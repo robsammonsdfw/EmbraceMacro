@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { analyzeImageWithGemini } from './services/geminiService';
 import type { NutritionInfo, Ingredient } from './types';
 import { ImageUploader } from './components/ImageUploader';
@@ -8,7 +8,7 @@ import { FoodPlan } from './components/FoodPlan';
 import { Loader } from './components/Loader';
 import { ErrorAlert } from './components/ErrorAlert';
 import { Hero } from './components/Hero';
-import { CameraIcon } from './components/icons';
+import { CameraIcon, UploadIcon } from './components/icons';
 
 const App: React.FC = () => {
   const [image, setImage] = useState<string | null>(null);
@@ -16,9 +16,11 @@ const App: React.FC = () => {
   const [foodPlan, setFoodPlan] = useState<Ingredient[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
 
-  const handleImageChange = useCallback(async (file: File) => {
+  const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
@@ -39,6 +41,7 @@ const App: React.FC = () => {
       }
     };
     reader.readAsDataURL(file);
+    event.target.value = ''; // Allow re-uploading the same file
   }, []);
 
   const handleAddMealToPlan = useCallback(() => {
@@ -53,13 +56,33 @@ const App: React.FC = () => {
      setFoodPlan(prevPlan => prevPlan.filter((_, i) => i !== index));
   }, []);
 
+  const handleTriggerCamera = () => {
+    cameraInputRef.current?.click();
+  };
+  
   const handleTriggerUpload = () => {
-    fileInputRef.current?.click();
+    uploadInputRef.current?.click();
   };
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800">
       <main className="max-w-4xl mx-auto p-4 md:p-8">
+         <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            ref={cameraInputRef}
+            onChange={handleFileChange}
+            className="hidden"
+          />
+          <input
+            type="file"
+            accept="image/*"
+            ref={uploadInputRef}
+            onChange={handleFileChange}
+            className="hidden"
+          />
+
         <header className="text-center mb-8">
           <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500">
             Macro Vision AI
@@ -68,13 +91,9 @@ const App: React.FC = () => {
         </header>
 
         <div className="space-y-8">
-          {!image && !isLoading && <Hero onUploadClick={handleTriggerUpload} />}
+          {!image && !isLoading && <Hero onCameraClick={handleTriggerCamera} onUploadClick={handleTriggerUpload} />}
 
-          <ImageUploader 
-            image={image}
-            onImageChange={handleImageChange}
-            fileInputRef={fileInputRef}
-          />
+          <ImageUploader image={image} />
 
           {isLoading && <Loader />}
           {error && <ErrorAlert message={error} />}
@@ -90,13 +109,20 @@ const App: React.FC = () => {
         </div>
 
         {!image && !isLoading && (
-           <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-sm border-t border-slate-200 flex justify-center md:hidden">
+           <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-sm border-t border-slate-200 flex justify-center items-center gap-4 md:hidden">
               <button
-                onClick={handleTriggerUpload}
-                className="w-full max-w-xs bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 ease-in-out flex items-center justify-center space-x-3"
+                onClick={handleTriggerCamera}
+                className="w-full bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 ease-in-out flex items-center justify-center space-x-3"
               >
                 <CameraIcon />
-                <span>Analyze Meal</span>
+                <span>Take Photo</span>
+              </button>
+              <button
+                onClick={handleTriggerUpload}
+                className="w-full bg-white text-slate-700 font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl border border-slate-200 transform hover:-translate-y-1 transition-all duration-300 ease-in-out flex items-center justify-center space-x-3"
+              >
+                <UploadIcon />
+                <span>Upload</span>
               </button>
            </div>
         )}
