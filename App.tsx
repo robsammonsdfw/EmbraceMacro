@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { analyzeImageWithGemini } from './services/geminiService';
 import type { NutritionInfo, Ingredient } from './types';
 import { ImageUploader } from './components/ImageUploader';
@@ -10,14 +10,32 @@ import { ErrorAlert } from './components/ErrorAlert';
 import { Hero } from './components/Hero';
 import { CameraIcon, UploadIcon } from './components/icons';
 
+const FOOD_PLAN_STORAGE_KEY = 'macro-vision-ai-food-plan';
+
 const App: React.FC = () => {
   const [image, setImage] = useState<string | null>(null);
   const [nutritionData, setNutritionData] = useState<NutritionInfo | null>(null);
-  const [foodPlan, setFoodPlan] = useState<Ingredient[]>([]);
+  const [foodPlan, setFoodPlan] = useState<Ingredient[]>(() => {
+    try {
+      const savedPlan = window.localStorage.getItem(FOOD_PLAN_STORAGE_KEY);
+      return savedPlan ? JSON.parse(savedPlan) : [];
+    } catch (error) {
+      console.error("Could not load food plan from local storage", error);
+      return [];
+    }
+  });
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(FOOD_PLAN_STORAGE_KEY, JSON.stringify(foodPlan));
+    } catch (error) {
+      console.error("Could not save food plan to local storage", error);
+    }
+  }, [foodPlan]);
 
   const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
