@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { analyzeImageWithGemini } from './services/geminiService';
+import { analyzeImageWithGemini, getMealSuggestions } from './services/geminiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
 import type { NutritionInfo, Ingredient, SavedMeal } from './types';
 import { ImageUploader } from './components/ImageUploader';
@@ -12,11 +12,12 @@ import { BarcodeScanner } from './components/BarcodeScanner';
 import { MealLibrary } from './components/MealLibrary';
 import { GroceryList } from './components/GroceryList';
 import { AppNav } from './components/AppNav';
+import { MealSuggester } from './components/MealSuggester';
 
 const FOOD_PLAN_STORAGE_KEY = 'macro-vision-ai-food-plan';
 const SAVED_MEALS_STORAGE_KEY = 'macro-vision-ai-saved-meals';
 
-type ActiveView = 'plan' | 'meals' | 'grocery';
+type ActiveView = 'plan' | 'meals' | 'grocery' | 'suggestions';
 
 const App: React.FC = () => {
   const [image, setImage] = useState<string | null>(null);
@@ -43,6 +44,10 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [activeView, setActiveView] = useState<ActiveView>('plan');
+
+  const [suggestedMeals, setSuggestedMeals] = useState<NutritionInfo[] | null>(null);
+  const [isSuggesting, setIsSuggesting] = useState<boolean>(false);
+  const [suggestionError, setSuggestionError] = useState<string | null>(null);
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
@@ -108,20 +113,20 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const handleAddToPlan = useCallback(() => {
-    if (nutritionData?.ingredients) {
-      setFoodPlan(prevPlan => [...prevPlan, ...nutritionData.ingredients]);
-      resetState();
+  const handleAddToPlan = useCallback((ingredients: Ingredient[]) => {
+    setFoodPlan(prevPlan => [...prevPlan, ...ingredients]);
+    if (nutritionData) {
+        resetState();
     }
   }, [nutritionData]);
 
-  const handleSaveMeal = useCallback(() => {
-    if (nutritionData) {
-        const newMeal: SavedMeal = {
-            ...nutritionData,
-            id: new Date().toISOString(),
-        };
-        setSavedMeals(prevMeals => [newMeal, ...prevMeals]);
+  const handleSaveMeal = useCallback((mealData: NutritionInfo) => {
+    const newMeal: SavedMeal = {
+        ...mealData,
+        id: new Date().toISOString(),
+    };
+    setSavedMeals(prevMeals => [newMeal, ...prevMeals]);
+    if (nutritionData === mealData) {
         resetState();
     }
   }, [nutritionData]);
@@ -138,6 +143,22 @@ const App: React.FC = () => {
     setSavedMeals(prevMeals => prevMeals.filter(meal => meal.id !== id));
   }, []);
 
+  const handleGetSuggestions = useCallback(async (condition: string) => {
+    setIsSuggesting(true);
+    setSuggestionError(null);
+    setSuggestedMeals(null);
+    try {
+        const suggestions = await getMealSuggestions(condition);
+        setSuggestedMeals(suggestions);
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'An unknown error occurred.';
+        setSuggestionError(message);
+        console.error(err);
+    } finally {
+        setIsSuggesting(false);
+    }
+  }, []);
+
   const handleTriggerCamera = () => { cameraInputRef.current?.click(); };
   const handleTriggerUpload = () => { uploadInputRef.current?.click(); };
   const handleTriggerScanner = () => { setIsScanning(true); };
@@ -151,6 +172,15 @@ const App: React.FC = () => {
             return <FoodPlan items={foodPlan} onRemove={handleRemoveFromPlan} />;
         case 'meals':
             return <MealLibrary meals={savedMeals} onAdd={handleAddSavedMealToPlan} onDelete={handleDeleteMeal} />;
+        case 'suggestions':
+            return <MealSuggester 
+                        onGetSuggestions={handleGetSuggestions}
+                        suggestions={suggestedMeals}
+                        isLoading={isSuggesting}
+                        error={suggestionError}
+                        onAddToPlan={handleAddToPlan}
+                        onSaveMeal={handleSaveMeal}
+                    />;
         case 'grocery':
             return <GroceryList meals={savedMeals} />;
         default:
@@ -182,17 +212,17 @@ const App: React.FC = () => {
                 {error && <ErrorAlert message={error} />}
                 {nutritionData && !isLoading && (
                     <NutritionCard 
-                    data={nutritionData} 
-                    onAddToPlan={handleAddToPlan} 
-                    onSaveMeal={handleSaveMeal}
+                        data={nutritionData} 
+                        onAddToPlan={() => handleAddToPlan(nutritionData.ingredients)} 
+                        onSaveMeal={() => handleSaveMeal(nutritionData)}
                     />
                 )}
             </>
           ) : (
-            <>
+            <div className="space-y-6">
                 <AppNav activeView={activeView} onViewChange={setActiveView} />
                 {renderActiveView()}
-            </>
+            </div>
           )}
 
         </div>

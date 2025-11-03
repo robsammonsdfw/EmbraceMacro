@@ -24,6 +24,7 @@ export interface NutritionInfo {
   totalFiber?: number;
   totalSodium?: number;
   ingredients: Ingredient[];
+  justification?: string;
   // Optional metadata for the whole meal/product
   imageUrl?: string; 
   nutriScore?: string;

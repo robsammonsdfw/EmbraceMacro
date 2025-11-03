@@ -109,3 +109,45 @@ export const analyzeImageWithGemini = async (base64Image: string, mimeType: stri
     throw new Error("Failed to process the image with the AI model.");
   }
 };
+
+const suggestionSchema = {
+    type: Type.ARRAY,
+    items: {
+        type: Type.OBJECT,
+        properties: {
+            ...nutritionSchema.properties,
+            justification: {
+                type: Type.STRING,
+                description: "A brief, one-sentence explanation of why this meal is suitable for the specified health condition."
+            }
+        },
+        required: [...nutritionSchema.required, "justification"]
+    }
+};
+
+export const getMealSuggestions = async (condition: string): Promise<NutritionInfo[]> => {
+    try {
+        const prompt = `Generate 3 diverse meal suggestions (e.g., breakfast, lunch, dinner) suitable for a person with ${condition}. For each meal, provide a meal name, a list of ingredients with their estimated weight in grams, calories, protein, carbs, and fat. Also, provide the total nutritional values for the meal. Include a short, one-sentence justification for why this meal is suitable for ${condition}. Return the result as a JSON array matching the provided schema.`;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema: suggestionSchema,
+            },
+        });
+
+        const jsonText = response.text.trim();
+        const parsedData = JSON.parse(jsonText);
+
+        if (Array.isArray(parsedData)) {
+            return parsedData as NutritionInfo[];
+        } else {
+            throw new Error("Invalid data structure received from API. Expected an array.");
+        }
+    } catch (error) {
+        console.error(`Error getting meal suggestions for ${condition}:`, error);
+        throw new Error(`Failed to get meal suggestions for ${condition}.`);
+    }
+};
