@@ -1,16 +1,22 @@
-
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { analyzeImageWithGemini } from './services/geminiService';
-import type { NutritionInfo, Ingredient } from './types';
+import { getProductByBarcode } from './services/openFoodFactsService';
+import type { NutritionInfo, Ingredient, SavedMeal } from './types';
 import { ImageUploader } from './components/ImageUploader';
 import { NutritionCard } from './components/NutritionCard';
 import { FoodPlan } from './components/FoodPlan';
 import { Loader } from './components/Loader';
 import { ErrorAlert } from './components/ErrorAlert';
 import { Hero } from './components/Hero';
-import { CameraIcon, UploadIcon } from './components/icons';
+import { BarcodeScanner } from './components/BarcodeScanner';
+import { MealLibrary } from './components/MealLibrary';
+import { GroceryList } from './components/GroceryList';
+import { AppNav } from './components/AppNav';
 
 const FOOD_PLAN_STORAGE_KEY = 'macro-vision-ai-food-plan';
+const SAVED_MEALS_STORAGE_KEY = 'macro-vision-ai-saved-meals';
+
+type ActiveView = 'plan' | 'meals' | 'grocery';
 
 const App: React.FC = () => {
   const [image, setImage] = useState<string | null>(null);
@@ -24,8 +30,20 @@ const App: React.FC = () => {
       return [];
     }
   });
+  const [savedMeals, setSavedMeals] = useState<SavedMeal[]>(() => {
+    try {
+      const saved = window.localStorage.getItem(SAVED_MEALS_STORAGE_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch (error) {
+      console.error("Could not load saved meals from local storage", error);
+      return [];
+    }
+  });
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [isScanning, setIsScanning] = useState<boolean>(false);
+  const [activeView, setActiveView] = useState<ActiveView>('plan');
+
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
@@ -37,16 +55,29 @@ const App: React.FC = () => {
     }
   }, [foodPlan]);
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(SAVED_MEALS_STORAGE_KEY, JSON.stringify(savedMeals));
+    } catch (error) {
+      console.error("Could not save meals to local storage", error);
+    }
+  }, [savedMeals]);
+  
+  const resetState = () => {
+      setImage(null);
+      setNutritionData(null);
+      setError(null);
+  };
+
   const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    resetState();
     const reader = new FileReader();
     reader.onloadend = async () => {
       const base64String = (reader.result as string).split(',')[1];
       setImage(reader.result as string);
-      setNutritionData(null);
-      setError(null);
       setIsLoading(true);
       try {
         const data = await analyzeImageWithGemini(base64String, file.type);
@@ -62,88 +93,109 @@ const App: React.FC = () => {
     event.target.value = ''; // Allow re-uploading the same file
   }, []);
 
-  const handleAddMealToPlan = useCallback(() => {
+  const handleScanSuccess = useCallback(async (barcode: string) => {
+    setIsScanning(false);
+    resetState();
+    setIsLoading(true);
+    try {
+        const data = await getProductByBarcode(barcode);
+        setNutritionData(data);
+    } catch(err) {
+        setError(`Could not find product for barcode ${barcode}. Please try another.`);
+        console.error(err);
+    } finally {
+        setIsLoading(false);
+    }
+  }, []);
+
+  const handleAddToPlan = useCallback(() => {
     if (nutritionData?.ingredients) {
       setFoodPlan(prevPlan => [...prevPlan, ...nutritionData.ingredients]);
-      setNutritionData(null);
-      setImage(null);
+      resetState();
     }
   }, [nutritionData]);
+
+  const handleSaveMeal = useCallback(() => {
+    if (nutritionData) {
+        const newMeal: SavedMeal = {
+            ...nutritionData,
+            id: new Date().toISOString(),
+        };
+        setSavedMeals(prevMeals => [newMeal, ...prevMeals]);
+        resetState();
+    }
+  }, [nutritionData]);
+
+  const handleAddSavedMealToPlan = useCallback((meal: SavedMeal) => {
+    setFoodPlan(prevPlan => [...prevPlan, ...meal.ingredients]);
+  }, []);
   
   const handleRemoveFromPlan = useCallback((index: number) => {
      setFoodPlan(prevPlan => prevPlan.filter((_, i) => i !== index));
   }, []);
 
-  const handleTriggerCamera = () => {
-    cameraInputRef.current?.click();
-  };
-  
-  const handleTriggerUpload = () => {
-    uploadInputRef.current?.click();
-  };
+  const handleDeleteMeal = useCallback((id: string) => {
+    setSavedMeals(prevMeals => prevMeals.filter(meal => meal.id !== id));
+  }, []);
+
+  const handleTriggerCamera = () => { cameraInputRef.current?.click(); };
+  const handleTriggerUpload = () => { uploadInputRef.current?.click(); };
+  const handleTriggerScanner = () => { setIsScanning(true); };
+
+  const showHero = !image && !isLoading && !nutritionData && !isScanning;
+  const showAnalysisContent = image || isLoading || error || nutritionData;
+
+  const renderActiveView = () => {
+    switch(activeView) {
+        case 'plan':
+            return <FoodPlan items={foodPlan} onRemove={handleRemoveFromPlan} />;
+        case 'meals':
+            return <MealLibrary meals={savedMeals} onAdd={handleAddSavedMealToPlan} onDelete={handleDeleteMeal} />;
+        case 'grocery':
+            return <GroceryList meals={savedMeals} />;
+        default:
+            return <FoodPlan items={foodPlan} onRemove={handleRemoveFromPlan} />;
+    }
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800">
+      {isScanning && <BarcodeScanner onScanSuccess={handleScanSuccess} onCancel={() => setIsScanning(false)} />}
       <main className="max-w-4xl mx-auto p-4 md:p-8">
-         <input
-            type="file"
-            accept="image/*"
-            capture="environment"
-            ref={cameraInputRef}
-            onChange={handleFileChange}
-            className="hidden"
-          />
-          <input
-            type="file"
-            accept="image/*"
-            ref={uploadInputRef}
-            onChange={handleFileChange}
-            className="hidden"
-          />
+         <input type="file" accept="image/*" capture="environment" ref={cameraInputRef} onChange={handleFileChange} className="hidden"/>
+         <input type="file" accept="image/*" ref={uploadInputRef} onChange={handleFileChange} className="hidden"/>
 
         <header className="text-center mb-8">
           <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500">
             Macro Vision AI
           </h1>
-          <p className="text-slate-600 mt-2 text-lg">Snap your food, know your macros.</p>
+          <p className="text-slate-600 mt-2 text-lg">Your intelligent meal and grocery planner.</p>
         </header>
 
         <div className="space-y-8">
-          {!image && !isLoading && <Hero onCameraClick={handleTriggerCamera} onUploadClick={handleTriggerUpload} />}
+          {showHero && <Hero onCameraClick={handleTriggerCamera} onUploadClick={handleTriggerUpload} onBarcodeClick={handleTriggerScanner} />}
 
-          <ImageUploader image={image} />
-
-          {isLoading && <Loader />}
-          {error && <ErrorAlert message={error} />}
-
-          {nutritionData && !isLoading && (
-            <NutritionCard 
-              data={nutritionData} 
-              onAddToPlan={handleAddMealToPlan} 
-            />
+          {showAnalysisContent ? (
+            <>
+                <ImageUploader image={image || nutritionData?.imageUrl || null} />
+                {isLoading && <Loader />}
+                {error && <ErrorAlert message={error} />}
+                {nutritionData && !isLoading && (
+                    <NutritionCard 
+                    data={nutritionData} 
+                    onAddToPlan={handleAddToPlan} 
+                    onSaveMeal={handleSaveMeal}
+                    />
+                )}
+            </>
+          ) : (
+            <>
+                <AppNav activeView={activeView} onViewChange={setActiveView} />
+                {renderActiveView()}
+            </>
           )}
-          
-          <FoodPlan items={foodPlan} onRemove={handleRemoveFromPlan} />
-        </div>
 
-        {!image && !isLoading && (
-           <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-sm border-t border-slate-200 flex justify-center items-center gap-4 md:hidden">
-              <button
-                onClick={handleTriggerCamera}
-                className="w-full bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 ease-in-out flex items-center justify-center space-x-3"
-              >
-                <CameraIcon />
-                <span>Take Photo</span>
-              </button>
-              <button
-                onClick={handleTriggerUpload}
-                className="w-full bg-white text-slate-700 font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl border border-slate-200 transform hover:-translate-y-1 transition-all duration-300 ease-in-out flex items-center justify-center space-x-3"
-              >
-                <UploadIcon />
-                <span>Upload</span>
-              </button>
-           </div>
-        )}
+        </div>
       </main>
     </div>
   );
