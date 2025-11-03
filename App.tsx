@@ -1,8 +1,8 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { analyzeImageWithGemini, getMealSuggestions } from './services/geminiService';
+import { analyzeImageWithGemini, getMealSuggestions, getRecipesFromImage } from './services/geminiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
-import type { NutritionInfo, Ingredient, SavedMeal } from './types';
+import type { NutritionInfo, Ingredient, SavedMeal, Recipe } from './types';
 import { ImageUploader } from './components/ImageUploader';
 import { NutritionCard } from './components/NutritionCard';
 import { FoodPlan } from './components/FoodPlan';
@@ -14,6 +14,7 @@ import { MealLibrary } from './components/MealLibrary';
 import { GroceryList } from './components/GroceryList';
 import { AppNav } from './components/AppNav';
 import { MealSuggester } from './components/MealSuggester';
+import { RecipeCard } from './components/RecipeCard';
 
 const FOOD_PLAN_STORAGE_KEY = 'macro-vision-ai-food-plan';
 const SAVED_MEALS_STORAGE_KEY = 'macro-vision-ai-saved-meals';
@@ -23,6 +24,7 @@ type ActiveView = 'plan' | 'meals' | 'grocery' | 'suggestions';
 const App: React.FC = () => {
   const [image, setImage] = useState<string | null>(null);
   const [nutritionData, setNutritionData] = useState<NutritionInfo | null>(null);
+  const [recipes, setRecipes] = useState<Recipe[] | null>(null);
   const [foodPlan, setFoodPlan] = useState<Ingredient[]>(() => {
     try {
       const savedPlan = window.localStorage.getItem(FOOD_PLAN_STORAGE_KEY);
@@ -41,7 +43,8 @@ const App: React.FC = () => {
       return [];
     }
   });
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
+  const [analysisMessage, setAnalysisMessage] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [activeView, setActiveView] = useState<ActiveView>('plan');
@@ -52,6 +55,7 @@ const App: React.FC = () => {
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  const pantryInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     try {
@@ -72,6 +76,7 @@ const App: React.FC = () => {
   const resetState = () => {
       setImage(null);
       setNutritionData(null);
+      setRecipes(null);
       setError(null);
   };
 
@@ -84,7 +89,8 @@ const App: React.FC = () => {
     reader.onloadend = async () => {
       const base64String = (reader.result as string).split(',')[1];
       setImage(reader.result as string);
-      setIsLoading(true);
+      setIsAnalyzing(true);
+      setAnalysisMessage('Analyzing your meal...');
       try {
         const data = await analyzeImageWithGemini(base64String, file.type);
         setNutritionData(data);
@@ -92,17 +98,43 @@ const App: React.FC = () => {
         setError('Failed to analyze the image. Please try again.');
         console.error(err);
       } finally {
-        setIsLoading(false);
+        setIsAnalyzing(false);
       }
     };
     reader.readAsDataURL(file);
     event.target.value = ''; // Allow re-uploading the same file
   }, []);
+  
+  const handleFridgeFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    resetState();
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64String = (reader.result as string).split(',')[1];
+      setImage(reader.result as string);
+      setIsAnalyzing(true);
+      setAnalysisMessage('Generating recipe ideas...');
+      try {
+        const recipeData = await getRecipesFromImage(base64String, file.type);
+        setRecipes(recipeData);
+      } catch (err) {
+        setError('Failed to get recipes from your image. Please try again.');
+        console.error(err);
+      } finally {
+        setIsAnalyzing(false);
+      }
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  }, []);
 
   const handleScanSuccess = useCallback(async (barcode: string) => {
     setIsScanning(false);
     resetState();
-    setIsLoading(true);
+    setIsAnalyzing(true);
+    setAnalysisMessage('Fetching product data...');
     try {
         const data = await getProductByBarcode(barcode);
         setNutritionData(data);
@@ -110,7 +142,7 @@ const App: React.FC = () => {
         setError(`Could not find product for barcode ${barcode}. Please try another.`);
         console.error(err);
     } finally {
-        setIsLoading(false);
+        setIsAnalyzing(false);
     }
   }, []);
 
@@ -120,6 +152,19 @@ const App: React.FC = () => {
         resetState();
     }
   }, [nutritionData]);
+
+  const handleAddRecipeToPlan = useCallback((recipe: Recipe) => {
+    const recipeAsIngredient: Ingredient = {
+        name: recipe.recipeName,
+        weightGrams: 0, // Not applicable
+        calories: recipe.nutrition.totalCalories,
+        protein: recipe.nutrition.totalProtein,
+        carbs: recipe.nutrition.totalCarbs,
+        fat: recipe.nutrition.totalFat,
+    };
+    setFoodPlan(prevPlan => [...prevPlan, recipeAsIngredient]);
+  }, []);
+
 
   const handleSaveMeal = useCallback((mealData: NutritionInfo) => {
     const newMeal: SavedMeal = {
@@ -162,10 +207,11 @@ const App: React.FC = () => {
 
   const handleTriggerCamera = () => { cameraInputRef.current?.click(); };
   const handleTriggerUpload = () => { uploadInputRef.current?.click(); };
+  const handleTriggerPantryUpload = () => { pantryInputRef.current?.click(); };
   const handleTriggerScanner = () => { setIsScanning(true); };
 
-  const showHero = !image && !isLoading && !nutritionData && !isScanning;
-  const showAnalysisContent = image || isLoading || error || nutritionData;
+  const showHero = !image && !isAnalyzing && !nutritionData && !isScanning && !recipes;
+  const showAnalysisContent = image || isAnalyzing || error || nutritionData || recipes;
 
   const renderActiveView = () => {
     switch(activeView) {
@@ -195,6 +241,7 @@ const App: React.FC = () => {
       <main className="max-w-4xl mx-auto p-4 md:p-8">
          <input type="file" accept="image/*" capture="environment" ref={cameraInputRef} onChange={handleFileChange} className="hidden"/>
          <input type="file" accept="image/*" ref={uploadInputRef} onChange={handleFileChange} className="hidden"/>
+         <input type="file" accept="image/*" ref={pantryInputRef} onChange={handleFridgeFileChange} className="hidden"/>
 
         <header className="text-center mb-8">
           <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500">
@@ -204,21 +251,35 @@ const App: React.FC = () => {
         </header>
 
         <div className="space-y-8">
-          {showHero && <Hero onCameraClick={handleTriggerCamera} onUploadClick={handleTriggerUpload} onBarcodeClick={handleTriggerScanner} />}
+          {showHero && <Hero onCameraClick={handleTriggerCamera} onUploadClick={handleTriggerUpload} onBarcodeClick={handleTriggerScanner} onPantryChefClick={handleTriggerPantryUpload} />}
 
           {showAnalysisContent ? (
-            <>
+            <div className="space-y-6">
                 <ImageUploader image={image || nutritionData?.imageUrl || null} />
-                {isLoading && <Loader />}
+                {isAnalyzing && <Loader message={analysisMessage} />}
                 {error && <ErrorAlert message={error} />}
-                {nutritionData && !isLoading && (
+                {nutritionData && !isAnalyzing && (
                     <NutritionCard 
                         data={nutritionData} 
                         onAddToPlan={() => handleAddToPlan(nutritionData.ingredients)} 
                         onSaveMeal={() => handleSaveMeal(nutritionData)}
                     />
                 )}
-            </>
+                {recipes && !isAnalyzing && (
+                  <div className="space-y-4">
+                      <h2 className="text-2xl font-bold text-slate-800 text-center pt-4 border-t border-slate-200">
+                          Recipe Ideas From Your Ingredients
+                      </h2>
+                      {recipes.map((recipe, index) => (
+                          <RecipeCard 
+                              key={index} 
+                              recipe={recipe} 
+                              onAddToPlan={() => handleAddRecipeToPlan(recipe)} 
+                          />
+                      ))}
+                  </div>
+                )}
+            </div>
           ) : (
             <div className="space-y-6">
                 <AppNav activeView={activeView} onViewChange={setActiveView} />

@@ -35,3 +35,19 @@ export interface NutritionInfo {
 export interface SavedMeal extends NutritionInfo {
   id: string;
 }
+
+export interface Recipe {
+  recipeName: string;
+  description: string;
+  ingredients: {
+    name: string;
+    quantity: string;
+  }[];
+  instructions: string[];
+  nutrition: {
+    totalCalories: number;
+    totalProtein: number;
+    totalCarbs: number;
+    totalFat: number;
+  };
+}

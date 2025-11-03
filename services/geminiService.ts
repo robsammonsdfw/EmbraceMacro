@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import type { NutritionInfo } from '../types';
+import type { NutritionInfo, Recipe } from '../types';
 
 const API_KEY = process.env.API_KEY;
 
@@ -153,5 +153,84 @@ export const getMealSuggestions = async (condition: string, cuisine: string): Pr
     } catch (error) {
         console.error(`Error getting meal suggestions for ${condition} with cuisine ${cuisine}:`, error);
         throw new Error(`Failed to get meal suggestions for ${condition}.`);
+    }
+};
+
+const recipeSchema = {
+    type: Type.OBJECT,
+    properties: {
+        recipeName: { type: Type.STRING, description: "A creative and descriptive name for the recipe." },
+        description: { type: Type.STRING, description: "A brief, enticing one-paragraph description of the dish." },
+        ingredients: {
+            type: Type.ARRAY,
+            description: "A list of all ingredients required for the recipe.",
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    name: { type: Type.STRING, description: "The name of the ingredient." },
+                    quantity: { type: Type.STRING, description: "The amount of the ingredient, e.g., '1 cup', '200g', '2 tbsp'." }
+                },
+                required: ["name", "quantity"]
+            }
+        },
+        instructions: {
+            type: Type.ARRAY,
+            description: "Step-by-step cooking instructions.",
+            items: { type: Type.STRING }
+        },
+        nutrition: {
+            type: Type.OBJECT,
+            description: "Estimated nutritional information for one serving of the final dish.",
+            properties: {
+                totalCalories: { type: Type.NUMBER },
+                totalProtein: { type: Type.NUMBER },
+                totalCarbs: { type: Type.NUMBER },
+                totalFat: { type: Type.NUMBER }
+            },
+            required: ["totalCalories", "totalProtein", "totalCarbs", "totalFat"]
+        }
+    },
+    required: ["recipeName", "description", "ingredients", "instructions", "nutrition"]
+};
+
+const recipesSchema = {
+    type: Type.ARRAY,
+    description: "A list of 3 diverse meal recipes.",
+    items: recipeSchema
+};
+
+export const getRecipesFromImage = async (base64Image: string, mimeType: string): Promise<Recipe[]> => {
+    try {
+        const imagePart = {
+            inlineData: {
+                data: base64Image,
+                mimeType: mimeType,
+            },
+        };
+
+        const textPart = {
+            text: "Analyze the image to identify all visible food ingredients. Based on these ingredients, suggest 3 diverse meal recipes. Assume common pantry staples like oil, salt, pepper, and basic spices are available. For each recipe, provide a descriptive name, a short description, a list of ingredients with quantities, step-by-step instructions, and an estimated nutritional breakdown (total calories, protein, carbs, fat). Return the result in the specified JSON format.",
+        };
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: { parts: [imagePart, textPart] },
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema: recipesSchema,
+            },
+        });
+
+        const jsonText = response.text.trim();
+        const parsedData = JSON.parse(jsonText);
+
+        if (Array.isArray(parsedData)) {
+            return parsedData as Recipe[];
+        } else {
+            throw new Error("Invalid data structure received from API. Expected an array of recipes.");
+        }
+    } catch (error) {
+        console.error("Error getting recipes from image:", error);
+        throw new Error("Failed to generate recipes from the provided image.");
     }
 };
