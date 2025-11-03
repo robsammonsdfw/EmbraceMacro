@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { analyzeImageWithGemini, getMealSuggestions } from './services/geminiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
@@ -143,12 +144,12 @@ const App: React.FC = () => {
     setSavedMeals(prevMeals => prevMeals.filter(meal => meal.id !== id));
   }, []);
 
-  const handleGetSuggestions = useCallback(async (condition: string) => {
+  const handleGetSuggestions = useCallback(async (condition: string, cuisine: string) => {
     setIsSuggesting(true);
     setSuggestionError(null);
     setSuggestedMeals(null);
     try {
-        const suggestions = await getMealSuggestions(condition);
+        const suggestions = await getMealSuggestions(condition, cuisine);
         setSuggestedMeals(suggestions);
     } catch (err) {
         const message = err instanceof Error ? err.message : 'An unknown error occurred.';

@@ -121,13 +121,17 @@ const suggestionSchema = {
                 description: "A brief, one-sentence explanation of why this meal is suitable for the specified health condition."
             }
         },
-        required: [...nutritionSchema.required, "justification"]
+        required: [...(nutritionSchema.required || []), "justification"]
     }
 };
 
-export const getMealSuggestions = async (condition: string): Promise<NutritionInfo[]> => {
+export const getMealSuggestions = async (condition: string, cuisine: string): Promise<NutritionInfo[]> => {
     try {
-        const prompt = `Generate 3 diverse meal suggestions (e.g., breakfast, lunch, dinner) suitable for a person with ${condition}. For each meal, provide a meal name, a list of ingredients with their estimated weight in grams, calories, protein, carbs, and fat. Also, provide the total nutritional values for the meal. Include a short, one-sentence justification for why this meal is suitable for ${condition}. Return the result as a JSON array matching the provided schema.`;
+        let prompt = `Generate 3 diverse meal suggestions (e.g., breakfast, lunch, dinner) suitable for a person with ${condition}.`;
+        if (cuisine && cuisine.toLowerCase() !== 'any') {
+            prompt += ` The meals should be from ${cuisine} cuisine.`;
+        }
+        prompt += ` For each meal, provide a meal name, a list of ingredients with their estimated weight in grams, calories, protein, carbs, and fat. Also, provide the total nutritional values for the meal. Include a short, one-sentence justification for why this meal is suitable for ${condition}. Return the result as a JSON array matching the provided schema.`;
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -147,7 +151,7 @@ export const getMealSuggestions = async (condition: string): Promise<NutritionIn
             throw new Error("Invalid data structure received from API. Expected an array.");
         }
     } catch (error) {
-        console.error(`Error getting meal suggestions for ${condition}:`, error);
+        console.error(`Error getting meal suggestions for ${condition} with cuisine ${cuisine}:`, error);
         throw new Error(`Failed to get meal suggestions for ${condition}.`);
     }
 };
