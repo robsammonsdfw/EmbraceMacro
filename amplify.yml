@@ -1,0 +1,13 @@
+version: 1
+frontend:
+  phases:
+    # This application consists of static files and does not have a build step.
+    build:
+      commands: []
+  artifacts:
+    # This configures Amplify to serve all files from the project's root directory.
+    baseDirectory: /
+    files:
+      - '**/*'
+  cache:
+    paths: []

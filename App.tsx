@@ -245,7 +245,7 @@ const App: React.FC = () => {
 
         <header className="text-center mb-8">
           <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500">
-            Macro Vision AI
+            Embrace Health Meals and Macros
           </h1>
           <p className="text-slate-600 mt-2 text-lg">Your intelligent meal and grocery planner.</p>
         </header>
