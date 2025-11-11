@@ -9,14 +9,10 @@ interface AuthContextType {
   isLoading: boolean;
 }
 
-// Create the context with a default value
-export const AuthContext = createContext<AuthContextType>({
-  token: null,
-  isAuthenticated: false,
-  login: () => {},
-  logout: () => {},
-  isLoading: true,
-});
+// FIX: Changed createContext to have an undefined default value.
+// This is a more robust pattern that ensures a provider is used.
+// It should resolve the downstream type error where the context value was inferred as {}.
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const AUTH_TOKEN_KEY = 'macro-vision-ai-auth-token';
 

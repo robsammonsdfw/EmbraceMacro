@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { XIcon } from './icons';
+import { XIcon } from './icons.tsx';
 import { Html5Qrcode } from 'html5-qrcode';
 
 interface BarcodeScannerProps {
@@ -25,7 +25,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScanSuccess, o
             stopScanner();
           };
 
-          const errorCallback = (error: any) => {
+          const errorCallback = (_error: any) => {
              // Errors are ignored to prevent console spam
           };
 
