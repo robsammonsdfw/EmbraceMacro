@@ -1,0 +1,16 @@
+{
+  "name": "macro-vision-backend",
+  "version": "1.0.0",
+  "description": "Backend for Macro Vision AI app",
+  "main": "lambda/index.mjs",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.11.3"
+  }
+}
