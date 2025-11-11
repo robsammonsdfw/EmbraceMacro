@@ -12,6 +12,7 @@ const {
     SHOPIFY_CLIENT_SECRET,
     JWT_SECRET, // A long, random, secret string for signing your tokens
     FRONTEND_URL, // The full URL of your Amplify app, e.g., 'https://main.xxxxxxxx.amplifyapp.com'
+    SHOPIFY_SHOP_DOMAIN, // The fixed *.myshopify.com domain for your store
     // Database credentials will be used by the 'pg' library automatically:
     // PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGPORT
 } = process.env;
@@ -28,16 +29,21 @@ const headers = {
 // --- MAIN HANDLER (ROUTER) ---
 export const handler = async (event) => {
     const path = event.rawPath;
-    console.log(`Received request for path: ${path}`);
+    const stage = event.requestContext?.stage;
+    const basePath = stage ? `/${stage}` : '';
+    // Remove the base path (stage) if it exists and is not just "/"
+    const cleanPath = path.startsWith(basePath) && basePath.length > 1 ? path.substring(basePath.length) : path;
+    
+    console.log(`Received request for path: ${path}, clean path: ${cleanPath}`);
     
     if (event.requestContext.http.method === 'OPTIONS') {
         return { statusCode: 200, headers };
     }
 
-    if (path.startsWith('/auth/shopify/callback')) {
+    if (cleanPath === '/auth/shopify/callback') {
         return handleShopifyCallback(event);
     }
-    if (path === '/auth/shopify') {
+    if (cleanPath === '/auth/shopify') {
         return handleShopifyAuth(event);
     }
     
@@ -57,7 +63,7 @@ export const handler = async (event) => {
     // Add user info from token to the event for use in other handlers
     event.user = decodedToken;
 
-    if (path === '/analyze-image' || path === '/analyze-image-recipes') {
+    if (cleanPath === '/analyze-image' || cleanPath === '/analyze-image-recipes') {
         return handleGeminiRequest(event);
     }
     // Add future data routes here
@@ -68,17 +74,20 @@ export const handler = async (event) => {
     return {
         statusCode: 404,
         headers,
-        body: JSON.stringify({ error: `Not Found: The path "${path}" does not exist.` }),
+        body: JSON.stringify({ error: `Not Found: The path "${cleanPath}" does not exist.` }),
     };
 };
 
 // --- ROUTE HANDLERS ---
 
 function handleShopifyAuth(event) {
-    const shop = event.queryStringParameters?.shop;
+    const shop = SHOPIFY_SHOP_DOMAIN;
     if (!shop) {
-        return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing shop parameter. e.g., my-store.myshopify.com' })};
-    }
+       console.error("CRITICAL: SHOPIFY_SHOP_DOMAIN environment variable is not set.");
+       return { statusCode: 500, headers, body: JSON.stringify({ error: 'Server configuration error.' })};
+   }
+    // The redirect URI is built dynamically using the request's path.
+    // e.g., if request is /default/auth/shopify, callback will be /default/auth/shopify/callback
     const redirectUri = `https://${event.requestContext.domainName}${event.rawPath}/callback`;
     const authUrl = `https://${shop}/admin/oauth/authorize?client_id=${SHOPIFY_CLIENT_ID}&scope=${SHOPIFY_SCOPES}&redirect_uri=${redirectUri}`;
 
@@ -149,6 +158,7 @@ async function handleGeminiRequest(event) {
 
 function exchangeCodeForToken(shop, code, event) {
     return new Promise((resolve, reject) => {
+        // This MUST match the redirect_uri from handleShopifyAuth
         const redirectUri = `https://${event.requestContext.domainName}${event.rawPath}`;
         const postData = JSON.stringify({
             client_id: SHOPIFY_CLIENT_ID,

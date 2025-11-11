@@ -5,9 +5,9 @@ import React from 'react';
 const SHOPIFY_AUTH_URL = 'https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default/auth/shopify';
 
 export const Login: React.FC = () => {
-    
     const handleLogin = () => {
-        // Redirect the user to our backend, which will then redirect to Shopify.
+        // The backend now knows which Shopify store to use via environment variables.
+        // We just need to redirect to the auth endpoint.
         window.location.href = SHOPIFY_AUTH_URL;
     };
 
@@ -22,7 +22,7 @@ export const Login: React.FC = () => {
                 </header>
                 <div className="space-y-4">
                     <p className="text-slate-600">
-                        Please connect your Shopify account to continue. Your meal plans and data will be securely saved to your profile.
+                        Connect your EmbraceHealth account to get started.
                     </p>
                     <button
                         onClick={handleLogin}
