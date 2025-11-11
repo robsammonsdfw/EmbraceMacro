@@ -234,7 +234,7 @@ const App: React.FC = () => {
 
         <header className="text-center mb-8 relative">
           <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500">
-            Macro Vision AI
+            EmbraceHealth Meals
           </h1>
           <p className="text-slate-600 mt-2 text-lg">Your intelligent meal and grocery planner.</p>
           <button onClick={logout} className="absolute top-0 right-0 bg-slate-200 text-slate-700 font-semibold text-sm py-1 px-3 rounded-full hover:bg-slate-300 transition">Logout</button>

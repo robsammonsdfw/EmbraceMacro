@@ -2,6 +2,8 @@ import { GoogleGenAI } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import https from 'https';
 import { findOrCreateUser } from '../services/databaseService.mjs';
+// FIX: Import Buffer to resolve 'Cannot find name 'Buffer'' error.
+import { Buffer } from 'buffer';
 
 // --- IMPORTANT: CONFIGURE THESE IN YOUR LAMBDA ENVIRONMENT VARIABLES ---
 const {

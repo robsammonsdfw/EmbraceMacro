@@ -1,5 +1,5 @@
 {
-  "name": "macro-vision-ai",
+  "name": "embracehealth-meals",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -17,7 +17,8 @@
     "pg": "^8.16.3",
     "html5-qrcode": "^2.3.8",
     "@vitejs/plugin-react": "^5.1.0",
-    "vite": "^7.2.2"
+    "vite": "^7.2.2",
+    "buffer": "^6.0.3"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

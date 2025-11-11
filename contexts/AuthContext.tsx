@@ -15,7 +15,7 @@ interface AuthContextType {
 // the `undefined` case to ensure the provider is used.
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const AUTH_TOKEN_KEY = 'macro-vision-ai-auth-token';
+const AUTH_TOKEN_KEY = 'embracehealth-meals-auth-token';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [token, setToken] = useState<string | null>(null);

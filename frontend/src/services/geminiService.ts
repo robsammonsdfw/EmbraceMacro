@@ -3,7 +3,7 @@ import type { NutritionInfo, Recipe } from '../types';
 
 // IMPORTANT: This URL will need to be updated to a new base URL that handles multiple routes.
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
-const AUTH_TOKEN_KEY = 'macro-vision-ai-auth-token';
+const AUTH_TOKEN_KEY = 'embracehealth-meals-auth-token';
 
 if (!API_BASE_URL) {
     alert("CRITICAL ERROR: The backend API URL is not configured.");
