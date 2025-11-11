@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { XIcon } from './icons.tsx';
+import { XIcon } from './icons';
 import { Html5Qrcode } from 'html5-qrcode';
 
 interface BarcodeScannerProps {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { CameraIcon, UploadIcon, BarcodeIcon, ChefHatIcon } from './icons.tsx';
+import { CameraIcon, UploadIcon, BarcodeIcon, ChefHatIcon } from './icons';
 
 interface HeroProps {
     onCameraClick: () => void;

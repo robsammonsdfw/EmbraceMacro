@@ -1,4 +1,4 @@
-import type { NutritionInfo, Ingredient } from '../types.ts';
+import type { NutritionInfo, Ingredient } from '../types';
 
 const API_URL = 'https://world.openfoodfacts.org/api/v2/product/';
 

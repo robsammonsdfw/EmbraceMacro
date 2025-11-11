@@ -9,9 +9,10 @@ interface AuthContextType {
   isLoading: boolean;
 }
 
-// FIX: Changed createContext to have an undefined default value.
-// This is a more robust pattern that ensures a provider is used.
-// It should resolve the downstream type error where the context value was inferred as {}.
+// FIX: Initialize the context with `undefined` and a specific generic type.
+// This prevents TypeScript from inferring the type as `{}`, which was causing
+// errors in components consuming this context. The `useAuth` hook will handle
+// the `undefined` case to ensure the provider is used.
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const AUTH_TOKEN_KEY = 'macro-vision-ai-auth-token';

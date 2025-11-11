@@ -1,6 +1,6 @@
 import React from 'react';
-import type { Ingredient } from '../types.ts';
-import { TrashIcon, PlusIcon } from './icons.tsx';
+import type { Ingredient } from '../types';
+import { TrashIcon, PlusIcon } from './icons';
 
 interface FoodPlanProps {
   items: Ingredient[];

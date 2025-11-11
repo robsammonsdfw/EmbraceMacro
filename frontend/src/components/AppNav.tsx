@@ -1,5 +1,5 @@
 import React from 'react';
-import { PlusIcon, BookOpenIcon, ClipboardListIcon, LightBulbIcon } from './icons.tsx';
+import { PlusIcon, BookOpenIcon, ClipboardListIcon, LightBulbIcon } from './icons';
 
 type ActiveView = 'plan' | 'meals' | 'grocery' | 'suggestions';
 

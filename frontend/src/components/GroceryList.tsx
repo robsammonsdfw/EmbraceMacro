@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
-import type { SavedMeal } from '../types.ts';
-import { ClipboardListIcon } from './icons.tsx';
+import React, { useState } from 'react';
+import type { SavedMeal } from '../types';
+import { ClipboardListIcon } from './icons';
 
 interface GroceryListProps {
   meals: SavedMeal[];

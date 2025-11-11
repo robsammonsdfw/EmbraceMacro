@@ -1,5 +1,5 @@
 import { Type } from "@google/genai";
-import type { NutritionInfo, Recipe } from '../types.ts';
+import type { NutritionInfo, Recipe } from '../types';
 
 // IMPORTANT: This URL will need to be updated to a new base URL that handles multiple routes.
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
@@ -122,22 +122,7 @@ export const analyzeImageWithGemini = async (base64Image: string, mimeType: stri
   }
 };
 
-const suggestionSchema = {
-    type: Type.ARRAY,
-    items: {
-        type: Type.OBJECT,
-        properties: {
-            ...nutritionSchema.properties,
-            justification: {
-                type: Type.STRING,
-                description: "A brief, one-sentence explanation of why this meal is suitable for the specified health condition."
-            }
-        },
-        required: [...(nutritionSchema.required || []), "justification"]
-    }
-};
-
-export const getMealSuggestions = async (condition: string, cuisine: string): Promise<NutritionInfo[]> => {
+export const getMealSuggestions = async (_condition: string, _cuisine: string): Promise<NutritionInfo[]> => {
     // This text-only function doesn't fit the simplified image-based backend proxy.
     // To proceed with the deployment guide, this functionality is being stubbed out.
     // A more advanced backend could be created to handle both text and image prompts.

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import type { NutritionInfo, Ingredient } from '../types.ts';
-import { MealSuggestionCard } from './MealSuggestionCard.tsx';
-import { LightBulbIcon } from './icons.tsx';
+import type { NutritionInfo, Ingredient } from '../types';
+import { MealSuggestionCard } from './MealSuggestionCard';
+import { LightBulbIcon } from './icons';
 
 interface MealSuggesterProps {
     onGetSuggestions: (condition: string, cuisine: string) => void;

@@ -1,6 +1,6 @@
 import React from 'react';
-import type { Recipe } from '../types.ts';
-import { PlusIcon } from './icons.tsx';
+import type { Recipe } from '../types';
+import { PlusIcon } from './icons';
 
 const MacroPill: React.FC<{ label: string; value: number; unit: string; color: string }> = ({ label, value, unit, color }) => (
   <div className={`text-center p-2 rounded-lg ${color}`}>
@@ -30,7 +30,7 @@ export const RecipeCard: React.FC<{ recipe: Recipe; onAddToPlan: () => void; }> 
             <details className="bg-slate-50 p-4 rounded-lg open:ring-2 open:ring-emerald-200">
                 <summary className="font-semibold text-slate-700 cursor-pointer">Ingredients</summary>
                 <ul className="mt-3 list-disc list-inside space-y-1 text-slate-600">
-                    {recipe.ingredients.map((ing, index) => (
+                    {recipe.ingredients.map((ing: { name: string; quantity: string }, index: number) => (
                         <li key={index}>
                            <span className="font-medium text-slate-800">{ing.name}:</span> {ing.quantity}
                         </li>
@@ -40,7 +40,7 @@ export const RecipeCard: React.FC<{ recipe: Recipe; onAddToPlan: () => void; }> 
             <details className="bg-slate-50 p-4 rounded-lg open:ring-2 open:ring-emerald-200">
                 <summary className="font-semibold text-slate-700 cursor-pointer">Instructions</summary>
                 <ol className="mt-3 list-decimal list-inside space-y-2 text-slate-600">
-                    {recipe.instructions.map((step, index) => (
+                    {recipe.instructions.map((step: string, index: number) => (
                         <li key={index} className="pl-2">{step}</li>
                     ))}
                 </ol>

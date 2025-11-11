@@ -1,6 +1,6 @@
 import React from 'react';
-import type { NutritionInfo, Ingredient } from '../types.ts';
-import { PlusIcon, BookmarkIcon } from './icons.tsx';
+import type { NutritionInfo, Ingredient } from '../types';
+import { PlusIcon, BookmarkIcon } from './icons';
 
 interface MealSuggestionCardProps {
   meal: NutritionInfo;

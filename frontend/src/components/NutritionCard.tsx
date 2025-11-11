@@ -1,6 +1,6 @@
 import React from 'react';
-import type { NutritionInfo } from '../types.ts';
-import { PlusIcon, BookmarkIcon } from './icons.tsx';
+import type { NutritionInfo, Ingredient } from '../types';
+import { PlusIcon, BookmarkIcon } from './icons';
 
 interface NutritionCardProps {
   data: NutritionInfo;
@@ -63,7 +63,7 @@ export const NutritionCard: React.FC<NutritionCardProps> = ({ data, onAddToPlan,
             <>
                 <h3 className="text-lg font-semibold text-slate-700 mb-3">Ingredients Breakdown</h3>
                 <ul className="space-y-2 mb-4">
-                  {data.ingredients.map((item, index) => (
+                  {data.ingredients.map((item: Ingredient, index: number) => (
                     <li key={index} className="flex justify-between items-center bg-slate-50 p-3 rounded-md">
                       <div>
                         <p className="font-semibold text-slate-800">{item.name}</p>

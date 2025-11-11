@@ -1,6 +1,6 @@
 import React from 'react';
-import type { SavedMeal } from '../types.ts';
-import { PlusIcon, TrashIcon, BookOpenIcon } from './icons.tsx';
+import type { SavedMeal } from '../types';
+import { PlusIcon, TrashIcon, BookOpenIcon } from './icons';
 
 interface MealLibraryProps {
   meals: SavedMeal[];
