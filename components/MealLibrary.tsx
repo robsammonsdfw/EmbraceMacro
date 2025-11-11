@@ -1,6 +1,5 @@
 import React from 'react';
 import type { SavedMeal } from '../types';
-// FIX: Import BookOpenIcon
 import { PlusIcon, TrashIcon, BookOpenIcon } from './icons';
 
 interface MealLibraryProps {
@@ -55,7 +54,9 @@ export const MealLibrary: React.FC<MealLibraryProps> = ({ meals, onAdd, onDelete
         </ul>
       ) : (
         <div className="text-center py-10 px-4 bg-slate-50 rounded-lg">
-            <BookOpenIcon />
+            <div className="mx-auto bg-slate-100 text-slate-500 rounded-full w-16 h-16 flex items-center justify-center mb-4">
+                <BookOpenIcon />
+            </div>
             <h3 className="text-lg font-semibold text-slate-700 mt-2">Your meal library is empty.</h3>
             <p className="text-slate-500 mt-1">Analyze a meal or scan a product and save it to get started!</p>
         </div>

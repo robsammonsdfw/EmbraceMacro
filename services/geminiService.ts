@@ -1,14 +1,12 @@
 import { Type } from "@google/genai";
 import type { NutritionInfo, Recipe } from '../types';
 
-// IMPORTANT: After deploying your backend, paste the API Gateway URL here.
-// FIX: Add type annotation to widen the type to string and resolve comparison error.
-const BACKEND_API_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default/gemini-api-proxy"; 
+// IMPORTANT: This URL will need to be updated to a new base URL that handles multiple routes.
+const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
+const AUTH_TOKEN_KEY = 'macro-vision-ai-auth-token';
 
-if (!BACKEND_API_URL || BACKEND_API_URL === "YOUR_API_GATEWAY_URL_HERE") {
-    console.error("CRITICAL: The backend API URL is not configured in services/geminiService.ts. The app will not work correctly.");
-    // In a real app, you might show a user-friendly error, but for this context, an alert is direct.
-    alert("CRITICAL ERROR: The backend API URL is not configured. Please see deployment instructions.");
+if (!API_BASE_URL) {
+    alert("CRITICAL ERROR: The backend API URL is not configured.");
 }
 
 const nutritionSchema = {
@@ -72,26 +70,37 @@ const nutritionSchema = {
   required: ["mealName", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "ingredients"]
 };
 
-// A generic function to call our new secure backend
-const callBackend = async (body: object) => {
-     const response = await fetch(BACKEND_API_URL, {
+// A generic function to call our secure backend with authentication
+const callBackend = async (endpoint: string, body: object) => {
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
+    
+    const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+    };
+
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify(body),
     });
 
     if (!response.ok) {
         const errorBody = await response.text();
         console.error("Backend error response:", errorBody);
-        throw new Error(`Backend request failed with status: ${response.status}`);
+        throw new Error(`Backend request to ${endpoint} failed with status: ${response.status}`);
     }
 
-    const jsonText = await response.text();
-    // The Lambda function now returns the already-stringified JSON from Gemini.
-    // So we can parse it directly here.
-    return JSON.parse(jsonText); 
+    // Handle cases with no JSON body to parse
+    const contentType = response.headers.get("content-type");
+    if (contentType && contentType.indexOf("application/json") !== -1) {
+        return response.json();
+    } else {
+        return response.text();
+    }
 };
 
 
@@ -99,7 +108,7 @@ export const analyzeImageWithGemini = async (base64Image: string, mimeType: stri
   try {
     const prompt = "Analyze the image of the food and identify the meal and all its ingredients. Provide a detailed nutritional breakdown including estimated calories, protein, carbohydrates, and fat for each ingredient and for the total meal. Use average portion sizes if necessary for estimation. Return the result in the specified JSON format.";
     
-    const parsedData = await callBackend({ base64Image, mimeType, prompt, schema: nutritionSchema });
+    const parsedData = await callBackend('/analyze-image', { base64Image, mimeType, prompt, schema: nutritionSchema });
 
     if (parsedData && Array.isArray(parsedData.ingredients)) {
         return parsedData as NutritionInfo;
@@ -185,7 +194,7 @@ export const getRecipesFromImage = async (base64Image: string, mimeType: string)
     try {
         const prompt = "Analyze the image to identify all visible food ingredients. Based on these ingredients, suggest 3 diverse meal recipes. Assume common pantry staples like oil, salt, pepper, and basic spices are available. For each recipe, provide a descriptive name, a short description, a list of ingredients with quantities, step-by-step instructions, and an estimated nutritional breakdown (total calories, protein, carbs, fat). Return the result in the specified JSON format.";
         
-        const parsedData = await callBackend({ base64Image, mimeType, prompt, schema: recipesSchema });
+        const parsedData = await callBackend('/analyze-image-recipes', { base64Image, mimeType, prompt, schema: recipesSchema });
 
         if (Array.isArray(parsedData)) {
             return parsedData as Recipe[];

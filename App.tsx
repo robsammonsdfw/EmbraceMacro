@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { analyzeImageWithGemini, getMealSuggestions, getRecipesFromImage } from './services/geminiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
@@ -15,34 +14,23 @@ import { GroceryList } from './components/GroceryList';
 import { AppNav } from './components/AppNav';
 import { MealSuggester } from './components/MealSuggester';
 import { RecipeCard } from './components/RecipeCard';
+import { useAuth } from './hooks/useAuth';
+import { Login } from './components/Login';
 
-const FOOD_PLAN_STORAGE_KEY = 'macro-vision-ai-food-plan';
-const SAVED_MEALS_STORAGE_KEY = 'macro-vision-ai-saved-meals';
 
 type ActiveView = 'plan' | 'meals' | 'grocery' | 'suggestions';
 
 const App: React.FC = () => {
+  const { isAuthenticated, isLoading, logout } = useAuth();
+  
+  // State is now managed in memory for the duration of the session.
+  // The backend will be responsible for persistence.
   const [image, setImage] = useState<string | null>(null);
   const [nutritionData, setNutritionData] = useState<NutritionInfo | null>(null);
   const [recipes, setRecipes] = useState<Recipe[] | null>(null);
-  const [foodPlan, setFoodPlan] = useState<Ingredient[]>(() => {
-    try {
-      const savedPlan = window.localStorage.getItem(FOOD_PLAN_STORAGE_KEY);
-      return savedPlan ? JSON.parse(savedPlan) : [];
-    } catch (error) {
-      console.error("Could not load food plan from local storage", error);
-      return [];
-    }
-  });
-  const [savedMeals, setSavedMeals] = useState<SavedMeal[]>(() => {
-    try {
-      const saved = window.localStorage.getItem(SAVED_MEALS_STORAGE_KEY);
-      return saved ? JSON.parse(saved) : [];
-    } catch (error) {
-      console.error("Could not load saved meals from local storage", error);
-      return [];
-    }
-  });
+  const [foodPlan, setFoodPlan] = useState<Ingredient[]>([]);
+  const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
+  
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [analysisMessage, setAnalysisMessage] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
@@ -57,21 +45,7 @@ const App: React.FC = () => {
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const pantryInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(FOOD_PLAN_STORAGE_KEY, JSON.stringify(foodPlan));
-    } catch (error) {
-      console.error("Could not save food plan to local storage", error);
-    }
-  }, [foodPlan]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(SAVED_MEALS_STORAGE_KEY, JSON.stringify(savedMeals));
-    } catch (error) {
-      console.error("Could not save meals to local storage", error);
-    }
-  }, [savedMeals]);
+  // NOTE: useEffects for localStorage have been removed.
   
   const resetState = () => {
       setImage(null);
@@ -119,7 +93,8 @@ const App: React.FC = () => {
       try {
         const recipeData = await getRecipesFromImage(base64String, file.type);
         setRecipes(recipeData);
-      } catch (err) {
+      } catch (err)
+      {
         setError('Failed to get recipes from your image. Please try again.');
         console.error(err);
       } finally {
@@ -167,9 +142,10 @@ const App: React.FC = () => {
 
 
   const handleSaveMeal = useCallback((mealData: NutritionInfo) => {
+    // In a real app, this would be an API call to the backend.
     const newMeal: SavedMeal = {
         ...mealData,
-        id: new Date().toISOString(),
+        id: new Date().toISOString(), // The backend would generate a real ID.
     };
     setSavedMeals(prevMeals => [newMeal, ...prevMeals]);
     if (nutritionData === mealData) {
@@ -186,6 +162,7 @@ const App: React.FC = () => {
   }, []);
 
   const handleDeleteMeal = useCallback((id: string) => {
+    // In a real app, this would be an API call.
     setSavedMeals(prevMeals => prevMeals.filter(meal => meal.id !== id));
   }, []);
 
@@ -209,6 +186,18 @@ const App: React.FC = () => {
   const handleTriggerUpload = () => { uploadInputRef.current?.click(); };
   const handleTriggerPantryUpload = () => { pantryInputRef.current?.click(); };
   const handleTriggerScanner = () => { setIsScanning(true); };
+  
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader message="Loading session..." />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Login />;
+  }
 
   const showHero = !image && !isAnalyzing && !nutritionData && !isScanning && !recipes;
   const showAnalysisContent = image || isAnalyzing || error || nutritionData || recipes;
@@ -243,11 +232,12 @@ const App: React.FC = () => {
          <input type="file" accept="image/*" ref={uploadInputRef} onChange={handleFileChange} className="hidden"/>
          <input type="file" accept="image/*" ref={pantryInputRef} onChange={handleFridgeFileChange} className="hidden"/>
 
-        <header className="text-center mb-8">
+        <header className="text-center mb-8 relative">
           <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500">
             Macro Vision AI
           </h1>
           <p className="text-slate-600 mt-2 text-lg">Your intelligent meal and grocery planner.</p>
+          <button onClick={logout} className="absolute top-0 right-0 bg-slate-200 text-slate-700 font-semibold text-sm py-1 px-3 rounded-full hover:bg-slate-300 transition">Logout</button>
         </header>
 
         <div className="space-y-8">

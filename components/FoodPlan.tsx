@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Ingredient } from '../types';
-import { TrashIcon } from './icons';
+import { TrashIcon, PlusIcon } from './icons';
 
 interface FoodPlanProps {
   items: Ingredient[];
@@ -22,7 +22,15 @@ export const FoodPlan: React.FC<FoodPlanProps> = ({ items, onRemove }) => {
   );
 
   if (items.length === 0) {
-    return null;
+    return (
+        <div className="text-center py-12 px-4 bg-white rounded-xl shadow-md border border-slate-200">
+            <div className="mx-auto bg-slate-100 text-slate-500 rounded-full w-16 h-16 flex items-center justify-center mb-4">
+                <PlusIcon />
+            </div>
+            <h3 className="text-xl font-semibold text-slate-700 mt-2">Your plan is empty for today.</h3>
+            <p className="text-slate-500 mt-1">Analyze a meal, scan a product, or add from your saved meals to get started!</p>
+        </div>
+    );
   }
 
   return (
