@@ -148,12 +148,18 @@ async function handleCustomerLogin(event, headers) {
         
         const data = shopifyResponse.customerAccessTokenCreate;
         
-        if (!data || (Array.isArray(data.customerUserErrors) && data.customerUserErrors.length > 0)) {
-            console.error('Shopify customer login error:', data?.customerUserErrors);
+        // FIX: The `data` variable is of type `unknown` here. The following logic safely
+        // checks for and extracts `customerUserErrors` to prevent type errors.
+        const userErrors = (data && typeof data === 'object' && 'customerUserErrors' in data && Array.isArray(data.customerUserErrors))
+            ? data.customerUserErrors
+            : [];
+        
+        if (!data || userErrors.length > 0) {
+            console.error('Shopify customer login error:', userErrors);
             return {
                 statusCode: 401,
                 headers,
-                body: JSON.stringify({ error: 'Invalid credentials.', details: data?.customerUserErrors?.[0]?.message ?? 'An unknown login error occurred.' })
+                body: JSON.stringify({ error: 'Invalid credentials.', details: userErrors[0]?.message ?? 'An unknown login error occurred.' })
             };
         }
         
