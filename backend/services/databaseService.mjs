@@ -11,32 +11,44 @@ const pool = new Pool({
 });
 
 /**
- * Finds a user by their Shopify shop name or creates a new one if they don't exist.
- * Saves or updates their permanent Shopify access token.
- * @param {string} shop - The shop name (e.g., 'my-store.myshopify.com').
- * @param {string} accessToken - The permanent access token from Shopify.
- * @returns {Promise<object>} The user record from the database (including the internal ID).
+ * Finds a user by their email address or creates a new one if they don't exist.
+ * This is used to provision a user in our system after they successfully log in
+ * via Shopify's Customer Authentication.
+ * @param {string} email - The customer's email address.
+ * @returns {Promise<object>} The user record from the database (including the internal ID and email).
  */
-export const findOrCreateUser = async (shop, accessToken) => {
+export const findOrCreateUserByEmail = async (email) => {
     const client = await pool.connect();
     try {
-        // Use an "upsert" query: INSERT if not exists, UPDATE if it does.
-        const query = `
-            INSERT INTO users (shop, shopify_access_token)
-            VALUES ($1, $2)
-            ON CONFLICT (shop) 
-            DO UPDATE SET shopify_access_token = EXCLUDED.shopify_access_token
-            RETURNING id, shop;
-        `;
-        const values = [shop, accessToken];
-        const res = await client.query(query, values);
+        await client.query('BEGIN');
+        
+        // Attempt to insert the user. If their email already exists, do nothing.
+        // This prevents race conditions where two simultaneous login attempts could
+        // try to create the same user.
+        await client.query(
+            'INSERT INTO users (email) VALUES ($1) ON CONFLICT (email) DO NOTHING',
+            [email]
+        );
 
-        console.log(`Successfully upserted user for shop: ${shop}`);
+        // Now, whether the user was just inserted or already existed, we can safely
+        // select their record to get their internal ID.
+        const res = await client.query(
+            'SELECT id, email FROM users WHERE email = $1',
+            [email]
+        );
+        
+        await client.query('COMMIT');
+
+        console.log(`Successfully found or created user for email: ${email}`);
+        if (res.rows.length === 0) {
+            throw new Error('User was not found after upsert operation.');
+        }
         return res.rows[0];
 
     } catch (err) {
-        console.error('Database error in findOrCreateUser:', err);
-        throw new Error('Could not save user data to the database.');
+        await client.query('ROLLBACK');
+        console.error('Database error in findOrCreateUserByEmail:', err);
+        throw new Error('Could not save or retrieve user data from the database.');
     } finally {
         client.release();
     }

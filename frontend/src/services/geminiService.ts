@@ -122,14 +122,36 @@ export const analyzeImageWithGemini = async (base64Image: string, mimeType: stri
   }
 };
 
-export const getMealSuggestions = async (_condition: string, _cuisine: string): Promise<NutritionInfo[]> => {
-    // This text-only function doesn't fit the simplified image-based backend proxy.
-    // To proceed with the deployment guide, this functionality is being stubbed out.
-    // A more advanced backend could be created to handle both text and image prompts.
-    console.warn("getMealSuggestions is not implemented with the new backend proxy.");
-    await new Promise(resolve => setTimeout(resolve, 500)); // Simulate network delay
-    // Return an empty array to prevent the UI from breaking.
-    return []; 
+const suggestionSchema = {
+    type: Type.ARRAY,
+    items: {
+        type: Type.OBJECT,
+        properties: {
+            ...nutritionSchema.properties,
+            justification: {
+                type: Type.STRING,
+                description: "A brief, one-sentence explanation of why this meal is suitable for the specified health condition."
+            }
+        },
+        required: [...(nutritionSchema.required || []), "justification"]
+    }
+};
+
+export const getMealSuggestions = async (condition: string, cuisine: string): Promise<NutritionInfo[]> => {
+    try {
+        const prompt = `Generate 3 diverse meal suggestions suitable for someone with ${condition}. The cuisine preference is ${cuisine}. For each meal, provide a detailed nutritional breakdown (total calories, protein, carbs, fat) and a list of ingredients with their individual nutritional info. Also, include a brief justification for why the meal is appropriate. Return the result in the specified JSON format.`;
+
+        const parsedData = await callBackend('/get-meal-suggestions', { prompt, schema: suggestionSchema });
+
+        if (Array.isArray(parsedData)) {
+            return parsedData as NutritionInfo[];
+        } else {
+            throw new Error("Invalid data structure received from API. Expected an array of suggestions.");
+        }
+    } catch (error) {
+        console.error("Error getting meal suggestions:", error);
+        throw new Error("Failed to generate meal suggestions.");
+    }
 };
 
 const recipeSchema = {

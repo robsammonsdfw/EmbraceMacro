@@ -1,7 +1,7 @@
-// You will need to add the 'jsonwebtoken' library to your Lambda function's dependencies.
 import { GoogleGenAI } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import https from 'https';
+import { findOrCreateUser } from '../services/databaseService.mjs';
 // FIX: Import Buffer to resolve 'Cannot find name 'Buffer'' error.
 import { Buffer } from 'buffer';
 
@@ -11,8 +11,9 @@ const {
     SHOPIFY_CLIENT_ID,
     SHOPIFY_CLIENT_SECRET,
     JWT_SECRET, // A long, random, secret string for signing your tokens
-    // The full URL of your Amplify app, e.g., 'https://main.xxxxxxxx.amplifyapp.com'
-    FRONTEND_URL,
+    FRONTEND_URL, // The full URL of your Amplify app, e.g., 'https://main.xxxxxxxx.amplifyapp.com'
+    // Database credentials will be used by the 'pg' library automatically:
+    // PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGPORT
 } = process.env;
 
 // FIX: Define Shopify OAuth scopes.
@@ -32,14 +33,10 @@ export const handler = async (event) => {
     // This check runs on every invocation to ensure the function is properly configured.
     const requiredEnvVars = [
         'GEMINI_API_KEY', 'SHOPIFY_CLIENT_ID', 'SHOPIFY_CLIENT_SECRET',
-        'JWT_SECRET', 'FRONTEND_URL'
+        'JWT_SECRET', 'FRONTEND_URL', 'PGHOST', 'PGUSER', 'PGPASSWORD',
+        'PGDATABASE', 'PGPORT'
     ];
     
-    // We also check for database credentials, though they are only used in the callback.
-    // This prevents a successful login followed by a failed callback.
-    // Note: The databaseService.mjs will also need PGHOST, PGUSER, etc.
-    // We will assume for now they are checked implicitly by the DB connection logic.
-
     const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
     
     if (missingVars.length > 0) {
@@ -66,7 +63,7 @@ export const handler = async (event) => {
         stage = event.requestContext.stage;
         method = event.requestContext.http.method;
         console.log('[ROUTING] Detected API Gateway v2 (HTTP API) payload.');
-    } 
+    }
     // Check for API Gateway v1 (REST API) payload format
     else if (event.requestContext && event.path) {
         path = event.path;
@@ -88,7 +85,7 @@ export const handler = async (event) => {
     if (method === 'OPTIONS') {
         return { statusCode: 200, headers };
     }
-    
+
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
     const eventContext = { domainName, stage };
 
@@ -99,21 +96,27 @@ export const handler = async (event) => {
         return handleShopifyAuth(event, eventContext);
     }
     
-    // Protected routes below
+    // --- PROTECTED ROUTES ---
     const token = event.headers.authorization?.split(' ')[1];
     if (!token) {
         return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized: No token provided.' })};
     }
 
+    let decodedToken;
     try {
-        jwt.verify(token, JWT_SECRET); // This will throw an error if the token is invalid
+        decodedToken = jwt.verify(token, JWT_SECRET);
     } catch (err) {
         return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized: Invalid token.' })};
     }
     
-    // --- PROTECTED ROUTES ---
+    // Add user info from token to the event for use in other handlers
+    event.user = decodedToken;
+
     if (path === '/analyze-image' || path === '/analyze-image-recipes') {
         return handleGeminiRequest(event, ai);
+    }
+    if (path === '/get-meal-suggestions') {
+        return handleMealSuggestionRequest(event, ai);
     }
 
     return {
@@ -123,7 +126,6 @@ export const handler = async (event) => {
     };
 };
 
-
 // --- ROUTE HANDLERS ---
 
 function handleShopifyAuth(event, eventContext) {
@@ -131,20 +133,14 @@ function handleShopifyAuth(event, eventContext) {
     
     const { domainName, stage } = eventContext;
     const redirectUri = `https://${domainName}/${stage}/auth/shopify/callback`;
-    
+
     const authUrl = `https://${shop}/admin/oauth/authorize?client_id=${SHOPIFY_CLIENT_ID}&scope=${SHOPIFY_SCOPES}&redirect_uri=${redirectUri}`;
 
-    return {
-        statusCode: 302,
-        headers: {
-            Location: authUrl,
-        },
-    };
+    return { statusCode: 302, headers: { Location: authUrl } };
 }
 
 async function handleShopifyCallback(event, eventContext) {
     const { code, shop } = event.queryStringParameters;
-    
     if (!code || !shop) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing code or shop from Shopify callback.' })};
     }
@@ -152,16 +148,18 @@ async function handleShopifyCallback(event, eventContext) {
     try {
         const accessToken = await exchangeCodeForToken(shop, code, eventContext);
         
-        const sessionToken = jwt.sign({ shop: shop }, JWT_SECRET, { expiresIn: '7d' });
+        // Save user to database and get their internal ID
+        const user = await findOrCreateUser(shop, accessToken);
+        
+        // Create a session token (JWT) containing our internal user ID and the shop name
+        const sessionToken = jwt.sign(
+            { userId: user.id, shop: user.shop }, 
+            JWT_SECRET, 
+            { expiresIn: '7d' }
+        );
         
         const redirectUrl = `${FRONTEND_URL}?token=${sessionToken}`;
-        
-        return {
-            statusCode: 302,
-            headers: {
-                Location: redirectUrl,
-            },
-        };
+        return { statusCode: 302, headers: { Location: redirectUrl } };
 
     } catch (error) {
         console.error("Error during Shopify callback:", error);
@@ -170,6 +168,8 @@ async function handleShopifyCallback(event, eventContext) {
 }
 
 async function handleGeminiRequest(event, ai) {
+    // Note: event.user is available here if you need to log which user made the request
+    console.log(`Gemini request made by user ID: ${event.user.userId}`);
     try {
         const body = JSON.parse(event.body);
         const { base64Image, mimeType, prompt, schema } = body;
@@ -190,7 +190,7 @@ async function handleGeminiRequest(event, ai) {
         return {
             statusCode: 200,
             headers: { ...headers, 'Content-Type': 'application/json' },
-            body: response.text, // Gemini's response.text is already a stringified JSON
+            body: response.text,
         };
     } catch (error) {
         console.error("Error calling Gemini API:", error);
@@ -198,13 +198,41 @@ async function handleGeminiRequest(event, ai) {
     }
 }
 
+async function handleMealSuggestionRequest(event, ai) {
+    console.log(`Meal suggestion request made by user ID: ${event.user.userId}`);
+    try {
+        const body = JSON.parse(event.body);
+        const { prompt, schema } = body;
+        
+        if (!prompt || !schema) {
+            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing required parameters (prompt, schema).' })};
+        }
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: { responseMimeType: 'application/json', responseSchema: schema },
+        });
+
+        return {
+            statusCode: 200,
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: response.text,
+        };
+    } catch (error) {
+        console.error("Error calling Gemini API for meal suggestions:", error);
+        return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to call Gemini API for meal suggestions.' })};
+    }
+}
+
+
 // --- HELPER FUNCTIONS ---
 
 function exchangeCodeForToken(shop, code, eventContext) {
     return new Promise((resolve, reject) => {
         const { domainName, stage } = eventContext;
         const redirectUri = `https://${domainName}/${stage}/auth/shopify/callback`;
-        
+
         const postData = JSON.stringify({
             client_id: SHOPIFY_CLIENT_ID,
             client_secret: SHOPIFY_CLIENT_SECRET,
@@ -215,10 +243,7 @@ function exchangeCodeForToken(shop, code, eventContext) {
             hostname: shop,
             path: '/admin/oauth/access_token',
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength(postData),
-            },
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
         };
 
         const req = https.request(options, (res) => {
