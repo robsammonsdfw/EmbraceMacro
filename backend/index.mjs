@@ -118,12 +118,6 @@ export const handler = async (event) => {
 // --- ROUTE HANDLERS ---
 
 async function handleCustomerLogin(event, headers) {
-    const { email, password } = JSON.parse(event.body);
-
-    if (!email || !password) {
-        return { statusCode: 400, headers, body: JSON.stringify({ error: 'Email and password are required.' }) };
-    }
-
     const mutation = `
         mutation customerAccessTokenCreate($input: CustomerAccessTokenCreateInput!) {
             customerAccessTokenCreate(input: $input) {
@@ -139,32 +133,25 @@ async function handleCustomerLogin(event, headers) {
             }
         }
     `;
-    const variables = { input: { email, password } };
 
     try {
-        const shopifyResponse = await callShopifyStorefrontAPI(mutation, variables);
-        // FIX: The original code produced a type error because `shopifyResponse` could be `unknown`.
-        // This type guard validates the shape of the response before accessing properties,
-        // which resolves the static analysis error and prevents potential runtime errors.
-        if (
-            !shopifyResponse ||
-            typeof shopifyResponse !== 'object' ||
-            !('customerAccessTokenCreate' in shopifyResponse)
-        ) {
-            console.error('Shopify customer login error: malformed response', shopifyResponse);
-            return {
-                statusCode: 500,
-                headers,
-                body: JSON.stringify({ error: 'Login failed due to an unexpected response from the authentication server.' })
-            };
+        const { email, password } = JSON.parse(event.body);
+
+        if (!email || !password) {
+            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Email and password are required.' }) };
         }
         
-        const data = shopifyResponse.customerAccessTokenCreate;
+        const variables = { input: { email, password } };
+
+        const shopifyResponse = await callShopifyStorefrontAPI(mutation, variables);
         
-        // FIX: The `data` variable is of type `unknown` here. The following logic safely
-        // checks for and extracts `customerUserErrors` to prevent type errors.
-        const userErrors = (data && typeof data === 'object' && 'customerUserErrors' in data && Array.isArray(data.customerUserErrors))
-            ? data.customerUserErrors
+        // FIX: Added a type guard to safely access the nested property from the unknown response.
+        const data = (shopifyResponse && typeof shopifyResponse === 'object' && 'customerAccessTokenCreate' in shopifyResponse)
+            ? shopifyResponse['customerAccessTokenCreate']
+            : null;
+        
+        const userErrors = (data && typeof data === 'object' && 'customerUserErrors' in data && Array.isArray(data.customerUserErrors)) 
+            ? data.customerUserErrors 
             : [];
         
         if (!data || userErrors.length > 0) {
@@ -179,7 +166,7 @@ async function handleCustomerLogin(event, headers) {
         // Find or create the user in our own database
         const user = await findOrCreateUserByEmail(email);
 
-        // Create a session token (JWT) containing our internal user ID and email
+        // Create a session token (JWT)
         const sessionToken = jwt.sign(
             { userId: user.id, email: user.email },
             process.env.JWT_SECRET,
@@ -193,8 +180,9 @@ async function handleCustomerLogin(event, headers) {
         };
 
     } catch (error) {
-        console.error("Error during customer login:", error);
-        return { statusCode: 500, headers, body: JSON.stringify({ error: 'Login failed due to an internal error.' }) };
+        // This will now catch the JSON.parse error
+        console.error("Error during customer login:", error); 
+        return { statusCode: 500, headers, body: JSON.stringify({ error: 'Login failed due to an internal error.', details: error.message }) };
     }
 }
 
