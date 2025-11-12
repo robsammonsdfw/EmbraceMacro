@@ -1,31 +1,29 @@
-
 import { GoogleGenAI } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import https from 'https';
 import { findOrCreateUserByEmail } from '../services/databaseService.mjs';
 import { Buffer } from 'buffer';
 
-// --- IMPORTANT: CONFIGURE THESE IN YOUR LAMBDA ENVIRONMENT VARIABLES ---
-const {
-    GEMINI_API_KEY,
-    SHOPIFY_STOREFRONT_TOKEN, // Used for Storefront API access
-    SHOPIFY_STORE_DOMAIN,     // Your shop domain e.g., 'rxmens.myshopify.com'
-    JWT_SECRET,               // A long, random, secret string for signing your tokens
-    FRONTEND_URL,             // The full URL of your Amplify app
-    // Database credentials will be used by the 'pg' library automatically:
-    // PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGPORT
-} = process.env;
-
-// This check is outside the handler so it can be reused without being redefined on every invocation.
-const headers = {
-    "Access-Control-Allow-Origin": FRONTEND_URL,
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    "Access-Control-Allow-Methods": "OPTIONS,POST,GET"
-};
-
-
 // --- MAIN HANDLER (ROUTER) ---
 export const handler = async (event) => {
+    // --- IMPORTANT: CONFIGURE THESE IN YOUR LAMBDA ENVIRONMENT VARIABLES ---
+    const {
+        GEMINI_API_KEY,
+        SHOPIFY_STOREFRONT_TOKEN, // Used for Storefront API access
+        SHOPIFY_STORE_DOMAIN,     // Your shop domain e.g., 'rxmens.myshopify.com'
+        JWT_SECRET,               // A long, random, secret string for signing your tokens
+        FRONTEND_URL,             // The full URL of your Amplify app
+        // Database credentials will be used by the 'pg' library automatically:
+        // PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGPORT
+    } = process.env;
+    
+    // Define headers FIRST. This ensures all responses, including errors, get CORS headers.
+    const headers = {
+        "Access-Control-Allow-Origin": FRONTEND_URL,
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        "Access-Control-Allow-Methods": "OPTIONS,POST,GET"
+    };
+
     // --- START: Environment Variable Validation ---
     const requiredEnvVars = [
         'GEMINI_API_KEY', 'SHOPIFY_STOREFRONT_TOKEN', 'SHOPIFY_STORE_DOMAIN',
@@ -38,6 +36,7 @@ export const handler = async (event) => {
     if (missingVars.length > 0) {
         const errorMessage = `Configuration error: The following required environment variables are missing: ${missingVars.join(', ')}. Please configure them in the Lambda settings.`;
         console.error(errorMessage);
+        // CRITICAL: Return the error with the CORS headers so the browser can read it.
         return {
             statusCode: 500,
             headers,
@@ -56,8 +55,8 @@ export const handler = async (event) => {
     } else if (event.path) { // API Gateway v1 (REST API)
         path = event.path;
         method = event.httpMethod;
-        const stage = event.requestContext.stage;
-        if (path.startsWith(`/${stage}`)) {
+        const stage = event.requestContext?.stage;
+        if (stage && path.startsWith(`/${stage}`)) {
             path = path.substring(stage.length + 1);
         }
     } else {
@@ -74,7 +73,7 @@ export const handler = async (event) => {
     
     // --- NEW PUBLIC LOGIN ROUTE ---
     if (path === '/auth/customer-login') {
-        return handleCustomerLogin(event);
+        return handleCustomerLogin(event, headers);
     }
     
     // --- PROTECTED ROUTES ---
@@ -90,10 +89,10 @@ export const handler = async (event) => {
     }
 
     if (path === '/analyze-image' || path === '/analyze-image-recipes') {
-        return handleGeminiRequest(event, ai);
+        return handleGeminiRequest(event, ai, headers);
     }
     if (path === '/get-meal-suggestions') {
-        return handleMealSuggestionRequest(event, ai);
+        return handleMealSuggestionRequest(event, ai, headers);
     }
 
     return {
@@ -105,7 +104,7 @@ export const handler = async (event) => {
 
 // --- ROUTE HANDLERS ---
 
-async function handleCustomerLogin(event) {
+async function handleCustomerLogin(event, headers) {
     const { email, password } = JSON.parse(event.body);
 
     if (!email || !password) {
@@ -131,10 +130,9 @@ async function handleCustomerLogin(event) {
 
     try {
         const shopifyResponse = await callShopifyStorefrontAPI(mutation, variables);
-        // FIX: Use optional chaining to safely access nested property and fix type error.
+        // FIX: Use optional chaining to safely access nested properties. This resolves the TypeScript error 'property does not exist on type {}' which occurred when destructuring from a fallback empty object.
         const data = shopifyResponse?.customerAccessTokenCreate;
         
-        // FIX: Add a check for `data` and improve error handling to prevent runtime errors.
         if (!data || data.customerUserErrors.length > 0) {
             console.error('Shopify customer login error:', data?.customerUserErrors);
             return {
@@ -150,7 +148,7 @@ async function handleCustomerLogin(event) {
         // Create a session token (JWT) containing our internal user ID and email
         const sessionToken = jwt.sign(
             { userId: user.id, email: user.email },
-            JWT_SECRET,
+            process.env.JWT_SECRET,
             { expiresIn: '7d' }
         );
         
@@ -167,7 +165,7 @@ async function handleCustomerLogin(event) {
 }
 
 
-async function handleGeminiRequest(event, ai) {
+async function handleGeminiRequest(event, ai, headers) {
     console.log(`Gemini request made by user: ${event.user.email}`);
     try {
         const body = JSON.parse(event.body);
@@ -197,7 +195,7 @@ async function handleGeminiRequest(event, ai) {
     }
 }
 
-async function handleMealSuggestionRequest(event, ai) {
+async function handleMealSuggestionRequest(event, ai, headers) {
     console.log(`Meal suggestion request made by user: ${event.user.email}`);
     try {
         const body = JSON.parse(event.body);
@@ -228,6 +226,7 @@ async function handleMealSuggestionRequest(event, ai) {
 // --- HELPER FUNCTIONS ---
 
 function callShopifyStorefrontAPI(query, variables) {
+    const { SHOPIFY_STORE_DOMAIN, SHOPIFY_STOREFRONT_TOKEN } = process.env;
     const postData = JSON.stringify({ query, variables });
 
     const options = {
