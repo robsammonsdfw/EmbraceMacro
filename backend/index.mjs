@@ -64,20 +64,17 @@ export const handler = async (event) => {
         return { statusCode: 500, headers, body: JSON.stringify({ error: 'Internal Server Error: Malformed request event.' }) };
     }
     // --- END: Robust path and domain resolution ---
-
-    // --- 1. ADD THIS DEBUGGING LOG ---
+    
     console.log('[DEBUG] INCOMING_REQUEST:', JSON.stringify({
         resolved_method: method,
         resolved_path: path,
         env_frontend_url: FRONTEND_URL 
     }));
-    // --- END DEBUGGING LOG ---
+
 
     if (method === 'OPTIONS') {
         
-        // --- 2. ADD THIS DEBUGGING LOG ---
         console.log('[DEBUG] OPTIONS_HANDLER: Returning headers:', JSON.stringify(headers));
-        // --- END DEBUGGING LOG ---
         
         return { statusCode: 200, headers };
     }
@@ -135,6 +132,11 @@ async function handleCustomerLogin(event, headers) {
     `;
 
     try {
+        // --- 1. ADD THIS LOG ---
+        // Log the raw body to see what we're getting
+        console.log('[DEBUG] handleCustomerLogin event.body:', event.body);
+        // --- END ADDED LOG ---
+
         const { email, password } = JSON.parse(event.body);
 
         if (!email || !password) {
@@ -145,7 +147,6 @@ async function handleCustomerLogin(event, headers) {
 
         const shopifyResponse = await callShopifyStorefrontAPI(mutation, variables);
         
-        // FIX: Added a type guard to safely access the nested property from the unknown response.
         const data = (shopifyResponse && typeof shopifyResponse === 'object' && 'customerAccessTokenCreate' in shopifyResponse)
             ? shopifyResponse['customerAccessTokenCreate']
             : null;
@@ -180,8 +181,11 @@ async function handleCustomerLogin(event, headers) {
         };
 
     } catch (error) {
-        // This will now catch the JSON.parse error
-        console.error("Error during customer login:", error); 
+        // --- 2. MODIFY THIS LOG ---
+        // Make the catch block log more verbosely
+        console.error('[CRITICAL] LOGIN_HANDLER_CRASH:', error.name, error.message, error.stack); 
+        // --- END MODIFIED LOG ---
+        
         return { statusCode: 500, headers, body: JSON.stringify({ error: 'Login failed due to an internal error.', details: error.message }) };
     }
 }
