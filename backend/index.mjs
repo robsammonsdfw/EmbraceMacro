@@ -1,7 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import https from 'https';
-import { findOrCreateUserByEmail } from '../services/databaseService.mjs';
+import { findOrCreateUserByEmail } from './services/databaseService.mjs';
 import { Buffer } from 'buffer';
 
 // --- MAIN HANDLER (ROUTER) ---
