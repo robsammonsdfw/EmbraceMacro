@@ -27,20 +27,49 @@ const headers = {
 
 // --- MAIN HANDLER (ROUTER) ---
 export const handler = async (event) => {
-    // Use the reliable path provided by API Gateway, which excludes the stage.
-    const path = event.requestContext.http.path;
+    // --- START: Robust path and domain resolution ---
+    let path;
+    let domainName;
+    let stage;
+    let method;
 
-    console.log(`Received request for clean path: ${path}`);
-    
-    if (event.requestContext.http.method === 'OPTIONS') {
+    // Check for API Gateway v2 (HTTP API) payload format
+    if (event.requestContext && event.requestContext.http) {
+        path = event.requestContext.http.path;
+        domainName = event.requestContext.domainName;
+        stage = event.requestContext.stage;
+        method = event.requestContext.http.method;
+        console.log('[ROUTING] Detected API Gateway v2 (HTTP API) payload.');
+    }
+    // Check for API Gateway v1 (REST API) payload format
+    else if (event.requestContext && event.path) {
+        path = event.path;
+        domainName = event.headers.Host;
+        stage = event.requestContext.stage;
+        method = event.httpMethod;
+        // In v1, path includes the stage, so we remove it for consistent routing logic.
+        if (path.startsWith(`/${stage}`)) {
+            path = path.substring(stage.length + 1);
+        }
+        console.log('[ROUTING] Detected API Gateway v1 (REST API) payload.');
+    } else {
+        console.error('[ROUTING] Could not determine API Gateway payload version. Event:', JSON.stringify(event));
+        return { statusCode: 500, headers, body: JSON.stringify({ error: 'Internal Server Error: Malformed request event.' }) };
+    }
+    console.log(`[ROUTING] Final Path: "${path}", Domain: "${domainName}", Stage: "${stage}"`);
+    // --- END: Robust path and domain resolution ---
+
+    if (method === 'OPTIONS') {
         return { statusCode: 200, headers };
     }
 
+    const eventContext = { domainName, stage };
+
     if (path === '/auth/shopify/callback') {
-        return handleShopifyCallback(event);
+        return handleShopifyCallback(event, eventContext);
     }
     if (path === '/auth/shopify') {
-        return handleShopifyAuth(event);
+        return handleShopifyAuth(event, eventContext);
     }
     
     // --- PROTECTED ROUTES ---
@@ -70,35 +99,31 @@ export const handler = async (event) => {
     return {
         statusCode: 404,
         headers,
-        body: JSON.stringify({ error: `Not Found: The path "${path}" does not exist.` }),
+        body: JSON.stringify({ error: `Not Found: The path "${path}" could not be handled.` }),
     };
 };
 
 // --- ROUTE HANDLERS ---
 
-function handleShopifyAuth(event) {
+function handleShopifyAuth(event, eventContext) {
     const shop = 'rxmens.myshopify.com'; // Hardcoded store domain
-    if (!shop) {
-       console.error("CRITICAL: Shopify store domain is not configured.");
-       return { statusCode: 500, headers, body: JSON.stringify({ error: 'Server configuration error.' })};
-   }
-    // Robustly build the redirect URI from its parts.
-    const stage = event.requestContext?.stage || 'default';
-    const redirectUri = `https://${event.requestContext.domainName}/${stage}/auth/shopify/callback`;
+    
+    const { domainName, stage } = eventContext;
+    const redirectUri = `https://${domainName}/${stage}/auth/shopify/callback`;
 
     const authUrl = `https://${shop}/admin/oauth/authorize?client_id=${SHOPIFY_CLIENT_ID}&scope=${SHOPIFY_SCOPES}&redirect_uri=${redirectUri}`;
 
     return { statusCode: 302, headers: { Location: authUrl } };
 }
 
-async function handleShopifyCallback(event) {
+async function handleShopifyCallback(event, eventContext) {
     const { code, shop } = event.queryStringParameters;
     if (!code || !shop) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing code or shop from Shopify callback.' })};
     }
 
     try {
-        const accessToken = await exchangeCodeForToken(shop, code, event);
+        const accessToken = await exchangeCodeForToken(shop, code, eventContext);
         
         // Save user to database and get their internal ID
         const user = await findOrCreateUser(shop, accessToken);
@@ -153,11 +178,10 @@ async function handleGeminiRequest(event) {
 
 // --- HELPER FUNCTIONS ---
 
-function exchangeCodeForToken(shop, code, event) {
+function exchangeCodeForToken(shop, code, eventContext) {
     return new Promise((resolve, reject) => {
-        // Robustly build the redirect URI to ensure it matches the one from the auth step.
-        const stage = event.requestContext?.stage || 'default';
-        const redirectUri = `https://${event.requestContext.domainName}/${stage}/auth/shopify/callback`;
+        const { domainName, stage } = eventContext;
+        const redirectUri = `https://${domainName}/${stage}/auth/shopify/callback`;
 
         const postData = JSON.stringify({
             client_id: SHOPIFY_CLIENT_ID,
