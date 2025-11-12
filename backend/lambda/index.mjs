@@ -16,17 +16,40 @@ const {
     // PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGPORT
 } = process.env;
 
-const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-const SHOPIFY_SCOPES = 'read_products,read_customer'; // Add scopes you need
+// FIX: Define Shopify OAuth scopes.
+const SHOPIFY_SCOPES = 'read_customers';
 
+// This check is outside the handler so it can be reused without being redefined on every invocation.
 const headers = {
     "Access-Control-Allow-Origin": FRONTEND_URL,
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Allow-Methods": "OPTIONS,POST,GET"
 };
 
+
 // --- MAIN HANDLER (ROUTER) ---
 export const handler = async (event) => {
+    // --- START: Environment Variable Validation ---
+    // This check runs on every invocation to ensure the function is properly configured.
+    const requiredEnvVars = [
+        'GEMINI_API_KEY', 'SHOPIFY_CLIENT_ID', 'SHOPIFY_CLIENT_SECRET',
+        'JWT_SECRET', 'FRONTEND_URL', 'PGHOST', 'PGUSER', 'PGPASSWORD',
+        'PGDATABASE', 'PGPORT'
+    ];
+    
+    const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+    
+    if (missingVars.length > 0) {
+        const errorMessage = `Configuration error: The following required environment variables are missing: ${missingVars.join(', ')}. Please configure them in the Lambda settings.`;
+        console.error(errorMessage);
+        return {
+            statusCode: 500,
+            headers,
+            body: JSON.stringify({ error: errorMessage }),
+        };
+    }
+    // --- END: Environment Variable Validation ---
+
     // --- START: Robust path and domain resolution ---
     let path;
     let domainName;
@@ -63,6 +86,7 @@ export const handler = async (event) => {
         return { statusCode: 200, headers };
     }
 
+    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
     const eventContext = { domainName, stage };
 
     if (path === '/auth/shopify/callback') {
@@ -89,7 +113,7 @@ export const handler = async (event) => {
     event.user = decodedToken;
 
     if (path === '/analyze-image' || path === '/analyze-image-recipes') {
-        return handleGeminiRequest(event);
+        return handleGeminiRequest(event, ai);
     }
     // Add future data routes here
     // if (path === '/meals') {
@@ -144,7 +168,7 @@ async function handleShopifyCallback(event, eventContext) {
     }
 }
 
-async function handleGeminiRequest(event) {
+async function handleGeminiRequest(event, ai) {
     // Note: event.user is available here if you need to log which user made the request
     console.log(`Gemini request made by user ID: ${event.user.userId}`);
     try {
