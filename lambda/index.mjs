@@ -13,7 +13,6 @@ const {
     JWT_SECRET, // A long, random, secret string for signing your tokens
     // The full URL of your Amplify app, e.g., 'https://main.xxxxxxxx.amplifyapp.com'
     FRONTEND_URL,
-    SHOPIFY_SHOP_DOMAIN // The fixed *.myshopify.com domain for your store
 } = process.env;
 
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
@@ -77,9 +76,9 @@ export const handler = async (event) => {
 
 // 1. Redirects the user to Shopify's authorization screen
 function handleShopifyAuth(event) {
-    const shop = SHOPIFY_SHOP_DOMAIN;
+    const shop = 'rxmens.myshopify.com'; // Hardcoded store domain
     if (!shop) {
-        console.error("CRITICAL: SHOPIFY_SHOP_DOMAIN environment variable is not set.");
+        console.error("CRITICAL: Shopify store domain is not configured.");
         return { statusCode: 500, headers, body: JSON.stringify({ error: 'Server configuration error.' })};
     }
 

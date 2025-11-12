@@ -12,7 +12,6 @@ const {
     SHOPIFY_CLIENT_SECRET,
     JWT_SECRET, // A long, random, secret string for signing your tokens
     FRONTEND_URL, // The full URL of your Amplify app, e.g., 'https://main.xxxxxxxx.amplifyapp.com'
-    SHOPIFY_SHOP_DOMAIN, // The fixed *.myshopify.com domain for your store
     // Database credentials will be used by the 'pg' library automatically:
     // PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGPORT
 } = process.env;
@@ -81,9 +80,9 @@ export const handler = async (event) => {
 // --- ROUTE HANDLERS ---
 
 function handleShopifyAuth(event) {
-    const shop = SHOPIFY_SHOP_DOMAIN;
+    const shop = 'rxmens.myshopify.com'; // Hardcoded store domain
     if (!shop) {
-       console.error("CRITICAL: SHOPIFY_SHOP_DOMAIN environment variable is not set.");
+       console.error("CRITICAL: Shopify store domain is not configured.");
        return { statusCode: 500, headers, body: JSON.stringify({ error: 'Server configuration error.' })};
    }
     // The redirect URI is built dynamically using the request's path.
