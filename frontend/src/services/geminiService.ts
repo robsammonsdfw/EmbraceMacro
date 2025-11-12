@@ -1,4 +1,3 @@
-import { Type } from "@google/genai";
 import type { NutritionInfo, Recipe } from '../types';
 
 // IMPORTANT: This URL will need to be updated to a new base URL that handles multiple routes.
@@ -8,6 +7,14 @@ const AUTH_TOKEN_KEY = 'embracehealth-meals-auth-token';
 if (!API_BASE_URL) {
     alert("CRITICAL ERROR: The backend API URL is not configured.");
 }
+
+// Local constant to replace the 'Type' enum from @google/genai
+const Type = {
+  OBJECT: 'OBJECT',
+  STRING: 'STRING',
+  NUMBER: 'NUMBER',
+  ARRAY: 'ARRAY',
+} as const;
 
 const nutritionSchema = {
   type: Type.OBJECT,
