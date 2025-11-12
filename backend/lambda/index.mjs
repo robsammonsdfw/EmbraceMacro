@@ -27,22 +27,19 @@ const headers = {
 
 // --- MAIN HANDLER (ROUTER) ---
 export const handler = async (event) => {
-    const path = event.rawPath;
-    const stage = event.requestContext?.stage;
-    const basePath = stage ? `/${stage}` : '';
-    // Remove the base path (stage) if it exists and is not just "/"
-    const cleanPath = path.startsWith(basePath) && basePath.length > 1 ? path.substring(basePath.length) : path;
-    
-    console.log(`Received request for path: ${path}, clean path: ${cleanPath}`);
+    // Use the reliable path provided by API Gateway, which excludes the stage.
+    const path = event.requestContext.http.path;
+
+    console.log(`Received request for clean path: ${path}`);
     
     if (event.requestContext.http.method === 'OPTIONS') {
         return { statusCode: 200, headers };
     }
 
-    if (cleanPath === '/auth/shopify/callback') {
+    if (path === '/auth/shopify/callback') {
         return handleShopifyCallback(event);
     }
-    if (cleanPath === '/auth/shopify') {
+    if (path === '/auth/shopify') {
         return handleShopifyAuth(event);
     }
     
@@ -62,7 +59,7 @@ export const handler = async (event) => {
     // Add user info from token to the event for use in other handlers
     event.user = decodedToken;
 
-    if (cleanPath === '/analyze-image' || cleanPath === '/analyze-image-recipes') {
+    if (path === '/analyze-image' || path === '/analyze-image-recipes') {
         return handleGeminiRequest(event);
     }
     // Add future data routes here
@@ -73,7 +70,7 @@ export const handler = async (event) => {
     return {
         statusCode: 404,
         headers,
-        body: JSON.stringify({ error: `Not Found: The path "${cleanPath}" does not exist.` }),
+        body: JSON.stringify({ error: `Not Found: The path "${path}" does not exist.` }),
     };
 };
 
@@ -85,9 +82,10 @@ function handleShopifyAuth(event) {
        console.error("CRITICAL: Shopify store domain is not configured.");
        return { statusCode: 500, headers, body: JSON.stringify({ error: 'Server configuration error.' })};
    }
-    // The redirect URI is built dynamically using the request's path.
-    // e.g., if request is /default/auth/shopify, callback will be /default/auth/shopify/callback
-    const redirectUri = `https://${event.requestContext.domainName}${event.rawPath}/callback`;
+    // Robustly build the redirect URI from its parts.
+    const stage = event.requestContext?.stage || 'default';
+    const redirectUri = `https://${event.requestContext.domainName}/${stage}/auth/shopify/callback`;
+
     const authUrl = `https://${shop}/admin/oauth/authorize?client_id=${SHOPIFY_CLIENT_ID}&scope=${SHOPIFY_SCOPES}&redirect_uri=${redirectUri}`;
 
     return { statusCode: 302, headers: { Location: authUrl } };
@@ -157,8 +155,10 @@ async function handleGeminiRequest(event) {
 
 function exchangeCodeForToken(shop, code, event) {
     return new Promise((resolve, reject) => {
-        // This MUST match the redirect_uri from handleShopifyAuth
-        const redirectUri = `https://${event.requestContext.domainName}${event.rawPath}`;
+        // Robustly build the redirect URI to ensure it matches the one from the auth step.
+        const stage = event.requestContext?.stage || 'default';
+        const redirectUri = `https://${event.requestContext.domainName}/${stage}/auth/shopify/callback`;
+
         const postData = JSON.stringify({
             client_id: SHOPIFY_CLIENT_ID,
             client_secret: SHOPIFY_CLIENT_SECRET,
