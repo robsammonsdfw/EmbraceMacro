@@ -271,10 +271,25 @@ function callShopifyStorefrontAPI(query, variables) {
             let data = '';
             res.on('data', (chunk) => { data += chunk; });
             res.on('end', () => {
-                if (res.statusCode >= 200 && res.statusCode < 300) {
-                    resolve(JSON.parse(data).data);
-                } else {
-                    reject(new Error(`Shopify API failed with status ${res.statusCode}: ${data}`));
+                try {
+                    const responseBody = JSON.parse(data);
+                    
+                    if (res.statusCode >= 200 && res.statusCode < 300) {
+                        // NEW: Check for top-level errors
+                        if (responseBody.errors) {
+                            console.error("[Shopify API Error]", JSON.stringify(responseBody.errors));
+                            // Pass null so the main handler knows data is missing, 
+                            // or reject if you prefer to catch it as a crash.
+                            // Let's resolve null to let the main handler fail gracefully.
+                            resolve(null); 
+                        } else {
+                            resolve(responseBody.data);
+                        }
+                    } else {
+                        reject(new Error(`Shopify API failed with status ${res.statusCode}: ${data}`));
+                    }
+                } catch (e) {
+                    reject(new Error(`Failed to parse Shopify response: ${e.message}`));
                 }
             });
         });
