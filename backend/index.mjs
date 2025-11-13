@@ -62,7 +62,7 @@ export const handler = async (event) => {
     }
     
     if (method === 'OPTIONS') {
-        return { statusCode: 200, headers };
+        return { statusCode: 204, headers };
     }
 
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
