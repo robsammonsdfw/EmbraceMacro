@@ -85,10 +85,10 @@ export const handler = async (event) => {
 
     // --- API ROUTING ---
     if (path.includes('/saved-meals')) {
-        return handleSavedMealsRequest(event, headers, method);
+        return handleSavedMealsRequest(event, headers, method, path);
     }
     if (path.includes('/food-plan')) {
-        return handleFoodPlanRequest(event, headers, method);
+        return handleFoodPlanRequest(event, headers, method, path);
     }
     if (path.endsWith('/analyze-image') || path.endsWith('/analyze-image-recipes')) {
         return handleGeminiRequest(event, ai, headers);
@@ -106,9 +106,8 @@ export const handler = async (event) => {
 
 // --- ROUTE HANDLERS ---
 
-async function handleSavedMealsRequest(event, headers, method) {
+async function handleSavedMealsRequest(event, headers, method, path) {
     const userId = event.user.userId;
-    const path = event.requestContext?.http?.path || event.path;
 
     try {
         if (method === 'GET') {
@@ -136,9 +135,8 @@ async function handleSavedMealsRequest(event, headers, method) {
     }
 }
 
-async function handleFoodPlanRequest(event, headers, method) {
+async function handleFoodPlanRequest(event, headers, method, path) {
     const userId = event.user.userId;
-    const path = event.requestContext?.http?.path || event.path;
 
     try {
         if (method === 'GET') {
