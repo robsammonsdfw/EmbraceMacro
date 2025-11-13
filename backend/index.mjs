@@ -202,7 +202,8 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
             };
         }
         
-        const data = shopifyResponse.customerAccessTokenCreate;
+        // FIX: Use bracket notation for property access on a variable typed as 'object' to resolve TypeScript error.
+        const data = shopifyResponse['customerAccessTokenCreate'];
         if (!data || data.customerUserErrors.length > 0) {
             console.error('Shopify customer login error:', data?.customerUserErrors);
             return {
