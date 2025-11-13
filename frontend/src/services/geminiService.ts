@@ -1,4 +1,4 @@
-import type { NutritionInfo, Recipe, SavedMeal, Ingredient, FoodPlanItem } from '../types';
+import type { NutritionInfo, Recipe, SavedMeal, Ingredient, MealPlanGroup } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
 const AUTH_TOKEN_KEY = 'embracehealth-meals-auth-token';
@@ -99,11 +99,11 @@ export const deleteMeal = (mealId: number): Promise<null> => {
 
 // --- Food Plan Endpoints ---
 
-export const getFoodPlan = (): Promise<FoodPlanItem[]> => {
+export const getFoodPlan = (): Promise<MealPlanGroup[]> => {
     return callApi('/food-plan', 'GET');
 };
 
-export const addItemsToFoodPlan = (ingredients: Ingredient[]): Promise<FoodPlanItem[]> => {
+export const addItemsToFoodPlan = (ingredients: Ingredient[]): Promise<MealPlanGroup[]> => {
     return callApi('/food-plan', 'POST', { ingredients });
 };
 

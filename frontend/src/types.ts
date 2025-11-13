@@ -5,11 +5,9 @@ export interface Ingredient {
   protein: number;
   carbs: number;
   fat: number;
-  // Optional detailed nutrients
   sugar?: number;
   fiber?: number;
   sodium?: number;
-  // Optional metadata
   imageUrl?: string;
 }
 
@@ -19,13 +17,11 @@ export interface NutritionInfo {
   totalProtein: number;
   totalCarbs: number;
   totalFat: number;
-  // Optional detailed totals
   totalSugar?: number;
   totalFiber?: number;
   totalSodium?: number;
   ingredients: Ingredient[];
   justification?: string;
-  // Optional metadata for the whole meal/product
   imageUrl?: string; 
   nutriScore?: string;
   ecoScore?: string;
@@ -36,9 +32,16 @@ export interface SavedMeal extends NutritionInfo {
   id: number; // Database ID is a number
 }
 
-// Represents an ingredient that has been saved to the daily plan
-export interface FoodPlanItem extends Ingredient {
-  id: number; // Database ID is a number
+// Represents a meal analysis that has been saved to the user's history
+export interface MealLogEntry extends NutritionInfo {
+  id: number;
+  createdAt: string;
+}
+
+// Represents a meal that has been added to the daily plan
+export interface MealPlanGroup {
+  id: number; // This is the ID of the entry in the meal_plan_groups table
+  meal: SavedMeal;
 }
 
 export interface Recipe {
@@ -52,7 +55,6 @@ export interface Recipe {
   nutrition: {
     totalCalories: number;
     totalProtein: number;
-
     totalCarbs: number;
     totalFat: number;
   };

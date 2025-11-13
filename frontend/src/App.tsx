@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import * as apiService from './services/apiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
-import type { NutritionInfo, Ingredient, SavedMeal, Recipe, FoodPlanItem } from './types';
+import type { NutritionInfo, SavedMeal, Recipe, MealLogEntry, MealPlanGroup } from './types';
 import { ImageUploader } from './components/ImageUploader';
 import { NutritionCard } from './components/NutritionCard';
 import { FoodPlan } from './components/FoodPlan';
@@ -10,15 +10,13 @@ import { ErrorAlert } from './components/ErrorAlert';
 import { Hero } from './components/Hero';
 import { BarcodeScanner } from './components/BarcodeScanner';
 import { MealLibrary } from './components/MealLibrary';
-import { GroceryList } from './components/GroceryList';
 import { AppNav } from './components/AppNav';
-import { MealSuggester } from './components/MealSuggester';
+import { MealHistory } from './components/MealHistory';
 import { RecipeCard } from './components/RecipeCard';
 import { useAuth } from './hooks/useAuth';
 import { Login } from './components/Login';
 
-
-type ActiveView = 'plan' | 'meals' | 'grocery' | 'suggestions';
+type ActiveView = 'plan' | 'meals' | 'history';
 
 const App: React.FC = () => {
   const { isAuthenticated, isLoading: isAuthLoading, logout } = useAuth();
@@ -26,19 +24,16 @@ const App: React.FC = () => {
   const [image, setImage] = useState<string | null>(null);
   const [nutritionData, setNutritionData] = useState<NutritionInfo | null>(null);
   const [recipes, setRecipes] = useState<Recipe[] | null>(null);
-  const [foodPlan, setFoodPlan] = useState<FoodPlanItem[]>([]);
+  const [foodPlan, setFoodPlan] = useState<MealPlanGroup[]>([]);
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
+  const [mealLog, setMealLog] = useState<MealLogEntry[]>([]);
   
-  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
-  const [analysisMessage, setAnalysisMessage] = useState<string>('');
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [processingMessage, setProcessingMessage] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState<boolean>(false);
-  const [activeView, setActiveView] = useState<ActiveView>('plan');
+  const [activeView, setActiveView] = useState<ActiveView>('history');
   const [isDataLoading, setIsDataLoading] = useState<boolean>(true);
-
-  const [suggestedMeals, setSuggestedMeals] = useState<NutritionInfo[] | null>(null);
-  const [isSuggesting, setIsSuggesting] = useState<boolean>(false);
-  const [suggestionError, setSuggestionError] = useState<string | null>(null);
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
@@ -49,12 +44,14 @@ const App: React.FC = () => {
       const loadInitialData = async () => {
         try {
           setIsDataLoading(true);
-          const [meals, plan] = await Promise.all([
+          const [meals, plan, log] = await Promise.all([
             apiService.getSavedMeals(),
-            apiService.getFoodPlan()
+            apiService.getFoodPlan(),
+            apiService.getMealLog(),
           ]);
           setSavedMeals(meals);
           setFoodPlan(plan);
+          setMealLog(log);
         } catch (err) {
           setError("Could not load your data. Please try refreshing the page.");
         } finally {
@@ -65,46 +62,35 @@ const App: React.FC = () => {
     }
   }, [isAuthenticated]);
   
-  const resetState = () => {
+  const resetAnalysisState = () => {
       setImage(null);
       setNutritionData(null);
       setRecipes(null);
       setError(null);
+      setActiveView('history');
   };
 
-  const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>, isPantry: boolean = false) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    resetState();
+    resetAnalysisState();
     const reader = new FileReader();
     reader.onloadend = async () => {
-      const base64String = (reader.result as string).split(',')[1];
-      setImage(reader.result as string);
-      setIsAnalyzing(true);
-      setAnalysisMessage('Analyzing your meal...');
+      const base64String = (reader.result as string);
+      const base64Data = base64String.split(',')[1];
+      setImage(base64String);
+      setIsProcessing(true);
       try {
-        const data = await apiService.analyzeImageWithGemini(base64String, file.type);
-        setNutritionData(data);
-      } catch (err) { setError('Failed to analyze the image. Please try again.'); } finally { setIsAnalyzing(false); }
-    };
-    reader.readAsDataURL(file);
-    event.target.value = '';
-  }, []);
-  
-  const handleFridgeFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    resetState();
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      const base64String = (reader.result as string).split(',')[1];
-      setImage(reader.result as string);
-      setIsAnalyzing(true);
-      setAnalysisMessage('Generating recipe ideas...');
-      try {
-        const recipeData = await apiService.getRecipesFromImage(base64String, file.type);
-        setRecipes(recipeData);
-      } catch (err) { setError('Failed to get recipes from your image. Please try again.'); } finally { setIsAnalyzing(false); }
+        if(isPantry) {
+          setProcessingMessage('Generating recipe ideas...');
+          const recipeData = await apiService.getRecipesFromImage(base64Data, file.type);
+          setRecipes(recipeData);
+        } else {
+          setProcessingMessage('Analyzing your meal...');
+          const data = await apiService.analyzeImageWithGemini(base64Data, file.type);
+          setNutritionData(data);
+        }
+      } catch (err) { setError('Analysis failed. Please try again.'); } finally { setIsProcessing(false); }
     };
     reader.readAsDataURL(file);
     event.target.value = '';
@@ -112,79 +98,72 @@ const App: React.FC = () => {
 
   const handleScanSuccess = useCallback(async (barcode: string) => {
     setIsScanning(false);
-    resetState();
-    setIsAnalyzing(true);
-    setAnalysisMessage('Fetching product data...');
+    resetAnalysisState();
+    setIsProcessing(true);
+    setProcessingMessage('Fetching product data...');
     try {
         const data = await getProductByBarcode(barcode);
         setNutritionData(data);
-    } catch(err) { setError(`Could not find product for barcode ${barcode}.`); } finally { setIsAnalyzing(false); }
+    } catch(err) { setError(`Could not find product for barcode ${barcode}.`); } finally { setIsProcessing(false); }
   }, []);
 
-  const handleAddToPlan = useCallback(async (ingredients: Ingredient[]) => {
+  const handleSaveToHistory = useCallback(async (mealData: NutritionInfo, imageBase64: string) => {
+    setIsProcessing(true);
+    setProcessingMessage("Saving to your history...");
     try {
-      const newItems = await apiService.addItemsToFoodPlan(ingredients);
-      setFoodPlan(prevPlan => [...prevPlan, ...newItems]);
-      if (nutritionData && ingredients.some(ing => nutritionData.ingredients.includes(ing))) {
-          resetState();
-      }
+      const newLogEntry = await apiService.createMealLogEntry(mealData, imageBase64);
+      setMealLog(prevLog => [newLogEntry, ...prevLog]);
+      resetAnalysisState();
     } catch (err) {
-      setError('Could not add items to your plan. Please try again.');
+      setError("Could not save to history. Please try again.");
+    } finally {
+      setIsProcessing(false);
     }
-  }, [nutritionData]);
+  }, []);
 
-  const handleAddRecipeToPlan = useCallback(async (recipe: Recipe) => {
-    const recipeAsIngredient: Ingredient = {
-        name: recipe.recipeName, weightGrams: 0, calories: recipe.nutrition.totalCalories,
-        protein: recipe.nutrition.totalProtein, carbs: recipe.nutrition.totalCarbs, fat: recipe.nutrition.totalFat,
-    };
-    await handleAddToPlan([recipeAsIngredient]);
-  }, [handleAddToPlan]);
-
-  const handleSaveMeal = useCallback(async (mealData: NutritionInfo) => {
-    try {
-      const newMeal = await apiService.saveMeal(mealData);
-      setSavedMeals(prevMeals => [newMeal, ...prevMeals]);
-      if (nutritionData === mealData) {
-          resetState();
+  const handleSaveMealFromLog = useCallback(async (mealData: NutritionInfo) => {
+      try {
+        const newMeal = await apiService.saveMeal(mealData);
+        // Avoid duplicates in local state
+        if (!savedMeals.some(m => m.id === newMeal.id)) {
+            setSavedMeals(prevMeals => [newMeal, ...prevMeals]);
+        }
+        return newMeal;
+      } catch (err) {
+        setError('Could not save your meal.');
+        return null;
       }
-    } catch (err) {
-      setError('Could not save your meal. Please try again.');
-    }
-  }, [nutritionData]);
-
-  const handleAddSavedMealToPlan = useCallback(async (meal: SavedMeal) => {
-    await handleAddToPlan(meal.ingredients);
-  }, [handleAddToPlan]);
+  }, [savedMeals]);
   
-  const handleRemoveFromPlan = useCallback(async (itemId: number) => {
-    const originalPlan = foodPlan;
-    setFoodPlan(prevPlan => prevPlan.filter(item => item.id !== itemId)); // Optimistic update
+  const handleAddMealToPlan = useCallback(async (mealData: NutritionInfo) => {
+    // A meal must be in "Saved Meals" to be added to a plan, as we need its ID.
     try {
-       await apiService.removeFoodPlanItem(itemId);
+        let savedMeal = savedMeals.find(m => m.mealName === mealData.mealName);
+        if (!savedMeal) {
+            savedMeal = await handleSaveMealFromLog(mealData);
+        }
+        
+        if (savedMeal) {
+            const newPlanGroup = await apiService.addMealToPlan(savedMeal.id);
+            if(newPlanGroup && !foodPlan.some(p => p.id === newPlanGroup.id)) {
+              setFoodPlan(prevPlan => [...prevPlan, newPlanGroup]);
+            }
+        }
     } catch (err) {
-      setError('Failed to remove item from plan.');
-      setFoodPlan(originalPlan); // Revert on failure
+        setError("Failed to add meal to today's plan.");
     }
-  }, [foodPlan]);
+  }, [savedMeals, foodPlan, handleSaveMealFromLog]);
 
   const handleDeleteMeal = useCallback(async (mealId: number) => {
-    const originalMeals = savedMeals;
-    setSavedMeals(prevMeals => prevMeals.filter(meal => meal.id !== mealId)); // Optimistic update
-    try {
-      await apiService.deleteMeal(mealId);
-    } catch (err) {
-      setError('Failed to delete meal.');
-      setSavedMeals(originalMeals); // Revert on failure
-    }
-  }, [savedMeals]);
+    setSavedMeals(prev => prev.filter(m => m.id !== mealId));
+    try { await apiService.deleteMeal(mealId); } 
+    catch (err) { setError('Failed to delete meal.'); /* Revert not implemented for simplicity */ }
+  }, []);
 
-  const handleGetSuggestions = useCallback(async (condition: string, cuisine: string) => {
-    setIsSuggesting(true); setSuggestionError(null); setSuggestedMeals(null);
-    try {
-        const suggestions = await apiService.getMealSuggestions(condition, cuisine);
-        setSuggestedMeals(suggestions);
-    } catch (err) { setSuggestionError(err instanceof Error ? err.message : 'An unknown error occurred.'); } finally { setIsSuggesting(false); }
+  const handleRemoveFromPlan = useCallback(async (planGroupId: number) => {
+      setFoodPlan(prev => prev.filter(p => p.id !== planGroupId));
+      try { await apiService.removeMealFromPlan(planGroupId); }
+      catch (err) { setError("Failed to remove meal from plan."); }
   }, []);
 
   const handleTriggerCamera = () => { cameraInputRef.current?.click(); };
@@ -196,16 +175,15 @@ const App: React.FC = () => {
   if (!isAuthenticated) { return <Login />; }
   if (isDataLoading) { return <div className="min-h-screen flex items-center justify-center"><Loader message="Loading your data..." /></div>; }
 
-  const showHero = !image && !isAnalyzing && !nutritionData && !isScanning && !recipes;
-  const showAnalysisContent = image || isAnalyzing || error || nutritionData || recipes;
+  const showHero = !image && !isProcessing && !nutritionData && !isScanning && !recipes;
+  const showAnalysisContent = image || isProcessing || error || nutritionData || recipes;
 
   const renderActiveView = () => {
     switch(activeView) {
-        case 'plan': return <FoodPlan items={foodPlan} onRemove={handleRemoveFromPlan} />;
-        case 'meals': return <MealLibrary meals={savedMeals} onAdd={handleAddSavedMealToPlan} onDelete={handleDeleteMeal} />;
-        case 'suggestions': return <MealSuggester onGetSuggestions={handleGetSuggestions} suggestions={suggestedMeals} isLoading={isSuggesting} error={suggestionError} onAddToPlan={handleAddToPlan} onSaveMeal={handleSaveMeal} />;
-        case 'grocery': return <GroceryList meals={savedMeals} />;
-        default: return <FoodPlan items={foodPlan} onRemove={handleRemoveFromPlan} />;
+        case 'plan': return <FoodPlan planGroups={foodPlan} onRemove={handleRemoveFromPlan} />;
+        case 'meals': return <MealLibrary meals={savedMeals} onAdd={handleAddMealToPlan} onDelete={handleDeleteMeal} />;
+        case 'history': return <MealHistory logEntries={mealLog} onSaveMeal={handleSaveMealFromLog} onAddToPlan={handleAddMealToPlan} />;
+        default: return <MealHistory logEntries={mealLog} onSaveMeal={handleSaveMealFromLog} onAddToPlan={handleAddMealToPlan} />;
     }
   }
 
@@ -213,9 +191,9 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800">
       {isScanning && <BarcodeScanner onScanSuccess={handleScanSuccess} onCancel={() => setIsScanning(false)} />}
       <main className="max-w-4xl mx-auto p-4 md:p-8">
-         <input type="file" accept="image/*" capture="environment" ref={cameraInputRef} onChange={handleFileChange} className="hidden"/>
-         <input type="file" accept="image/*" ref={uploadInputRef} onChange={handleFileChange} className="hidden"/>
-         <input type="file" accept="image/*" ref={pantryInputRef} onChange={handleFridgeFileChange} className="hidden"/>
+         <input type="file" accept="image/*" capture="environment" ref={cameraInputRef} onChange={(e) => handleFileChange(e)} className="hidden"/>
+         <input type="file" accept="image/*" ref={uploadInputRef} onChange={(e) => handleFileChange(e)} className="hidden"/>
+         <input type="file" accept="image/*" ref={pantryInputRef} onChange={(e) => handleFileChange(e, true)} className="hidden"/>
 
         <header className="text-center mb-8 relative">
           <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500">EmbraceHealth Meals</h1>
@@ -227,14 +205,14 @@ const App: React.FC = () => {
           {showHero && <Hero onCameraClick={handleTriggerCamera} onUploadClick={handleTriggerUpload} onBarcodeClick={handleTriggerScanner} onPantryChefClick={handleTriggerPantryUpload} />}
           {showAnalysisContent ? (
             <div className="space-y-6">
-                <ImageUploader image={image || nutritionData?.imageUrl || null} />
-                {isAnalyzing && <Loader message={analysisMessage} />}
+                <ImageUploader image={image} />
+                {isProcessing && <Loader message={processingMessage} />}
                 {error && <ErrorAlert message={error} />}
-                {nutritionData && !isAnalyzing && ( <NutritionCard data={nutritionData} onAddToPlan={() => handleAddToPlan(nutritionData.ingredients)} onSaveMeal={() => handleSaveMeal(nutritionData)} /> )}
-                {recipes && !isAnalyzing && (
-                  <div className="space-y-4">
-                      <h2 className="text-2xl font-bold text-slate-800 text-center pt-4 border-t border-slate-200">Recipe Ideas From Your Ingredients</h2>
-                      {recipes.map((recipe, index) => ( <RecipeCard key={index} recipe={recipe} onAddToPlan={() => handleAddRecipeToPlan(recipe)} /> ))}
+                {nutritionData && !isProcessing && image && ( <NutritionCard data={nutritionData} onSaveToHistory={() => handleSaveToHistory(nutritionData, image)} /> )}
+                {recipes && !isProcessing && (
+                  <div className="space-y-4"> {/* Recipe display logic can be simplified or removed if not a core feature now */}
+                      <h2 className="text-2xl font-bold text-slate-800 text-center pt-4 border-t border-slate-200">Recipe Ideas</h2>
+                      {recipes.map((recipe, index) => ( <RecipeCard key={index} recipe={recipe} onAddToPlan={()=>{/*This needs a new flow*/}} /> ))}
                   </div>
                 )}
             </div>

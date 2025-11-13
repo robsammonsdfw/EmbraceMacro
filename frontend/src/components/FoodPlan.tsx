@@ -1,34 +1,62 @@
 import React from 'react';
-import type { FoodPlanItem } from '../types';
+import type { MealPlanGroup } from '../types';
 import { TrashIcon, PlusIcon } from './icons';
 
 interface FoodPlanProps {
-  items: FoodPlanItem[];
-  onRemove: (id: number) => void;
+  planGroups: MealPlanGroup[];
+  onRemove: (planGroupId: number) => void;
 }
 
-export const FoodPlan: React.FC<FoodPlanProps> = ({ items, onRemove }) => {
-  const totals = items.reduce(
-    (acc, item) => ({
-      calories: acc.calories + (item.calories || 0),
-      protein: acc.protein + (item.protein || 0),
-      carbs: acc.carbs + (item.carbs || 0),
-      fat: acc.fat + (item.fat || 0),
-      sugar: acc.sugar + (item.sugar || 0),
-      fiber: acc.fiber + (item.fiber || 0),
-      sodium: acc.sodium + (item.sodium || 0),
-    }),
-    { calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, fiber: 0, sodium: 0 }
-  );
+const MealGroupCard: React.FC<{ group: MealPlanGroup; onRemove: (id: number) => void; }> = ({ group, onRemove }) => {
+    const meal = group.meal;
+    return (
+        <div className="bg-slate-50 p-4 rounded-lg">
+            <div className="flex justify-between items-center mb-3">
+                <div className="flex items-center space-x-3">
+                    {meal.imageUrl && <img src={meal.imageUrl} alt={meal.mealName} className="w-12 h-12 rounded-md object-cover" />}
+                    <div>
+                        <h4 className="font-bold text-slate-800">{meal.mealName}</h4>
+                        <p className="text-sm text-slate-500">{Math.round(meal.totalCalories)} kcal</p>
+                    </div>
+                </div>
+                <button
+                    onClick={() => onRemove(group.id)}
+                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-100 rounded-full transition-colors"
+                    aria-label={`Remove ${meal.mealName}`}
+                >
+                    <TrashIcon />
+                </button>
+            </div>
+            <ul className="space-y-1 pl-4 border-l-2 border-slate-200">
+                {meal.ingredients.map((ing, index) => (
+                    <li key={index} className="text-sm text-slate-600 flex justify-between">
+                        <span>{ing.name} <span className="text-slate-400">({Math.round(ing.weightGrams)}g)</span></span>
+                        <span>{Math.round(ing.calories)} kcal</span>
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
+};
 
-  if (items.length === 0) {
+export const FoodPlan: React.FC<FoodPlanProps> = ({ planGroups, onRemove }) => {
+  const totals = planGroups.reduce((acc, group) => {
+    const meal = group.meal;
+    acc.calories += meal.totalCalories;
+    acc.protein += meal.totalProtein;
+    acc.carbs += meal.totalCarbs;
+    acc.fat += meal.totalFat;
+    return acc;
+  }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+
+  if (planGroups.length === 0) {
     return (
         <div className="text-center py-12 px-4 bg-white rounded-xl shadow-md border border-slate-200">
             <div className="mx-auto bg-slate-100 text-slate-500 rounded-full w-16 h-16 flex items-center justify-center mb-4">
                 <PlusIcon />
             </div>
             <h3 className="text-xl font-semibold text-slate-700 mt-2">Your plan is empty for today.</h3>
-            <p className="text-slate-500 mt-1">Analyze a meal, scan a product, or add from your saved meals to get started!</p>
+            <p className="text-slate-500 mt-1">Add meals from your History or Saved Meals to get started!</p>
         </div>
     );
   }
@@ -45,33 +73,13 @@ export const FoodPlan: React.FC<FoodPlanProps> = ({ items, onRemove }) => {
           <div><span className="font-bold">{Math.round(totals.carbs)}g</span><br/>Carbs</div>
           <div><span className="font-bold">{Math.round(totals.fat)}g</span><br/>Fat</div>
         </div>
-        <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-white/30 text-center text-xs">
-          <div><span className="font-bold">{Math.round(totals.sugar)}g</span><br/>Sugar</div>
-          <div><span className="font-bold">{Math.round(totals.fiber)}g</span><br/>Fiber</div>
-          <div><span className="font-bold">{Math.round(totals.sodium * 1000)}mg</span><br/>Sodium</div>
-        </div>
       </div>
 
-      <ul className="space-y-3">
-        {items.map((item) => (
-          <li key={item.id} className="flex justify-between items-center bg-slate-50 p-3 rounded-md hover:bg-slate-100 transition-colors">
-            <div className="flex items-center space-x-3">
-              {item.imageUrl && <img src={item.imageUrl} alt={item.name} className="w-10 h-10 rounded-md object-cover" />}
-              <div>
-                <p className="font-semibold text-slate-800">{item.name}</p>
-                <p className="text-sm text-slate-500">{Math.round(item.calories)} kcal &bull; {Math.round(item.weightGrams)}g</p>
-              </div>
-            </div>
-            <button
-              onClick={() => onRemove(item.id)}
-              className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-100 rounded-full transition-colors"
-              aria-label={`Remove ${item.name}`}
-            >
-              <TrashIcon />
-            </button>
-          </li>
+      <div className="space-y-4">
+        {planGroups.map((group) => (
+          <MealGroupCard key={group.id} group={group} onRemove={onRemove} />
         ))}
-      </ul>
+      </div>
     </div>
   );
 };

@@ -7,8 +7,10 @@ import {
     saveMeal,
     deleteMeal,
     getFoodPlan,
-    addItemsToFoodPlan,
-    removeFoodPlanItem
+    addMealToPlan,
+    removeMealFromPlan,
+    createMealLogEntry,
+    getMealLogEntries
 } from './services/databaseService.mjs';
 import { Buffer } from 'buffer';
 
@@ -27,7 +29,7 @@ export const handler = async (event) => {
     const headers = {
         "Access-Control-Allow-Origin": FRONTEND_URL,
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        "Access-Control-Allow-Methods": "OPTIONS,POST,GET" // DELETE is no longer used
+        "Access-Control-Allow-Methods": "OPTIONS,POST,GET,DELETE"
     };
 
     const requiredEnvVars = [
@@ -84,6 +86,10 @@ export const handler = async (event) => {
     }
 
     // --- API ROUTING ---
+    if (path.includes('/meal-log')) {
+        // FIX: Removed extra `path` argument from the function call to match the function definition.
+        return handleMealLogRequest(event, headers, method);
+    }
     if (path.includes('/saved-meals')) {
         return handleSavedMealsRequest(event, headers, method, path);
     }
@@ -106,6 +112,25 @@ export const handler = async (event) => {
 
 // --- ROUTE HANDLERS ---
 
+async function handleMealLogRequest(event, headers, method) {
+    const userId = event.user.userId;
+    try {
+        if (method === 'GET') {
+            const logEntries = await getMealLogEntries(userId);
+            return { statusCode: 200, headers, body: JSON.stringify(logEntries) };
+        }
+        if (method === 'POST') {
+            const { mealData, imageBase64 } = JSON.parse(event.body);
+            const newEntry = await createMealLogEntry(userId, mealData, imageBase64);
+            return { statusCode: 201, headers, body: JSON.stringify(newEntry) };
+        }
+        return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' })};
+    } catch (error) {
+        console.error(`Error in handleMealLogRequest (method: ${method}):`, error);
+        return { statusCode: 500, headers, body: JSON.stringify({ error: 'An internal error occurred while managing meal history.' })};
+    }
+}
+
 async function handleSavedMealsRequest(event, headers, method, path) {
     const userId = event.user.userId;
 
@@ -115,12 +140,9 @@ async function handleSavedMealsRequest(event, headers, method, path) {
             return { statusCode: 200, headers, body: JSON.stringify(meals) };
         }
         if (method === 'POST') {
-             // Differentiate between creating and deleting
             if (path.endsWith('/delete')) {
                 const { mealId } = JSON.parse(event.body);
-                if (!mealId) {
-                    return { statusCode: 400, headers, body: JSON.stringify({ error: 'Meal ID is required for deletion.' })};
-                }
+                if (!mealId) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Meal ID is required for deletion.' })};
                 await deleteMeal(userId, mealId);
                 return { statusCode: 204, headers, body: '' };
             } else {
@@ -138,24 +160,22 @@ async function handleSavedMealsRequest(event, headers, method, path) {
 
 async function handleFoodPlanRequest(event, headers, method, path) {
     const userId = event.user.userId;
-
     try {
         if (method === 'GET') {
-            const planItems = await getFoodPlan(userId);
-            return { statusCode: 200, headers, body: JSON.stringify(planItems) };
+            const planGroups = await getFoodPlan(userId);
+            return { statusCode: 200, headers, body: JSON.stringify(planGroups) };
         }
         if (method === 'POST') {
             if (path.endsWith('/delete')) {
-                const { itemId } = JSON.parse(event.body);
-                if (!itemId) {
-                    return { statusCode: 400, headers, body: JSON.stringify({ error: 'Item ID is required for deletion.' })};
-                }
-                await removeFoodPlanItem(userId, itemId);
+                const { planGroupId } = JSON.parse(event.body);
+                if (!planGroupId) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Plan Group ID is required for deletion.' })};
+                await removeMealFromPlan(userId, planGroupId);
                 return { statusCode: 204, headers, body: '' };
             } else {
-                const { ingredients } = JSON.parse(event.body);
-                const newItems = await addItemsToFoodPlan(userId, ingredients);
-                return { statusCode: 201, headers, body: JSON.stringify(newItems) };
+                const { savedMealId } = JSON.parse(event.body);
+                if (!savedMealId) return { statusCode: 400, headers, body: JSON.stringify({ error: 'A saved meal ID is required to add to the plan.' })};
+                const newPlanGroup = await addMealToPlan(userId, savedMealId);
+                return { statusCode: 201, headers, body: JSON.stringify(newPlanGroup) };
             }
         }
         return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' })};
@@ -191,21 +211,13 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         
         if (!shopifyResponse || typeof shopifyResponse !== 'object') {
             console.error('Shopify customer login error: Invalid or empty response from Shopify API.');
-            return {
-                statusCode: 500,
-                headers,
-                body: JSON.stringify({ error: 'Login failed due to an issue with the authentication service.' })
-            };
+            return { statusCode: 500, headers, body: JSON.stringify({ error: 'Login failed due to an issue with the authentication service.' }) };
         }
         
         const data = shopifyResponse['customerAccessTokenCreate'];
         if (!data || data.customerUserErrors.length > 0) {
             console.error('Shopify customer login error:', data?.customerUserErrors);
-            return {
-                statusCode: 401,
-                headers,
-                body: JSON.stringify({ error: 'Invalid credentials.', details: data?.customerUserErrors[0]?.message ?? 'An unknown login error occurred.' })
-            };
+            return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid credentials.', details: data?.customerUserErrors[0]?.message ?? 'An unknown login error occurred.' }) };
         }
         const user = await findOrCreateUserByEmail(email);
         const sessionToken = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });

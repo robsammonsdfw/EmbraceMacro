@@ -1,4 +1,4 @@
-import type { NutritionInfo, Recipe, SavedMeal, Ingredient, FoodPlanItem } from '../types';
+import type { NutritionInfo, Recipe, SavedMeal, MealLogEntry, MealPlanGroup } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
 const AUTH_TOKEN_KEY = 'embracehealth-meals-auth-token';
@@ -16,22 +16,11 @@ const callApi = async (endpoint: string, method: string, body?: any) => {
     const token = localStorage.getItem(AUTH_TOKEN_KEY);
     const url = `${API_BASE_URL}${endpoint}`;
     
-    const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-    };
+    const headers: HeadersInit = { 'Content-Type': 'application/json' };
+    if (token) { headers['Authorization'] = `Bearer ${token}`; }
 
-    if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const config: RequestInit = {
-        method,
-        headers,
-    };
-
-    if (body) {
-        config.body = JSON.stringify(body);
-    }
+    const config: RequestInit = { method, headers };
+    if (body) { config.body = JSON.stringify(body); }
 
     const response = await fetch(url, config);
 
@@ -40,103 +29,78 @@ const callApi = async (endpoint: string, method: string, body?: any) => {
         console.error(`API error response from ${method} ${endpoint}:`, errorBody);
         throw new Error(`API request failed with status: ${response.status}`);
     }
-
-    if (response.status === 204) { // No Content
-        return null;
-    }
-
-    return response.json();
+    return response.status === 204 ? null : response.json();
 };
-
 
 // --- AI & Analysis Endpoints ---
 
 const nutritionSchema = {
-  type: Type.OBJECT,
-  properties: {
-    mealName: { 
-      type: Type.STRING, 
-      description: "A descriptive name for the meal, like 'Grilled Chicken Salad' or 'Spaghetti Bolognese'." 
-    },
-    totalCalories: { 
-      type: Type.NUMBER, 
-      description: "The total estimated calories for the entire meal." 
-    },
-    totalProtein: { 
-      type: Type.NUMBER, 
-      description: "The total estimated protein in grams for the entire meal." 
-    },
-    totalCarbs: { 
-      type: Type.NUMBER, 
-      description: "The total estimated carbohydrates in grams for the entire meal." 
-    },
-    totalFat: { 
-      type: Type.NUMBER, 
-      description: "The total estimated fat in grams for the entire meal." 
-    },
-    ingredients: {
-      type: Type.ARRAY,
-      description: "A list of all identified ingredients in the meal.",
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          name: { 
-            type: Type.STRING, 
-            description: "The name of the ingredient, e.g., 'Chicken Breast'." 
+    type: Type.OBJECT,
+    properties: {
+      mealName: { 
+        type: Type.STRING, 
+        description: "A descriptive name for the meal, like 'Grilled Chicken Salad' or 'Spaghetti Bolognese'." 
+      },
+      totalCalories: { 
+        type: Type.NUMBER, 
+        description: "The total estimated calories for the entire meal." 
+      },
+      totalProtein: { 
+        type: Type.NUMBER, 
+        description: "The total estimated protein in grams for the entire meal." 
+      },
+      totalCarbs: { 
+        type: Type.NUMBER, 
+        description: "The total estimated carbohydrates in grams for the entire meal." 
+      },
+      totalFat: { 
+        type: Type.NUMBER, 
+        description: "The total estimated fat in grams for the entire meal." 
+      },
+      ingredients: {
+        type: Type.ARRAY,
+        description: "A list of all identified ingredients in the meal.",
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            name: { 
+              type: Type.STRING, 
+              description: "The name of the ingredient, e.g., 'Chicken Breast'." 
+            },
+            weightGrams: { 
+              type: Type.NUMBER, 
+              description: "The estimated weight of the ingredient in grams." 
+            },
+            calories: { 
+              type: Type.NUMBER, 
+              description: "Estimated calories for this ingredient." 
+            },
+            protein: { 
+              type: Type.NUMBER, 
+              description: "Estimated protein in grams for this ingredient." 
+            },
+            carbs: { 
+              type: Type.NUMBER, 
+              description: "Estimated carbohydrates in grams for this ingredient." 
+            },
+            fat: { 
+              type: Type.NUMBER, 
+              description: "Estimated fat in grams for this ingredient." 
+            },
           },
-          weightGrams: { 
-            type: Type.NUMBER, 
-            description: "The estimated weight of the ingredient in grams." 
-          },
-          calories: { 
-            type: Type.NUMBER, 
-            description: "Estimated calories for this ingredient." 
-          },
-          protein: { 
-            type: Type.NUMBER, 
-            description: "Estimated protein in grams for this ingredient." 
-          },
-          carbs: { 
-            type: Type.NUMBER, 
-            description: "Estimated carbohydrates in grams for this ingredient." 
-          },
-          fat: { 
-            type: Type.NUMBER, 
-            description: "Estimated fat in grams for this ingredient." 
-          },
-        },
-        required: ["name", "weightGrams", "calories", "protein", "carbs", "fat"]
+          required: ["name", "weightGrams", "calories", "protein", "carbs", "fat"]
+        }
       }
-    }
-  },
-  required: ["mealName", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "ingredients"]
-};
+    },
+    required: ["mealName", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "ingredients"]
+  };
 
-export const analyzeImageWithGemini = async (base64Image: string, mimeType: string): Promise<NutritionInfo> => {
-    const prompt = "Analyze the image of the food and identify the meal and all its ingredients. Provide a detailed nutritional breakdown...";
+export const analyzeImageWithGemini = (base64Image: string, mimeType: string): Promise<NutritionInfo> => {
+    const prompt = "Analyze the image of the food and identify the meal and all its ingredients...";
     return callApi('/analyze-image', 'POST', { base64Image, mimeType, prompt, schema: nutritionSchema });
 };
 
-const suggestionSchema = {
-    type: Type.ARRAY,
-    items: {
-        type: Type.OBJECT,
-        properties: {
-            ...nutritionSchema.properties,
-            justification: {
-                type: Type.STRING,
-                description: "A brief, one-sentence explanation of why this meal is suitable for the specified health condition."
-            }
-        },
-        required: [...(nutritionSchema.required || []), "justification"]
-    }
-};
-
-export const getMealSuggestions = async (condition: string, cuisine: string): Promise<NutritionInfo[]> => {
-    const prompt = `Generate 3 diverse meal suggestions suitable for someone with ${condition}. The cuisine preference is ${cuisine}...`;
-    return callApi('/get-meal-suggestions', 'POST', { prompt, schema: suggestionSchema });
-};
-
+// FIX: Added missing schemas and function for recipe generation
 const recipeSchema = {
     type: Type.OBJECT,
     properties: {
@@ -180,9 +144,20 @@ const recipesSchema = {
     items: recipeSchema
 };
 
-export const getRecipesFromImage = async (base64Image: string, mimeType: string): Promise<Recipe[]> => {
-    const prompt = "Analyze the image to identify all visible food ingredients. Based on these ingredients, suggest 3 diverse meal recipes...";
+export const getRecipesFromImage = (base64Image: string, mimeType: string): Promise<Recipe[]> => {
+    const prompt = "Analyze the image to identify all visible food ingredients. Based on these ingredients, suggest 3 diverse meal recipes. Assume common pantry staples like oil, salt, pepper, and basic spices are available. For each recipe, provide a descriptive name, a short description, a list of ingredients with quantities, step-by-step instructions, and an estimated nutritional breakdown (total calories, protein, carbs, fat). Return the result in the specified JSON format.";
     return callApi('/analyze-image-recipes', 'POST', { base64Image, mimeType, prompt, schema: recipesSchema });
+};
+
+
+// --- Meal Log (History) Endpoints ---
+
+export const getMealLog = (): Promise<MealLogEntry[]> => {
+    return callApi('/meal-log', 'GET');
+};
+
+export const createMealLogEntry = (mealData: NutritionInfo, imageBase64: string): Promise<MealLogEntry> => {
+    return callApi('/meal-log', 'POST', { mealData, imageBase64 });
 };
 
 // --- Saved Meals Endpoints ---
@@ -196,21 +171,19 @@ export const saveMeal = (mealData: NutritionInfo): Promise<SavedMeal> => {
 };
 
 export const deleteMeal = (mealId: number): Promise<null> => {
-    // Tunnel DELETE over POST to avoid preflight issues
     return callApi('/saved-meals/delete', 'POST', { mealId });
 };
 
-// --- Food Plan Endpoints ---
+// --- Food Plan Endpoints (Grouped Meals) ---
 
-export const getFoodPlan = (): Promise<FoodPlanItem[]> => {
+export const getFoodPlan = (): Promise<MealPlanGroup[]> => {
     return callApi('/food-plan', 'GET');
 };
 
-export const addItemsToFoodPlan = (ingredients: Ingredient[]): Promise<FoodPlanItem[]> => {
-    return callApi('/food-plan', 'POST', { ingredients });
+export const addMealToPlan = (savedMealId: number): Promise<MealPlanGroup> => {
+    return callApi('/food-plan', 'POST', { savedMealId });
 };
 
-export const removeFoodPlanItem = (itemId: number): Promise<null> => {
-    // Tunnel DELETE over POST to avoid preflight issues
-    return callApi('/food-plan/delete', 'POST', { itemId });
+export const removeMealFromPlan = (planGroupId: number): Promise<null> => {
+    return callApi('/food-plan/delete', 'POST', { planGroupId });
 };
