@@ -33,7 +33,12 @@ export interface NutritionInfo {
 }
 
 export interface SavedMeal extends NutritionInfo {
-  id: string;
+  id: number; // Database ID is a number
+}
+
+// Represents an ingredient that has been saved to the daily plan
+export interface FoodPlanItem extends Ingredient {
+  id: number; // Database ID is a number
 }
 
 export interface Recipe {
@@ -47,6 +52,7 @@ export interface Recipe {
   nutrition: {
     totalCalories: number;
     totalProtein: number;
+
     totalCarbs: number;
     totalFat: number;
   };

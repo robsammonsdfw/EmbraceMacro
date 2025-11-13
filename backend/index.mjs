@@ -1,7 +1,15 @@
 import { GoogleGenAI } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import https from 'https';
-import { findOrCreateUserByEmail } from './services/databaseService.mjs';
+import { 
+    findOrCreateUserByEmail,
+    getSavedMeals,
+    saveMeal,
+    deleteMeal,
+    getFoodPlan,
+    addItemsToFoodPlan,
+    removeFoodPlanItem
+} from './services/databaseService.mjs';
 import { Buffer } from 'buffer';
 
 // --- MAIN HANDLER (ROUTER) ---
@@ -9,22 +17,19 @@ export const handler = async (event) => {
     // --- IMPORTANT: CONFIGURE THESE IN YOUR LAMBDA ENVIRONMENT VARIABLES ---
     const {
         GEMINI_API_KEY,
-        SHOPIFY_STOREFRONT_TOKEN, // Used for Storefront API access
-        SHOPIFY_STORE_DOMAIN,     // Your shop domain e.g., 'rxmens.myshopify.com'
-        JWT_SECRET,               // A long, random, secret string for signing your tokens
-        FRONTEND_URL,             // The full URL of your Amplify app
-        // Database credentials will be used by the 'pg' library automatically:
-        // PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGPORT
+        SHOPIFY_STOREFRONT_TOKEN,
+        SHOPIFY_STORE_DOMAIN,
+        JWT_SECRET,
+        FRONTEND_URL,
+        PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGPORT
     } = process.env;
     
-    // Define headers FIRST. This ensures all responses, including errors, get CORS headers.
     const headers = {
         "Access-Control-Allow-Origin": FRONTEND_URL,
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        "Access-Control-Allow-Methods": "OPTIONS,POST,GET"
+        "Access-Control-Allow-Methods": "OPTIONS,POST,GET,DELETE" // Added DELETE
     };
 
-    // --- START: Environment Variable Validation ---
     const requiredEnvVars = [
         'GEMINI_API_KEY', 'SHOPIFY_STOREFRONT_TOKEN', 'SHOPIFY_STORE_DOMAIN',
         'JWT_SECRET', 'FRONTEND_URL', 'PGHOST', 'PGUSER', 'PGPASSWORD',
@@ -34,18 +39,15 @@ export const handler = async (event) => {
     const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
     
     if (missingVars.length > 0) {
-        const errorMessage = `Configuration error: The following required environment variables are missing: ${missingVars.join(', ')}. Please configure them in the Lambda settings.`;
+        const errorMessage = `Configuration error: The following required environment variables are missing: ${missingVars.join(', ')}.`;
         console.error(errorMessage);
-        // CRITICAL: Return the error with the CORS headers so the browser can read it.
         return {
             statusCode: 500,
             headers,
             body: JSON.stringify({ error: errorMessage }),
         };
     }
-    // --- END: Environment Variable Validation ---
 
-    // --- START: Robust path and domain resolution ---
     let path;
     let method;
 
@@ -56,30 +58,18 @@ export const handler = async (event) => {
         path = event.path;
         method = event.httpMethod;
     } else {
-        console.error('[ROUTING] Could not determine API Gateway payload version. Event:', JSON.stringify(event));
         return { statusCode: 500, headers, body: JSON.stringify({ error: 'Internal Server Error: Malformed request event.' }) };
     }
-    // --- END: Robust path and domain resolution ---
     
-    console.log('[DEBUG] INCOMING_REQUEST:', JSON.stringify({
-        resolved_method: method,
-        resolved_path: path,
-        env_frontend_url: FRONTEND_URL 
-    }));
-
-
     if (method === 'OPTIONS') {
-        
-        console.log('[DEBUG] OPTIONS_HANDLER: Returning headers:', JSON.stringify(headers));
-        
         return { statusCode: 200, headers };
     }
 
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
     
-    // --- NEW PUBLIC LOGIN ROUTE ---
     if (path.endsWith('/auth/customer-login')) {
-        return handleCustomerLogin(event, headers);
+        // FIX: Pass JWT_SECRET to handleCustomerLogin as it's out of scope otherwise.
+        return handleCustomerLogin(event, headers, JWT_SECRET);
     }
     
     // --- PROTECTED ROUTES ---
@@ -94,6 +84,13 @@ export const handler = async (event) => {
         return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized: Invalid token.' })};
     }
 
+    // --- API ROUTING ---
+    if (path.includes('/saved-meals')) {
+        return handleSavedMealsRequest(event, headers);
+    }
+    if (path.includes('/food-plan')) {
+        return handleFoodPlanRequest(event, headers);
+    }
     if (path.endsWith('/analyze-image') || path.endsWith('/analyze-image-recipes')) {
         return handleGeminiRequest(event, ai, headers);
     }
@@ -110,7 +107,68 @@ export const handler = async (event) => {
 
 // --- ROUTE HANDLERS ---
 
-async function handleCustomerLogin(event, headers) {
+async function handleSavedMealsRequest(event, headers) {
+    const userId = event.user.userId;
+    const { httpMethod: method, path } = event;
+
+    try {
+        if (method === 'GET') {
+            const meals = await getSavedMeals(userId);
+            return { statusCode: 200, headers, body: JSON.stringify(meals) };
+        }
+        if (method === 'POST') {
+            const mealData = JSON.parse(event.body);
+            const newMeal = await saveMeal(userId, mealData);
+            return { statusCode: 201, headers, body: JSON.stringify(newMeal) };
+        }
+        if (method === 'DELETE') {
+            const mealIdMatch = path.match(/\/saved-meals\/(\d+)/);
+            if (!mealIdMatch || !mealIdMatch[1]) {
+                return { statusCode: 400, headers, body: JSON.stringify({ error: 'Meal ID missing from URL.' })};
+            }
+            const mealId = parseInt(mealIdMatch[1], 10);
+            await deleteMeal(userId, mealId);
+            return { statusCode: 204, headers, body: '' }; // No content
+        }
+        return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' })};
+    } catch (error) {
+        console.error(`Error in handleSavedMealsRequest (method: ${method}):`, error);
+        return { statusCode: 500, headers, body: JSON.stringify({ error: 'An internal error occurred while managing saved meals.' })};
+    }
+}
+
+async function handleFoodPlanRequest(event, headers) {
+    const userId = event.user.userId;
+    const { httpMethod: method, path } = event;
+
+    try {
+        if (method === 'GET') {
+            const planItems = await getFoodPlan(userId);
+            return { statusCode: 200, headers, body: JSON.stringify(planItems) };
+        }
+        if (method === 'POST') {
+            const { ingredients } = JSON.parse(event.body);
+            const newItems = await addItemsToFoodPlan(userId, ingredients);
+            return { statusCode: 201, headers, body: JSON.stringify(newItems) };
+        }
+        if (method === 'DELETE') {
+            const itemIdMatch = path.match(/\/food-plan\/(\d+)/);
+             if (!itemIdMatch || !itemIdMatch[1]) {
+                return { statusCode: 400, headers, body: JSON.stringify({ error: 'Item ID missing from URL.' })};
+            }
+            const itemId = parseInt(itemIdMatch[1], 10);
+            await removeFoodPlanItem(userId, itemId);
+            return { statusCode: 204, headers, body: '' };
+        }
+        return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' })};
+    } catch (error) {
+        console.error(`Error in handleFoodPlanRequest (method: ${method}):`, error);
+        return { statusCode: 500, headers, body: JSON.stringify({ error: 'An internal error occurred while managing the food plan.' })};
+    }
+}
+
+// FIX: Add JWT_SECRET as a parameter to bring it into scope.
+async function handleCustomerLogin(event, headers, JWT_SECRET) {
     const mutation = `
         mutation customerAccessTokenCreate($input: CustomerAccessTokenCreateInput!) {
             customerAccessTokenCreate(input: $input) {
@@ -126,85 +184,54 @@ async function handleCustomerLogin(event, headers) {
             }
         }
     `;
-
     try {
-        console.log('[DEBUG] handleCustomerLogin event.body:', event.body);
-
         const { email, password } = JSON.parse(event.body);
-
         if (!email || !password) {
             return { statusCode: 400, headers, body: JSON.stringify({ error: 'Email and password are required.' }) };
         }
-        
         const variables = { input: { email, password } };
-
         const shopifyResponse = await callShopifyStorefrontAPI(mutation, variables);
         
-        const data = (shopifyResponse && typeof shopifyResponse === 'object' && 'customerAccessTokenCreate' in shopifyResponse)
-            ? shopifyResponse['customerAccessTokenCreate']
-            : null;
-        
-        const userErrors = (data && typeof data === 'object' && 'customerUserErrors' in data && Array.isArray(data.customerUserErrors)) 
-            ? data.customerUserErrors 
-            : [];
-        
-        if (!data || userErrors.length > 0) {
-            console.error('Shopify customer login error:', userErrors);
+        // FIX: Add a guard to ensure shopifyResponse is a valid object before property access.
+        if (!shopifyResponse || typeof shopifyResponse !== 'object') {
+            console.error('Shopify customer login error: Invalid or empty response from Shopify API.');
             return {
-                statusCode: 401,
+                statusCode: 500,
                 headers,
-                body: JSON.stringify({ error: 'Invalid credentials.', details: userErrors[0]?.message ?? 'An unknown login error occurred.' })
+                body: JSON.stringify({ error: 'Login failed due to an issue with the authentication service.' })
             };
         }
         
-        // Find or create the user in our own database
+        const data = shopifyResponse.customerAccessTokenCreate;
+        if (!data || data.customerUserErrors.length > 0) {
+            console.error('Shopify customer login error:', data?.customerUserErrors);
+            return {
+                statusCode: 401,
+                headers,
+                body: JSON.stringify({ error: 'Invalid credentials.', details: data?.customerUserErrors[0]?.message ?? 'An unknown login error occurred.' })
+            };
+        }
         const user = await findOrCreateUserByEmail(email);
-
-        // Create a session token (JWT)
-        const sessionToken = jwt.sign(
-            { userId: user.id, email: user.email },
-            process.env.JWT_SECRET,
-            { expiresIn: '7d' }
-        );
-        
-        return {
-            statusCode: 200,
-            headers: { ...headers, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: sessionToken })
-        };
-
+        const sessionToken = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+        return { statusCode: 200, headers, body: JSON.stringify({ token: sessionToken }) };
     } catch (error) {
-        console.error('[CRITICAL] LOGIN_HANDLER_CRASH:', error.name, error.message, error.stack); 
-        
+        console.error('[CRITICAL] LOGIN_HANDLER_CRASH:', error.name, error.message, error.stack);
         return { statusCode: 500, headers, body: JSON.stringify({ error: 'Login failed due to an internal error.', details: error.message }) };
     }
 }
 
-
 async function handleGeminiRequest(event, ai, headers) {
-    console.log(`Gemini request made by user: ${event.user.email}`);
     try {
         const body = JSON.parse(event.body);
         const { base64Image, mimeType, prompt, schema } = body;
-        
-        if (!base64Image || !mimeType || !prompt || !schema) {
-            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing required parameters.' })};
-        }
-
         const imagePart = { inlineData: { data: base64Image, mimeType } };
         const textPart = { text: prompt };
-
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: { parts: [imagePart, textPart] },
             config: { responseMimeType: 'application/json', responseSchema: schema },
         });
-
-        return {
-            statusCode: 200,
-            headers: { ...headers, 'Content-Type': 'application/json' },
-            body: response.text,
-        };
+        return { statusCode: 200, headers: { ...headers, 'Content-Type': 'application/json' }, body: response.text };
     } catch (error) {
         console.error("Error calling Gemini API:", error);
         return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to call Gemini API.' })};
@@ -212,39 +239,24 @@ async function handleGeminiRequest(event, ai, headers) {
 }
 
 async function handleMealSuggestionRequest(event, ai, headers) {
-    console.log(`Meal suggestion request made by user: ${event.user.email}`);
     try {
         const body = JSON.parse(event.body);
         const { prompt, schema } = body;
-        
-        if (!prompt || !schema) {
-            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing required parameters (prompt, schema).' })};
-        }
-
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: { responseMimeType: 'application/json', responseSchema: schema },
         });
-
-        return {
-            statusCode: 200,
-            headers: { ...headers, 'Content-Type': 'application/json' },
-            body: response.text,
-        };
+        return { statusCode: 200, headers: { ...headers, 'Content-Type': 'application/json' }, body: response.text };
     } catch (error) {
         console.error("Error calling Gemini API for meal suggestions:", error);
         return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to call Gemini API for meal suggestions.' })};
     }
 }
 
-
-// --- HELPER FUNCTIONS ---
-
 function callShopifyStorefrontAPI(query, variables) {
     const { SHOPIFY_STORE_DOMAIN, SHOPIFY_STOREFRONT_TOKEN } = process.env;
     const postData = JSON.stringify({ query, variables });
-
     const options = {
         hostname: SHOPIFY_STORE_DOMAIN,
         path: '/api/2024-04/graphql.json',
@@ -255,7 +267,6 @@ function callShopifyStorefrontAPI(query, variables) {
             'X-Shopify-Storefront-Access-Token': SHOPIFY_STOREFRONT_TOKEN
         },
     };
-
     return new Promise((resolve, reject) => {
         const req = https.request(options, (res) => {
             let data = '';
@@ -263,7 +274,6 @@ function callShopifyStorefrontAPI(query, variables) {
             res.on('end', () => {
                 try {
                     const responseBody = JSON.parse(data);
-                    
                     if (res.statusCode >= 200 && res.statusCode < 300) {
                         if (responseBody.errors) {
                             console.error("[Shopify API Error]", JSON.stringify(responseBody.errors));
@@ -279,7 +289,6 @@ function callShopifyStorefrontAPI(query, variables) {
                 }
             });
         });
-
         req.on('error', (e) => reject(e));
         req.write(postData);
         req.end();

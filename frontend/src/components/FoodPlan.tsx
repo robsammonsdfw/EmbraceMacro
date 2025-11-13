@@ -1,10 +1,10 @@
 import React from 'react';
-import type { Ingredient } from '../types';
+import type { FoodPlanItem } from '../types';
 import { TrashIcon, PlusIcon } from './icons';
 
 interface FoodPlanProps {
-  items: Ingredient[];
-  onRemove: (index: number) => void;
+  items: FoodPlanItem[];
+  onRemove: (id: number) => void;
 }
 
 export const FoodPlan: React.FC<FoodPlanProps> = ({ items, onRemove }) => {
@@ -53,8 +53,8 @@ export const FoodPlan: React.FC<FoodPlanProps> = ({ items, onRemove }) => {
       </div>
 
       <ul className="space-y-3">
-        {items.map((item, index) => (
-          <li key={index} className="flex justify-between items-center bg-slate-50 p-3 rounded-md hover:bg-slate-100 transition-colors">
+        {items.map((item) => (
+          <li key={item.id} className="flex justify-between items-center bg-slate-50 p-3 rounded-md hover:bg-slate-100 transition-colors">
             <div className="flex items-center space-x-3">
               {item.imageUrl && <img src={item.imageUrl} alt={item.name} className="w-10 h-10 rounded-md object-cover" />}
               <div>
@@ -63,7 +63,7 @@ export const FoodPlan: React.FC<FoodPlanProps> = ({ items, onRemove }) => {
               </div>
             </div>
             <button
-              onClick={() => onRemove(index)}
+              onClick={() => onRemove(item.id)}
               className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-100 rounded-full transition-colors"
               aria-label={`Remove ${item.name}`}
             >

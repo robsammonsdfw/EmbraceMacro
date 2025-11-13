@@ -5,10 +5,10 @@ import { PlusIcon, TrashIcon, BookOpenIcon } from './icons';
 interface MealLibraryProps {
   meals: SavedMeal[];
   onAdd: (meal: SavedMeal) => void;
-  onDelete: (id: string) => void;
+  onDelete: (id: number) => void;
 }
 
-const MealCard: React.FC<{ meal: SavedMeal; onAdd: (meal: SavedMeal) => void; onDelete: (id: string) => void;}> = ({ meal, onAdd, onDelete }) => (
+const MealCard: React.FC<{ meal: SavedMeal; onAdd: (meal: SavedMeal) => void; onDelete: (id: number) => void;}> = ({ meal, onAdd, onDelete }) => (
     <div className="bg-slate-50 p-4 rounded-lg flex items-center justify-between hover:bg-slate-100 transition-colors">
         <div className="flex items-center space-x-4">
             {meal.imageUrl && <img src={meal.imageUrl} alt={meal.mealName} className="w-16 h-16 rounded-md object-cover" />}
