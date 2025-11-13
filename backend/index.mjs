@@ -55,10 +55,6 @@ export const handler = async (event) => {
     } else if (event.path) { // API Gateway v1 (REST API)
         path = event.path;
         method = event.httpMethod;
-        const stage = event.requestContext?.stage;
-        if (stage && path.startsWith(`/${stage}`)) {
-            path = path.substring(stage.length + 1);
-        }
     } else {
         console.error('[ROUTING] Could not determine API Gateway payload version. Event:', JSON.stringify(event));
         return { statusCode: 500, headers, body: JSON.stringify({ error: 'Internal Server Error: Malformed request event.' }) };
@@ -98,10 +94,10 @@ export const handler = async (event) => {
         return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized: Invalid token.' })};
     }
 
-    if (path === '/analyze-image' || path === '/analyze-image-recipes') {
+    if (path.endsWith('/analyze-image') || path.endsWith('/analyze-image-recipes')) {
         return handleGeminiRequest(event, ai, headers);
     }
-    if (path === '/get-meal-suggestions') {
+    if (path.endsWith('/get-meal-suggestions')) {
         return handleMealSuggestionRequest(event, ai, headers);
     }
 
@@ -132,10 +128,7 @@ async function handleCustomerLogin(event, headers) {
     `;
 
     try {
-        // --- 1. ADD THIS LOG ---
-        // Log the raw body to see what we're getting
         console.log('[DEBUG] handleCustomerLogin event.body:', event.body);
-        // --- END ADDED LOG ---
 
         const { email, password } = JSON.parse(event.body);
 
@@ -181,10 +174,7 @@ async function handleCustomerLogin(event, headers) {
         };
 
     } catch (error) {
-        // --- 2. MODIFY THIS LOG ---
-        // Make the catch block log more verbosely
         console.error('[CRITICAL] LOGIN_HANDLER_CRASH:', error.name, error.message, error.stack); 
-        // --- END MODIFIED LOG ---
         
         return { statusCode: 500, headers, body: JSON.stringify({ error: 'Login failed due to an internal error.', details: error.message }) };
     }
@@ -275,12 +265,8 @@ function callShopifyStorefrontAPI(query, variables) {
                     const responseBody = JSON.parse(data);
                     
                     if (res.statusCode >= 200 && res.statusCode < 300) {
-                        // NEW: Check for top-level errors
                         if (responseBody.errors) {
                             console.error("[Shopify API Error]", JSON.stringify(responseBody.errors));
-                            // Pass null so the main handler knows data is missing, 
-                            // or reject if you prefer to catch it as a crash.
-                            // Let's resolve null to let the main handler fail gracefully.
                             resolve(null); 
                         } else {
                             resolve(responseBody.data);
