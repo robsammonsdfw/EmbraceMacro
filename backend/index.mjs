@@ -119,7 +119,7 @@ async function handleCustomerLogin(event, headers) {
         mutation customerAccessTokenCreate($input: CustomerAccessTokenCreateInput!) {
             customerAccessTokenCreate(input: $input) {
                 customerAccessToken {
-                    token
+                    accessToken
                     expiresAt
                 }
                 customerUserErrors {
