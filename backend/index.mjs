@@ -27,7 +27,7 @@ export const handler = async (event) => {
     const headers = {
         "Access-Control-Allow-Origin": FRONTEND_URL,
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        "Access-Control-Allow-Methods": "OPTIONS,POST,GET,DELETE" // Added DELETE
+        "Access-Control-Allow-Methods": "OPTIONS,POST,GET,DELETE"
     };
 
     const requiredEnvVars = [
@@ -68,7 +68,6 @@ export const handler = async (event) => {
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
     
     if (path.endsWith('/auth/customer-login')) {
-        // FIX: Pass JWT_SECRET to handleCustomerLogin as it's out of scope otherwise.
         return handleCustomerLogin(event, headers, JWT_SECRET);
     }
     
@@ -86,10 +85,10 @@ export const handler = async (event) => {
 
     // --- API ROUTING ---
     if (path.includes('/saved-meals')) {
-        return handleSavedMealsRequest(event, headers);
+        return handleSavedMealsRequest(event, headers, method);
     }
     if (path.includes('/food-plan')) {
-        return handleFoodPlanRequest(event, headers);
+        return handleFoodPlanRequest(event, headers, method);
     }
     if (path.endsWith('/analyze-image') || path.endsWith('/analyze-image-recipes')) {
         return handleGeminiRequest(event, ai, headers);
@@ -107,9 +106,9 @@ export const handler = async (event) => {
 
 // --- ROUTE HANDLERS ---
 
-async function handleSavedMealsRequest(event, headers) {
+async function handleSavedMealsRequest(event, headers, method) {
     const userId = event.user.userId;
-    const { httpMethod: method, path } = event;
+    const path = event.requestContext?.http?.path || event.path;
 
     try {
         if (method === 'GET') {
@@ -137,9 +136,9 @@ async function handleSavedMealsRequest(event, headers) {
     }
 }
 
-async function handleFoodPlanRequest(event, headers) {
+async function handleFoodPlanRequest(event, headers, method) {
     const userId = event.user.userId;
-    const { httpMethod: method, path } = event;
+    const path = event.requestContext?.http?.path || event.path;
 
     try {
         if (method === 'GET') {
@@ -167,7 +166,6 @@ async function handleFoodPlanRequest(event, headers) {
     }
 }
 
-// FIX: Add JWT_SECRET as a parameter to bring it into scope.
 async function handleCustomerLogin(event, headers, JWT_SECRET) {
     const mutation = `
         mutation customerAccessTokenCreate($input: CustomerAccessTokenCreateInput!) {
@@ -192,7 +190,6 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         const variables = { input: { email, password } };
         const shopifyResponse = await callShopifyStorefrontAPI(mutation, variables);
         
-        // FIX: Add a guard to ensure shopifyResponse is a valid object before property access.
         if (!shopifyResponse || typeof shopifyResponse !== 'object') {
             console.error('Shopify customer login error: Invalid or empty response from Shopify API.');
             return {
@@ -202,7 +199,6 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
             };
         }
         
-        // FIX: Use bracket notation for property access on a variable typed as 'object' to resolve TypeScript error.
         const data = shopifyResponse['customerAccessTokenCreate'];
         if (!data || data.customerUserErrors.length > 0) {
             console.error('Shopify customer login error:', data?.customerUserErrors);
