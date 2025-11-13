@@ -82,7 +82,7 @@ export const handler = async (event) => {
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
     
     // --- NEW PUBLIC LOGIN ROUTE ---
-    if (path === '/auth/customer-login') {
+    if (path.endsWith('/auth/customer-login')) {
         return handleCustomerLogin(event, headers);
     }
     
