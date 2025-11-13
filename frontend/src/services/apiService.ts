@@ -196,7 +196,8 @@ export const saveMeal = (mealData: NutritionInfo): Promise<SavedMeal> => {
 };
 
 export const deleteMeal = (mealId: number): Promise<null> => {
-    return callApi(`/saved-meals/${mealId}`, 'DELETE');
+    // Tunnel DELETE over POST to avoid preflight issues
+    return callApi('/saved-meals/delete', 'POST', { mealId });
 };
 
 // --- Food Plan Endpoints ---
@@ -210,5 +211,6 @@ export const addItemsToFoodPlan = (ingredients: Ingredient[]): Promise<FoodPlanI
 };
 
 export const removeFoodPlanItem = (itemId: number): Promise<null> => {
-    return callApi(`/food-plan/${itemId}`, 'DELETE');
+    // Tunnel DELETE over POST to avoid preflight issues
+    return callApi('/food-plan/delete', 'POST', { itemId });
 };

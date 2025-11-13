@@ -27,7 +27,7 @@ export const handler = async (event) => {
     const headers = {
         "Access-Control-Allow-Origin": FRONTEND_URL,
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        "Access-Control-Allow-Methods": "OPTIONS,POST,GET,DELETE"
+        "Access-Control-Allow-Methods": "OPTIONS,POST,GET" // DELETE is no longer used
     };
 
     const requiredEnvVars = [
@@ -115,18 +115,19 @@ async function handleSavedMealsRequest(event, headers, method, path) {
             return { statusCode: 200, headers, body: JSON.stringify(meals) };
         }
         if (method === 'POST') {
-            const mealData = JSON.parse(event.body);
-            const newMeal = await saveMeal(userId, mealData);
-            return { statusCode: 201, headers, body: JSON.stringify(newMeal) };
-        }
-        if (method === 'DELETE') {
-            const mealIdMatch = path.match(/\/saved-meals\/(\d+)/);
-            if (!mealIdMatch || !mealIdMatch[1]) {
-                return { statusCode: 400, headers, body: JSON.stringify({ error: 'Meal ID missing from URL.' })};
+             // Differentiate between creating and deleting
+            if (path.endsWith('/delete')) {
+                const { mealId } = JSON.parse(event.body);
+                if (!mealId) {
+                    return { statusCode: 400, headers, body: JSON.stringify({ error: 'Meal ID is required for deletion.' })};
+                }
+                await deleteMeal(userId, mealId);
+                return { statusCode: 204, headers, body: '' };
+            } else {
+                const mealData = JSON.parse(event.body);
+                const newMeal = await saveMeal(userId, mealData);
+                return { statusCode: 201, headers, body: JSON.stringify(newMeal) };
             }
-            const mealId = parseInt(mealIdMatch[1], 10);
-            await deleteMeal(userId, mealId);
-            return { statusCode: 204, headers, body: '' }; // No content
         }
         return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' })};
     } catch (error) {
@@ -144,18 +145,18 @@ async function handleFoodPlanRequest(event, headers, method, path) {
             return { statusCode: 200, headers, body: JSON.stringify(planItems) };
         }
         if (method === 'POST') {
-            const { ingredients } = JSON.parse(event.body);
-            const newItems = await addItemsToFoodPlan(userId, ingredients);
-            return { statusCode: 201, headers, body: JSON.stringify(newItems) };
-        }
-        if (method === 'DELETE') {
-            const itemIdMatch = path.match(/\/food-plan\/(\d+)/);
-             if (!itemIdMatch || !itemIdMatch[1]) {
-                return { statusCode: 400, headers, body: JSON.stringify({ error: 'Item ID missing from URL.' })};
+            if (path.endsWith('/delete')) {
+                const { itemId } = JSON.parse(event.body);
+                if (!itemId) {
+                    return { statusCode: 400, headers, body: JSON.stringify({ error: 'Item ID is required for deletion.' })};
+                }
+                await removeFoodPlanItem(userId, itemId);
+                return { statusCode: 204, headers, body: '' };
+            } else {
+                const { ingredients } = JSON.parse(event.body);
+                const newItems = await addItemsToFoodPlan(userId, ingredients);
+                return { statusCode: 201, headers, body: JSON.stringify(newItems) };
             }
-            const itemId = parseInt(itemIdMatch[1], 10);
-            await removeFoodPlanItem(userId, itemId);
-            return { statusCode: 204, headers, body: '' };
         }
         return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' })};
     } catch (error) {
