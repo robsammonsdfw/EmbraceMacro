@@ -59,12 +59,19 @@ export const handler = async (event) => {
     let path;
     let method;
 
+    // Accommodate both v1 (REST) and v2 (HTTP) API Gateway payloads
     if (event.requestContext && event.requestContext.http) { // API Gateway v2 (HTTP API)
         path = event.requestContext.http.path;
         method = event.requestContext.http.method;
     } else if (event.path) { // API Gateway v1 (REST API)
         path = event.path;
         method = event.httpMethod;
+        
+        // For REST APIs, the stage is part of the path. We need to remove it for consistent routing.
+        const stage = event.requestContext?.stage;
+        if (stage && path.startsWith(`/${stage}`)) {
+            path = path.substring(stage.length + 1);
+        }
     } else {
         return { statusCode: 500, headers, body: JSON.stringify({ error: 'Internal Server Error: Malformed request event.' }) };
     }
@@ -75,7 +82,8 @@ export const handler = async (event) => {
 
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
     
-    if (path.endsWith('/auth/customer-login')) {
+    // Path needs to be checked without the stage prefix
+    if (path === '/auth/customer-login') {
         return handleCustomerLogin(event, headers, JWT_SECRET);
     }
     
@@ -92,7 +100,7 @@ export const handler = async (event) => {
     }
 
     // --- API ROUTING ---
-    const pathParts = path.split('/').filter(Boolean); // Cleanly splits path, removing empty strings
+    const pathParts = path.split('/').filter(Boolean);
     const resource = pathParts[0];
 
     try {
@@ -130,7 +138,7 @@ export const handler = async (event) => {
 
 async function handleGroceryListRequest(event, headers, method, pathParts) {
     const userId = event.user.userId;
-    const action = pathParts[1]; // e.g., 'generate' or 'update'
+    const action = pathParts[1]; 
 
     if (method === 'GET') {
         const list = await getGroceryList(userId);
