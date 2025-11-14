@@ -82,7 +82,7 @@ export const getMealLogEntries = async (userId) => {
             return {
                 id: row.id,
                 ...mealData,
-                imageUrl: row.image_base64,
+                imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
                 createdAt: row.created_at,
             };
         });
@@ -228,6 +228,63 @@ export const addMealToPlan = async (userId, savedMealId) => {
         client.release();
     }
 };
+
+export const addMealAndLinkToPlan = async (userId, mealData) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Step 1: Insert the meal into saved_meals to get a persistent ID.
+        const saveQuery = `
+            INSERT INTO saved_meals (user_id, meal_data) 
+            VALUES ($1, $2) 
+            RETURNING id;
+        `;
+        const saveRes = await client.query(saveQuery, [userId, mealData]);
+        const savedMealId = saveRes.rows[0].id;
+
+        // Step 2: Use the new ID to create the link in the meal plan group.
+        const planQuery = `
+            INSERT INTO meal_plan_groups (user_id, saved_meal_id)
+            VALUES ($1, $2)
+            RETURNING id;
+        `;
+        const planRes = await client.query(planQuery, [userId, savedMealId]);
+        const newGroupId = planRes.rows[0].id;
+
+        await client.query('COMMIT');
+
+        // Step 3: Fetch the full group data to return to the client for an optimistic update.
+        const selectQuery = `
+            SELECT 
+                g.id as group_id,
+                m.id as meal_id,
+                m.meal_data
+            FROM meal_plan_groups g
+            JOIN saved_meals m ON g.saved_meal_id = m.id
+            WHERE g.id = $1;
+        `;
+        const finalRes = await client.query(selectQuery, [newGroupId]);
+        const row = finalRes.rows[0];
+        const mealDataFromDb = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
+        
+        return {
+            id: row.group_id,
+            meal: {
+                id: row.meal_id,
+                ...mealDataFromDb
+            }
+        };
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Database transaction error in addMealAndLinkToPlan:', err);
+        throw new Error('Could not add meal from history to plan due to a database error.');
+    } finally {
+        client.release();
+    }
+};
+
 
 export const removeMealFromPlan = async (userId, planGroupId) => {
     const client = await pool.connect();

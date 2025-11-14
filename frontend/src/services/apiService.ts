@@ -100,7 +100,6 @@ export const analyzeImageWithGemini = (base64Image: string, mimeType: string): P
     return callApi('/analyze-image', 'POST', { base64Image, mimeType, prompt, schema: nutritionSchema });
 };
 
-// FIX: Added missing schemas and function for recipe generation
 const recipeSchema = {
     type: Type.OBJECT,
     properties: {
@@ -182,6 +181,11 @@ export const getFoodPlan = (): Promise<MealPlanGroup[]> => {
 
 export const addMealToPlan = (savedMealId: number): Promise<MealPlanGroup> => {
     return callApi('/food-plan', 'POST', { savedMealId });
+};
+
+export const addMealFromHistoryToPlan = (mealData: NutritionInfo): Promise<MealPlanGroup> => {
+    const { id, createdAt, ...pureMealData } = mealData as MealLogEntry; // Strip log-specific fields
+    return callApi('/food-plan/from-log', 'POST', { mealData: pureMealData });
 };
 
 export const removeMealFromPlan = (planGroupId: number): Promise<null> => {

@@ -124,7 +124,6 @@ const App: React.FC = () => {
   const handleSaveMealFromLog = useCallback(async (mealData: NutritionInfo): Promise<SavedMeal | null> => {
       try {
         const newMeal = await apiService.saveMeal(mealData);
-        // Avoid duplicates in local state
         if (!savedMeals.some(m => m.id === newMeal.id)) {
             setSavedMeals(prevMeals => [newMeal, ...prevMeals]);
         }
@@ -135,28 +134,34 @@ const App: React.FC = () => {
       }
   }, [savedMeals]);
   
-  const handleAddMealToPlan = useCallback(async (mealData: NutritionInfo) => {
+  const handleAddSavedMealToPlan = useCallback(async (meal: SavedMeal) => {
     try {
-      let mealToPlan: SavedMeal | null = savedMeals.find(m => m.mealName === mealData.mealName) || null;
-
-      if (!mealToPlan) {
-        mealToPlan = await handleSaveMealFromLog(mealData);
-      }
-
-      if (mealToPlan) {
-        const newPlanGroup = await apiService.addMealToPlan(mealToPlan.id);
-        if (newPlanGroup && !foodPlan.some(p => p.id === newPlanGroup.id)) {
-          setFoodPlan(prevPlan => [...prevPlan, newPlanGroup]);
-        }
-      } else {
-        console.error("Failed to save the meal, so it cannot be added to the plan.");
-        // Error is already set within handleSaveMealFromLog, so no need to set it again here.
+      const newPlanGroup = await apiService.addMealToPlan(meal.id);
+      if (newPlanGroup && !foodPlan.some(p => p.id === newPlanGroup.id)) {
+        setFoodPlan(prevPlan => [...prevPlan, newPlanGroup]);
       }
     } catch (err) {
-      setError("Failed to add meal to today's plan.");
+      setError("Failed to add saved meal to today's plan.");
       console.error(err);
     }
-  }, [savedMeals, foodPlan, handleSaveMealFromLog]);
+  }, [foodPlan]);
+
+  const handleAddMealFromLogToPlan = useCallback(async (mealData: NutritionInfo) => {
+    try {
+      const newPlanGroup = await apiService.addMealFromHistoryToPlan(mealData);
+      if (newPlanGroup && !foodPlan.some(p => p.id === newPlanGroup.id)) {
+        setFoodPlan(prevPlan => [...prevPlan, newPlanGroup]);
+        
+        const newSavedMeal = newPlanGroup.meal;
+        if (!savedMeals.some(m => m.id === newSavedMeal.id)) {
+            setSavedMeals(prev => [newSavedMeal, ...prev]);
+        }
+      }
+    } catch (err) {
+      setError("Failed to add meal from history to today's plan.");
+      console.error(err);
+    }
+  }, [foodPlan, savedMeals]);
 
   const handleDeleteMeal = useCallback(async (mealId: number) => {
     setSavedMeals(prev => prev.filter(m => m.id !== mealId));
@@ -185,9 +190,9 @@ const App: React.FC = () => {
   const renderActiveView = () => {
     switch(activeView) {
         case 'plan': return <FoodPlan planGroups={foodPlan} onRemove={handleRemoveFromPlan} />;
-        case 'meals': return <MealLibrary meals={savedMeals} onAdd={handleAddMealToPlan} onDelete={handleDeleteMeal} />;
-        case 'history': return <MealHistory logEntries={mealLog} onSaveMeal={handleSaveMealFromLog} onAddToPlan={handleAddMealToPlan} />;
-        default: return <MealHistory logEntries={mealLog} onSaveMeal={handleSaveMealFromLog} onAddToPlan={handleAddMealToPlan} />;
+        case 'meals': return <MealLibrary meals={savedMeals} onAdd={handleAddSavedMealToPlan} onDelete={handleDeleteMeal} />;
+        case 'history': return <MealHistory logEntries={mealLog} onSaveMeal={handleSaveMealFromLog} onAddToPlan={handleAddMealFromLogToPlan} />;
+        default: return <MealHistory logEntries={mealLog} onSaveMeal={handleSaveMealFromLog} onAddToPlan={handleAddMealFromLogToPlan} />;
     }
   }
 
@@ -214,9 +219,12 @@ const App: React.FC = () => {
                 {error && <ErrorAlert message={error} />}
                 {nutritionData && !isProcessing && image && ( <NutritionCard data={nutritionData} onSaveToHistory={() => handleSaveToHistory(nutritionData, image)} /> )}
                 {recipes && !isProcessing && (
-                  <div className="space-y-4"> {/* Recipe display logic can be simplified or removed if not a core feature now */}
+                  <div className="space-y-4">
                       <h2 className="text-2xl font-bold text-slate-800 text-center pt-4 border-t border-slate-200">Recipe Ideas</h2>
-                      {recipes.map((recipe, index) => ( <RecipeCard key={index} recipe={recipe} onAddToPlan={()=>{/*This needs a new flow*/}} /> ))}
+                      {recipes.map((recipe, index) => ( <RecipeCard key={index} recipe={recipe} onAddToPlan={() => {
+                        const mealData: NutritionInfo = { ...recipe.nutrition, mealName: recipe.recipeName, ingredients: [] };
+                        handleAddMealFromLogToPlan(mealData);
+                      }} /> ))}
                   </div>
                 )}
             </div>

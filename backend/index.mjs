@@ -10,7 +10,8 @@ import {
     addMealToPlan,
     removeMealFromPlan,
     createMealLogEntry,
-    getMealLogEntries
+    getMealLogEntries,
+    addMealAndLinkToPlan
 } from './services/databaseService.mjs';
 import { Buffer } from 'buffer';
 
@@ -87,7 +88,6 @@ export const handler = async (event) => {
 
     // --- API ROUTING ---
     if (path.includes('/meal-log')) {
-        // FIX: Removed extra `path` argument from the function call to match the function definition.
         return handleMealLogRequest(event, headers, method);
     }
     if (path.includes('/saved-meals')) {
@@ -121,7 +121,9 @@ async function handleMealLogRequest(event, headers, method) {
         }
         if (method === 'POST') {
             const { mealData, imageBase64 } = JSON.parse(event.body);
-            const newEntry = await createMealLogEntry(userId, mealData, imageBase64);
+            // Remove the data URL prefix if it exists
+            const base64Data = imageBase64.split(',')[1] || imageBase64;
+            const newEntry = await createMealLogEntry(userId, mealData, base64Data);
             return { statusCode: 201, headers, body: JSON.stringify(newEntry) };
         }
         return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' })};
@@ -171,6 +173,11 @@ async function handleFoodPlanRequest(event, headers, method, path) {
                 if (!planGroupId) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Plan Group ID is required for deletion.' })};
                 await removeMealFromPlan(userId, planGroupId);
                 return { statusCode: 204, headers, body: '' };
+            } else if (path.endsWith('/from-log')) {
+                const { mealData } = JSON.parse(event.body);
+                if (!mealData) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Meal data is required to add from log.' })};
+                const newPlanGroup = await addMealAndLinkToPlan(userId, mealData);
+                return { statusCode: 201, headers, body: JSON.stringify(newPlanGroup) };
             } else {
                 const { savedMealId } = JSON.parse(event.body);
                 if (!savedMealId) return { statusCode: 400, headers, body: JSON.stringify({ error: 'A saved meal ID is required to add to the plan.' })};
@@ -180,7 +187,7 @@ async function handleFoodPlanRequest(event, headers, method, path) {
         }
         return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' })};
     } catch (error) {
-        console.error(`Error in handleFoodPlanRequest (method: ${method}):`, error);
+        console.error(`Error in handleFoodPlanRequest (method: ${method}, path: ${path}):`, error);
         return { statusCode: 500, headers, body: JSON.stringify({ error: 'An internal error occurred while managing the food plan.' })};
     }
 }
