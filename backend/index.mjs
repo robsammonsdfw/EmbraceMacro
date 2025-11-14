@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import jwt from 'jsonwebtoken';
-import https from 'httpss';
+import https from 'https';
 import { 
     findOrCreateUserByEmail,
     getSavedMeals,
@@ -138,14 +138,14 @@ async function handleGroceryListRequest(event, headers, method, pathParts) {
     }
     if (method === 'POST') {
         const body = JSON.parse(event.body);
-        if (action === 'generate') {
+        if (pathParts.length === 2 && action === 'generate') {
             if (!Array.isArray(body.mealPlanIds)) {
                 return { statusCode: 400, headers, body: JSON.stringify({ error: 'mealPlanIds must be an array.' })};
             }
             const newList = await generateGroceryList(userId, body.mealPlanIds);
             return { statusCode: 201, headers, body: JSON.stringify(newList) };
         }
-        if (action === 'update') {
+        if (pathParts.length === 2 && action === 'update') {
             if (body.itemId === undefined || body.checked === undefined) {
                 return { statusCode: 400, headers, body: JSON.stringify({ error: 'itemId and checked status are required.' })};
             }
