@@ -12,11 +12,12 @@ import { BarcodeScanner } from './components/BarcodeScanner';
 import { MealLibrary } from './components/MealLibrary';
 import { AppNav } from './components/AppNav';
 import { MealHistory } from './components/MealHistory';
+import { MealSuggester } from './components/MealSuggester';
 import { RecipeCard } from './components/RecipeCard';
 import { useAuth } from './hooks/useAuth';
 import { Login } from './components/Login';
 
-type ActiveView = 'plan' | 'meals' | 'history';
+type ActiveView = 'plan' | 'meals' | 'history' | 'suggestions';
 
 const App: React.FC = () => {
   const { isAuthenticated, isLoading: isAuthLoading, logout } = useAuth();
@@ -32,8 +33,12 @@ const App: React.FC = () => {
   const [processingMessage, setProcessingMessage] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState<boolean>(false);
-  const [activeView, setActiveView] = useState<ActiveView>('history');
+  const [activeView, setActiveView] = useState<ActiveView>('plan');
   const [isDataLoading, setIsDataLoading] = useState<boolean>(true);
+
+  const [suggestedMeals, setSuggestedMeals] = useState<NutritionInfo[] | null>(null);
+  const [isSuggesting, setIsSuggesting] = useState<boolean>(false);
+  const [suggestionError, setSuggestionError] = useState<string | null>(null);
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
@@ -67,7 +72,7 @@ const App: React.FC = () => {
       setNutritionData(null);
       setRecipes(null);
       setError(null);
-      setActiveView('history');
+      setActiveView('plan');
   };
 
   const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>, isPantry: boolean = false) => {
@@ -157,6 +162,7 @@ const App: React.FC = () => {
             setSavedMeals(prev => [newSavedMeal, ...prev]);
         }
       }
+      setActiveView('plan');
     } catch (err) {
       setError("Failed to add meal from history to today's plan.");
       console.error(err);
@@ -173,6 +179,22 @@ const App: React.FC = () => {
       setFoodPlan(prev => prev.filter(p => p.id !== planGroupId));
       try { await apiService.removeMealFromPlan(planGroupId); }
       catch (err) { setError("Failed to remove meal from plan."); }
+  }, []);
+
+  const handleGetSuggestions = useCallback(async (condition: string, cuisine: string) => {
+    setIsSuggesting(true);
+    setSuggestionError(null);
+    setSuggestedMeals(null);
+    try {
+        const suggestions = await apiService.getMealSuggestions(condition, cuisine);
+        setSuggestedMeals(suggestions);
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'An unknown error occurred.';
+        setSuggestionError(message);
+        console.error(err);
+    } finally {
+        setIsSuggesting(false);
+    }
   }, []);
 
   const handleTriggerCamera = () => { cameraInputRef.current?.click(); };
@@ -192,7 +214,15 @@ const App: React.FC = () => {
         case 'plan': return <FoodPlan planGroups={foodPlan} onRemove={handleRemoveFromPlan} />;
         case 'meals': return <MealLibrary meals={savedMeals} onAdd={handleAddSavedMealToPlan} onDelete={handleDeleteMeal} />;
         case 'history': return <MealHistory logEntries={mealLog} onSaveMeal={handleSaveMealFromLog} onAddToPlan={handleAddMealFromLogToPlan} />;
-        default: return <MealHistory logEntries={mealLog} onSaveMeal={handleSaveMealFromLog} onAddToPlan={handleAddMealFromLogToPlan} />;
+        case 'suggestions': return <MealSuggester 
+                                      onGetSuggestions={handleGetSuggestions}
+                                      suggestions={suggestedMeals}
+                                      isLoading={isSuggesting}
+                                      error={suggestionError}
+                                      onAddToPlan={handleAddMealFromLogToPlan}
+                                      onSaveMeal={handleSaveMealFromLog}
+                                  />;
+        default: return <FoodPlan planGroups={foodPlan} onRemove={handleRemoveFromPlan} />;
     }
   }
 

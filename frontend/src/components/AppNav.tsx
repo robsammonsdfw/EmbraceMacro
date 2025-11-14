@@ -1,7 +1,7 @@
 import React from 'react';
-import { PlusIcon, BookOpenIcon, ClockIcon } from './icons';
+import { PlusIcon, BookOpenIcon, ClockIcon, LightBulbIcon } from './icons';
 
-type ActiveView = 'plan' | 'meals' | 'history';
+type ActiveView = 'plan' | 'meals' | 'history' | 'suggestions';
 
 interface AppNavProps {
     activeView: ActiveView;
@@ -29,7 +29,7 @@ const NavButton: React.FC<{
 
 export const AppNav: React.FC<AppNavProps> = ({ activeView, onViewChange }) => {
     return (
-        <div className="grid grid-cols-3 gap-3 p-2 bg-slate-100 rounded-xl border border-slate-200">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-2 bg-slate-100 rounded-xl border border-slate-200">
             <NavButton
                 isActive={activeView === 'plan'}
                 onClick={() => onViewChange('plan')}
@@ -47,6 +47,12 @@ export const AppNav: React.FC<AppNavProps> = ({ activeView, onViewChange }) => {
                 onClick={() => onViewChange('history')}
                 icon={<ClockIcon />}
                 label="History"
+            />
+            <NavButton
+                isActive={activeView === 'suggestions'}
+                onClick={() => onViewChange('suggestions')}
+                icon={<LightBulbIcon />}
+                label="Meal Ideas"
             />
         </div>
     );

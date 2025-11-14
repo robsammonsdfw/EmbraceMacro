@@ -1,11 +1,11 @@
 import React from 'react';
-import type { NutritionInfo, Ingredient } from '../types';
+import type { NutritionInfo, SavedMeal } from '../types';
 import { PlusIcon, BookmarkIcon } from './icons';
 
 interface MealSuggestionCardProps {
   meal: NutritionInfo;
-  onAddToPlan: (ingredients: Ingredient[]) => void;
-  onSaveMeal: (meal: NutritionInfo) => void;
+  onAddToPlan: (meal: NutritionInfo) => void;
+  onSaveMeal: (meal: NutritionInfo) => Promise<SavedMeal | null>;
 }
 
 const MacroPill: React.FC<{ label: string; value: number; unit: string; color: string }> = ({ label, value, unit, color }) => (
@@ -17,8 +17,8 @@ const MacroPill: React.FC<{ label: string; value: number; unit: string; color: s
 
 export const MealSuggestionCard: React.FC<MealSuggestionCardProps> = ({ meal, onAddToPlan, onSaveMeal }) => {
   return (
-    <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden animate-fade-in">
-      <div className="p-5">
+    <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden animate-fade-in flex flex-col">
+      <div className="p-5 flex-grow">
         <h3 className="text-xl font-bold text-slate-800 mb-2">{meal.mealName}</h3>
         
         {meal.justification && (
@@ -48,7 +48,7 @@ export const MealSuggestionCard: React.FC<MealSuggestionCardProps> = ({ meal, on
           <span>Save Meal</span>
         </button>
         <button
-          onClick={() => onAddToPlan(meal.ingredients)}
+          onClick={() => onAddToPlan(meal)}
           className="w-full bg-emerald-500 text-white font-bold py-2 px-3 rounded-lg hover:bg-emerald-600 transition-colors flex items-center justify-center space-x-2 text-sm"
         >
           <PlusIcon />

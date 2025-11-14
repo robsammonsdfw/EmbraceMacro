@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { NutritionInfo, Ingredient } from '../types';
+import type { NutritionInfo, SavedMeal } from '../types';
 import { MealSuggestionCard } from './MealSuggestionCard';
 import { LightBulbIcon } from './icons';
 
@@ -8,14 +8,16 @@ interface MealSuggesterProps {
     suggestions: NutritionInfo[] | null;
     isLoading: boolean;
     error: string | null;
-    onAddToPlan: (ingredients: Ingredient[]) => void;
-    onSaveMeal: (meal: NutritionInfo) => void;
+    onAddToPlan: (meal: NutritionInfo) => void;
+    onSaveMeal: (meal: NutritionInfo) => Promise<SavedMeal | null>;
 }
 
 const conditions = [
-    { id: 'diabetes', name: 'Diabetes', description: 'Focuses on low-glycemic foods to manage blood sugar.' },
-    { id: 'high-blood-pressure', name: 'High Blood Pressure', description: 'Emphasizes low-sodium and potassium-rich meals.' },
-    { id: 'high-cholesterol', name: 'High Cholesterol', description: 'Highlights meals low in saturated fats and high in fiber.' },
+    { id: 'Weight Loss', name: 'Weight Loss', description: 'Focuses on calorie-controlled, high-satiety meals.' },
+    { id: 'Muscle Gain', name: 'Muscle Gain', description: 'Highlights protein-rich meals to support muscle growth.' },
+    { id: 'Diabetes', name: 'Diabetes', description: 'Focuses on low-glycemic foods to manage blood sugar.' },
+    { id: 'High Blood Pressure', name: 'High Blood Pressure', description: 'Emphasizes low-sodium and potassium-rich meals.' },
+    { id: 'High Cholesterol', name: 'High Cholesterol', description: 'Highlights meals low in saturated fats and high in fiber.' },
 ];
 
 const cuisines = [
@@ -27,7 +29,6 @@ const cuisines = [
     { id: 'mediterranean', name: 'Mediterranean' },
     { id: 'mexican', name: 'Mexican' },
 ];
-
 
 export const MealSuggester: React.FC<MealSuggesterProps> = ({ onGetSuggestions, suggestions, isLoading, error, onAddToPlan, onSaveMeal }) => {
     const [selectedCondition, setSelectedCondition] = useState<string | null>(null);
@@ -52,8 +53,8 @@ export const MealSuggester: React.FC<MealSuggesterProps> = ({ onGetSuggestions, 
 
             <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
-                    <h3 className="text-lg font-semibold text-slate-700 mb-3 text-center">1. Select a dietary profile:</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <h3 className="text-lg font-semibold text-slate-700 mb-3 text-center">1. Select a goal or dietary profile:</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                         {conditions.map(condition => (
                             <button
                                 type="button"
