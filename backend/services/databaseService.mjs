@@ -8,6 +8,43 @@ const pool = new Pool({
 });
 
 /**
+ * Helper function to prepare meal data for database insertion.
+ * It extracts the raw base64 data from a data URL and stores it
+ * under `imageBase64`, removing the original `imageUrl` to save space
+ * and avoid potential JSONB storage issues with very long strings.
+ * @param {object} mealData - The meal data object from the client.
+ * @returns {object} The processed meal data object ready for the database.
+ */
+const processMealDataForSave = (mealData) => {
+    const dataForDb = { ...mealData };
+    if (dataForDb.imageUrl && dataForDb.imageUrl.startsWith('data:image')) {
+        dataForDb.imageBase64 = dataForDb.imageUrl.split(',')[1];
+        delete dataForDb.imageUrl;
+    }
+    // Clean up properties that don't belong in a saved meal
+    delete dataForDb.id;
+    delete dataForDb.createdAt;
+    return dataForDb;
+};
+
+/**
+ * Helper function to prepare meal data for the client.
+ * It reconstructs the full data URL for an image from the raw
+ * base64 data stored in the database.
+ * @param {object} mealData - The meal data object from the database.
+ * @returns {object} The processed meal data object with a usable `imageUrl`.
+ */
+const processMealDataForClient = (mealData) => {
+    const dataForClient = { ...mealData };
+    if (dataForClient.imageBase64) {
+        dataForClient.imageUrl = `data:image/jpeg;base64,${dataForClient.imageBase64}`;
+        delete dataForClient.imageBase64;
+    }
+    return dataForClient;
+};
+
+
+/**
  * Finds a user by their email or creates a new one if they don't exist.
  * @param {string} email - The customer's email address.
  * @returns {Promise<object>} The user record from the database.
@@ -55,7 +92,7 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
         return { 
             id: row.id,
             ...mealDataFromDb,
-            imageUrl: row.image_base64,
+            imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
             createdAt: row.created_at
         };
     } catch (err) {
@@ -107,7 +144,7 @@ export const getSavedMeals = async (userId) => {
         const res = await client.query(query, [userId]);
         return res.rows.map(row => {
             const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
-            return { id: row.id, ...mealData };
+            return { id: row.id, ...processMealDataForClient(mealData) };
         });
     } catch (err) {
         console.error('Database error in getSavedMeals:', err);
@@ -120,16 +157,17 @@ export const getSavedMeals = async (userId) => {
 export const saveMeal = async (userId, mealData) => {
     const client = await pool.connect();
     try {
+        const mealDataForDb = processMealDataForSave(mealData);
         const query = `
             INSERT INTO saved_meals (user_id, meal_data) 
             VALUES ($1, $2) 
             RETURNING id, meal_data;
         `;
-        const res = await client.query(query, [userId, mealData]);
+        const res = await client.query(query, [userId, mealDataForDb]);
         const row = res.rows[0];
         const mealDataFromDb = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
 
-        return { id: row.id, ...mealDataFromDb };
+        return { id: row.id, ...processMealDataForClient(mealDataFromDb) };
     } catch (err) {
         console.error('Database error in saveMeal:', err);
         throw new Error('Could not save meal.');
@@ -173,7 +211,7 @@ export const getFoodPlan = async (userId) => {
                 id: row.group_id,
                 meal: {
                     id: row.meal_id,
-                    ...mealData
+                    ...processMealDataForClient(mealData)
                 }
             };
         });
@@ -213,7 +251,7 @@ export const addMealToPlan = async (userId, savedMealId) => {
             id: row.group_id,
             meal: {
                 id: row.meal_id,
-                ...mealData
+                ...processMealDataForClient(mealData)
             }
         };
 
@@ -233,6 +271,8 @@ export const addMealAndLinkToPlan = async (userId, mealData) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
+        
+        const mealDataForDb = processMealDataForSave(mealData);
 
         // Step 1: Insert the meal into saved_meals to get a persistent ID.
         const saveQuery = `
@@ -240,7 +280,7 @@ export const addMealAndLinkToPlan = async (userId, mealData) => {
             VALUES ($1, $2) 
             RETURNING id;
         `;
-        const saveRes = await client.query(saveQuery, [userId, mealData]);
+        const saveRes = await client.query(saveQuery, [userId, mealDataForDb]);
         const savedMealId = saveRes.rows[0].id;
 
         // Step 2: Use the new ID to create the link in the meal plan group.
@@ -272,7 +312,7 @@ export const addMealAndLinkToPlan = async (userId, mealData) => {
             id: row.group_id,
             meal: {
                 id: row.meal_id,
-                ...mealDataFromDb
+                ...processMealDataForClient(mealDataFromDb)
             }
         };
 
