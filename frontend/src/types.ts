@@ -59,3 +59,9 @@ export interface Recipe {
     totalFat: number;
   };
 }
+
+export interface GroceryItem {
+  id: number;
+  name: string;
+  checked: boolean;
+}

@@ -337,3 +337,83 @@ export const removeMealFromPlan = async (userId, planGroupId) => {
         client.release();
     }
 };
+
+// --- Grocery List Persistence ---
+
+export const getGroceryList = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const query = `
+            SELECT id, name, checked FROM grocery_list_items 
+            WHERE user_id = $1 
+            ORDER BY name ASC;
+        `;
+        const res = await client.query(query, [userId]);
+        return res.rows;
+    } catch (err) {
+        console.error('Database error in getGroceryList:', err);
+        throw new Error('Could not retrieve grocery list.');
+    } finally {
+        client.release();
+    }
+};
+
+export const generateGroceryList = async (userId) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Step 1: Get all ingredients from saved meals for the user
+        const mealRes = await client.query(`SELECT meal_data FROM saved_meals WHERE user_id = $1;`, [userId]);
+        const allIngredients = mealRes.rows.flatMap(row => row.meal_data?.ingredients || []);
+        
+        // Step 2: Create a unique, sorted list of ingredient names
+        const uniqueIngredientNames = [...new Set(allIngredients.map(ing => ing.name))].sort();
+
+        // Step 3: Clear the old list
+        await client.query(`DELETE FROM grocery_list_items WHERE user_id = $1;`, [userId]);
+
+        // Step 4: Insert the new list if there are any ingredients
+        if (uniqueIngredientNames.length > 0) {
+            const insertQuery = `
+                INSERT INTO grocery_list_items (user_id, name)
+                SELECT $1, unnest($2::text[]);
+            `;
+            await client.query(insertQuery, [userId, uniqueIngredientNames]);
+        }
+        
+        await client.query('COMMIT');
+
+        // Step 5: Return the newly created list
+        return getGroceryList(userId);
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Database transaction error in generateGroceryList:', err);
+        throw new Error('Could not generate grocery list.');
+    } finally {
+        client.release();
+    }
+};
+
+export const updateGroceryListItem = async (userId, itemId, checked) => {
+    const client = await pool.connect();
+    try {
+        const query = `
+            UPDATE grocery_list_items 
+            SET checked = $1 
+            WHERE id = $2 AND user_id = $3
+            RETURNING id, name, checked;
+        `;
+        const res = await client.query(query, [checked, itemId, userId]);
+        if (res.rows.length === 0) {
+            throw new Error("Grocery item not found or user unauthorized.");
+        }
+        return res.rows[0];
+    } catch (err) {
+        console.error('Database error in updateGroceryListItem:', err);
+        throw new Error('Could not update grocery list item.');
+    } finally {
+        client.release();
+    }
+};

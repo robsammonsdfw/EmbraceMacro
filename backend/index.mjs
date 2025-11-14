@@ -11,7 +11,10 @@ import {
     removeMealFromPlan,
     createMealLogEntry,
     getMealLogEntries,
-    addMealAndLinkToPlan
+    addMealAndLinkToPlan,
+    getGroceryList,
+    generateGroceryList,
+    updateGroceryListItem
 } from './services/databaseService.mjs';
 import { Buffer } from 'buffer';
 
@@ -96,6 +99,9 @@ export const handler = async (event) => {
     if (path.includes('/food-plan')) {
         return handleFoodPlanRequest(event, headers, method, path);
     }
+    if (path.includes('/grocery-list')) {
+        return handleGroceryListRequest(event, headers, method, path);
+    }
     if (path.endsWith('/analyze-image') || path.endsWith('/analyze-image-recipes')) {
         return handleGeminiRequest(event, ai, headers);
     }
@@ -111,6 +117,35 @@ export const handler = async (event) => {
 };
 
 // --- ROUTE HANDLERS ---
+
+async function handleGroceryListRequest(event, headers, method, path) {
+    const userId = event.user.userId;
+    try {
+        if (method === 'GET') {
+            const list = await getGroceryList(userId);
+            return { statusCode: 200, headers, body: JSON.stringify(list) };
+        }
+        if (method === 'POST') {
+            if (path.endsWith('/generate')) {
+                const newList = await generateGroceryList(userId);
+                return { statusCode: 201, headers, body: JSON.stringify(newList) };
+            }
+            if (path.endsWith('/update')) {
+                const { itemId, checked } = JSON.parse(event.body);
+                if (itemId === undefined || checked === undefined) {
+                    return { statusCode: 400, headers, body: JSON.stringify({ error: 'itemId and checked status are required.' })};
+                }
+                const updatedItem = await updateGroceryListItem(userId, itemId, checked);
+                return { statusCode: 200, headers, body: JSON.stringify(updatedItem) };
+            }
+        }
+        return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed on this path' })};
+    } catch (error) {
+        console.error(`Error in handleGroceryListRequest (method: ${method}):`, error);
+        return { statusCode: 500, headers, body: JSON.stringify({ error: 'An internal error occurred while managing the grocery list.' })};
+    }
+}
+
 
 async function handleMealLogRequest(event, headers, method) {
     const userId = event.user.userId;

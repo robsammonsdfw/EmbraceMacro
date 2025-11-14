@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import * as apiService from './services/apiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
-import type { NutritionInfo, SavedMeal, Recipe, MealLogEntry, MealPlanGroup } from './types';
+import type { NutritionInfo, SavedMeal, Recipe, MealLogEntry, MealPlanGroup, GroceryItem } from './types';
 import { ImageUploader } from './components/ImageUploader';
 import { NutritionCard } from './components/NutritionCard';
 import { FoodPlan } from './components/FoodPlan';
@@ -16,8 +16,9 @@ import { MealSuggester } from './components/MealSuggester';
 import { RecipeCard } from './components/RecipeCard';
 import { useAuth } from './hooks/useAuth';
 import { Login } from './components/Login';
+import { GroceryList } from './components/GroceryList';
 
-type ActiveView = 'plan' | 'meals' | 'history' | 'suggestions';
+type ActiveView = 'plan' | 'meals' | 'history' | 'suggestions' | 'grocery';
 
 const App: React.FC = () => {
   const { isAuthenticated, isLoading: isAuthLoading, logout } = useAuth();
@@ -28,6 +29,7 @@ const App: React.FC = () => {
   const [foodPlan, setFoodPlan] = useState<MealPlanGroup[]>([]);
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
   const [mealLog, setMealLog] = useState<MealLogEntry[]>([]);
+  const [groceryList, setGroceryList] = useState<GroceryItem[]>([]);
   
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [processingMessage, setProcessingMessage] = useState<string>('');
@@ -49,14 +51,16 @@ const App: React.FC = () => {
       const loadInitialData = async () => {
         try {
           setIsDataLoading(true);
-          const [meals, plan, log] = await Promise.all([
+          const [meals, plan, log, groceries] = await Promise.all([
             apiService.getSavedMeals(),
             apiService.getFoodPlan(),
             apiService.getMealLog(),
+            apiService.getGroceryList(),
           ]);
           setSavedMeals(meals);
           setFoodPlan(plan);
           setMealLog(log);
+          setGroceryList(groceries);
         } catch (err) {
           setError("Could not load your data. Please try refreshing the page.");
         } finally {
@@ -196,6 +200,31 @@ const App: React.FC = () => {
         setIsSuggesting(false);
     }
   }, []);
+  
+  const handleGenerateGroceryList = useCallback(async () => {
+    try {
+        const newList = await apiService.generateGroceryList();
+        setGroceryList(newList);
+    } catch (err) {
+        setError("Failed to generate grocery list.");
+    }
+  }, []);
+
+  const handleToggleGroceryItem = useCallback(async (itemId: number, checked: boolean) => {
+      setGroceryList(prevList => 
+          prevList.map(item => item.id === itemId ? { ...item, checked } : item)
+      );
+      try {
+          await apiService.updateGroceryItem(itemId, checked);
+      } catch (err) {
+          setError("Failed to update grocery item. Reverting change.");
+          // Revert optimistic update on failure
+          setGroceryList(prevList => 
+              prevList.map(item => item.id === itemId ? { ...item, checked: !checked } : item)
+          );
+      }
+  }, []);
+
 
   const handleTriggerCamera = () => { cameraInputRef.current?.click(); };
   const handleTriggerUpload = () => { uploadInputRef.current?.click(); };
@@ -222,6 +251,12 @@ const App: React.FC = () => {
                                       onAddToPlan={handleAddMealFromLogToPlan}
                                       onSaveMeal={handleSaveMealFromLog}
                                   />;
+        case 'grocery': return <GroceryList 
+                                  items={groceryList}
+                                  savedMealsCount={savedMeals.length}
+                                  onGenerate={handleGenerateGroceryList}
+                                  onToggle={handleToggleGroceryItem}
+                                />;
         default: return <FoodPlan planGroups={foodPlan} onRemove={handleRemoveFromPlan} />;
     }
   }

@@ -1,4 +1,4 @@
-import type { NutritionInfo, Recipe, SavedMeal, MealLogEntry, MealPlanGroup } from '../types';
+import type { NutritionInfo, Recipe, SavedMeal, MealLogEntry, MealPlanGroup, GroceryItem } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
 const AUTH_TOKEN_KEY = 'embracehealth-meals-auth-token';
@@ -212,4 +212,18 @@ export const addMealFromHistoryToPlan = (mealData: NutritionInfo): Promise<MealP
 
 export const removeMealFromPlan = (planGroupId: number): Promise<null> => {
     return callApi('/food-plan/delete', 'POST', { planGroupId });
+};
+
+// --- Grocery List Endpoints ---
+
+export const getGroceryList = (): Promise<GroceryItem[]> => {
+    return callApi('/grocery-list', 'GET');
+};
+
+export const generateGroceryList = (): Promise<GroceryItem[]> => {
+    return callApi('/grocery-list/generate', 'POST');
+};
+
+export const updateGroceryItem = (itemId: number, checked: boolean): Promise<GroceryItem> => {
+    return callApi('/grocery-list/update', 'POST', { itemId, checked });
 };
