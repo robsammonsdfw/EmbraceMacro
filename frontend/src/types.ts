@@ -38,10 +38,17 @@ export interface MealLogEntry extends NutritionInfo {
   createdAt: string;
 }
 
-// Represents a meal that has been added to the daily plan
-export interface MealPlanGroup {
-  id: number; // This is the ID of the entry in the meal_plan_groups table
+// Represents a meal that has been added to a specific meal plan
+export interface MealPlanItem {
+  id: number; // This is the ID of the entry in the meal_plan_items table
   meal: SavedMeal;
+}
+
+// Represents a named list of meals
+export interface MealPlan {
+  id: number;
+  name: string;
+  items: MealPlanItem[];
 }
 
 export interface Recipe {

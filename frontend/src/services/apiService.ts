@@ -1,4 +1,4 @@
-import type { NutritionInfo, Recipe, SavedMeal, MealLogEntry, MealPlanGroup, GroceryItem } from '../types';
+import type { NutritionInfo, Recipe, SavedMeal, MealLogEntry, MealPlan, MealPlanItem, GroceryItem } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
 const AUTH_TOKEN_KEY = 'embracehealth-meals-auth-token';
@@ -25,9 +25,9 @@ const callApi = async (endpoint: string, method: string, body?: any) => {
     const response = await fetch(url, config);
 
     if (!response.ok) {
-        const errorBody = await response.text();
-        console.error(`API error response from ${method} ${endpoint}:`, errorBody);
-        throw new Error(`API request failed with status: ${response.status}`);
+        const errorData = await response.json().catch(() => ({ error: 'API request failed with non-JSON response' }));
+        console.error(`API error from ${method} ${endpoint}:`, errorData);
+        throw new Error(errorData.error || `API request failed with status: ${response.status}`);
     }
     return response.status === 204 ? null : response.json();
 };
@@ -192,26 +192,34 @@ export const saveMeal = (mealData: NutritionInfo): Promise<SavedMeal> => {
 };
 
 export const deleteMeal = (mealId: number): Promise<null> => {
-    return callApi('/saved-meals/delete', 'POST', { mealId });
+    return callApi(`/saved-meals/${mealId}`, 'DELETE');
 };
 
-// --- Food Plan Endpoints (Grouped Meals) ---
+// --- Meal Plan Endpoints ---
 
-export const getFoodPlan = (): Promise<MealPlanGroup[]> => {
-    return callApi('/food-plan', 'GET');
+export const getMealPlans = (): Promise<MealPlan[]> => {
+    return callApi('/meal-plans', 'GET');
 };
 
-export const addMealToPlan = (savedMealId: number): Promise<MealPlanGroup> => {
-    return callApi('/food-plan', 'POST', { savedMealId });
+export const createMealPlan = (name: string): Promise<MealPlan> => {
+    return callApi('/meal-plans', 'POST', { name });
 };
 
-export const addMealFromHistoryToPlan = (mealData: NutritionInfo): Promise<MealPlanGroup> => {
-    const { id, createdAt, ...pureMealData } = mealData as MealLogEntry; // Strip log-specific fields
-    return callApi('/food-plan/from-log', 'POST', { mealData: pureMealData });
+export const deleteMealPlan = (planId: number): Promise<null> => {
+    return callApi(`/meal-plans/${planId}`, 'DELETE');
 };
 
-export const removeMealFromPlan = (planGroupId: number): Promise<null> => {
-    return callApi('/food-plan/delete', 'POST', { planGroupId });
+export const addMealToPlan = (planId: number, savedMealId: number): Promise<MealPlanItem> => {
+    return callApi(`/meal-plans/${planId}/items`, 'POST', { savedMealId });
+};
+
+export const addMealFromHistoryToPlan = (planId: number, mealData: NutritionInfo): Promise<MealPlanItem> => {
+    const { id, createdAt, ...pureMealData } = mealData as MealLogEntry;
+    return callApi(`/meal-plans/${planId}/items`, 'POST', { mealData: pureMealData });
+};
+
+export const removeMealFromPlanItem = (itemId: number): Promise<null> => {
+    return callApi(`/meal-plans/items/${itemId}`, 'DELETE');
 };
 
 // --- Grocery List Endpoints ---
@@ -220,8 +228,8 @@ export const getGroceryList = (): Promise<GroceryItem[]> => {
     return callApi('/grocery-list', 'GET');
 };
 
-export const generateGroceryList = (): Promise<GroceryItem[]> => {
-    return callApi('/grocery-list/generate', 'POST');
+export const generateGroceryList = (mealPlanIds: number[]): Promise<GroceryItem[]> => {
+    return callApi('/grocery-list/generate', 'POST', { mealPlanIds });
 };
 
 export const updateGroceryItem = (itemId: number, checked: boolean): Promise<GroceryItem> => {

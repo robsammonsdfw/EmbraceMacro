@@ -188,133 +188,151 @@ export const deleteMeal = async (userId, mealId) => {
     }
 };
 
-// --- Food Plan Persistence (Grouped Meals) ---
+// --- Meal Plans Persistence ---
 
-export const getFoodPlan = async (userId) => {
+export const getMealPlans = async (userId) => {
     const client = await pool.connect();
     try {
         const query = `
             SELECT 
-                g.id as group_id, 
-                g.plan_date,
-                m.id as meal_id,
-                m.meal_data
-            FROM meal_plan_groups g
-            JOIN saved_meals m ON g.saved_meal_id = m.id
-            WHERE g.user_id = $1 AND g.plan_date = CURRENT_DATE
-            ORDER BY g.created_at ASC;
+                p.id as plan_id, p.name as plan_name,
+                i.id as item_id,
+                sm.id as meal_id, sm.meal_data
+            FROM meal_plans p
+            LEFT JOIN meal_plan_items i ON p.id = i.meal_plan_id
+            LEFT JOIN saved_meals sm ON i.saved_meal_id = sm.id
+            WHERE p.user_id = $1
+            ORDER BY p.name, i.created_at;
         `;
         const res = await client.query(query, [userId]);
-        return res.rows.map(row => {
-            const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
-            return {
-                id: row.group_id,
-                meal: {
-                    id: row.meal_id,
-                    ...processMealDataForClient(mealData)
-                }
-            };
+        
+        // Process flat results into nested structure
+        const plans = new Map();
+        res.rows.forEach(row => {
+            if (!plans.has(row.plan_id)) {
+                plans.set(row.plan_id, {
+                    id: row.plan_id,
+                    name: row.plan_name,
+                    items: [],
+                });
+            }
+            if (row.item_id) { // Ensure item exists (for empty plans)
+                const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
+                plans.get(row.plan_id).items.push({
+                    id: row.item_id,
+                    meal: {
+                        id: row.meal_id,
+                        ...processMealDataForClient(mealData)
+                    }
+                });
+            }
         });
+        return Array.from(plans.values());
     } catch (err) {
-        console.error('Database error in getFoodPlan:', err);
-        throw new Error('Could not retrieve food plan.');
+        console.error('Database error in getMealPlans:', err);
+        throw new Error('Could not retrieve meal plans.');
     } finally {
         client.release();
     }
 };
 
-export const addMealToPlan = async (userId, savedMealId) => {
+export const createMealPlan = async (userId, name) => {
     const client = await pool.connect();
     try {
+        const query = `INSERT INTO meal_plans (user_id, name) VALUES ($1, $2) RETURNING id, name;`;
+        const res = await client.query(query, [userId, name]);
+        return { ...res.rows[0], items: [] }; // Return new plan with empty items
+    } catch(err) {
+        if (err.code === '23505') { // unique_violation
+            throw new Error(`A meal plan with the name "${name}" already exists.`);
+        }
+        console.error('Database error in createMealPlan:', err);
+        throw new Error('Could not create meal plan.');
+    } finally {
+        client.release();
+    }
+};
+
+export const deleteMealPlan = async (userId, planId) => {
+    const client = await pool.connect();
+    try {
+        // ON DELETE CASCADE will handle deleting items from meal_plan_items
+        await client.query(`DELETE FROM meal_plans WHERE id = $1 AND user_id = $2;`, [planId, userId]);
+    } catch(err) {
+        console.error('Database error in deleteMealPlan:', err);
+        throw new Error('Could not delete meal plan.');
+    } finally {
+        client.release();
+    }
+};
+
+
+export const addMealToPlanItem = async (userId, planId, savedMealId) => {
+    const client = await pool.connect();
+    try {
+        // Verify the user owns the plan and the meal before inserting
+        const checkQuery = `
+           SELECT (SELECT user_id FROM meal_plans WHERE id = $1) = $3 AS owns_plan,
+                  (SELECT user_id FROM saved_meals WHERE id = $2) = $3 AS owns_meal;
+        `;
+        const checkRes = await client.query(checkQuery, [planId, savedMealId, userId]);
+        if (!checkRes.rows[0].owns_plan || !checkRes.rows[0].owns_meal) {
+            throw new Error("Authorization error: Cannot add meal to a plan you don't own.");
+        }
+
         const insertQuery = `
-            INSERT INTO meal_plan_groups (user_id, saved_meal_id)
-            VALUES ($1, $2)
+            INSERT INTO meal_plan_items (user_id, meal_plan_id, saved_meal_id)
+            VALUES ($1, $2, $3)
             RETURNING id;
         `;
-        const insertRes = await client.query(insertQuery, [userId, savedMealId]);
-        const newGroupId = insertRes.rows[0].id;
+        const insertRes = await client.query(insertQuery, [userId, planId, savedMealId]);
+        const newItemId = insertRes.rows[0].id;
 
+        // Fetch the full data for the new item to return to client
         const selectQuery = `
             SELECT 
-                g.id as group_id,
+                i.id,
                 m.id as meal_id,
                 m.meal_data
-            FROM meal_plan_groups g
-            JOIN saved_meals m ON g.saved_meal_id = m.id
-            WHERE g.id = $1;
+            FROM meal_plan_items i
+            JOIN saved_meals m ON i.saved_meal_id = m.id
+            WHERE i.id = $1;
         `;
-        const selectRes = await client.query(selectQuery, [newGroupId]);
+        const selectRes = await client.query(selectQuery, [newItemId]);
         const row = selectRes.rows[0];
         const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
-
         return {
-            id: row.group_id,
-            meal: {
-                id: row.meal_id,
-                ...processMealDataForClient(mealData)
-            }
+            id: row.id,
+            meal: { id: row.meal_id, ...processMealDataForClient(mealData) }
         };
 
     } catch (err) {
-        if (err.code === '23505') { 
-            console.warn(`Meal ${savedMealId} is already in the plan for user ${userId} today.`);
-            return null;
+        if (err.code === '23505') { // unique_violation on (meal_plan_id, saved_meal_id)
+            console.warn(`Meal ${savedMealId} is already in plan ${planId}.`);
+            return null; // Or throw a specific error
         }
-        console.error('Database error in addMealToPlan:', err);
-        throw new Error('Could not add meal to food plan.');
+        console.error('Database error in addMealToPlanItem:', err);
+        throw new Error('Could not add meal to plan.');
     } finally {
         client.release();
     }
 };
 
-export const addMealAndLinkToPlan = async (userId, mealData) => {
+
+export const addMealAndLinkToPlan = async (userId, mealData, planId) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
         
-        const mealDataForDb = processMealDataForSave(mealData);
-
-        // Step 1: Insert the meal into saved_meals to get a persistent ID.
-        const saveQuery = `
-            INSERT INTO saved_meals (user_id, meal_data) 
-            VALUES ($1, $2) 
-            RETURNING id;
-        `;
-        const saveRes = await client.query(saveQuery, [userId, mealDataForDb]);
-        const savedMealId = saveRes.rows[0].id;
-
-        // Step 2: Use the new ID to create the link in the meal plan group.
-        const planQuery = `
-            INSERT INTO meal_plan_groups (user_id, saved_meal_id)
-            VALUES ($1, $2)
-            RETURNING id;
-        `;
-        const planRes = await client.query(planQuery, [userId, savedMealId]);
-        const newGroupId = planRes.rows[0].id;
-
-        await client.query('COMMIT');
-
-        // Step 3: Fetch the full group data to return to the client for an optimistic update.
-        const selectQuery = `
-            SELECT 
-                g.id as group_id,
-                m.id as meal_id,
-                m.meal_data
-            FROM meal_plan_groups g
-            JOIN saved_meals m ON g.saved_meal_id = m.id
-            WHERE g.id = $1;
-        `;
-        const finalRes = await client.query(selectQuery, [newGroupId]);
-        const row = finalRes.rows[0];
-        const mealDataFromDb = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
+        // Step 1: Save the new meal to get an ID.
+        const newMeal = await saveMeal(userId, mealData);
         
-        return {
-            id: row.group_id,
-            meal: {
-                id: row.meal_id,
-                ...processMealDataForClient(mealDataFromDb)
-            }
-        };
+        // Step 2: Add the newly saved meal to the specified plan.
+        const newPlanItem = await addMealToPlanItem(userId, planId, newMeal.id);
+        
+        await client.query('COMMIT');
+        
+        return newPlanItem;
 
     } catch (err) {
         await client.query('ROLLBACK');
@@ -325,18 +343,18 @@ export const addMealAndLinkToPlan = async (userId, mealData) => {
     }
 };
 
-
-export const removeMealFromPlan = async (userId, planGroupId) => {
+export const removeMealFromPlanItem = async (userId, planItemId) => {
     const client = await pool.connect();
     try {
-        await client.query(`DELETE FROM meal_plan_groups WHERE id = $1 AND user_id = $2;`, [planGroupId, userId]);
+        await client.query(`DELETE FROM meal_plan_items WHERE id = $1 AND user_id = $2;`, [planItemId, userId]);
     } catch (err) {
-        console.error('Database error in removeMealFromPlan:', err);
-        throw new Error('Could not remove meal from food plan.');
+        console.error('Database error in removeMealFromPlanItem:', err);
+        throw new Error('Could not remove meal from plan.');
     } finally {
         client.release();
     }
 };
+
 
 // --- Grocery List Persistence ---
 
@@ -358,13 +376,25 @@ export const getGroceryList = async (userId) => {
     }
 };
 
-export const generateGroceryList = async (userId) => {
+export const generateGroceryList = async (userId, planIds = []) => {
     const client = await pool.connect();
+    if (planIds.length === 0) {
+        // Clear the list if no plans are selected
+        await client.query(`DELETE FROM grocery_list_items WHERE user_id = $1;`, [userId]);
+        return [];
+    }
+    
     try {
         await client.query('BEGIN');
 
-        // Step 1: Get all ingredients from saved meals for the user
-        const mealRes = await client.query(`SELECT meal_data FROM saved_meals WHERE user_id = $1;`, [userId]);
+        // Step 1: Get all ingredients from meals within the selected plans
+        const mealQuery = `
+            SELECT sm.meal_data
+            FROM saved_meals sm
+            JOIN meal_plan_items mpi ON sm.id = mpi.saved_meal_id
+            WHERE mpi.user_id = $1 AND mpi.meal_plan_id = ANY($2::int[]);
+        `;
+        const mealRes = await client.query(mealQuery, [userId, planIds]);
         const allIngredients = mealRes.rows.flatMap(row => row.meal_data?.ingredients || []);
         
         // Step 2: Create a unique, sorted list of ingredient names

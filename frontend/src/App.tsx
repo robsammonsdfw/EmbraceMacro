@@ -1,7 +1,7 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import * as apiService from './services/apiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
-import type { NutritionInfo, SavedMeal, Recipe, MealLogEntry, MealPlanGroup, GroceryItem } from './types';
+import type { NutritionInfo, SavedMeal, Recipe, MealLogEntry, MealPlan, GroceryItem } from './types';
 import { ImageUploader } from './components/ImageUploader';
 import { NutritionCard } from './components/NutritionCard';
 import { FoodPlan } from './components/FoodPlan';
@@ -17,27 +17,38 @@ import { RecipeCard } from './components/RecipeCard';
 import { useAuth } from './hooks/useAuth';
 import { Login } from './components/Login';
 import { GroceryList } from './components/GroceryList';
+import { AddToPlanModal } from './components/AddToPlanModal';
+import { MealPlanManager } from './components/MealPlanManager';
 
 type ActiveView = 'plan' | 'meals' | 'history' | 'suggestions' | 'grocery';
+type MealDataType = NutritionInfo | SavedMeal | MealLogEntry;
 
 const App: React.FC = () => {
   const { isAuthenticated, isLoading: isAuthLoading, logout } = useAuth();
   
+  // App State
   const [image, setImage] = useState<string | null>(null);
   const [nutritionData, setNutritionData] = useState<NutritionInfo | null>(null);
   const [recipes, setRecipes] = useState<Recipe[] | null>(null);
-  const [foodPlan, setFoodPlan] = useState<MealPlanGroup[]>([]);
+  const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
+  const [activePlanId, setActivePlanId] = useState<number | null>(null);
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
   const [mealLog, setMealLog] = useState<MealLogEntry[]>([]);
   const [groceryList, setGroceryList] = useState<GroceryItem[]>([]);
   
+  // UI/Process State
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [processingMessage, setProcessingMessage] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [activeView, setActiveView] = useState<ActiveView>('plan');
   const [isDataLoading, setIsDataLoading] = useState<boolean>(true);
+  
+  // Modal State
+  const [isAddToPlanModalOpen, setIsAddToPlanModalOpen] = useState(false);
+  const [mealToAdd, setMealToAdd] = useState<MealDataType | null>(null);
 
+  // Suggestions State
   const [suggestedMeals, setSuggestedMeals] = useState<NutritionInfo[] | null>(null);
   const [isSuggesting, setIsSuggesting] = useState<boolean>(false);
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
@@ -46,19 +57,26 @@ const App: React.FC = () => {
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const pantryInputRef = useRef<HTMLInputElement>(null);
 
+  const activePlan = useMemo(() => {
+    return mealPlans.find(p => p.id === activePlanId) || null;
+  }, [mealPlans, activePlanId]);
+
   useEffect(() => {
     if (isAuthenticated) {
       const loadInitialData = async () => {
         try {
           setIsDataLoading(true);
-          const [meals, plan, log, groceries] = await Promise.all([
+          const [plans, meals, log, groceries] = await Promise.all([
+            apiService.getMealPlans(),
             apiService.getSavedMeals(),
-            apiService.getFoodPlan(),
             apiService.getMealLog(),
             apiService.getGroceryList(),
           ]);
+          setMealPlans(plans);
+          if (plans.length > 0 && !activePlanId) {
+            setActivePlanId(plans[0].id);
+          }
           setSavedMeals(meals);
-          setFoodPlan(plan);
           setMealLog(log);
           setGroceryList(groceries);
         } catch (err) {
@@ -130,7 +148,7 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const handleSaveMealFromLog = useCallback(async (mealData: NutritionInfo): Promise<SavedMeal | null> => {
+  const handleSaveMeal = useCallback(async (mealData: NutritionInfo): Promise<SavedMeal | null> => {
       try {
         const newMeal = await apiService.saveMeal(mealData);
         if (!savedMeals.some(m => m.id === newMeal.id)) {
@@ -143,89 +161,96 @@ const App: React.FC = () => {
       }
   }, [savedMeals]);
   
-  const handleAddSavedMealToPlan = useCallback(async (meal: SavedMeal) => {
-    try {
-      const newPlanGroup = await apiService.addMealToPlan(meal.id);
-      if (newPlanGroup && !foodPlan.some(p => p.id === newPlanGroup.id)) {
-        setFoodPlan(prevPlan => [...prevPlan, newPlanGroup]);
-      }
-    } catch (err) {
-      setError("Failed to add saved meal to today's plan.");
-      console.error(err);
-    }
-  }, [foodPlan]);
-
-  const handleAddMealFromLogToPlan = useCallback(async (mealData: NutritionInfo) => {
-    try {
-      const newPlanGroup = await apiService.addMealFromHistoryToPlan(mealData);
-      if (newPlanGroup && !foodPlan.some(p => p.id === newPlanGroup.id)) {
-        setFoodPlan(prevPlan => [...prevPlan, newPlanGroup]);
-        
-        const newSavedMeal = newPlanGroup.meal;
-        if (!savedMeals.some(m => m.id === newSavedMeal.id)) {
-            setSavedMeals(prev => [newSavedMeal, ...prev]);
-        }
-      }
-      setActiveView('plan');
-    } catch (err) {
-      setError("Failed to add meal from history to today's plan.");
-      console.error(err);
-    }
-  }, [foodPlan, savedMeals]);
-
   const handleDeleteMeal = useCallback(async (mealId: number) => {
     setSavedMeals(prev => prev.filter(m => m.id !== mealId));
     try { await apiService.deleteMeal(mealId); } 
-    catch (err) { setError('Failed to delete meal.'); /* Revert not implemented for simplicity */ }
-  }, []);
-
-  const handleRemoveFromPlan = useCallback(async (planGroupId: number) => {
-      setFoodPlan(prev => prev.filter(p => p.id !== planGroupId));
-      try { await apiService.removeMealFromPlan(planGroupId); }
-      catch (err) { setError("Failed to remove meal from plan."); }
+    catch (err) { setError('Failed to delete meal.'); }
   }, []);
 
   const handleGetSuggestions = useCallback(async (condition: string, cuisine: string) => {
-    setIsSuggesting(true);
-    setSuggestionError(null);
-    setSuggestedMeals(null);
+    setIsSuggesting(true); setSuggestionError(null); setSuggestedMeals(null);
     try {
         const suggestions = await apiService.getMealSuggestions(condition, cuisine);
         setSuggestedMeals(suggestions);
     } catch (err) {
         const message = err instanceof Error ? err.message : 'An unknown error occurred.';
         setSuggestionError(message);
-        console.error(err);
-    } finally {
-        setIsSuggesting(false);
-    }
+    } finally { setIsSuggesting(false); }
   }, []);
   
-  const handleGenerateGroceryList = useCallback(async () => {
+  // --- Meal Plan Handlers ---
+  const handleCreateMealPlan = async (name: string) => {
     try {
-        const newList = await apiService.generateGroceryList();
-        setGroceryList(newList);
+      const newPlan = await apiService.createMealPlan(name);
+      setMealPlans(prev => [...prev, newPlan]);
+      setActivePlanId(newPlan.id);
     } catch (err) {
-        setError("Failed to generate grocery list.");
+      setError(err instanceof Error ? err.message : "Could not create plan.");
     }
+  };
+
+  const handleInitiateAddToPlan = (meal: MealDataType) => {
+    setMealToAdd(meal);
+    setIsAddToPlanModalOpen(true);
+  };
+  
+  const handleConfirmAddToPlan = async (planId: number) => {
+    if (!mealToAdd) return;
+    try {
+        let newItem;
+        if ('id' in mealToAdd && 'createdAt' in mealToAdd) { // MealLogEntry
+            newItem = await apiService.addMealFromHistoryToPlan(planId, mealToAdd);
+        } else if ('id' in mealToAdd) { // SavedMeal
+            newItem = await apiService.addMealToPlan(planId, mealToAdd.id);
+        } else { // NutritionInfo from suggestion or recipe
+            newItem = await apiService.addMealFromHistoryToPlan(planId, mealToAdd);
+        }
+        
+        if (newItem) {
+            setMealPlans(plans => plans.map(p => p.id === planId ? { ...p, items: [...p.items, newItem] } : p));
+        }
+    } catch(err) {
+        setError("Failed to add meal to plan.");
+    } finally {
+        setIsAddToPlanModalOpen(false);
+        setMealToAdd(null);
+    }
+  };
+
+  const handleRemoveFromPlan = useCallback(async (planItemId: number) => {
+      if (!activePlan) return;
+      const originalItems = activePlan.items;
+      const updatedItems = originalItems.filter(item => item.id !== planItemId);
+      setMealPlans(plans => plans.map(p => p.id === activePlanId ? { ...p, items: updatedItems } : p));
+      
+      try { 
+        await apiService.removeMealFromPlanItem(planItemId);
+      } catch (err) { 
+        setError("Failed to remove meal from plan.");
+        // Revert on error
+        setMealPlans(plans => plans.map(p => p.id === activePlanId ? { ...p, items: originalItems } : p));
+      }
+  }, [activePlan, activePlanId]);
+
+  // --- Grocery List Handlers ---
+  const handleGenerateGroceryList = useCallback(async (planIds: number[]) => {
+    try {
+        const newList = await apiService.generateGroceryList(planIds);
+        setGroceryList(newList);
+    } catch (err) { setError("Failed to generate grocery list."); }
   }, []);
 
   const handleToggleGroceryItem = useCallback(async (itemId: number, checked: boolean) => {
-      setGroceryList(prevList => 
-          prevList.map(item => item.id === itemId ? { ...item, checked } : item)
-      );
+      setGroceryList(prev => prev.map(item => item.id === itemId ? { ...item, checked } : item));
       try {
           await apiService.updateGroceryItem(itemId, checked);
       } catch (err) {
           setError("Failed to update grocery item. Reverting change.");
-          // Revert optimistic update on failure
-          setGroceryList(prevList => 
-              prevList.map(item => item.id === itemId ? { ...item, checked: !checked } : item)
-          );
+          setGroceryList(prev => prev.map(item => item.id === itemId ? { ...item, checked: !checked } : item));
       }
   }, []);
 
-
+  // --- UI Triggers ---
   const handleTriggerCamera = () => { cameraInputRef.current?.click(); };
   const handleTriggerUpload = () => { uploadInputRef.current?.click(); };
   const handleTriggerPantryUpload = () => { pantryInputRef.current?.click(); };
@@ -240,30 +265,39 @@ const App: React.FC = () => {
 
   const renderActiveView = () => {
     switch(activeView) {
-        case 'plan': return <FoodPlan planGroups={foodPlan} onRemove={handleRemoveFromPlan} />;
-        case 'meals': return <MealLibrary meals={savedMeals} onAdd={handleAddSavedMealToPlan} onDelete={handleDeleteMeal} />;
-        case 'history': return <MealHistory logEntries={mealLog} onSaveMeal={handleSaveMealFromLog} onAddToPlan={handleAddMealFromLogToPlan} />;
+        case 'plan': return (
+            <>
+              <MealPlanManager 
+                plans={mealPlans} 
+                activePlanId={activePlanId} 
+                onPlanChange={setActivePlanId}
+                onCreatePlan={handleCreateMealPlan}
+              />
+              <FoodPlan plan={activePlan} onRemove={handleRemoveFromPlan} />
+            </>
+        );
+        case 'meals': return <MealLibrary meals={savedMeals} onAdd={handleInitiateAddToPlan} onDelete={handleDeleteMeal} />;
+        case 'history': return <MealHistory logEntries={mealLog} onSaveMeal={handleSaveMeal} onAddToPlan={handleInitiateAddToPlan} />;
         case 'suggestions': return <MealSuggester 
-                                      onGetSuggestions={handleGetSuggestions}
-                                      suggestions={suggestedMeals}
-                                      isLoading={isSuggesting}
-                                      error={suggestionError}
-                                      onAddToPlan={handleAddMealFromLogToPlan}
-                                      onSaveMeal={handleSaveMealFromLog}
+                                      onGetSuggestions={handleGetSuggestions} suggestions={suggestedMeals}
+                                      isLoading={isSuggesting} error={suggestionError}
+                                      onAddToPlan={handleInitiateAddToPlan} onSaveMeal={handleSaveMeal}
                                   />;
-        case 'grocery': return <GroceryList 
-                                  items={groceryList}
-                                  savedMealsCount={savedMeals.length}
-                                  onGenerate={handleGenerateGroceryList}
-                                  onToggle={handleToggleGroceryItem}
-                                />;
-        default: return <FoodPlan planGroups={foodPlan} onRemove={handleRemoveFromPlan} />;
+        case 'grocery': return <GroceryList items={groceryList} mealPlans={mealPlans} onGenerate={handleGenerateGroceryList} onToggle={handleToggleGroceryItem} />;
+        default: return <FoodPlan plan={activePlan} onRemove={handleRemoveFromPlan} />;
     }
   }
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800">
       {isScanning && <BarcodeScanner onScanSuccess={handleScanSuccess} onCancel={() => setIsScanning(false)} />}
+      {isAddToPlanModalOpen && (
+        <AddToPlanModal 
+            plans={mealPlans}
+            onSelectPlan={handleConfirmAddToPlan}
+            onClose={() => setIsAddToPlanModalOpen(false)}
+        />
+      )}
       <main className="max-w-4xl mx-auto p-4 md:p-8">
          <input type="file" accept="image/*" capture="environment" ref={cameraInputRef} onChange={(e) => handleFileChange(e)} className="hidden"/>
          <input type="file" accept="image/*" ref={uploadInputRef} onChange={(e) => handleFileChange(e)} className="hidden"/>
@@ -288,7 +322,7 @@ const App: React.FC = () => {
                       <h2 className="text-2xl font-bold text-slate-800 text-center pt-4 border-t border-slate-200">Recipe Ideas</h2>
                       {recipes.map((recipe, index) => ( <RecipeCard key={index} recipe={recipe} onAddToPlan={() => {
                         const mealData: NutritionInfo = { ...recipe.nutrition, mealName: recipe.recipeName, ingredients: [] };
-                        handleAddMealFromLogToPlan(mealData);
+                        handleInitiateAddToPlan(mealData);
                       }} /> ))}
                   </div>
                 )}

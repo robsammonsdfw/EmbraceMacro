@@ -1,4 +1,5 @@
-import type { NutritionInfo, Recipe, SavedMeal, Ingredient, MealPlanGroup } from '../types';
+// FIX: Replaced non-existent type 'MealPlanGroup' with 'MealPlan' to match types.ts.
+import type { NutritionInfo, Recipe, SavedMeal, Ingredient, MealPlan } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
 const AUTH_TOKEN_KEY = 'embracehealth-meals-auth-token';
@@ -99,11 +100,11 @@ export const deleteMeal = (mealId: number): Promise<null> => {
 
 // --- Food Plan Endpoints ---
 
-export const getFoodPlan = (): Promise<MealPlanGroup[]> => {
+export const getFoodPlan = (): Promise<MealPlan[]> => {
     return callApi('/food-plan', 'GET');
 };
 
-export const addItemsToFoodPlan = (ingredients: Ingredient[]): Promise<MealPlanGroup[]> => {
+export const addItemsToFoodPlan = (ingredients: Ingredient[]): Promise<MealPlan[]> => {
     return callApi('/food-plan', 'POST', { ingredients });
 };
 
