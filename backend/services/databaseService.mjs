@@ -276,8 +276,8 @@ export const addMealToPlanItem = async (userId, planId, savedMealId) => {
                   (SELECT user_id FROM saved_meals WHERE id = $2) = $3 AS owns_meal;
         `;
         const checkRes = await client.query(checkQuery, [planId, savedMealId, userId]);
-        if (!checkRes.rows[0].owns_plan || !checkRes.rows[0].owns_meal) {
-            throw new Error("Authorization error: Cannot add meal to a plan you don't own.");
+        if (!checkRes.rows[0] || !checkRes.rows[0].owns_plan || !checkRes.rows[0].owns_meal) {
+            throw new Error("Authorization error: Cannot add meal to a plan you don't own, or meal/plan does not exist.");
         }
 
         const insertQuery = `
@@ -309,7 +309,7 @@ export const addMealToPlanItem = async (userId, planId, savedMealId) => {
     } catch (err) {
         if (err.code === '23505') { // unique_violation on (meal_plan_id, saved_meal_id)
             console.warn(`Meal ${savedMealId} is already in plan ${planId}.`);
-            return null; // Or throw a specific error
+            throw new Error('This meal is already in the selected plan.');
         }
         console.error('Database error in addMealToPlanItem:', err);
         throw new Error('Could not add meal to plan.');

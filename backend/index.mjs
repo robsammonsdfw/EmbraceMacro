@@ -92,23 +92,31 @@ export const handler = async (event) => {
     }
 
     // --- API ROUTING ---
-    if (path.includes('/meal-log')) {
-        return handleMealLogRequest(event, headers, method);
-    }
-    if (path.includes('/saved-meals')) {
-        return handleSavedMealsRequest(event, headers, method, path);
-    }
-    if (path.includes('/meal-plans')) {
-        return handleMealPlansRequest(event, headers, method, path);
-    }
-    if (path.includes('/grocery-list')) {
-        return handleGroceryListRequest(event, headers, method, path);
-    }
-    if (path.endsWith('/analyze-image') || path.endsWith('/analyze-image-recipes')) {
-        return handleGeminiRequest(event, ai, headers);
-    }
-    if (path.endsWith('/get-meal-suggestions')) {
-        return handleMealSuggestionRequest(event, ai, headers);
+    const pathParts = path.split('/').filter(Boolean); // Cleanly splits path, removing empty strings
+    const resource = pathParts[0];
+
+    try {
+        if (resource === 'meal-log') {
+            return await handleMealLogRequest(event, headers, method);
+        }
+        if (resource === 'saved-meals') {
+            return await handleSavedMealsRequest(event, headers, method, pathParts);
+        }
+        if (resource === 'meal-plans') {
+            return await handleMealPlansRequest(event, headers, method, pathParts);
+        }
+        if (resource === 'grocery-list') {
+            return await handleGroceryListRequest(event, headers, method, pathParts);
+        }
+        if (resource === 'analyze-image' || resource === 'analyze-image-recipes') {
+            return await handleGeminiRequest(event, ai, headers);
+        }
+        if (resource === 'get-meal-suggestions') {
+            return await handleMealSuggestionRequest(event, ai, headers);
+        }
+    } catch (error) {
+        console.error(`[ROUTER CATCH] Unhandled error for ${method} ${path}:`, error);
+        return { statusCode: 500, headers, body: JSON.stringify({ error: 'An unexpected internal server error occurred.' }) };
     }
 
     return {
@@ -120,130 +128,117 @@ export const handler = async (event) => {
 
 // --- ROUTE HANDLERS ---
 
-async function handleGroceryListRequest(event, headers, method, path) {
+async function handleGroceryListRequest(event, headers, method, pathParts) {
     const userId = event.user.userId;
-    try {
-        if (method === 'GET') {
-            const list = await getGroceryList(userId);
-            return { statusCode: 200, headers, body: JSON.stringify(list) };
-        }
-        if (method === 'POST') {
-             if (path.endsWith('/generate')) {
-                const { mealPlanIds } = JSON.parse(event.body);
-                if (!Array.isArray(mealPlanIds)) {
-                     return { statusCode: 400, headers, body: JSON.stringify({ error: 'mealPlanIds must be an array.' })};
-                }
-                const newList = await generateGroceryList(userId, mealPlanIds);
-                return { statusCode: 201, headers, body: JSON.stringify(newList) };
-            }
-            if (path.endsWith('/update')) {
-                const { itemId, checked } = JSON.parse(event.body);
-                if (itemId === undefined || checked === undefined) {
-                    return { statusCode: 400, headers, body: JSON.stringify({ error: 'itemId and checked status are required.' })};
-                }
-                const updatedItem = await updateGroceryListItem(userId, itemId, checked);
-                return { statusCode: 200, headers, body: JSON.stringify(updatedItem) };
-            }
-        }
-        return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed on this path' })};
-    } catch (error) {
-        console.error(`Error in handleGroceryListRequest (method: ${method}):`, error);
-        return { statusCode: 500, headers, body: JSON.stringify({ error: 'An internal error occurred while managing the grocery list.' })};
+    const action = pathParts[1]; // e.g., 'generate' or 'update'
+
+    if (method === 'GET') {
+        const list = await getGroceryList(userId);
+        return { statusCode: 200, headers, body: JSON.stringify(list) };
     }
+    if (method === 'POST') {
+        const body = JSON.parse(event.body);
+        if (action === 'generate') {
+            if (!Array.isArray(body.mealPlanIds)) {
+                return { statusCode: 400, headers, body: JSON.stringify({ error: 'mealPlanIds must be an array.' })};
+            }
+            const newList = await generateGroceryList(userId, body.mealPlanIds);
+            return { statusCode: 201, headers, body: JSON.stringify(newList) };
+        }
+        if (action === 'update') {
+            if (body.itemId === undefined || body.checked === undefined) {
+                return { statusCode: 400, headers, body: JSON.stringify({ error: 'itemId and checked status are required.' })};
+            }
+            const updatedItem = await updateGroceryListItem(userId, body.itemId, body.checked);
+            return { statusCode: 200, headers, body: JSON.stringify(updatedItem) };
+        }
+    }
+    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed on this path' })};
 }
 
 
 async function handleMealLogRequest(event, headers, method) {
     const userId = event.user.userId;
-    try {
-        if (method === 'GET') {
-            const logEntries = await getMealLogEntries(userId);
-            return { statusCode: 200, headers, body: JSON.stringify(logEntries) };
-        }
-        if (method === 'POST') {
-            const { mealData, imageBase64 } = JSON.parse(event.body);
-            // Remove the data URL prefix if it exists
-            const base64Data = imageBase64.split(',')[1] || imageBase64;
-            const newEntry = await createMealLogEntry(userId, mealData, base64Data);
-            return { statusCode: 201, headers, body: JSON.stringify(newEntry) };
-        }
-        return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' })};
-    } catch (error) {
-        console.error(`Error in handleMealLogRequest (method: ${method}):`, error);
-        return { statusCode: 500, headers, body: JSON.stringify({ error: 'An internal error occurred while managing meal history.' })};
+    if (method === 'GET') {
+        const logEntries = await getMealLogEntries(userId);
+        return { statusCode: 200, headers, body: JSON.stringify(logEntries) };
     }
+    if (method === 'POST') {
+        const { mealData, imageBase64 } = JSON.parse(event.body);
+        const base64Data = imageBase64.split(',')[1] || imageBase64;
+        const newEntry = await createMealLogEntry(userId, mealData, base64Data);
+        return { statusCode: 201, headers, body: JSON.stringify(newEntry) };
+    }
+    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' })};
 }
 
-async function handleSavedMealsRequest(event, headers, method, path) {
+async function handleSavedMealsRequest(event, headers, method, pathParts) {
     const userId = event.user.userId;
-    const mealId = parseInt(path.split('/').pop(), 10);
+    const mealId = pathParts.length > 1 ? parseInt(pathParts[1], 10) : null;
 
-    try {
-        if (method === 'GET') {
-            const meals = await getSavedMeals(userId);
-            return { statusCode: 200, headers, body: JSON.stringify(meals) };
-        }
-        if (method === 'POST') {
-            const mealData = JSON.parse(event.body);
-            const newMeal = await saveMeal(userId, mealData);
-            return { statusCode: 201, headers, body: JSON.stringify(newMeal) };
-        }
-        if (method === 'DELETE' && mealId) {
-             await deleteMeal(userId, mealId);
-             return { statusCode: 204, headers, body: '' };
-        }
-        return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed or invalid meal ID' })};
-    } catch (error) {
-        console.error(`Error in handleSavedMealsRequest (method: ${method}):`, error);
-        return { statusCode: 500, headers, body: JSON.stringify({ error: 'An internal error occurred while managing saved meals.' })};
+    if (method === 'GET') {
+        const meals = await getSavedMeals(userId);
+        return { statusCode: 200, headers, body: JSON.stringify(meals) };
     }
+    if (method === 'POST') {
+        const mealData = JSON.parse(event.body);
+        const newMeal = await saveMeal(userId, mealData);
+        return { statusCode: 201, headers, body: JSON.stringify(newMeal) };
+    }
+    if (method === 'DELETE' && mealId) {
+         await deleteMeal(userId, mealId);
+         return { statusCode: 204, headers, body: '' };
+    }
+    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed or invalid meal ID' })};
 }
 
-async function handleMealPlansRequest(event, headers, method, path) {
+async function handleMealPlansRequest(event, headers, method, pathParts) {
     const userId = event.user.userId;
-    const pathParts = path.split('/').filter(p => p); // e.g., ['meal-plans', '1', 'items']
-    
-    try {
-        if (method === 'GET' && pathParts.length === 1) { // GET /meal-plans
-            const plans = await getMealPlans(userId);
-            return { statusCode: 200, headers, body: JSON.stringify(plans) };
-        }
-        if (method === 'POST' && pathParts.length === 1) { // POST /meal-plans
-            const { name } = JSON.parse(event.body);
-            if (!name) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Plan name is required.' })};
-            const newPlan = await createMealPlan(userId, name);
-            return { statusCode: 201, headers, body: JSON.stringify(newPlan) };
-        }
-        if (method === 'DELETE' && pathParts.length === 2) { // DELETE /meal-plans/:planId
-            const planId = parseInt(pathParts[1], 10);
-            await deleteMealPlan(userId, planId);
-            return { statusCode: 204, headers, body: '' };
-        }
-        if (method === 'POST' && pathParts[2] === 'items') { // POST /meal-plans/:planId/items
-            const planId = parseInt(pathParts[1], 10);
-            const { savedMealId, mealData } = JSON.parse(event.body);
 
-            if (savedMealId) {
-                const newItem = await addMealToPlanItem(userId, planId, savedMealId);
-                return { statusCode: 201, headers, body: JSON.stringify(newItem) };
-            } else if (mealData) {
-                 const newItem = await addMealAndLinkToPlan(userId, mealData, planId);
-                 return { statusCode: 201, headers, body: JSON.stringify(newItem) };
-            } else {
-                 return { statusCode: 400, headers, body: JSON.stringify({ error: 'Either savedMealId or mealData is required.' })};
-            }
-        }
-        if (method === 'DELETE' && pathParts[2] === 'items') { // DELETE /meal-plans/items/:itemId
-            const itemId = parseInt(pathParts[3], 10);
-            await removeMealFromPlanItem(userId, itemId);
-            return { statusCode: 204, headers, body: '' };
-        }
-
-        return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed for this path structure.' })};
-    } catch (error) {
-        console.error(`Error in handleMealPlansRequest (method: ${method}, path: ${path}):`, error);
-        return { statusCode: 500, headers, body: JSON.stringify({ error: 'An internal error occurred while managing meal plans.' })};
+    // GET /meal-plans
+    if (method === 'GET' && pathParts.length === 1) {
+        const plans = await getMealPlans(userId);
+        return { statusCode: 200, headers, body: JSON.stringify(plans) };
     }
+    // POST /meal-plans
+    if (method === 'POST' && pathParts.length === 1) {
+        const { name } = JSON.parse(event.body);
+        if (!name) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Plan name is required.' })};
+        const newPlan = await createMealPlan(userId, name);
+        return { statusCode: 201, headers, body: JSON.stringify(newPlan) };
+    }
+    // DELETE /meal-plans/:planId
+    if (method === 'DELETE' && pathParts.length === 2) {
+        const planId = parseInt(pathParts[1], 10);
+        if (!planId) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid plan ID.' })};
+        await deleteMealPlan(userId, planId);
+        return { statusCode: 204, headers, body: '' };
+    }
+    // POST /meal-plans/:planId/items
+    if (method === 'POST' && pathParts.length === 3 && pathParts[2] === 'items') {
+        const planId = parseInt(pathParts[1], 10);
+        if (!planId) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid plan ID.' })};
+        
+        const { savedMealId, mealData } = JSON.parse(event.body);
+        if (savedMealId) {
+            const newItem = await addMealToPlanItem(userId, planId, savedMealId);
+            return { statusCode: 201, headers, body: JSON.stringify(newItem) };
+        } else if (mealData) {
+             const newItem = await addMealAndLinkToPlan(userId, mealData, planId);
+             return { statusCode: 201, headers, body: JSON.stringify(newItem) };
+        } else {
+             return { statusCode: 400, headers, body: JSON.stringify({ error: 'Either savedMealId or mealData is required.' })};
+        }
+    }
+    // DELETE /meal-plans/items/:itemId
+    if (method === 'DELETE' && pathParts.length === 3 && pathParts[1] === 'items') {
+        const itemId = parseInt(pathParts[2], 10);
+        if (!itemId) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid item ID.' })};
+        await removeMealFromPlanItem(userId, itemId);
+        return { statusCode: 204, headers, body: '' };
+    }
+
+    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed for this path structure.' })};
 }
 
 async function handleCustomerLogin(event, headers, JWT_SECRET) {
@@ -290,37 +285,27 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
 }
 
 async function handleGeminiRequest(event, ai, headers) {
-    try {
-        const body = JSON.parse(event.body);
-        const { base64Image, mimeType, prompt, schema } = body;
-        const imagePart = { inlineData: { data: base64Image, mimeType } };
-        const textPart = { text: prompt };
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: { parts: [imagePart, textPart] },
-            config: { responseMimeType: 'application/json', responseSchema: schema },
-        });
-        return { statusCode: 200, headers: { ...headers, 'Content-Type': 'application/json' }, body: response.text };
-    } catch (error) {
-        console.error("Error calling Gemini API:", error);
-        return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to call Gemini API.' })};
-    }
+    const body = JSON.parse(event.body);
+    const { base64Image, mimeType, prompt, schema } = body;
+    const imagePart = { inlineData: { data: base64Image, mimeType } };
+    const textPart = { text: prompt };
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [imagePart, textPart] },
+        config: { responseMimeType: 'application/json', responseSchema: schema },
+    });
+    return { statusCode: 200, headers: { ...headers, 'Content-Type': 'application/json' }, body: response.text };
 }
 
 async function handleMealSuggestionRequest(event, ai, headers) {
-    try {
-        const body = JSON.parse(event.body);
-        const { prompt, schema } = body;
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: { responseMimeType: 'application/json', responseSchema: schema },
-        });
-        return { statusCode: 200, headers: { ...headers, 'Content-Type': 'application/json' }, body: response.text };
-    } catch (error) {
-        console.error("Error calling Gemini API for meal suggestions:", error);
-        return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to call Gemini API for meal suggestions.' })};
-    }
+    const body = JSON.parse(event.body);
+    const { prompt, schema } = body;
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: { responseMimeType: 'application/json', responseSchema: schema },
+    });
+    return { statusCode: 200, headers: { ...headers, 'Content-Type': 'application/json' }, body: response.text };
 }
 
 function callShopifyStorefrontAPI(query, variables) {
