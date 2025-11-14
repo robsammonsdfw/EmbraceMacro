@@ -16,7 +16,8 @@ import {
     addMealAndLinkToPlan,
     getGroceryList,
     generateGroceryList,
-    updateGroceryListItem
+    updateGroceryListItem,
+    clearGroceryList
 } from './services/databaseService.mjs';
 import { Buffer } from 'buffer';
 
@@ -162,6 +163,13 @@ async function handleGroceryListRequest(event, headers, method, pathParts) {
             }
             const updatedItem = await updateGroceryListItem(userId, body.itemId, body.checked);
             return { statusCode: 200, headers, body: JSON.stringify(updatedItem) };
+        }
+        if (pathParts.length === 2 && action === 'clear') {
+            if (!body.type || (body.type !== 'checked' && body.type !== 'all')) {
+                 return { statusCode: 400, headers, body: JSON.stringify({ error: 'A valid clear type ("checked" or "all") is required.' })};
+            }
+            await clearGroceryList(userId, body.type);
+            return { statusCode: 204, headers, body: '' };
         }
     }
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed on this path' })};

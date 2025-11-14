@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import type { GroceryItem, MealPlan } from '../types';
-import { ClipboardListIcon } from './icons';
+import { ClipboardListIcon, TrashIcon } from './icons';
 
 interface GroceryListProps {
   items: GroceryItem[];
   mealPlans: MealPlan[];
   onGenerate: (planIds: number[]) => void;
   onToggle: (id: number, checked: boolean) => void;
+  onClear: (type: 'checked' | 'all') => void;
 }
 
-export const GroceryList: React.FC<GroceryListProps> = ({ items, mealPlans, onGenerate, onToggle }) => {
+export const GroceryList: React.FC<GroceryListProps> = ({ items, mealPlans, onGenerate, onToggle, onClear }) => {
   const [selectedPlanIds, setSelectedPlanIds] = useState<Set<number>>(new Set());
 
   const handlePlanSelection = (planId: number) => {
@@ -87,6 +88,23 @@ export const GroceryList: React.FC<GroceryListProps> = ({ items, mealPlans, onGe
                 </li>
             ))}
             </ul>
+            <div className="mt-6 flex flex-col sm:flex-row gap-3 border-t border-slate-200 pt-4">
+                <button
+                    onClick={() => onClear('checked')}
+                    disabled={!items.some(item => item.checked)}
+                    className="w-full text-sm bg-amber-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-amber-600 transition-colors flex items-center justify-center space-x-2 disabled:bg-slate-300 disabled:cursor-not-allowed"
+                >
+                    <TrashIcon />
+                    <span>Clear Checked Items</span>
+                </button>
+                <button
+                    onClick={() => onClear('all')}
+                    className="w-full text-sm bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600 transition-colors flex items-center justify-center space-x-2 disabled:bg-slate-300 disabled:cursor-not-allowed"
+                >
+                    <TrashIcon />
+                    <span>Clear Entire List</span>
+                </button>
+            </div>
         </div>
       )}
     </div>

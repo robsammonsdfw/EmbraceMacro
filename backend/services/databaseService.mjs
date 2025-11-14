@@ -447,3 +447,23 @@ export const updateGroceryListItem = async (userId, itemId, checked) => {
         client.release();
     }
 };
+
+export const clearGroceryList = async (userId, type) => {
+    const client = await pool.connect();
+    try {
+        let query;
+        if (type === 'checked') {
+            query = `DELETE FROM grocery_list_items WHERE user_id = $1 AND checked = TRUE;`;
+        } else if (type === 'all') {
+            query = `DELETE FROM grocery_list_items WHERE user_id = $1;`;
+        } else {
+            throw new Error("Invalid clear type specified.");
+        }
+        await client.query(query, [userId]);
+    } catch (err) {
+        console.error('Database error in clearGroceryList:', err);
+        throw new Error('Could not clear grocery list items.');
+    } finally {
+        client.release();
+    }
+};

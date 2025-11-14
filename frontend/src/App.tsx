@@ -250,6 +250,19 @@ const App: React.FC = () => {
       }
   }, []);
 
+  const handleClearGroceryList = useCallback(async (type: 'checked' | 'all') => {
+    try {
+        await apiService.clearGroceryList(type);
+        if (type === 'all') {
+            setGroceryList([]);
+        } else {
+            setGroceryList(prev => prev.filter(item => !item.checked));
+        }
+    } catch (err) {
+        setError("Failed to clear grocery list.");
+    }
+  }, []);
+
   // --- UI Triggers ---
   const handleTriggerCamera = () => { cameraInputRef.current?.click(); };
   const handleTriggerUpload = () => { uploadInputRef.current?.click(); };
@@ -283,7 +296,7 @@ const App: React.FC = () => {
                                       isLoading={isSuggesting} error={suggestionError}
                                       onAddToPlan={handleInitiateAddToPlan} onSaveMeal={handleSaveMeal}
                                   />;
-        case 'grocery': return <GroceryList items={groceryList} mealPlans={mealPlans} onGenerate={handleGenerateGroceryList} onToggle={handleToggleGroceryItem} />;
+        case 'grocery': return <GroceryList items={groceryList} mealPlans={mealPlans} onGenerate={handleGenerateGroceryList} onToggle={handleToggleGroceryItem} onClear={handleClearGroceryList} />;
         default: return <FoodPlan plan={activePlan} onRemove={handleRemoveFromPlan} />;
     }
   }

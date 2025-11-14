@@ -235,3 +235,7 @@ export const generateGroceryList = (mealPlanIds: number[]): Promise<GroceryItem[
 export const updateGroceryItem = (itemId: number, checked: boolean): Promise<GroceryItem> => {
     return callApi('/grocery-list/update', 'POST', { itemId, checked });
 };
+
+export const clearGroceryList = (type: 'checked' | 'all'): Promise<null> => {
+    return callApi('/grocery-list/clear', 'POST', { type });
+};
