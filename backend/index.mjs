@@ -66,14 +66,17 @@ export const handler = async (event) => {
     } else if (event.path) { // API Gateway v1 (REST API)
         path = event.path;
         method = event.httpMethod;
-        
-        // For REST APIs, the stage is part of the path. We need to remove it for consistent routing.
-        const stage = event.requestContext?.stage;
-        if (stage && path.startsWith(`/${stage}`)) {
-            path = path.substring(stage.length + 1);
-        }
     } else {
         return { statusCode: 500, headers, body: JSON.stringify({ error: 'Internal Server Error: Malformed request event.' }) };
+    }
+    
+    // For REST APIs, the stage is part of the path. We must remove it for consistent routing.
+    const stage = event.requestContext?.stage;
+    if (stage) {
+        const stagePrefix = `/${stage}`;
+        if (path.startsWith(stagePrefix)) {
+            path = path.substring(stagePrefix.length);
+        }
     }
     
     if (method === 'OPTIONS') {
