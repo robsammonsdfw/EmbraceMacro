@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { SavedMeal } from '../types';
-import { PlusIcon, TrashIcon, BookOpenIcon } from './icons';
+import { PlusIcon, TrashIcon, BookOpenIcon, CameraIcon } from './icons';
+import { ImageViewModal } from './ImageViewModal';
 
 interface MealLibraryProps {
   meals: SavedMeal[];
@@ -8,10 +9,21 @@ interface MealLibraryProps {
   onDelete: (id: number) => void;
 }
 
-const MealCard: React.FC<{ meal: SavedMeal; onAdd: (meal: SavedMeal) => void; onDelete: (id: number) => void;}> = ({ meal, onAdd, onDelete }) => (
+const MealCard: React.FC<{ 
+    meal: SavedMeal; 
+    onAdd: (meal: SavedMeal) => void; 
+    onDelete: (id: number) => void;
+    onViewImage: () => void;
+}> = ({ meal, onAdd, onDelete, onViewImage }) => (
     <div className="bg-slate-50 p-4 rounded-lg flex items-center justify-between hover:bg-slate-100 transition-colors">
         <div className="flex items-center space-x-4">
-            {meal.imageUrl && <img src={meal.imageUrl} alt={meal.mealName} className="w-16 h-16 rounded-md object-cover" />}
+             <button 
+                onClick={onViewImage}
+                className="w-16 h-16 bg-slate-200 rounded-md flex flex-col items-center justify-center text-slate-500 hover:bg-slate-300 transition-colors flex-shrink-0"
+                title="View Image"
+            >
+                <CameraIcon />
+            </button>
             <div>
                 <p className="font-bold text-slate-800">{meal.mealName}</p>
                 <p className="text-sm text-slate-500">{Math.round(meal.totalCalories)} kcal</p>
@@ -41,14 +53,29 @@ const MealCard: React.FC<{ meal: SavedMeal; onAdd: (meal: SavedMeal) => void; on
 
 
 export const MealLibrary: React.FC<MealLibraryProps> = ({ meals, onAdd, onDelete }) => {
+  const [viewImageId, setViewImageId] = useState<number | null>(null);
+
   return (
     <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200">
       <h2 className="text-2xl font-bold text-slate-800 mb-4">My Saved Meals</h2>
+      {viewImageId && (
+          <ImageViewModal 
+            itemId={viewImageId} 
+            type="saved" 
+            onClose={() => setViewImageId(null)} 
+          />
+      )}
+
       {meals.length > 0 ? (
         <ul className="space-y-3">
           {meals.map((meal) => (
             <li key={meal.id}>
-                <MealCard meal={meal} onAdd={onAdd} onDelete={onDelete} />
+                <MealCard 
+                    meal={meal} 
+                    onAdd={onAdd} 
+                    onDelete={onDelete} 
+                    onViewImage={() => setViewImageId(meal.id)}
+                />
             </li>
           ))}
         </ul>

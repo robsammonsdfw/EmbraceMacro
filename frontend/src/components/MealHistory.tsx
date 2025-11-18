@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { MealLogEntry, NutritionInfo } from '../types';
-import { PlusIcon, BookmarkIcon, ClockIcon } from './icons';
+import { PlusIcon, BookmarkIcon, ClockIcon, CameraIcon } from './icons';
+import { ImageViewModal } from './ImageViewModal';
 
 interface MealHistoryProps {
   logEntries: MealLogEntry[];
@@ -8,10 +9,23 @@ interface MealHistoryProps {
   onSaveMeal: (mealData: NutritionInfo) => void;
 }
 
-const HistoryEntryCard: React.FC<{ entry: MealLogEntry; onAdd: () => void; onSave: () => void; }> = ({ entry, onAdd, onSave }) => (
+const HistoryEntryCard: React.FC<{ 
+    entry: MealLogEntry; 
+    onAdd: () => void; 
+    onSave: () => void;
+    onViewImage: () => void;
+}> = ({ entry, onAdd, onSave, onViewImage }) => (
     <div className="bg-slate-50 p-4 rounded-lg flex flex-col sm:flex-row sm:items-center sm:justify-between hover:bg-slate-100 transition-colors">
-        <div className="flex items-center space-x-4 mb-4 sm:mb-0">
-            {entry.imageUrl && <img src={entry.imageUrl} alt={entry.mealName} className="w-20 h-20 rounded-md object-cover" />}
+        <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-4 mb-4 sm:mb-0 w-full">
+            {/* Replaced Image with Button */}
+            <button 
+                onClick={onViewImage}
+                className="w-full sm:w-20 h-20 bg-slate-200 rounded-md flex flex-col items-center justify-center text-slate-500 hover:bg-slate-300 transition-colors flex-shrink-0"
+            >
+                <CameraIcon />
+                <span className="text-[10px] font-bold mt-1 uppercase">View Img</span>
+            </button>
+
             <div>
                 <p className="font-bold text-slate-800">{entry.mealName}</p>
                 <p className="text-sm text-slate-500">{Math.round(entry.totalCalories)} kcal</p>
@@ -57,10 +71,19 @@ const groupEntriesByDate = (entries: MealLogEntry[]) => {
 export const MealHistory: React.FC<MealHistoryProps> = ({ logEntries, onAddToPlan, onSaveMeal }) => {
   const groupedEntries = groupEntriesByDate(logEntries);
   const dates = Object.keys(groupedEntries);
+  const [viewImageId, setViewImageId] = useState<number | null>(null);
 
   return (
     <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200">
       <h2 className="text-2xl font-bold text-slate-800 mb-4">Meal History</h2>
+      {viewImageId && (
+          <ImageViewModal 
+            itemId={viewImageId} 
+            type="history" 
+            onClose={() => setViewImageId(null)} 
+          />
+      )}
+
       {logEntries.length > 0 ? (
         <div className="space-y-6">
           {dates.map((date) => (
@@ -73,6 +96,7 @@ export const MealHistory: React.FC<MealHistoryProps> = ({ logEntries, onAddToPla
                                 entry={entry} 
                                 onAdd={() => onAddToPlan(entry)} 
                                 onSave={() => onSaveMeal(entry)} 
+                                onViewImage={() => setViewImageId(entry.id)}
                             />
                         </li>
                     ))}

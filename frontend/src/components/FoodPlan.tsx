@@ -1,19 +1,30 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { MealPlan, MealPlanItem } from '../types';
-import { TrashIcon, PlusIcon } from './icons';
+import { TrashIcon, PlusIcon, CameraIcon } from './icons';
+import { ImageViewModal } from './ImageViewModal';
 
 interface FoodPlanProps {
   plan: MealPlan | null;
   onRemove: (planItemId: number) => void;
 }
 
-const MealItemCard: React.FC<{ item: MealPlanItem; onRemove: (id: number) => void; }> = ({ item, onRemove }) => {
+const MealItemCard: React.FC<{ 
+    item: MealPlanItem; 
+    onRemove: (id: number) => void;
+    onViewImage: () => void; 
+}> = ({ item, onRemove, onViewImage }) => {
     const meal = item.meal;
     return (
         <div className="bg-slate-50 p-4 rounded-lg">
             <div className="flex justify-between items-start mb-3">
                 <div className="flex items-center space-x-3">
-                    {meal.imageUrl && <img src={meal.imageUrl} alt={meal.mealName} className="w-12 h-12 rounded-md object-cover" />}
+                     <button 
+                        onClick={onViewImage}
+                        className="w-12 h-12 bg-slate-200 rounded-md flex flex-col items-center justify-center text-slate-500 hover:bg-slate-300 transition-colors flex-shrink-0"
+                        title="View Image"
+                    >
+                        <CameraIcon />
+                    </button>
                     <div>
                         <h4 className="font-bold text-slate-800">{meal.mealName}</h4>
                         <p className="text-sm text-slate-500">{Math.round(meal.totalCalories)} kcal</p>
@@ -42,6 +53,8 @@ const MealItemCard: React.FC<{ item: MealPlanItem; onRemove: (id: number) => voi
 };
 
 export const FoodPlan: React.FC<FoodPlanProps> = ({ plan, onRemove }) => {
+  const [viewImageId, setViewImageId] = useState<number | null>(null);
+
   const totals = plan?.items.reduce((acc, group) => {
     const meal = group.meal;
     acc.calories += meal.totalCalories;
@@ -67,6 +80,14 @@ export const FoodPlan: React.FC<FoodPlanProps> = ({ plan, onRemove }) => {
     <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200">
       <h2 className="text-2xl font-bold text-slate-800 mb-4">Plan: <span className="text-emerald-600">{plan.name}</span></h2>
       
+      {viewImageId && (
+          <ImageViewModal 
+            itemId={viewImageId} 
+            type="saved" 
+            onClose={() => setViewImageId(null)} 
+          />
+      )}
+
       <div className="mb-6 p-4 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-lg text-white">
         <h3 className="text-lg font-bold">Total Intake for this Plan</h3>
         <p className="text-3xl font-extrabold">{Math.round(totals.calories)} kcal</p>
@@ -79,7 +100,12 @@ export const FoodPlan: React.FC<FoodPlanProps> = ({ plan, onRemove }) => {
 
       <div className="space-y-4">
         {plan.items.map((item) => (
-          <MealItemCard key={item.id} item={item} onRemove={onRemove} />
+          <MealItemCard 
+            key={item.id} 
+            item={item} 
+            onRemove={onRemove} 
+            onViewImage={() => setViewImageId(item.meal.id)}
+        />
         ))}
       </div>
     </div>

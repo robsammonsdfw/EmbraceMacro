@@ -177,6 +177,10 @@ export const getMealLog = (): Promise<MealLogEntry[]> => {
     return callApi('/meal-log', 'GET');
 };
 
+export const getMealLogEntryById = (id: number): Promise<MealLogEntry> => {
+    return callApi(`/meal-log/${id}`, 'GET');
+};
+
 export const createMealLogEntry = (mealData: NutritionInfo, imageBase64: string): Promise<MealLogEntry> => {
     return callApi('/meal-log', 'POST', { mealData, imageBase64 });
 };
@@ -185,6 +189,10 @@ export const createMealLogEntry = (mealData: NutritionInfo, imageBase64: string)
 
 export const getSavedMeals = (): Promise<SavedMeal[]> => {
     return callApi('/saved-meals', 'GET');
+};
+
+export const getSavedMealById = (id: number): Promise<SavedMeal> => {
+    return callApi(`/saved-meals/${id}`, 'GET');
 };
 
 export const saveMeal = (mealData: NutritionInfo): Promise<SavedMeal> => {

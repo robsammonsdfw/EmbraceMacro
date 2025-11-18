@@ -97,29 +97,73 @@ const App: React.FC = () => {
       setActiveView('plan');
   };
 
+  // Utility to resize images
+  const resizeImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 1024;
+          const MAX_HEIGHT = 1024;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.7)); // Compress to 70% JPEG
+        };
+        img.onerror = (err) => reject(err);
+      };
+      reader.onerror = (err) => reject(err);
+    });
+  };
+
   const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>, isPantry: boolean = false) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    
     resetAnalysisState();
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      const base64String = (reader.result as string);
-      const base64Data = base64String.split(',')[1];
-      setImage(base64String);
-      setIsProcessing(true);
-      try {
-        if(isPantry) {
-          setProcessingMessage('Generating recipe ideas...');
-          const recipeData = await apiService.getRecipesFromImage(base64Data, file.type);
-          setRecipes(recipeData);
-        } else {
-          setProcessingMessage('Analyzing your meal...');
-          const data = await apiService.analyzeImageWithGemini(base64Data, file.type);
-          setNutritionData(data);
-        }
-      } catch (err) { setError('Analysis failed. Please try again.'); } finally { setIsProcessing(false); }
-    };
-    reader.readAsDataURL(file);
+    setIsProcessing(true);
+    
+    try {
+      setProcessingMessage('Processing image...');
+      const resizedBase64 = await resizeImage(file);
+      const base64Data = resizedBase64.split(',')[1];
+      setImage(resizedBase64);
+
+      if(isPantry) {
+        setProcessingMessage('Generating recipe ideas...');
+        const recipeData = await apiService.getRecipesFromImage(base64Data, 'image/jpeg');
+        setRecipes(recipeData);
+      } else {
+        setProcessingMessage('Analyzing your meal...');
+        const data = await apiService.analyzeImageWithGemini(base64Data, 'image/jpeg');
+        setNutritionData(data);
+      }
+    } catch (err) {
+      setError('Analysis failed. Please try again.');
+      console.error(err);
+    } finally {
+      setIsProcessing(false);
+    }
+    
     event.target.value = '';
   }, []);
 

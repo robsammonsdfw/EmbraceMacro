@@ -16,7 +16,6 @@ const processMealDataForSave = (mealData) => {
         dataForDb.imageBase64 = dataForDb.imageUrl.split(',')[1];
         delete dataForDb.imageUrl;
     }
-    // Clean up properties that don't belong in a saved meal
     delete dataForDb.id;
     delete dataForDb.createdAt;
     return dataForDb;
@@ -25,19 +24,24 @@ const processMealDataForSave = (mealData) => {
 /**
  * Helper function to prepare meal data for the client.
  */
-const processMealDataForClient = (mealData) => {
+const processMealDataForClient = (mealData, includeImage = false) => {
     const dataForClient = { ...mealData };
-    if (dataForClient.imageBase64) {
-        dataForClient.imageUrl = `data:image/jpeg;base64,${dataForClient.imageBase64}`;
-        delete dataForClient.imageBase64;
+    
+    // Always strip the base64 from the main object to prevent massive payloads
+    // unless specifically requested via includeImage
+    const base64 = dataForClient.imageBase64;
+    delete dataForClient.imageBase64;
+
+    if (includeImage && base64) {
+        dataForClient.imageUrl = `data:image/jpeg;base64,${base64}`;
+    } else {
+        // Ensure no image data leaks if not requested
+        delete dataForClient.imageUrl;
     }
     return dataForClient;
 };
 
 
-/**
- * Finds a user by their email or creates a new one if they don't exist.
- */
 export const findOrCreateUserByEmail = async (email) => {
     const client = await pool.connect();
     try {
@@ -73,15 +77,14 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
         const query = `
             INSERT INTO meal_log_entries (user_id, meal_data, image_base64)
             VALUES ($1, $2, $3)
-            RETURNING id, meal_data, image_base64, created_at;
+            RETURNING id, meal_data, created_at;
         `;
+        // We do not return imageBase64 in the response to keep it light
         const res = await client.query(query, [userId, mealData, imageBase64]);
         const row = res.rows[0];
-        const mealDataFromDb = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
         return { 
             id: row.id,
-            ...mealDataFromDb,
-            imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
+            ...row.meal_data,
             createdAt: row.created_at
         };
     } catch (err) {
@@ -92,29 +95,54 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
     }
 };
 
-
 export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
     try {
+        // EXPLICITLY EXCLUDE image_base64 column
         const query = `
-            SELECT id, meal_data, image_base64, created_at 
+            SELECT id, meal_data, created_at 
             FROM meal_log_entries
             WHERE user_id = $1 
             ORDER BY created_at DESC;
         `;
         const res = await client.query(query, [userId]);
-        return res.rows.map(row => {
-            const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
-            return {
-                id: row.id,
-                ...mealData,
-                imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
-                createdAt: row.created_at,
-            };
-        });
+        return res.rows.map(row => ({
+            id: row.id,
+            ...processMealDataForClient(row.meal_data || {}, false),
+            createdAt: row.created_at,
+        }));
     } catch (err) {
         console.error('Database error in getMealLogEntries:', err);
         throw new Error('Could not retrieve meal history.');
+    } finally {
+        client.release();
+    }
+};
+
+export const getMealLogEntryById = async (userId, logId) => {
+    const client = await pool.connect();
+    try {
+        const query = `
+            SELECT id, meal_data, image_base64, created_at 
+            FROM meal_log_entries
+            WHERE id = $1 AND user_id = $2;
+        `;
+        const res = await client.query(query, [logId, userId]);
+        if (res.rows.length === 0) return null;
+        
+        const row = res.rows[0];
+        const mealData = row.meal_data || {};
+        
+        // Reconstruct the object with the image
+        return {
+            id: row.id,
+            ...mealData,
+            imageUrl: row.image_base64 ? `data:image/jpeg;base64,${row.image_base64}` : null,
+            createdAt: row.created_at
+        };
+    } catch (err) {
+        console.error('Database error in getMealLogEntryById:', err);
+        throw new Error('Could not retrieve meal log entry.');
     } finally {
         client.release();
     }
@@ -132,12 +160,30 @@ export const getSavedMeals = async (userId) => {
         `;
         const res = await client.query(query, [userId]);
         return res.rows.map(row => {
-            const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
-            return { id: row.id, ...processMealDataForClient(mealData) };
+            // Ensure false is passed to strip images
+            return { id: row.id, ...processMealDataForClient(row.meal_data || {}, false) };
         });
     } catch (err) {
         console.error('Database error in getSavedMeals:', err);
         throw new Error('Could not retrieve saved meals.');
+    } finally {
+        client.release();
+    }
+};
+
+export const getSavedMealById = async (userId, mealId) => {
+    const client = await pool.connect();
+    try {
+        const query = `SELECT id, meal_data FROM saved_meals WHERE id = $1 AND user_id = $2;`;
+        const res = await client.query(query, [mealId, userId]);
+        if (res.rows.length === 0) return null;
+        
+        const row = res.rows[0];
+        // Pass true to include image
+        return { id: row.id, ...processMealDataForClient(row.meal_data || {}, true) };
+    } catch (err) {
+        console.error('Database error in getSavedMealById:', err);
+        throw new Error('Could not retrieve saved meal.');
     } finally {
         client.release();
     }
@@ -154,9 +200,8 @@ export const saveMeal = async (userId, mealData) => {
         `;
         const res = await client.query(query, [userId, mealDataForDb]);
         const row = res.rows[0];
-        const mealDataFromDb = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
-
-        return { id: row.id, ...processMealDataForClient(mealDataFromDb) };
+        // Return without image for speed, client already has it if they just uploaded
+        return { id: row.id, ...processMealDataForClient(row.meal_data || {}, false) };
     } catch (err) {
         console.error('Database error in saveMeal:', err);
         throw new Error('Could not save meal.');
@@ -195,7 +240,6 @@ export const getMealPlans = async (userId) => {
         `;
         const res = await client.query(query, [userId]);
         
-        // Process flat results into nested structure
         const plans = new Map();
         res.rows.forEach(row => {
             if (!plans.has(row.plan_id)) {
@@ -205,13 +249,14 @@ export const getMealPlans = async (userId) => {
                     items: [],
                 });
             }
-            if (row.item_id) { // Ensure item exists (for empty plans)
-                const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
+            if (row.item_id) {
+                const mealData = row.meal_data || {};
                 plans.get(row.plan_id).items.push({
                     id: row.item_id,
                     meal: {
                         id: row.meal_id,
-                        ...processMealDataForClient(mealData)
+                        // Explicitly strip images from meal plans list
+                        ...processMealDataForClient(mealData, false)
                     }
                 });
             }
@@ -230,9 +275,9 @@ export const createMealPlan = async (userId, name) => {
     try {
         const query = `INSERT INTO meal_plans (user_id, name) VALUES ($1, $2) RETURNING id, name;`;
         const res = await client.query(query, [userId, name]);
-        return { ...res.rows[0], items: [] }; // Return new plan with empty items
+        return { ...res.rows[0], items: [] }; 
     } catch(err) {
-        if (err.code === '23505') { // unique_violation
+        if (err.code === '23505') { 
             throw new Error(`A meal plan with the name "${name}" already exists.`);
         }
         console.error('Database error in createMealPlan:', err);
@@ -245,7 +290,6 @@ export const createMealPlan = async (userId, name) => {
 export const deleteMealPlan = async (userId, planId) => {
     const client = await pool.connect();
     try {
-        // ON DELETE CASCADE will handle deleting items from meal_plan_items
         await client.query(`DELETE FROM meal_plans WHERE id = $1 AND user_id = $2;`, [planId, userId]);
     } catch(err) {
         console.error('Database error in deleteMealPlan:', err);
@@ -255,11 +299,9 @@ export const deleteMealPlan = async (userId, planId) => {
     }
 };
 
-
 export const addMealToPlanItem = async (userId, planId, savedMealId) => {
     const client = await pool.connect();
     try {
-        // Verify the user owns the plan and the meal before inserting
         const checkQuery = `
            SELECT (SELECT user_id FROM meal_plans WHERE id = $1) = $3 AS owns_plan,
                   (SELECT user_id FROM saved_meals WHERE id = $2) = $3 AS owns_meal;
@@ -277,7 +319,6 @@ export const addMealToPlanItem = async (userId, planId, savedMealId) => {
         const insertRes = await client.query(insertQuery, [userId, planId, savedMealId]);
         const newItemId = insertRes.rows[0].id;
 
-        // Fetch the full data for the new item to return to client
         const selectQuery = `
             SELECT 
                 i.id,
@@ -289,14 +330,14 @@ export const addMealToPlanItem = async (userId, planId, savedMealId) => {
         `;
         const selectRes = await client.query(selectQuery, [newItemId]);
         const row = selectRes.rows[0];
-        const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
+        // Don't return image here either, keep it light
         return {
             id: row.id,
-            meal: { id: row.meal_id, ...processMealDataForClient(mealData) }
+            meal: { id: row.meal_id, ...processMealDataForClient(row.meal_data || {}, false) }
         };
 
     } catch (err) {
-        if (err.code === '23505') { // unique_violation on (meal_plan_id, saved_meal_id)
+        if (err.code === '23505') { 
             console.warn(`Meal ${savedMealId} is already in plan ${planId}.`);
             throw new Error('This meal is already in the selected plan.');
         }
@@ -307,22 +348,14 @@ export const addMealToPlanItem = async (userId, planId, savedMealId) => {
     }
 };
 
-
 export const addMealAndLinkToPlan = async (userId, mealData, planId) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        
-        // Step 1: Save the new meal to get an ID.
         const newMeal = await saveMeal(userId, mealData);
-        
-        // Step 2: Add the newly saved meal to the specified plan.
         const newPlanItem = await addMealToPlanItem(userId, planId, newMeal.id);
-        
         await client.query('COMMIT');
-        
         return newPlanItem;
-
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Database transaction error in addMealAndLinkToPlan:', err);
@@ -343,7 +376,6 @@ export const removeMealFromPlanItem = async (userId, planItemId) => {
         client.release();
     }
 };
-
 
 // --- Grocery List Persistence ---
 
@@ -368,15 +400,11 @@ export const getGroceryList = async (userId) => {
 export const generateGroceryList = async (userId, planIds = []) => {
     const client = await pool.connect();
     if (planIds.length === 0) {
-        // Clear the list if no plans are selected
         await client.query(`DELETE FROM grocery_list_items WHERE user_id = $1;`, [userId]);
         return [];
     }
-    
     try {
         await client.query('BEGIN');
-
-        // Step 1: Get all ingredients from meals within the selected plans
         const mealQuery = `
             SELECT sm.meal_data
             FROM saved_meals sm
@@ -385,14 +413,10 @@ export const generateGroceryList = async (userId, planIds = []) => {
         `;
         const mealRes = await client.query(mealQuery, [userId, planIds]);
         const allIngredients = mealRes.rows.flatMap(row => row.meal_data?.ingredients || []);
-        
-        // Step 2: Create a unique, sorted list of ingredient names
         const uniqueIngredientNames = [...new Set(allIngredients.map(ing => ing.name))].sort();
 
-        // Step 3: Clear the old list
         await client.query(`DELETE FROM grocery_list_items WHERE user_id = $1;`, [userId]);
 
-        // Step 4: Insert the new list if there are any ingredients
         if (uniqueIngredientNames.length > 0) {
             const insertQuery = `
                 INSERT INTO grocery_list_items (user_id, name)
@@ -400,12 +424,8 @@ export const generateGroceryList = async (userId, planIds = []) => {
             `;
             await client.query(insertQuery, [userId, uniqueIngredientNames]);
         }
-        
         await client.query('COMMIT');
-
-        // Step 5: Return the newly created list
         return getGroceryList(userId);
-
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Database transaction error in generateGroceryList:', err);
