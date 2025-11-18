@@ -92,7 +92,13 @@ export const handler = async (event) => {
     }
     
     // --- PROTECTED ROUTES ---
-    const token = event.headers.authorization?.split(' ')[1];
+    // Normalize headers to handle case-insensitivity (e.g., 'Authorization' vs 'authorization')
+    const normalizedHeaders = {};
+    for (const key in event.headers) {
+        normalizedHeaders[key.toLowerCase()] = event.headers[key];
+    }
+
+    const token = normalizedHeaders['authorization']?.split(' ')[1];
     if (!token) {
         return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized: No token provided.' })};
     }

@@ -92,7 +92,13 @@ export const handler = async (event) => {
     }
     
     // --- PROTECTED ROUTES ---
-    const token = event.headers.authorization?.split(' ')[1];
+    // Normalize headers to handle case-insensitivity (e.g., 'Authorization' vs 'authorization')
+    const normalizedHeaders = {};
+    for (const key in event.headers) {
+        normalizedHeaders[key.toLowerCase()] = event.headers[key];
+    }
+
+    const token = normalizedHeaders['authorization']?.split(' ')[1];
     if (!token) {
         return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized: No token provided.' })};
     }
@@ -330,4 +336,40 @@ async function handleMealSuggestionRequest(event, ai, headers) {
 function callShopifyStorefrontAPI(query, variables) {
     const { SHOPIFY_STORE_DOMAIN, SHOPIFY_STOREFRONT_TOKEN } = process.env;
     const postData = JSON.stringify({ query, variables });
-    const options =
+    const options = {
+        hostname: SHOPIFY_STORE_DOMAIN,
+        path: '/api/2024-04/graphql.json',
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(postData),
+            'X-Shopify-Storefront-Access-Token': SHOPIFY_STOREFRONT_TOKEN
+        },
+    };
+    return new Promise((resolve, reject) => {
+        const req = https.request(options, (res) => {
+            let data = '';
+            res.on('data', (chunk) => { data += chunk; });
+            res.on('end', () => {
+                try {
+                    const responseBody = JSON.parse(data);
+                    if (res.statusCode >= 200 && res.statusCode < 300) {
+                        if (responseBody.errors) {
+                            console.error("[Shopify API Error]", JSON.stringify(responseBody.errors));
+                            resolve(null); 
+                        } else {
+                            resolve(responseBody.data);
+                        }
+                    } else {
+                        reject(new Error(`Shopify API failed with status ${res.statusCode}: ${data}`));
+                    }
+                } catch (e) {
+                    reject(new Error(`Failed to parse Shopify response: ${e.message}`));
+                }
+            });
+        });
+        req.on('error', (e) => reject(e));
+        req.write(postData);
+        req.end();
+    });
+}

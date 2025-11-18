@@ -9,11 +9,6 @@ const pool = new Pool({
 
 /**
  * Helper function to prepare meal data for database insertion.
- * It extracts the raw base64 data from a data URL and stores it
- * under `imageBase64`, removing the original `imageUrl` to save space
- * and avoid potential JSONB storage issues with very long strings.
- * @param {object} mealData - The meal data object from the client.
- * @returns {object} The processed meal data object ready for the database.
  */
 const processMealDataForSave = (mealData) => {
     const dataForDb = { ...mealData };
@@ -29,10 +24,6 @@ const processMealDataForSave = (mealData) => {
 
 /**
  * Helper function to prepare meal data for the client.
- * It reconstructs the full data URL for an image from the raw
- * base64 data stored in the database.
- * @param {object} mealData - The meal data object from the database.
- * @returns {object} The processed meal data object with a usable `imageUrl`.
  */
 const processMealDataForClient = (mealData) => {
     const dataForClient = { ...mealData };
@@ -46,8 +37,6 @@ const processMealDataForClient = (mealData) => {
 
 /**
  * Finds a user by their email or creates a new one if they don't exist.
- * @param {string} email - The customer's email address.
- * @returns {Promise<object>} The user record from the database.
  */
 export const findOrCreateUserByEmail = async (email) => {
     const client = await pool.connect();
