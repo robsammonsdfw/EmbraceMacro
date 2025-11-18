@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { MealPlan, MealPlanItem } from '../types';
-import { TrashIcon, PlusIcon, CameraIcon } from './icons';
+import { TrashIcon, PlusIcon, CameraIcon, CameraOffIcon } from './icons';
 import { ImageViewModal } from './ImageViewModal';
 
 interface FoodPlanProps {
@@ -14,17 +14,25 @@ const MealItemCard: React.FC<{
     onViewImage: () => void; 
 }> = ({ item, onRemove, onViewImage }) => {
     const meal = item.meal;
+    const hasImage = meal.hasImage;
+
     return (
         <div className="bg-slate-50 p-4 rounded-lg">
             <div className="flex justify-between items-start mb-3">
                 <div className="flex items-center space-x-3">
-                     <button 
-                        onClick={onViewImage}
-                        className="w-12 h-12 bg-slate-200 rounded-md flex flex-col items-center justify-center text-slate-500 hover:bg-slate-300 transition-colors flex-shrink-0"
-                        title="View Image"
-                    >
-                        <CameraIcon />
-                    </button>
+                     {hasImage ? (
+                        <button 
+                            onClick={onViewImage}
+                            className="w-12 h-12 bg-slate-200 rounded-md flex flex-col items-center justify-center text-slate-500 hover:bg-slate-300 transition-colors flex-shrink-0"
+                            title="View Image"
+                        >
+                            <CameraIcon />
+                        </button>
+                     ) : (
+                        <div className="w-12 h-12 bg-slate-100 rounded-md flex flex-col items-center justify-center text-slate-300 border border-slate-200 flex-shrink-0" title="No Image">
+                             <CameraOffIcon />
+                        </div>
+                     )}
                     <div>
                         <h4 className="font-bold text-slate-800">{meal.mealName}</h4>
                         <p className="text-sm text-slate-500">{Math.round(meal.totalCalories)} kcal</p>

@@ -23,6 +23,7 @@ export interface NutritionInfo {
   ingredients: Ingredient[];
   justification?: string;
   imageUrl?: string; 
+  hasImage?: boolean; // New flag to indicate if an image exists for this record
   nutriScore?: string;
   ecoScore?: string;
   allergens?: string[];

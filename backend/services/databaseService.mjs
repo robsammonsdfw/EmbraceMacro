@@ -9,6 +9,8 @@ const pool = new Pool({
 
 /**
  * Helper function to prepare meal data for database insertion.
+ * It extracts the raw base64 data from a data URL and stores it
+ * under `imageBase64`, removing the original `imageUrl` to save space.
  */
 const processMealDataForSave = (mealData) => {
     const dataForDb = { ...mealData };
@@ -18,25 +20,39 @@ const processMealDataForSave = (mealData) => {
     }
     delete dataForDb.id;
     delete dataForDb.createdAt;
+    // We also don't need to store the flag in the DB, we calculate it on retrieval
+    delete dataForDb.hasImage; 
     return dataForDb;
 };
 
 /**
  * Helper function to prepare meal data for the client.
+ * @param {object} mealData - The meal data object from the database.
+ * @param {boolean} stripImage - If true, removes image data and adds `hasImage` flag.
+ * @returns {object} The processed meal data object.
  */
-const processMealDataForClient = (mealData, includeImage = false) => {
+const processMealDataForClient = (mealData, stripImage = false) => {
     const dataForClient = { ...mealData };
     
-    // Always strip the base64 from the main object to prevent massive payloads
-    // unless specifically requested via includeImage
-    const base64 = dataForClient.imageBase64;
-    delete dataForClient.imageBase64;
+    // Check if an image exists (either as base64 or an external URL)
+    const hasBase64 = !!(dataForClient.imageBase64 && dataForClient.imageBase64.length > 0);
+    const hasUrl = !!(dataForClient.imageUrl && dataForClient.imageUrl.length > 0);
+    
+    dataForClient.hasImage = hasBase64 || hasUrl;
 
-    if (includeImage && base64) {
-        dataForClient.imageUrl = `data:image/jpeg;base64,${base64}`;
+    if (stripImage) {
+        // Remove heavy data for list views
+        delete dataForClient.imageBase64;
+        // If it's a data URL, remove it too. Keep external URLs (like OpenFoodFacts) as they are small.
+        if (dataForClient.imageUrl && dataForClient.imageUrl.startsWith('data:')) {
+            delete dataForClient.imageUrl;
+        }
     } else {
-        // Ensure no image data leaks if not requested
-        delete dataForClient.imageUrl;
+        // Construct full image for detailed views
+        if (dataForClient.imageBase64) {
+            dataForClient.imageUrl = `data:image/jpeg;base64,${dataForClient.imageBase64}`;
+            delete dataForClient.imageBase64;
+        }
     }
     return dataForClient;
 };
@@ -79,12 +95,16 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
             VALUES ($1, $2, $3)
             RETURNING id, meal_data, created_at;
         `;
-        // We do not return imageBase64 in the response to keep it light
+        // Note: We don't return image_base64 here to keep response light
         const res = await client.query(query, [userId, mealData, imageBase64]);
         const row = res.rows[0];
+        const mealDataFromDb = row.meal_data || {};
+        
         return { 
             id: row.id,
-            ...row.meal_data,
+            ...processMealDataForClient(mealDataFromDb, true), // Return stripped version with hasImage flag
+            // Override hasImage because we know we just saved an image if imageBase64 was provided
+            hasImage: !!imageBase64,
             createdAt: row.created_at
         };
     } catch (err) {
@@ -98,19 +118,27 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
 export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
     try {
-        // EXPLICITLY EXCLUDE image_base64 column
+        // We select a boolean flag for the image existence to avoid fetching the blob
         const query = `
-            SELECT id, meal_data, created_at 
+            SELECT id, meal_data, created_at, 
+                   (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image_column
             FROM meal_log_entries
             WHERE user_id = $1 
             ORDER BY created_at DESC;
         `;
         const res = await client.query(query, [userId]);
-        return res.rows.map(row => ({
-            id: row.id,
-            ...processMealDataForClient(row.meal_data || {}, false),
-            createdAt: row.created_at,
-        }));
+        return res.rows.map(row => {
+            const mealData = row.meal_data || {};
+            const processed = processMealDataForClient(mealData, true);
+            // The column check is the authority for history entries
+            processed.hasImage = row.has_image_column; 
+            
+            return {
+                id: row.id,
+                ...processed,
+                createdAt: row.created_at,
+            };
+        });
     } catch (err) {
         console.error('Database error in getMealLogEntries:', err);
         throw new Error('Could not retrieve meal history.');
@@ -133,13 +161,19 @@ export const getMealLogEntryById = async (userId, logId) => {
         const row = res.rows[0];
         const mealData = row.meal_data || {};
         
-        // Reconstruct the object with the image
-        return {
+        // Manually construct to ensure image is attached
+        const result = {
             id: row.id,
             ...mealData,
-            imageUrl: row.image_base64 ? `data:image/jpeg;base64,${row.image_base64}` : null,
-            createdAt: row.created_at
+            createdAt: row.created_at,
+            hasImage: !!row.image_base64
         };
+        
+        if (row.image_base64) {
+            result.imageUrl = `data:image/jpeg;base64,${row.image_base64}`;
+        }
+        
+        return result;
     } catch (err) {
         console.error('Database error in getMealLogEntryById:', err);
         throw new Error('Could not retrieve meal log entry.');
@@ -160,8 +194,9 @@ export const getSavedMeals = async (userId) => {
         `;
         const res = await client.query(query, [userId]);
         return res.rows.map(row => {
-            // Ensure false is passed to strip images
-            return { id: row.id, ...processMealDataForClient(row.meal_data || {}, false) };
+            const mealData = row.meal_data || {};
+            // True = strip images, calculate hasImage
+            return { id: row.id, ...processMealDataForClient(mealData, true) };
         });
     } catch (err) {
         console.error('Database error in getSavedMeals:', err);
@@ -179,8 +214,8 @@ export const getSavedMealById = async (userId, mealId) => {
         if (res.rows.length === 0) return null;
         
         const row = res.rows[0];
-        // Pass true to include image
-        return { id: row.id, ...processMealDataForClient(row.meal_data || {}, true) };
+        // False = Include full image
+        return { id: row.id, ...processMealDataForClient(row.meal_data || {}, false) };
     } catch (err) {
         console.error('Database error in getSavedMealById:', err);
         throw new Error('Could not retrieve saved meal.');
@@ -200,8 +235,10 @@ export const saveMeal = async (userId, mealData) => {
         `;
         const res = await client.query(query, [userId, mealDataForDb]);
         const row = res.rows[0];
-        // Return without image for speed, client already has it if they just uploaded
-        return { id: row.id, ...processMealDataForClient(row.meal_data || {}, false) };
+        const mealDataFromDb = row.meal_data || {};
+
+        // Return stripped version for list compatibility
+        return { id: row.id, ...processMealDataForClient(mealDataFromDb, true) };
     } catch (err) {
         console.error('Database error in saveMeal:', err);
         throw new Error('Could not save meal.');
@@ -255,8 +292,8 @@ export const getMealPlans = async (userId) => {
                     id: row.item_id,
                     meal: {
                         id: row.meal_id,
-                        // Explicitly strip images from meal plans list
-                        ...processMealDataForClient(mealData, false)
+                        // Strip images for plans list
+                        ...processMealDataForClient(mealData, true)
                     }
                 });
             }
@@ -330,10 +367,11 @@ export const addMealToPlanItem = async (userId, planId, savedMealId) => {
         `;
         const selectRes = await client.query(selectQuery, [newItemId]);
         const row = selectRes.rows[0];
-        // Don't return image here either, keep it light
+        const mealData = row.meal_data || {};
+        
         return {
             id: row.id,
-            meal: { id: row.meal_id, ...processMealDataForClient(row.meal_data || {}, false) }
+            meal: { id: row.meal_id, ...processMealDataForClient(mealData, true) }
         };
 
     } catch (err) {
