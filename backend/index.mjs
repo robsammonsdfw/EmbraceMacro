@@ -32,19 +32,19 @@ export const handler = async (event) => {
         PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGPORT
     } = process.env;
     
-    // Dynamic CORS configuration
+    // Explicitly define allowed origins
     const allowedOrigins = [
         "https://food.embracehealth.ai",
         "https://app.embracehealth.ai",
         "http://localhost:5173",
         FRONTEND_URL
-    ].filter(Boolean);
+    ];
 
     const requestHeaders = event.headers || {};
     const origin = requestHeaders.origin || requestHeaders.Origin;
     
-    // Default to FRONTEND_URL or allow all if not set (safe for public APIs, caution for auth)
-    let accessControlAllowOrigin = FRONTEND_URL || (allowedOrigins.length > 0 ? allowedOrigins[0] : '*');
+    // Default to the main domain if no match is found to ensure it works
+    let accessControlAllowOrigin = "https://food.embracehealth.ai";
 
     if (origin && allowedOrigins.includes(origin)) {
         accessControlAllowOrigin = origin;
