@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import https from 'https';
@@ -33,8 +34,28 @@ export const handler = async (event) => {
         PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGPORT
     } = process.env;
     
+    // Dynamic CORS configuration
+    const allowedOrigins = [
+        "https://food.embracehealth.ai",
+        "https://app.embracehealth.ai",
+        "http://localhost:5173",
+        FRONTEND_URL
+    ].filter(Boolean);
+
+    const requestHeaders = event.headers || {};
+    const origin = requestHeaders.origin || requestHeaders.Origin;
+    
+    // Default to FRONTEND_URL if set, otherwise allowing * might be unsafe for authenticated endpoints
+    // but useful for debugging if FRONTEND_URL isn't set. 
+    // Ideally we echo the origin if it's allowed.
+    let accessControlAllowOrigin = FRONTEND_URL || (allowedOrigins.length > 0 ? allowedOrigins[0] : '*');
+
+    if (origin && allowedOrigins.includes(origin)) {
+        accessControlAllowOrigin = origin;
+    }
+
     const headers = {
-        "Access-Control-Allow-Origin": FRONTEND_URL,
+        "Access-Control-Allow-Origin": accessControlAllowOrigin,
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
         "Access-Control-Allow-Methods": "OPTIONS,POST,GET,DELETE"
     };
