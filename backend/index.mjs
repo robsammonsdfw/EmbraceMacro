@@ -32,28 +32,33 @@ export const handler = async (event) => {
         PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGPORT
     } = process.env;
     
-    // Explicitly define allowed origins
+    // --- CORS CONFIGURATION ---
     const allowedOrigins = [
         "https://food.embracehealth.ai",
         "https://app.embracehealth.ai",
         "http://localhost:5173",
+        "http://localhost:3000",
         FRONTEND_URL
     ];
 
     const requestHeaders = event.headers || {};
-    const origin = requestHeaders.origin || requestHeaders.Origin;
+    // Robustly find origin (header keys can be lowercased by some gateways)
+    const originKey = Object.keys(requestHeaders).find(key => key.toLowerCase() === 'origin');
+    const origin = originKey ? requestHeaders[originKey] : null;
     
-    // Default to the main domain if no match is found to ensure it works
+    // Default to the production domain
     let accessControlAllowOrigin = "https://food.embracehealth.ai";
 
+    // If the request origin is in our allowed list, allow it specifically
     if (origin && allowedOrigins.includes(origin)) {
         accessControlAllowOrigin = origin;
     }
 
     const headers = {
         "Access-Control-Allow-Origin": accessControlAllowOrigin,
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        "Access-Control-Allow-Methods": "OPTIONS,POST,GET,DELETE"
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Amz-Date, X-Api-Key, X-Amz-Security-Token",
+        "Access-Control-Allow-Methods": "OPTIONS,POST,GET,DELETE,PUT",
+        "Access-Control-Allow-Credentials": "true"
     };
 
     let path;
@@ -88,11 +93,10 @@ export const handler = async (event) => {
     }
     
     // --- PROTECTED ROUTES ---
+    // Normalize headers for authorization check as well
     const normalizedHeaders = {};
-    if (event.headers) {
-        for (const key in event.headers) {
-            normalizedHeaders[key.toLowerCase()] = event.headers[key];
-        }
+    for (const key in requestHeaders) {
+        normalizedHeaders[key.toLowerCase()] = requestHeaders[key];
     }
 
     const token = normalizedHeaders['authorization']?.split(' ')[1];
