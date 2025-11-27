@@ -19,8 +19,9 @@ import { Login } from './components/Login';
 import { GroceryList } from './components/GroceryList';
 import { AddToPlanModal } from './components/AddToPlanModal';
 import { MealPlanManager } from './components/MealPlanManager';
+import { RewardsDashboard } from './components/RewardsDashboard';
 
-type ActiveView = 'plan' | 'meals' | 'history' | 'suggestions' | 'grocery';
+type ActiveView = 'plan' | 'meals' | 'history' | 'suggestions' | 'grocery' | 'rewards';
 type MealDataType = NutritionInfo | SavedMeal | MealLogEntry;
 
 const App: React.FC = () => {
@@ -185,6 +186,7 @@ const App: React.FC = () => {
       const newLogEntry = await apiService.createMealLogEntry(mealData, imageBase64);
       setMealLog(prevLog => [newLogEntry, ...prevLog]);
       resetAnalysisState();
+      setActiveView('rewards'); // Redirect to rewards to show the earned points
     } catch (err) {
       setError("Could not save to history. Please try again.");
     } finally {
@@ -341,6 +343,7 @@ const App: React.FC = () => {
                                       onAddToPlan={handleInitiateAddToPlan} onSaveMeal={handleSaveMeal}
                                   />;
         case 'grocery': return <GroceryList items={groceryList} mealPlans={mealPlans} onGenerate={handleGenerateGroceryList} onToggle={handleToggleGroceryItem} onClear={handleClearGroceryList} />;
+        case 'rewards': return <RewardsDashboard />;
         default: return <FoodPlan plan={activePlan} onRemove={handleRemoveFromPlan} />;
     }
   }

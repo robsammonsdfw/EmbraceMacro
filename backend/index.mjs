@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import https from 'https';
@@ -18,11 +17,14 @@ import {
     getGroceryList,
     generateGroceryList,
     updateGroceryListItem,
-    clearGroceryList
+    clearGroceryList,
+    getRewardsSummary
 } from './services/databaseService.mjs';
 import { Buffer } from 'buffer';
 
+// --- MAIN HANDLER (ROUTER) ---
 export const handler = async (event) => {
+    // --- IMPORTANT: CONFIGURE THESE IN YOUR LAMBDA ENVIRONMENT VARIABLES ---
     const {
         GEMINI_API_KEY,
         SHOPIFY_STOREFRONT_TOKEN,
@@ -32,50 +34,69 @@ export const handler = async (event) => {
         PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGPORT
     } = process.env;
     
-    // --- CORS CONFIGURATION ---
+    // Dynamic CORS configuration
     const allowedOrigins = [
         "https://food.embracehealth.ai",
         "https://app.embracehealth.ai",
+        "https://main.dfp0msdoew280.amplifyapp.com",
         "http://localhost:5173",
         "http://localhost:3000",
         FRONTEND_URL
-    ];
+    ].filter(Boolean);
 
     const requestHeaders = event.headers || {};
-    // Robustly find origin (header keys can be lowercased by some gateways)
-    const originKey = Object.keys(requestHeaders).find(key => key.toLowerCase() === 'origin');
-    const origin = originKey ? requestHeaders[originKey] : null;
+    const origin = requestHeaders.origin || requestHeaders.Origin;
     
-    // Default to the production domain
-    let accessControlAllowOrigin = "https://food.embracehealth.ai";
+    // Default to FRONTEND_URL if set, otherwise allowing * might be unsafe for authenticated endpoints
+    // but useful for debugging if FRONTEND_URL isn't set. 
+    // Ideally we echo the origin if it's allowed.
+    let accessControlAllowOrigin = FRONTEND_URL || (allowedOrigins.length > 0 ? allowedOrigins[0] : '*');
 
-    // If the request origin is in our allowed list, allow it specifically
     if (origin && allowedOrigins.includes(origin)) {
         accessControlAllowOrigin = origin;
     }
 
     const headers = {
         "Access-Control-Allow-Origin": accessControlAllowOrigin,
-        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Amz-Date, X-Api-Key, X-Amz-Security-Token",
-        "Access-Control-Allow-Methods": "OPTIONS,POST,GET,DELETE,PUT",
-        "Access-Control-Allow-Credentials": "true"
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        "Access-Control-Allow-Methods": "OPTIONS,POST,GET,DELETE"
     };
+
+    const requiredEnvVars = [
+        'GEMINI_API_KEY', 'SHOPIFY_STOREFRONT_TOKEN', 'SHOPIFY_STORE_DOMAIN',
+        'JWT_SECRET', 'FRONTEND_URL', 'PGHOST', 'PGUSER', 'PGPASSWORD',
+        'PGDATABASE', 'PGPORT'
+    ];
+    
+    const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+    
+    if (missingVars.length > 0) {
+        const errorMessage = `Configuration error: The following required environment variables are missing: ${missingVars.join(', ')}.`;
+        console.error(errorMessage);
+        return {
+            statusCode: 500,
+            headers,
+            body: JSON.stringify({ error: errorMessage }),
+        };
+    }
 
     let path;
     let method;
 
-    if (event.requestContext && event.requestContext.http) {
+    // Accommodate both v1 (REST) and v2 (HTTP) API Gateway payloads
+    if (event.requestContext && event.requestContext.http) { // API Gateway v2 (HTTP API)
         path = event.requestContext.http.path;
         method = event.requestContext.http.method;
-    } else if (event.path) {
+    } else if (event.path) { // API Gateway v1 (REST API)
         path = event.path;
         method = event.httpMethod;
     } else {
         return { statusCode: 500, headers, body: JSON.stringify({ error: 'Internal Server Error: Malformed request event.' }) };
     }
     
+    // For REST APIs, the stage is part of the path. We must remove it for consistent routing.
     const stage = event.requestContext?.stage;
-    if (stage && stage !== '$default') {
+    if (stage) {
         const stagePrefix = `/${stage}`;
         if (path.startsWith(stagePrefix)) {
             path = path.substring(stagePrefix.length);
@@ -88,18 +109,13 @@ export const handler = async (event) => {
 
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
     
+    // Path needs to be checked without the stage prefix
     if (path === '/auth/customer-login') {
         return handleCustomerLogin(event, headers, JWT_SECRET);
     }
     
     // --- PROTECTED ROUTES ---
-    // Normalize headers for authorization check as well
-    const normalizedHeaders = {};
-    for (const key in requestHeaders) {
-        normalizedHeaders[key.toLowerCase()] = requestHeaders[key];
-    }
-
-    const token = normalizedHeaders['authorization']?.split(' ')[1];
+    const token = event.headers.authorization?.split(' ')[1];
     if (!token) {
         return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized: No token provided.' })};
     }
@@ -110,6 +126,7 @@ export const handler = async (event) => {
         return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized: Invalid token.' })};
     }
 
+    // --- API ROUTING ---
     const pathParts = path.split('/').filter(Boolean);
     const resource = pathParts[0];
 
@@ -132,17 +149,12 @@ export const handler = async (event) => {
         if (resource === 'get-meal-suggestions') {
             return await handleMealSuggestionRequest(event, ai, headers);
         }
+        if (resource === 'rewards') {
+            return await handleRewardsRequest(event, headers, method);
+        }
     } catch (error) {
-        console.error(`[ROUTER CATCH] Error for ${method} ${path}:`, error);
-        return { 
-            statusCode: 500, 
-            headers, 
-            body: JSON.stringify({ 
-                error: 'Internal Server Error', 
-                details: error.message,
-                stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined
-            }) 
-        };
+        console.error(`[ROUTER CATCH] Unhandled error for ${method} ${path}:`, error);
+        return { statusCode: 500, headers, body: JSON.stringify({ error: 'An unexpected internal server error occurred.' }) };
     }
 
     return {
@@ -151,6 +163,16 @@ export const handler = async (event) => {
         body: JSON.stringify({ error: `Not Found: The path "${path}" could not be handled.` }),
     };
 };
+
+// --- ROUTE HANDLERS ---
+
+async function handleRewardsRequest(event, headers, method) {
+    if (method === 'GET') {
+        const summary = await getRewardsSummary(event.user.userId);
+        return { statusCode: 200, headers, body: JSON.stringify(summary) };
+    }
+    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' })};
+}
 
 async function handleGroceryListRequest(event, headers, method, pathParts) {
     const userId = event.user.userId;
@@ -184,8 +206,9 @@ async function handleGroceryListRequest(event, headers, method, pathParts) {
             return { statusCode: 204, headers, body: '' };
         }
     }
-    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' })};
+    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed on this path' })};
 }
+
 
 async function handleMealLogRequest(event, headers, method) {
     const userId = event.user.userId;
@@ -219,7 +242,7 @@ async function handleSavedMealsRequest(event, headers, method, pathParts) {
          await deleteMeal(userId, mealId);
          return { statusCode: 204, headers, body: '' };
     }
-    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' })};
+    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed or invalid meal ID' })};
 }
 
 async function handleMealPlansRequest(event, headers, method, pathParts) {

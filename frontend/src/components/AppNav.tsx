@@ -1,7 +1,7 @@
 import React from 'react';
-import { PlusIcon, BookOpenIcon, ClockIcon, LightBulbIcon, ClipboardListIcon } from './icons';
+import { PlusIcon, BookOpenIcon, ClockIcon, LightBulbIcon, ClipboardListIcon, StarIcon } from './icons';
 
-type ActiveView = 'plan' | 'meals' | 'history' | 'suggestions' | 'grocery';
+type ActiveView = 'plan' | 'meals' | 'history' | 'suggestions' | 'grocery' | 'rewards';
 
 interface AppNavProps {
     activeView: ActiveView;
@@ -29,18 +29,18 @@ const NavButton: React.FC<{
 
 export const AppNav: React.FC<AppNavProps> = ({ activeView, onViewChange }) => {
     return (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 p-2 bg-slate-100 rounded-xl border border-slate-200">
+        <div className="grid grid-cols-3 md:grid-cols-6 gap-3 p-2 bg-slate-100 rounded-xl border border-slate-200">
             <NavButton
                 isActive={activeView === 'plan'}
                 onClick={() => onViewChange('plan')}
                 icon={<PlusIcon />}
-                label="Today's Plan"
+                label="Plan"
             />
             <NavButton
                 isActive={activeView === 'meals'}
                 onClick={() => onViewChange('meals')}
                 icon={<BookOpenIcon />}
-                label="My Meals"
+                label="Meals"
             />
             <NavButton
                 isActive={activeView === 'history'}
@@ -52,13 +52,19 @@ export const AppNav: React.FC<AppNavProps> = ({ activeView, onViewChange }) => {
                 isActive={activeView === 'suggestions'}
                 onClick={() => onViewChange('suggestions')}
                 icon={<LightBulbIcon />}
-                label="Meal Ideas"
+                label="Ideas"
             />
             <NavButton
                 isActive={activeView === 'grocery'}
                 onClick={() => onViewChange('grocery')}
                 icon={<ClipboardListIcon />}
-                label="Grocery List"
+                label="List"
+            />
+             <NavButton
+                isActive={activeView === 'rewards'}
+                onClick={() => onViewChange('rewards')}
+                icon={<StarIcon />}
+                label="Rewards"
             />
         </div>
     );

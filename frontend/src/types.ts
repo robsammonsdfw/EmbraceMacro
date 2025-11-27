@@ -73,3 +73,18 @@ export interface GroceryItem {
   name: string;
   checked: boolean;
 }
+
+export interface RewardsLedgerEntry {
+  entry_id: number;
+  event_type: string;
+  points_delta: number;
+  created_at: string;
+  metadata?: any;
+}
+
+export interface RewardsSummary {
+  points_total: number;
+  points_available: number;
+  tier: string;
+  history: RewardsLedgerEntry[];
+}

@@ -1,4 +1,4 @@
-import type { NutritionInfo, Recipe, SavedMeal, MealLogEntry, MealPlan, MealPlanItem, GroceryItem } from '../types';
+import type { NutritionInfo, Recipe, SavedMeal, MealLogEntry, MealPlan, MealPlanItem, GroceryItem, RewardsSummary } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
 const AUTH_TOKEN_KEY = 'embracehealth-meals-auth-token';
@@ -246,4 +246,10 @@ export const updateGroceryItem = (itemId: number, checked: boolean): Promise<Gro
 
 export const clearGroceryList = (type: 'checked' | 'all'): Promise<null> => {
     return callApi('/grocery-list/clear', 'POST', { type });
+};
+
+// --- Rewards Endpoints ---
+
+export const getRewardsSummary = (): Promise<RewardsSummary> => {
+    return callApi('/rewards', 'GET');
 };

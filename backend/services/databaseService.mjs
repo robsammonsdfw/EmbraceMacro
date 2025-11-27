@@ -65,6 +65,98 @@ const processMealDataForClient = (mealData, dbImageBase64 = null, stripImage = f
     return data;
 };
 
+const ensureRewardsTables = async (client) => {
+    await client.query(`
+        CREATE TABLE IF NOT EXISTS rewards_balances (
+            user_id VARCHAR(255) PRIMARY KEY,
+            points_total INT DEFAULT 0,
+            points_available INT DEFAULT 0,
+            tier VARCHAR(50) DEFAULT 'Bronze',
+            updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS rewards_ledger (
+            entry_id SERIAL PRIMARY KEY,
+            user_id VARCHAR(255) NOT NULL,
+            event_type VARCHAR(100) NOT NULL,
+            points_delta INT NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            metadata JSONB DEFAULT '{}'
+        );
+    `);
+};
+
+// --- Rewards Logic ---
+
+export const awardPoints = async (userId, eventType, points, metadata = {}) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Insert into ledger
+        await client.query(`
+            INSERT INTO rewards_ledger (user_id, event_type, points_delta, metadata)
+            VALUES ($1, $2, $3, $4)
+        `, [userId, eventType, points, metadata]);
+
+        // 2. Update balances
+        const updateRes = await client.query(`
+            UPDATE rewards_balances
+            SET points_total = points_total + $2,
+                points_available = points_available + $2,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = $1
+            RETURNING points_total
+        `, [userId, points]);
+        
+        // 3. Recalculate Tier
+        const newTotal = updateRes.rows[0].points_total;
+        let newTier = 'Bronze';
+        if (newTotal >= 5000) newTier = 'Platinum';
+        else if (newTotal >= 1000) newTier = 'Gold';
+        else if (newTotal >= 200) newTier = 'Silver';
+
+        await client.query(`
+            UPDATE rewards_balances SET tier = $2 WHERE user_id = $1
+        `, [userId, newTier]);
+
+        await client.query('COMMIT');
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Error awarding points:', err);
+    } finally {
+        client.release();
+    }
+};
+
+export const getRewardsSummary = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const balanceRes = await client.query(`
+            SELECT points_total, points_available, tier 
+            FROM rewards_balances WHERE user_id = $1
+        `, [userId]);
+        
+        const historyRes = await client.query(`
+            SELECT entry_id, event_type, points_delta, created_at, metadata
+            FROM rewards_ledger
+            WHERE user_id = $1
+            ORDER BY created_at DESC
+            LIMIT 50
+        `, [userId]);
+
+        const balance = balanceRes.rows[0] || { points_total: 0, points_available: 0, tier: 'Bronze' };
+
+        return {
+            ...balance,
+            history: historyRes.rows
+        };
+    } catch (err) {
+        console.error('Error getting rewards summary:', err);
+        throw new Error('Could not retrieve rewards.');
+    } finally {
+        client.release();
+    }
+};
 
 export const findOrCreateUserByEmail = async (email) => {
     const client = await pool.connect();
@@ -83,6 +175,17 @@ export const findOrCreateUserByEmail = async (email) => {
         if (res.rows.length === 0) {
             throw new Error("Failed to find or create user after insert operation.");
         }
+        
+        // Ensure rewards tables exist
+        await ensureRewardsTables(client);
+        
+        // Ensure rewards balance entry exists for this user
+        await client.query(`
+            INSERT INTO rewards_balances (user_id, points_total, points_available, tier)
+            VALUES ($1, 0, 0, 'Bronze')
+            ON CONFLICT (user_id) DO NOTHING;
+        `, [res.rows[0].id]);
+
         return res.rows[0];
 
     } catch (err) {
@@ -106,6 +209,9 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
         const res = await client.query(query, [userId, mealData, imageBase64]);
         const row = res.rows[0];
         
+        // Award points for logging a meal
+        await awardPoints(userId, 'meal_photo.logged', 50, { meal_log_id: row.id });
+
         // Return client data with hasImage=true (since we just saved it), but strip the actual blob
         const processed = processMealDataForClient(row.meal_data, null, true);
         processed.hasImage = !!imageBase64; 
@@ -234,6 +340,9 @@ export const saveMeal = async (userId, mealData) => {
         `;
         const res = await client.query(query, [userId, mealDataForDb]);
         const row = res.rows[0];
+        
+        // Award points for saving a meal
+        await awardPoints(userId, 'meal.saved', 10, { saved_meal_id: row.id });
         
         return { id: row.id, ...processMealDataForClient(row.meal_data, null, true) };
     } catch (err) {
