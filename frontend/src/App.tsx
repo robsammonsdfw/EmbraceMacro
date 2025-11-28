@@ -1,8 +1,7 @@
-
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import * as apiService from './services/apiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
-import type { NutritionInfo, SavedMeal, Recipe, MealLogEntry, MealPlan, GroceryItem } from './types';
+import type { NutritionInfo, SavedMeal, Recipe, MealLogEntry, MealPlan } from './types';
 import { ImageUploader } from './components/ImageUploader';
 import { NutritionCard } from './components/NutritionCard';
 import { FoodPlan } from './components/FoodPlan';
@@ -414,4 +413,5 @@ const App: React.FC = () => {
     </div>
   );
 };
+
 export default App;
