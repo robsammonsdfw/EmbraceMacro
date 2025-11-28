@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import * as apiService from './services/apiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
@@ -10,7 +11,7 @@ import { ErrorAlert } from './components/ErrorAlert';
 import { Hero } from './components/Hero';
 import { BarcodeScanner } from './components/BarcodeScanner';
 import { MealLibrary } from './components/MealLibrary';
-import { AppNav } from './components/AppNav';
+import { Navbar } from './components/Navbar';
 import { MealHistory } from './components/MealHistory';
 import { MealSuggester } from './components/MealSuggester';
 import { RecipeCard } from './components/RecipeCard';
@@ -21,7 +22,7 @@ import { AddToPlanModal } from './components/AddToPlanModal';
 import { MealPlanManager } from './components/MealPlanManager';
 import { RewardsDashboard } from './components/RewardsDashboard';
 
-type ActiveView = 'plan' | 'meals' | 'history' | 'suggestions' | 'grocery' | 'rewards';
+type ActiveView = 'home' | 'plan' | 'meals' | 'history' | 'suggestions' | 'grocery' | 'rewards';
 type MealDataType = NutritionInfo | SavedMeal | MealLogEntry;
 
 const App: React.FC = () => {
@@ -42,7 +43,7 @@ const App: React.FC = () => {
   const [processingMessage, setProcessingMessage] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState<boolean>(false);
-  const [activeView, setActiveView] = useState<ActiveView>('plan');
+  const [activeView, setActiveView] = useState<ActiveView>('home');
   const [isDataLoading, setIsDataLoading] = useState<boolean>(true);
   
   // Modal State
@@ -96,7 +97,13 @@ const App: React.FC = () => {
       setNutritionData(null);
       setRecipes(null);
       setError(null);
-      setActiveView('plan');
+      // We don't necessarily reset activeView here; handled by navigation
+  };
+
+  const handleNavigation = (view: string) => {
+    // Navigating via the menu always resets any current analysis/image state
+    resetAnalysisState();
+    setActiveView(view as ActiveView);
   };
 
   // Utility to resize images
@@ -142,6 +149,7 @@ const App: React.FC = () => {
     if (!file) return;
     
     resetAnalysisState();
+    // Force view to 'home' conceptually during analysis or keep current but show analysis content
     setIsProcessing(true);
     
     try {
@@ -191,7 +199,7 @@ const App: React.FC = () => {
       const newLogEntry = await apiService.createMealLogEntry(mealData, imageBase64);
       setMealLog(prevLog => [newLogEntry, ...prevLog]);
       resetAnalysisState();
-      setActiveView('rewards'); // Redirect to rewards to show the earned points
+      handleNavigation('rewards'); // Redirect to rewards to show the earned points
     } catch (err) {
       setError("Could not save to history. Please try again.");
     } finally {
@@ -325,68 +333,13 @@ const App: React.FC = () => {
   if (!isAuthenticated) { return <Login />; }
   if (isDataLoading) { return <div className="min-h-screen flex items-center justify-center"><Loader message="Loading your data..." /></div>; }
 
-  const showHero = !image && !isProcessing && !nutritionData && !isScanning && !recipes;
-  const showAnalysisContent = image || isProcessing || error || nutritionData || recipes;
-
-  const renderActiveView = () => {
-    switch(activeView) {
-        case 'plan': return (
-            <>
-              <MealPlanManager 
-                plans={mealPlans} 
-                activePlanId={activePlanId} 
-                onPlanChange={setActivePlanId}
-                onCreatePlan={handleCreateMealPlan}
-              />
-              <FoodPlan plan={activePlan} onRemove={handleRemoveFromPlan} />
-            </>
-        );
-        case 'meals': return <MealLibrary meals={savedMeals} onAdd={handleInitiateAddToPlan} onDelete={handleDeleteMeal} />;
-        case 'history': return <MealHistory logEntries={mealLog} onSaveMeal={handleSaveMeal} onAddToPlan={handleInitiateAddToPlan} />;
-        case 'suggestions': return <MealSuggester 
-                                      onGetSuggestions={handleGetSuggestions} suggestions={suggestedMeals}
-                                      isLoading={isSuggesting} error={suggestionError}
-                                      onAddToPlan={handleInitiateAddToPlan} onSaveMeal={handleSaveMeal}
-                                  />;
-        case 'grocery': return <GroceryList items={groceryList} mealPlans={mealPlans} onGenerate={handleGenerateGroceryList} onToggle={handleToggleGroceryItem} onClear={handleClearGroceryList} />;
-        case 'rewards': return <RewardsDashboard />;
-        default: return <FoodPlan plan={activePlan} onRemove={handleRemoveFromPlan} />;
-    }
-  }
-
-  return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-800">
-      {isScanning && <BarcodeScanner onScanSuccess={handleScanSuccess} onCancel={() => setIsScanning(false)} />}
-      {isAddToPlanModalOpen && (
-        <AddToPlanModal 
-            plans={mealPlans}
-            onSelectPlan={handleConfirmAddToPlan}
-            onClose={() => setIsAddToPlanModalOpen(false)}
-        />
-      )}
-      <main className="max-w-4xl mx-auto p-4 md:p-8">
-         <input type="file" accept="image/*" capture="environment" ref={cameraInputRef} onChange={(e) => handleFileChange(e, 'nutrition')} className="hidden"/>
-         <input type="file" accept="image/*" ref={uploadInputRef} onChange={(e) => handleFileChange(e, 'nutrition')} className="hidden"/>
-         <input type="file" accept="image/*" ref={pantryInputRef} onChange={(e) => handleFileChange(e, 'pantry')} className="hidden"/>
-         <input type="file" accept="image/*" ref={recipeInputRef} onChange={(e) => handleFileChange(e, 'recipe')} className="hidden"/>
-
-        <header className="text-center mb-8 relative">
-          <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500">EmbraceHealth Meals</h1>
-          <p className="text-slate-600 mt-2 text-lg">Your intelligent meal and grocery planner.</p>
-          <button onClick={logout} className="absolute top-0 right-0 bg-slate-200 text-slate-700 font-semibold text-sm py-1 px-3 rounded-full hover:bg-slate-300 transition">Logout</button>
-        </header>
-
-        <div className="space-y-8">
-          {showHero && (
-            <Hero 
-              onCameraClick={handleTriggerCamera} 
-              onUploadClick={handleTriggerUpload} 
-              onBarcodeClick={handleTriggerScanner} 
-              onPantryChefClick={handleTriggerPantryUpload} 
-              onGetRecipeClick={handleTriggerRecipeUpload}
-            />
-          )}
-          {showAnalysisContent ? (
+  // Logic to determine what to show
+  // Analysis content (images/results) overrides the standard view content if present
+  const hasAnalysisContent = image || isProcessing || error || nutritionData || recipes;
+  
+  const renderContent = () => {
+      if (hasAnalysisContent) {
+          return (
             <div className="space-y-6">
                 <ImageUploader image={image} />
                 {isProcessing && <Loader message={processingMessage} />}
@@ -402,7 +355,7 @@ const App: React.FC = () => {
                           key={index} 
                           recipe={recipe} 
                           onAddToPlan={() => {
-                            // Map recipe ingredients to NutritionInfo structure so they appear on shopping list
+                            // Map recipe ingredients to NutritionInfo structure
                             const ingredientsList = recipe.ingredients.map(i => ({
                                 name: i.name,
                                 weightGrams: 0, 
@@ -424,12 +377,71 @@ const App: React.FC = () => {
                   </div>
                 )}
             </div>
-          ) : (
-            <div className="space-y-6">
-                <AppNav activeView={activeView} onViewChange={setActiveView} />
-                {renderActiveView()}
-            </div>
-          )}
+          );
+      }
+
+      switch(activeView) {
+        case 'home': return (
+            <Hero 
+              onCameraClick={handleTriggerCamera} 
+              onUploadClick={handleTriggerUpload} 
+              onBarcodeClick={handleTriggerScanner} 
+              onPantryChefClick={handleTriggerPantryUpload} 
+              onGetRecipeClick={handleTriggerRecipeUpload}
+            />
+        );
+        case 'plan': return (
+            <>
+              <MealPlanManager 
+                plans={mealPlans} 
+                activePlanId={activePlanId} 
+                onPlanChange={setActivePlanId}
+                onCreatePlan={handleCreateMealPlan}
+              />
+              <FoodPlan plan={activePlan} onRemove={handleRemoveFromPlan} />
+            </>
+        );
+        case 'meals': return <MealLibrary meals={savedMeals} onAdd={handleInitiateAddToPlan} onDelete={handleDeleteMeal} />;
+        case 'history': return <MealHistory logEntries={mealLog} onSaveMeal={handleSaveMeal} onAddToPlan={handleInitiateAddToPlan} />;
+        case 'suggestions': return <MealSuggester 
+                                      onGetSuggestions={handleGetSuggestions} suggestions={suggestedMeals}
+                                      isLoading={isSuggesting} error={suggestionError}
+                                      onAddToPlan={handleInitiateAddToPlan} onSaveMeal={handleSaveMeal}
+                                  />;
+        case 'grocery': return <GroceryList items={groceryList} mealPlans={mealPlans} onGenerate={handleGenerateGroceryList} onToggle={handleToggleGroceryItem} onClear={handleClearGroceryList} />;
+        case 'rewards': return <RewardsDashboard />;
+        default: return <Hero 
+                    onCameraClick={handleTriggerCamera} 
+                    onUploadClick={handleTriggerUpload} 
+                    onBarcodeClick={handleTriggerScanner} 
+                    onPantryChefClick={handleTriggerPantryUpload} 
+                    onGetRecipeClick={handleTriggerRecipeUpload}
+                />;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-800">
+      <Navbar activeView={activeView} onNavigate={handleNavigation} onLogout={logout} />
+      
+      {isScanning && <BarcodeScanner onScanSuccess={handleScanSuccess} onCancel={() => setIsScanning(false)} />}
+      
+      {isAddToPlanModalOpen && (
+        <AddToPlanModal 
+            plans={mealPlans}
+            onSelectPlan={handleConfirmAddToPlan}
+            onClose={() => setIsAddToPlanModalOpen(false)}
+        />
+      )}
+      
+      <main className="max-w-4xl mx-auto p-4 md:p-8">
+         <input type="file" accept="image/*" capture="environment" ref={cameraInputRef} onChange={(e) => handleFileChange(e, 'nutrition')} className="hidden"/>
+         <input type="file" accept="image/*" ref={uploadInputRef} onChange={(e) => handleFileChange(e, 'nutrition')} className="hidden"/>
+         <input type="file" accept="image/*" ref={pantryInputRef} onChange={(e) => handleFileChange(e, 'pantry')} className="hidden"/>
+         <input type="file" accept="image/*" ref={recipeInputRef} onChange={(e) => handleFileChange(e, 'recipe')} className="hidden"/>
+
+        <div className="space-y-8">
+            {renderContent()}
         </div>
       </main>
     </div>
