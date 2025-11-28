@@ -78,25 +78,35 @@ const ensureRewardsTables = async (client) => {
             entry_id SERIAL PRIMARY KEY,
             user_id VARCHAR(255) NOT NULL,
             event_type VARCHAR(100) NOT NULL,
+            event_ref_table VARCHAR(100),
+            event_ref_id VARCHAR(255),
             points_delta INT NOT NULL,
             created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
             metadata JSONB DEFAULT '{}'
         );
     `);
+    
+    // Attempt to add columns if they don't exist (Migration helper)
+    try {
+        await client.query(`ALTER TABLE rewards_ledger ADD COLUMN IF NOT EXISTS event_ref_table VARCHAR(100);`);
+        await client.query(`ALTER TABLE rewards_ledger ADD COLUMN IF NOT EXISTS event_ref_id VARCHAR(255);`);
+    } catch (e) {
+        console.log("Rewards columns likely exist or error adding them:", e.message);
+    }
 };
 
 // --- Rewards Logic ---
 
-export const awardPoints = async (userId, eventType, points, metadata = {}) => {
+export const awardPoints = async (userId, eventType, points, refTable = null, refId = null, metadata = {}) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
         // 1. Insert into ledger
         await client.query(`
-            INSERT INTO rewards_ledger (user_id, event_type, points_delta, metadata)
-            VALUES ($1, $2, $3, $4)
-        `, [userId, eventType, points, metadata]);
+            INSERT INTO rewards_ledger (user_id, event_type, points_delta, event_ref_table, event_ref_id, metadata)
+            VALUES ($1, $2, $3, $4, $5, $6)
+        `, [userId, eventType, points, refTable, refId, metadata]);
 
         // 2. Update balances
         const updateRes = await client.query(`
@@ -137,7 +147,7 @@ export const getRewardsSummary = async (userId) => {
         `, [userId]);
         
         const historyRes = await client.query(`
-            SELECT entry_id, event_type, points_delta, created_at, metadata
+            SELECT entry_id, event_type, points_delta, event_ref_table, event_ref_id, created_at, metadata
             FROM rewards_ledger
             WHERE user_id = $1
             ORDER BY created_at DESC
@@ -209,8 +219,15 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
         const res = await client.query(query, [userId, mealData, imageBase64]);
         const row = res.rows[0];
         
-        // Award points for logging a meal
-        await awardPoints(userId, 'meal_photo.logged', 50, { meal_log_id: row.id });
+        // Award points for logging a meal with correct reference
+        await awardPoints(
+            userId, 
+            'meal_photo.logged', 
+            50, 
+            'meal_log_entries', 
+            row.id.toString(), 
+            { source: 'camera_upload' }
+        );
 
         // Return client data with hasImage=true (since we just saved it), but strip the actual blob
         const processed = processMealDataForClient(row.meal_data, null, true);
@@ -341,8 +358,15 @@ export const saveMeal = async (userId, mealData) => {
         const res = await client.query(query, [userId, mealDataForDb]);
         const row = res.rows[0];
         
-        // Award points for saving a meal
-        await awardPoints(userId, 'meal.saved', 10, { saved_meal_id: row.id });
+        // Award points for saving a meal with correct reference
+        await awardPoints(
+            userId, 
+            'meal.saved', 
+            10, 
+            'saved_meals', 
+            row.id.toString(),
+            { is_new_recipe: true }
+        );
         
         return { id: row.id, ...processMealDataForClient(row.meal_data, null, true) };
     } catch (err) {

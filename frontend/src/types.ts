@@ -1,3 +1,4 @@
+
 export interface Ingredient {
   name: string;
   weightGrams: number;
@@ -77,6 +78,8 @@ export interface GroceryItem {
 export interface RewardsLedgerEntry {
   entry_id: number;
   event_type: string;
+  event_ref_table?: string;
+  event_ref_id?: string;
   points_delta: number;
   created_at: string;
   metadata?: any;

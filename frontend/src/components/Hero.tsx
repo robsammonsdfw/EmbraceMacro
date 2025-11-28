@@ -1,14 +1,15 @@
 import React from 'react';
-import { CameraIcon, UploadIcon, BarcodeIcon, ChefHatIcon } from './icons';
+import { CameraIcon, UploadIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon } from './icons';
 
 interface HeroProps {
     onCameraClick: () => void;
     onUploadClick: () => void;
     onBarcodeClick: () => void;
     onPantryChefClick: () => void;
+    onGetRecipeClick: () => void;
 }
 
-export const Hero: React.FC<HeroProps> = ({ onCameraClick, onUploadClick, onBarcodeClick, onPantryChefClick }) => {
+export const Hero: React.FC<HeroProps> = ({ onCameraClick, onUploadClick, onBarcodeClick, onPantryChefClick, onGetRecipeClick }) => {
     return (
         <div className="text-center p-8 bg-white rounded-xl shadow-md border border-slate-200">
             <div className="mx-auto bg-emerald-100 text-emerald-600 rounded-full w-16 h-16 flex items-center justify-center mb-4">
@@ -20,13 +21,20 @@ export const Hero: React.FC<HeroProps> = ({ onCameraClick, onUploadClick, onBarc
             <p className="text-slate-600 mb-6 max-w-lg mx-auto">
                 Analyze a meal's nutrition, scan a barcode, or get recipe ideas from a photo of your ingredients.
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mt-6">
                  <button
                     onClick={onCameraClick}
                     className="w-full inline-flex items-center justify-center space-x-3 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-bold py-3 px-6 rounded-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-300 ease-in-out"
                 >
                     <CameraIcon />
                     <span>Take Photo</span>
+                </button>
+                 <button
+                    onClick={onGetRecipeClick}
+                    className="w-full inline-flex items-center justify-center space-x-3 bg-indigo-500 text-white font-bold py-3 px-6 rounded-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-300 ease-in-out"
+                >
+                    <UtensilsIcon />
+                    <span>Get Recipe</span>
                 </button>
                  <button
                     onClick={onBarcodeClick}

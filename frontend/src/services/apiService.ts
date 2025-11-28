@@ -170,6 +170,11 @@ export const getRecipesFromImage = (base64Image: string, mimeType: string): Prom
     return callApi('/analyze-image-recipes', 'POST', { base64Image, mimeType, prompt, schema: recipesSchema });
 };
 
+export const getRecipesFromPlate = (base64Image: string, mimeType: string): Promise<Recipe[]> => {
+    const prompt = "Identify the prepared dish in the image. Provide 3 recipe options: 1. The standard recipe for this dish. 2. A popular variation (e.g. different protein or vegetarian). 3. A quick/easy version. For each, provide a descriptive name, description, ingredients list with quantities, step-by-step instructions, and estimated nutrition.";
+    return callApi('/analyze-image-recipes', 'POST', { base64Image, mimeType, prompt, schema: recipesSchema });
+};
+
 
 // --- Meal Log (History) Endpoints ---
 
@@ -222,7 +227,9 @@ export const addMealToPlan = (planId: number, savedMealId: number): Promise<Meal
 };
 
 export const addMealFromHistoryToPlan = (planId: number, mealData: NutritionInfo): Promise<MealPlanItem> => {
-    const { id, createdAt, ...pureMealData } = mealData as MealLogEntry;
+    // If it's a MealLogEntry, strip ID and timestamps.
+    // If it's NutritionInfo, it's just data.
+    const { id, createdAt, ...pureMealData } = mealData as any;
     return callApi(`/meal-plans/${planId}/items`, 'POST', { mealData: pureMealData });
 };
 

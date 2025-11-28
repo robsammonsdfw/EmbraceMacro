@@ -57,6 +57,7 @@ const App: React.FC = () => {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const pantryInputRef = useRef<HTMLInputElement>(null);
+  const recipeInputRef = useRef<HTMLInputElement>(null);
 
   const activePlan = useMemo(() => {
     return mealPlans.find(p => p.id === activePlanId) || null;
@@ -136,7 +137,7 @@ const App: React.FC = () => {
     });
   };
 
-  const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>, isPantry: boolean = false) => {
+  const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>, mode: 'nutrition' | 'pantry' | 'recipe' = 'nutrition') => {
     const file = event.target.files?.[0];
     if (!file) return;
     
@@ -149,12 +150,16 @@ const App: React.FC = () => {
       const base64Data = resizedBase64.split(',')[1];
       setImage(resizedBase64);
 
-      if(isPantry) {
-        setProcessingMessage('Generating recipe ideas...');
+      if(mode === 'pantry') {
+        setProcessingMessage('Generating recipe ideas from ingredients...');
         const recipeData = await apiService.getRecipesFromImage(base64Data, 'image/jpeg');
         setRecipes(recipeData);
+      } else if (mode === 'recipe') {
+        setProcessingMessage('Identifying dish and fetching recipes...');
+        const recipeData = await apiService.getRecipesFromPlate(base64Data, 'image/jpeg');
+        setRecipes(recipeData);
       } else {
-        setProcessingMessage('Analyzing your meal...');
+        setProcessingMessage('Analyzing your meal nutritional data...');
         const data = await apiService.analyzeImageWithGemini(base64Data, 'image/jpeg');
         setNutritionData(data);
       }
@@ -313,6 +318,7 @@ const App: React.FC = () => {
   const handleTriggerCamera = () => { cameraInputRef.current?.click(); };
   const handleTriggerUpload = () => { uploadInputRef.current?.click(); };
   const handleTriggerPantryUpload = () => { pantryInputRef.current?.click(); };
+  const handleTriggerRecipeUpload = () => { recipeInputRef.current?.click(); };
   const handleTriggerScanner = () => { setIsScanning(true); };
   
   if (isAuthLoading) { return <div className="min-h-screen flex items-center justify-center"><Loader message="Loading session..." /></div>; }
@@ -359,9 +365,10 @@ const App: React.FC = () => {
         />
       )}
       <main className="max-w-4xl mx-auto p-4 md:p-8">
-         <input type="file" accept="image/*" capture="environment" ref={cameraInputRef} onChange={(e) => handleFileChange(e)} className="hidden"/>
-         <input type="file" accept="image/*" ref={uploadInputRef} onChange={(e) => handleFileChange(e)} className="hidden"/>
-         <input type="file" accept="image/*" ref={pantryInputRef} onChange={(e) => handleFileChange(e, true)} className="hidden"/>
+         <input type="file" accept="image/*" capture="environment" ref={cameraInputRef} onChange={(e) => handleFileChange(e, 'nutrition')} className="hidden"/>
+         <input type="file" accept="image/*" ref={uploadInputRef} onChange={(e) => handleFileChange(e, 'nutrition')} className="hidden"/>
+         <input type="file" accept="image/*" ref={pantryInputRef} onChange={(e) => handleFileChange(e, 'pantry')} className="hidden"/>
+         <input type="file" accept="image/*" ref={recipeInputRef} onChange={(e) => handleFileChange(e, 'recipe')} className="hidden"/>
 
         <header className="text-center mb-8 relative">
           <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500">EmbraceHealth Meals</h1>
@@ -370,7 +377,15 @@ const App: React.FC = () => {
         </header>
 
         <div className="space-y-8">
-          {showHero && <Hero onCameraClick={handleTriggerCamera} onUploadClick={handleTriggerUpload} onBarcodeClick={handleTriggerScanner} onPantryChefClick={handleTriggerPantryUpload} />}
+          {showHero && (
+            <Hero 
+              onCameraClick={handleTriggerCamera} 
+              onUploadClick={handleTriggerUpload} 
+              onBarcodeClick={handleTriggerScanner} 
+              onPantryChefClick={handleTriggerPantryUpload} 
+              onGetRecipeClick={handleTriggerRecipeUpload}
+            />
+          )}
           {showAnalysisContent ? (
             <div className="space-y-6">
                 <ImageUploader image={image} />
@@ -379,11 +394,33 @@ const App: React.FC = () => {
                 {nutritionData && !isProcessing && image && ( <NutritionCard data={nutritionData} onSaveToHistory={() => handleSaveToHistory(nutritionData, image)} /> )}
                 {recipes && !isProcessing && (
                   <div className="space-y-4">
-                      <h2 className="text-2xl font-bold text-slate-800 text-center pt-4 border-t border-slate-200">Recipe Ideas</h2>
-                      {recipes.map((recipe, index) => ( <RecipeCard key={index} recipe={recipe} onAddToPlan={() => {
-                        const mealData: NutritionInfo = { ...recipe.nutrition, mealName: recipe.recipeName, ingredients: [] };
-                        handleInitiateAddToPlan(mealData);
-                      }} /> ))}
+                      <h2 className="text-2xl font-bold text-slate-800 text-center pt-4 border-t border-slate-200">
+                        {processingMessage.includes('ingredients') ? 'Pantry Chef Ideas' : 'Recipe for Your Dish'}
+                      </h2>
+                      {recipes.map((recipe, index) => ( 
+                        <RecipeCard 
+                          key={index} 
+                          recipe={recipe} 
+                          onAddToPlan={() => {
+                            // Map recipe ingredients to NutritionInfo structure so they appear on shopping list
+                            const ingredientsList = recipe.ingredients.map(i => ({
+                                name: i.name,
+                                weightGrams: 0, 
+                                calories: 0,
+                                protein: 0,
+                                carbs: 0,
+                                fat: 0
+                            }));
+                            
+                            const mealData: NutritionInfo = { 
+                              ...recipe.nutrition, 
+                              mealName: recipe.recipeName, 
+                              ingredients: ingredientsList 
+                            };
+                            handleInitiateAddToPlan(mealData);
+                          }} 
+                        /> 
+                      ))}
                   </div>
                 )}
             </div>
