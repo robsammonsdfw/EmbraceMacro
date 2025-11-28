@@ -93,16 +93,13 @@ const App: React.FC = () => {
       setNutritionData(null);
       setRecipes(null);
       setError(null);
-      // We don't necessarily reset activeView here; handled by navigation
   };
 
   const handleNavigation = (view: string) => {
-    // Navigating via the menu always resets any current analysis/image state
     resetAnalysisState();
     setActiveView(view as ActiveView);
   };
 
-  // Utility to resize images
   const resizeImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -132,7 +129,7 @@ const App: React.FC = () => {
           canvas.height = height;
           const ctx = canvas.getContext('2d');
           ctx?.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', 0.7)); // Compress to 70% JPEG
+          resolve(canvas.toDataURL('image/jpeg', 0.7)); 
         };
         img.onerror = (err) => reject(err);
       };
@@ -145,7 +142,6 @@ const App: React.FC = () => {
     if (!file) return;
     
     resetAnalysisState();
-    // Force view to 'home' conceptually during analysis or keep current but show analysis content
     setIsProcessing(true);
     
     try {
@@ -195,7 +191,7 @@ const App: React.FC = () => {
       const newLogEntry = await apiService.createMealLogEntry(mealData, imageBase64);
       setMealLog(prevLog => [newLogEntry, ...prevLog]);
       resetAnalysisState();
-      handleNavigation('rewards'); // Redirect to rewards to show the earned points
+      handleNavigation('rewards'); 
     } catch (err) {
       setError("Could not save to history. Please try again.");
     } finally {
@@ -233,7 +229,6 @@ const App: React.FC = () => {
     } finally { setIsSuggesting(false); }
   }, []);
   
-  // --- Meal Plan Handlers ---
   const handleCreateMealPlan = async (name: string) => {
     try {
       const newPlan = await apiService.createMealPlan(name);
@@ -282,13 +277,11 @@ const App: React.FC = () => {
         await apiService.removeMealFromPlanItem(planItemId);
       } catch (err) { 
         setError("Failed to remove meal from plan.");
-        // Revert on error
         setMealPlans(plans => plans.map(p => p.id === activePlanId ? { ...p, items: originalItems } : p));
       }
   }, [activePlan, activePlanId]);
 
 
-  // --- UI Triggers ---
   const handleTriggerCamera = () => { cameraInputRef.current?.click(); };
   const handleTriggerUpload = () => { uploadInputRef.current?.click(); };
   const handleTriggerPantryUpload = () => { pantryInputRef.current?.click(); };
@@ -299,8 +292,6 @@ const App: React.FC = () => {
   if (!isAuthenticated) { return <Login />; }
   if (isDataLoading) { return <div className="min-h-screen flex items-center justify-center"><Loader message="Loading your data..." /></div>; }
 
-  // Logic to determine what to show
-  // Analysis content (images/results) overrides the standard view content if present
   const hasAnalysisContent = image || isProcessing || error || nutritionData || recipes;
   
   const renderContent = () => {
@@ -321,7 +312,6 @@ const App: React.FC = () => {
                           key={index} 
                           recipe={recipe} 
                           onAddToPlan={() => {
-                            // Map recipe ingredients to NutritionInfo structure
                             const ingredientsList = recipe.ingredients.map(i => ({
                                 name: i.name,
                                 weightGrams: 0, 
