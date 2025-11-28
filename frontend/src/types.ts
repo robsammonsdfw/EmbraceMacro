@@ -75,6 +75,14 @@ export interface GroceryItem {
   checked: boolean;
 }
 
+export interface GroceryList {
+    id: number;
+    name: string;
+    is_active: boolean;
+    created_at: string;
+    items?: GroceryItem[]; // Optional, as we might load lists without items first
+}
+
 export interface RewardsLedgerEntry {
   entry_id: number;
   event_type: string;

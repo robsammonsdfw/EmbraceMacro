@@ -1,4 +1,4 @@
-import type { NutritionInfo, Recipe, SavedMeal, MealLogEntry, MealPlan, MealPlanItem, GroceryItem, RewardsSummary } from '../types';
+import type { NutritionInfo, Recipe, SavedMeal, MealLogEntry, MealPlan, MealPlanItem, GroceryList, GroceryItem, RewardsSummary } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
 const AUTH_TOKEN_KEY = 'embracehealth-meals-auth-token';
@@ -239,20 +239,40 @@ export const removeMealFromPlanItem = (itemId: number): Promise<null> => {
 
 // --- Grocery List Endpoints ---
 
-export const getGroceryList = (): Promise<GroceryItem[]> => {
-    return callApi('/grocery-list', 'GET');
+export const getGroceryLists = (): Promise<GroceryList[]> => {
+    return callApi('/grocery-lists', 'GET');
 };
 
-export const generateGroceryList = (mealPlanIds: number[]): Promise<GroceryItem[]> => {
-    return callApi('/grocery-list/generate', 'POST', { mealPlanIds });
+export const getGroceryListItems = (listId: number): Promise<GroceryItem[]> => {
+    return callApi(`/grocery-lists/${listId}/items`, 'GET');
+};
+
+export const createGroceryList = (name: string): Promise<GroceryList> => {
+    return callApi('/grocery-lists', 'POST', { name });
+};
+
+export const generateGroceryList = (mealPlanIds: number[], name: string): Promise<GroceryList> => {
+    return callApi('/grocery-lists/generate', 'POST', { mealPlanIds, name });
+};
+
+export const setActiveGroceryList = (listId: number): Promise<{ success: boolean }> => {
+    return callApi(`/grocery-lists/${listId}/active`, 'POST');
+};
+
+export const deleteGroceryList = (listId: number): Promise<null> => {
+    return callApi(`/grocery-lists/${listId}`, 'DELETE');
+};
+
+export const addGroceryItem = (listId: number, name: string): Promise<GroceryItem> => {
+    return callApi(`/grocery-lists/${listId}/items`, 'POST', { name });
 };
 
 export const updateGroceryItem = (itemId: number, checked: boolean): Promise<GroceryItem> => {
-    return callApi('/grocery-list/update', 'POST', { itemId, checked });
+    return callApi(`/grocery-lists/items/${itemId}`, 'PUT', { checked });
 };
 
-export const clearGroceryList = (type: 'checked' | 'all'): Promise<null> => {
-    return callApi('/grocery-list/clear', 'POST', { type });
+export const removeGroceryItem = (itemId: number): Promise<null> => {
+    return callApi(`/grocery-lists/items/${itemId}`, 'DELETE');
 };
 
 // --- Rewards Endpoints ---

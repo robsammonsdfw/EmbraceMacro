@@ -36,7 +36,6 @@ const App: React.FC = () => {
   const [activePlanId, setActivePlanId] = useState<number | null>(null);
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
   const [mealLog, setMealLog] = useState<MealLogEntry[]>([]);
-  const [groceryList, setGroceryList] = useState<GroceryItem[]>([]);
   
   // UI/Process State
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -69,11 +68,10 @@ const App: React.FC = () => {
       const loadInitialData = async () => {
         try {
           setIsDataLoading(true);
-          const [plans, meals, log, groceries] = await Promise.all([
+          const [plans, meals, log] = await Promise.all([
             apiService.getMealPlans(),
             apiService.getSavedMeals(),
             apiService.getMealLog(),
-            apiService.getGroceryList(),
           ]);
           setMealPlans(plans);
           if (plans.length > 0 && !activePlanId) {
@@ -81,7 +79,6 @@ const App: React.FC = () => {
           }
           setSavedMeals(meals);
           setMealLog(log);
-          setGroceryList(groceries);
         } catch (err) {
           setError("Could not load your data. Please try refreshing the page.");
         } finally {
@@ -291,36 +288,6 @@ const App: React.FC = () => {
       }
   }, [activePlan, activePlanId]);
 
-  // --- Grocery List Handlers ---
-  const handleGenerateGroceryList = useCallback(async (planIds: number[]) => {
-    try {
-        const newList = await apiService.generateGroceryList(planIds);
-        setGroceryList(newList);
-    } catch (err) { setError("Failed to generate grocery list."); }
-  }, []);
-
-  const handleToggleGroceryItem = useCallback(async (itemId: number, checked: boolean) => {
-      setGroceryList(prev => prev.map(item => item.id === itemId ? { ...item, checked } : item));
-      try {
-          await apiService.updateGroceryItem(itemId, checked);
-      } catch (err) {
-          setError("Failed to update grocery item. Reverting change.");
-          setGroceryList(prev => prev.map(item => item.id === itemId ? { ...item, checked: !checked } : item));
-      }
-  }, []);
-
-  const handleClearGroceryList = useCallback(async (type: 'checked' | 'all') => {
-    try {
-        await apiService.clearGroceryList(type);
-        if (type === 'all') {
-            setGroceryList([]);
-        } else {
-            setGroceryList(prev => prev.filter(item => !item.checked));
-        }
-    } catch (err) {
-        setError("Failed to clear grocery list.");
-    }
-  }, []);
 
   // --- UI Triggers ---
   const handleTriggerCamera = () => { cameraInputRef.current?.click(); };
@@ -408,7 +375,7 @@ const App: React.FC = () => {
                                       isLoading={isSuggesting} error={suggestionError}
                                       onAddToPlan={handleInitiateAddToPlan} onSaveMeal={handleSaveMeal}
                                   />;
-        case 'grocery': return <GroceryList items={groceryList} mealPlans={mealPlans} onGenerate={handleGenerateGroceryList} onToggle={handleToggleGroceryItem} onClear={handleClearGroceryList} />;
+        case 'grocery': return <GroceryList mealPlans={mealPlans} />;
         case 'rewards': return <RewardsDashboard />;
         default: return <Hero 
                     onCameraClick={handleTriggerCamera} 

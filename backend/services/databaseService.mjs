@@ -9,7 +9,6 @@ const pool = new Pool({
 
 /**
  * Helper function to prepare meal data for database insertion.
- * Extracts base64 data to store in the dedicated column if needed.
  */
 const processMealDataForSave = (mealData) => {
     const dataForDb = { ...mealData };
@@ -19,53 +18,62 @@ const processMealDataForSave = (mealData) => {
     }
     delete dataForDb.id;
     delete dataForDb.createdAt;
-    // Clean up UI flags
-    delete dataForDb.hasImage; 
     return dataForDb;
 };
 
 /**
- * Helper to format data for the client.
- * @param {object} mealData - JSON data from DB.
- * @param {string|null} dbImageBase64 - Base64 string from DB column (optional).
- * @param {boolean} stripImage - If true, removes image data to save bandwidth.
+ * Helper function to prepare meal data for the client.
  */
-const processMealDataForClient = (mealData, dbImageBase64 = null, stripImage = false) => {
-    // Ensure mealData is an object (handle potential stringified JSON from DB)
-    const data = typeof mealData === 'string' ? JSON.parse(mealData) : { ...mealData };
-    
-    // 1. Determine if an image exists in any form
-    const hasDbImage = !!(dbImageBase64 && dbImageBase64.length > 0);
-    const hasJsonBase64 = !!(data.imageBase64 && data.imageBase64.length > 0);
-    const hasJsonUrl = !!(data.imageUrl && data.imageUrl.length > 0);
-    
-    // Set the flag so the frontend knows to show the "Camera" icon
-    data.hasImage = hasDbImage || hasJsonBase64 || hasJsonUrl;
-
-    // 2. Handle the actual image data
-    if (stripImage) {
-        // LIST MODE: Remove all heavy image data
-        delete data.imageBase64;
-        if (data.imageUrl && data.imageUrl.startsWith('data:')) {
-            delete data.imageUrl;
-        }
-        // We do NOT attach dbImageBase64 here
-    } else {
-        // DETAIL MODE: Attach the best available image
-        if (hasDbImage) {
-            data.imageUrl = `data:image/jpeg;base64,${dbImageBase64}`;
-        } else if (hasJsonBase64) {
-            // Legacy support for images stored inside JSON
-            data.imageUrl = `data:image/jpeg;base64,${data.imageBase64}`;
-            delete data.imageBase64; 
-        }
-        // If hasJsonUrl, data.imageUrl is already set correctly
+const processMealDataForClient = (mealData) => {
+    const dataForClient = { ...mealData };
+    if (dataForClient.imageBase64) {
+        dataForClient.imageUrl = `data:image/jpeg;base64,${dataForClient.imageBase64}`;
+        delete dataForClient.imageBase64;
     }
-
-    return data;
+    return dataForClient;
 };
 
-const ensureRewardsTables = async (client) => {
+
+export const findOrCreateUserByEmail = async (email) => {
+    const client = await pool.connect();
+    try {
+        const insertQuery = `
+            INSERT INTO users (email) 
+            VALUES ($1) 
+            ON CONFLICT (email) 
+            DO NOTHING;
+        `;
+        await client.query(insertQuery, [email]);
+
+        const selectQuery = `SELECT id, email FROM users WHERE email = $1;`;
+        const res = await client.query(selectQuery, [email]);
+        
+        if (res.rows.length === 0) {
+            throw new Error("Failed to find or create user after insert operation.");
+        }
+        
+        // Ensure database tables exist
+        await ensureDatabaseSchema(client);
+        
+        // Ensure rewards balance entry exists for this user
+        await client.query(`
+            INSERT INTO rewards_balances (user_id, points_total, points_available, tier)
+            VALUES ($1, 0, 0, 'Bronze')
+            ON CONFLICT (user_id) DO NOTHING;
+        `, [res.rows[0].id]);
+
+        return res.rows[0];
+
+    } catch (err) {
+        console.error('Database error in findOrCreateUserByEmail:', err);
+        throw new Error('Could not save or retrieve user data from the database.');
+    } finally {
+        client.release();
+    }
+};
+
+const ensureDatabaseSchema = async (client) => {
+    // Rewards Tables
     await client.query(`
         CREATE TABLE IF NOT EXISTS rewards_balances (
             user_id VARCHAR(255) PRIMARY KEY,
@@ -78,35 +86,45 @@ const ensureRewardsTables = async (client) => {
             entry_id SERIAL PRIMARY KEY,
             user_id VARCHAR(255) NOT NULL,
             event_type VARCHAR(100) NOT NULL,
-            event_ref_table VARCHAR(100),
-            event_ref_id VARCHAR(255),
             points_delta INT NOT NULL,
             created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
             metadata JSONB DEFAULT '{}'
         );
     `);
+
+    // Grocery List Tables (New Schema)
+    await client.query(`
+        CREATE TABLE IF NOT EXISTS grocery_lists (
+            id SERIAL PRIMARY KEY,
+            user_id VARCHAR(255) NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            is_active BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+    `);
     
-    // Attempt to add columns if they don't exist (Migration helper)
+    // Add grocery_list_id to items if it doesn't exist
     try {
-        await client.query(`ALTER TABLE rewards_ledger ADD COLUMN IF NOT EXISTS event_ref_table VARCHAR(100);`);
-        await client.query(`ALTER TABLE rewards_ledger ADD COLUMN IF NOT EXISTS event_ref_id VARCHAR(255);`);
+        await client.query(`ALTER TABLE grocery_list_items ADD COLUMN IF NOT EXISTS grocery_list_id INT;`);
+        // We create an index for performance
+        await client.query(`CREATE INDEX IF NOT EXISTS idx_grocery_list_items_list_id ON grocery_list_items(grocery_list_id);`);
     } catch (e) {
-        console.log("Rewards columns likely exist or error adding them:", e.message);
+        console.log("Error updating grocery_list_items schema:", e.message);
     }
 };
 
 // --- Rewards Logic ---
 
-export const awardPoints = async (userId, eventType, points, refTable = null, refId = null, metadata = {}) => {
+export const awardPoints = async (userId, eventType, points, metadata = {}) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
         // 1. Insert into ledger
         await client.query(`
-            INSERT INTO rewards_ledger (user_id, event_type, points_delta, event_ref_table, event_ref_id, metadata)
-            VALUES ($1, $2, $3, $4, $5, $6)
-        `, [userId, eventType, points, refTable, refId, metadata]);
+            INSERT INTO rewards_ledger (user_id, event_type, points_delta, metadata)
+            VALUES ($1, $2, $3, $4)
+        `, [userId, eventType, points, metadata]);
 
         // 2. Update balances
         const updateRes = await client.query(`
@@ -147,7 +165,7 @@ export const getRewardsSummary = async (userId) => {
         `, [userId]);
         
         const historyRes = await client.query(`
-            SELECT entry_id, event_type, points_delta, event_ref_table, event_ref_id, created_at, metadata
+            SELECT entry_id, event_type, points_delta, created_at, metadata
             FROM rewards_ledger
             WHERE user_id = $1
             ORDER BY created_at DESC
@@ -168,43 +186,6 @@ export const getRewardsSummary = async (userId) => {
     }
 };
 
-export const findOrCreateUserByEmail = async (email) => {
-    const client = await pool.connect();
-    try {
-        const insertQuery = `
-            INSERT INTO users (email) 
-            VALUES ($1) 
-            ON CONFLICT (email) 
-            DO NOTHING;
-        `;
-        await client.query(insertQuery, [email]);
-
-        const selectQuery = `SELECT id, email FROM users WHERE email = $1;`;
-        const res = await client.query(selectQuery, [email]);
-        
-        if (res.rows.length === 0) {
-            throw new Error("Failed to find or create user after insert operation.");
-        }
-        
-        // Ensure rewards tables exist
-        await ensureRewardsTables(client);
-        
-        // Ensure rewards balance entry exists for this user
-        await client.query(`
-            INSERT INTO rewards_balances (user_id, points_total, points_available, tier)
-            VALUES ($1, 0, 0, 'Bronze')
-            ON CONFLICT (user_id) DO NOTHING;
-        `, [res.rows[0].id]);
-
-        return res.rows[0];
-
-    } catch (err) {
-        console.error('Database error in findOrCreateUserByEmail:', err);
-        throw new Error('Could not save or retrieve user data from the database.');
-    } finally {
-        client.release();
-    }
-};
 
 // --- Meal Log (History) Persistence ---
 
@@ -214,28 +195,19 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
         const query = `
             INSERT INTO meal_log_entries (user_id, meal_data, image_base64)
             VALUES ($1, $2, $3)
-            RETURNING id, meal_data, created_at;
+            RETURNING id, meal_data, image_base64, created_at;
         `;
         const res = await client.query(query, [userId, mealData, imageBase64]);
         const row = res.rows[0];
         
-        // Award points for logging a meal with correct reference
-        await awardPoints(
-            userId, 
-            'meal_photo.logged', 
-            50, 
-            'meal_log_entries', 
-            row.id.toString(), 
-            { source: 'camera_upload' }
-        );
+        // Award points for logging a meal
+        await awardPoints(userId, 'meal_photo.logged', 50, { meal_log_id: row.id });
 
-        // Return client data with hasImage=true (since we just saved it), but strip the actual blob
-        const processed = processMealDataForClient(row.meal_data, null, true);
-        processed.hasImage = !!imageBase64; 
-
+        const mealDataFromDb = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
         return { 
             id: row.id,
-            ...processed,
+            ...mealDataFromDb,
+            imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
             createdAt: row.created_at
         };
     } catch (err) {
@@ -246,26 +218,23 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
     }
 };
 
+
 export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
     try {
-        // Check if image column has data, but DO NOT select the blob
         const query = `
-            SELECT id, meal_data, created_at, 
-                   (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_db_image
+            SELECT id, meal_data, image_base64, created_at 
             FROM meal_log_entries
             WHERE user_id = $1 
             ORDER BY created_at DESC;
         `;
         const res = await client.query(query, [userId]);
         return res.rows.map(row => {
-            const processed = processMealDataForClient(row.meal_data, null, true);
-            // If the column says we have an image, override the flag
-            if (row.has_db_image) processed.hasImage = true;
-            
+            const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
             return {
                 id: row.id,
-                ...processed,
+                ...mealData,
+                imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
                 createdAt: row.created_at,
             };
         });
@@ -289,12 +258,12 @@ export const getMealLogEntryById = async (userId, logId) => {
         if (res.rows.length === 0) return null;
         
         const row = res.rows[0];
-        // Pass false to NOT strip image -> returns full imageUrl
-        const processed = processMealDataForClient(row.meal_data, row.image_base64, false);
+        const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
         
         return {
             id: row.id,
-            ...processed,
+            ...mealData,
+            imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
             createdAt: row.created_at
         };
     } catch (err) {
@@ -317,8 +286,8 @@ export const getSavedMeals = async (userId) => {
         `;
         const res = await client.query(query, [userId]);
         return res.rows.map(row => {
-            // Strip image, calc hasImage
-            return { id: row.id, ...processMealDataForClient(row.meal_data, null, true) };
+            const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
+            return { id: row.id, ...processMealDataForClient(mealData) };
         });
     } catch (err) {
         console.error('Database error in getSavedMeals:', err);
@@ -336,8 +305,8 @@ export const getSavedMealById = async (userId, mealId) => {
         if (res.rows.length === 0) return null;
         
         const row = res.rows[0];
-        // Do NOT strip image
-        return { id: row.id, ...processMealDataForClient(row.meal_data, null, false) };
+        const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
+        return { id: row.id, ...processMealDataForClient(mealData) };
     } catch (err) {
         console.error('Database error in getSavedMealById:', err);
         throw new Error('Could not retrieve saved meal.');
@@ -358,17 +327,12 @@ export const saveMeal = async (userId, mealData) => {
         const res = await client.query(query, [userId, mealDataForDb]);
         const row = res.rows[0];
         
-        // Award points for saving a meal with correct reference
-        await awardPoints(
-            userId, 
-            'meal.saved', 
-            10, 
-            'saved_meals', 
-            row.id.toString(),
-            { is_new_recipe: true }
-        );
+        // Award points for saving a meal
+        await awardPoints(userId, 'meal.saved', 10, { saved_meal_id: row.id });
         
-        return { id: row.id, ...processMealDataForClient(row.meal_data, null, true) };
+        const mealDataFromDb = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
+
+        return { id: row.id, ...processMealDataForClient(mealDataFromDb) };
     } catch (err) {
         console.error('Database error in saveMeal:', err);
         throw new Error('Could not save meal.');
@@ -407,6 +371,7 @@ export const getMealPlans = async (userId) => {
         `;
         const res = await client.query(query, [userId]);
         
+        // Process flat results into nested structure
         const plans = new Map();
         res.rows.forEach(row => {
             if (!plans.has(row.plan_id)) {
@@ -416,12 +381,13 @@ export const getMealPlans = async (userId) => {
                     items: [],
                 });
             }
-            if (row.item_id) {
+            if (row.item_id) { // Ensure item exists (for empty plans)
+                const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
                 plans.get(row.plan_id).items.push({
                     id: row.item_id,
                     meal: {
                         id: row.meal_id,
-                        ...processMealDataForClient(row.meal_data, null, true) // Strip images
+                        ...processMealDataForClient(mealData)
                     }
                 });
             }
@@ -440,9 +406,9 @@ export const createMealPlan = async (userId, name) => {
     try {
         const query = `INSERT INTO meal_plans (user_id, name) VALUES ($1, $2) RETURNING id, name;`;
         const res = await client.query(query, [userId, name]);
-        return { ...res.rows[0], items: [] }; 
+        return { ...res.rows[0], items: [] }; // Return new plan with empty items
     } catch(err) {
-        if (err.code === '23505') { 
+        if (err.code === '23505') { // unique_violation
             throw new Error(`A meal plan with the name "${name}" already exists.`);
         }
         console.error('Database error in createMealPlan:', err);
@@ -455,6 +421,7 @@ export const createMealPlan = async (userId, name) => {
 export const deleteMealPlan = async (userId, planId) => {
     const client = await pool.connect();
     try {
+        // ON DELETE CASCADE will handle deleting items from meal_plan_items
         await client.query(`DELETE FROM meal_plans WHERE id = $1 AND user_id = $2;`, [planId, userId]);
     } catch(err) {
         console.error('Database error in deleteMealPlan:', err);
@@ -464,9 +431,11 @@ export const deleteMealPlan = async (userId, planId) => {
     }
 };
 
+
 export const addMealToPlanItem = async (userId, planId, savedMealId) => {
     const client = await pool.connect();
     try {
+        // Verify the user owns the plan and the meal before inserting
         const checkQuery = `
            SELECT (SELECT user_id FROM meal_plans WHERE id = $1) = $3 AS owns_plan,
                   (SELECT user_id FROM saved_meals WHERE id = $2) = $3 AS owns_meal;
@@ -484,6 +453,7 @@ export const addMealToPlanItem = async (userId, planId, savedMealId) => {
         const insertRes = await client.query(insertQuery, [userId, planId, savedMealId]);
         const newItemId = insertRes.rows[0].id;
 
+        // Fetch the full data for the new item to return to client
         const selectQuery = `
             SELECT 
                 i.id,
@@ -495,14 +465,14 @@ export const addMealToPlanItem = async (userId, planId, savedMealId) => {
         `;
         const selectRes = await client.query(selectQuery, [newItemId]);
         const row = selectRes.rows[0];
-        
+        const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
         return {
             id: row.id,
-            meal: { id: row.meal_id, ...processMealDataForClient(row.meal_data, null, true) }
+            meal: { id: row.meal_id, ...processMealDataForClient(mealData) }
         };
 
     } catch (err) {
-        if (err.code === '23505') { 
+        if (err.code === '23505') { // unique_violation on (meal_plan_id, saved_meal_id)
             console.warn(`Meal ${savedMealId} is already in plan ${planId}.`);
             throw new Error('This meal is already in the selected plan.');
         }
@@ -513,14 +483,22 @@ export const addMealToPlanItem = async (userId, planId, savedMealId) => {
     }
 };
 
+
 export const addMealAndLinkToPlan = async (userId, mealData, planId) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
+        
+        // Step 1: Save the new meal to get an ID.
         const newMeal = await saveMeal(userId, mealData);
+        
+        // Step 2: Add the newly saved meal to the specified plan.
         const newPlanItem = await addMealToPlanItem(userId, planId, newMeal.id);
+        
         await client.query('COMMIT');
+        
         return newPlanItem;
+
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Database transaction error in addMealAndLinkToPlan:', err);
@@ -542,55 +520,167 @@ export const removeMealFromPlanItem = async (userId, planItemId) => {
     }
 };
 
+
 // --- Grocery List Persistence ---
 
-export const getGroceryList = async (userId) => {
+// New Logic: Grocery Lists are now their own entities
+export const getGroceryLists = async (userId) => {
     const client = await pool.connect();
     try {
+        // 1. Check for legacy items (NULL grocery_list_id)
+        const checkLegacy = await client.query('SELECT count(*) FROM grocery_list_items WHERE user_id = $1 AND grocery_list_id IS NULL', [userId]);
+        if (parseInt(checkLegacy.rows[0].count) > 0) {
+            // Migrate legacy items to a new "My List"
+            await client.query('BEGIN');
+            const insertList = `INSERT INTO grocery_lists (user_id, name, is_active) VALUES ($1, 'My List', TRUE) RETURNING id`;
+            const listRes = await client.query(insertList, [userId]);
+            const newListId = listRes.rows[0].id;
+            await client.query(`UPDATE grocery_list_items SET grocery_list_id = $1 WHERE user_id = $2 AND grocery_list_id IS NULL`, [newListId, userId]);
+            await client.query('COMMIT');
+        }
+
         const query = `
-            SELECT id, name, checked FROM grocery_list_items 
+            SELECT id, name, is_active, created_at 
+            FROM grocery_lists 
             WHERE user_id = $1 
-            ORDER BY name ASC;
+            ORDER BY is_active DESC, created_at DESC;
         `;
         const res = await client.query(query, [userId]);
+        
+        // If user has no lists at all, create a default one
+        if (res.rows.length === 0) {
+             const insertList = `INSERT INTO grocery_lists (user_id, name, is_active) VALUES ($1, 'My List', TRUE) RETURNING id, name, is_active, created_at`;
+             const newRes = await client.query(insertList, [userId]);
+             return newRes.rows;
+        }
+
         return res.rows;
     } catch (err) {
-        console.error('Database error in getGroceryList:', err);
-        throw new Error('Could not retrieve grocery list.');
+        console.error('Database error in getGroceryLists:', err);
+        throw new Error('Could not retrieve grocery lists.');
     } finally {
         client.release();
     }
 };
 
-export const generateGroceryList = async (userId, planIds = []) => {
+export const createGroceryList = async (userId, name) => {
     const client = await pool.connect();
-    if (planIds.length === 0) {
-        await client.query(`DELETE FROM grocery_list_items WHERE user_id = $1;`, [userId]);
-        return [];
+    try {
+        // Create new list. Do not automatically make it active unless it's the first one, but UI can handle that.
+        // Let's make it active by default for better UX, and deactivate others? No, user explicitly chooses.
+        const query = `INSERT INTO grocery_lists (user_id, name) VALUES ($1, $2) RETURNING id, name, is_active, created_at;`;
+        const res = await client.query(query, [userId, name]);
+        return res.rows[0];
+    } catch (err) {
+        console.error('Database error in createGroceryList:', err);
+        throw new Error('Could not create grocery list.');
+    } finally {
+        client.release();
     }
+};
+
+export const setActiveGroceryList = async (userId, listId) => {
+    const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        const mealQuery = `
-            SELECT sm.meal_data
-            FROM saved_meals sm
-            JOIN meal_plan_items mpi ON sm.id = mpi.saved_meal_id
-            WHERE mpi.user_id = $1 AND mpi.meal_plan_id = ANY($2::int[]);
-        `;
-        const mealRes = await client.query(mealQuery, [userId, planIds]);
-        const allIngredients = mealRes.rows.flatMap(row => row.meal_data?.ingredients || []);
-        const uniqueIngredientNames = [...new Set(allIngredients.map(ing => ing.name))].sort();
-
-        await client.query(`DELETE FROM grocery_list_items WHERE user_id = $1;`, [userId]);
-
-        if (uniqueIngredientNames.length > 0) {
-            const insertQuery = `
-                INSERT INTO grocery_list_items (user_id, name)
-                SELECT $1, unnest($2::text[]);
-            `;
-            await client.query(insertQuery, [userId, uniqueIngredientNames]);
-        }
+        // Deactivate all
+        await client.query('UPDATE grocery_lists SET is_active = FALSE WHERE user_id = $1', [userId]);
+        // Activate target
+        await client.query('UPDATE grocery_lists SET is_active = TRUE WHERE user_id = $1 AND id = $2', [userId, listId]);
         await client.query('COMMIT');
-        return getGroceryList(userId);
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Database error in setActiveGroceryList:', err);
+        throw new Error('Could not set active list.');
+    } finally {
+        client.release();
+    }
+};
+
+export const deleteGroceryList = async (userId, listId) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        await client.query('DELETE FROM grocery_list_items WHERE grocery_list_id = $1', [listId]); // Cleanup items
+        await client.query('DELETE FROM grocery_lists WHERE id = $1 AND user_id = $2', [listId, userId]);
+        await client.query('COMMIT');
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Database error in deleteGroceryList:', err);
+        throw new Error('Could not delete grocery list.');
+    } finally {
+        client.release();
+    }
+};
+
+export const getGroceryListItems = async (userId, listId) => {
+    const client = await pool.connect();
+    try {
+        // Verify ownership indirectly by checking list exists for user, or just query items. 
+        // We'll join to ensure security.
+        const query = `
+            SELECT i.id, i.name, i.checked 
+            FROM grocery_list_items i
+            JOIN grocery_lists l ON i.grocery_list_id = l.id
+            WHERE l.id = $1 AND l.user_id = $2
+            ORDER BY i.name ASC;
+        `;
+        const res = await client.query(query, [listId, userId]);
+        return res.rows;
+    } catch (err) {
+        console.error('Database error in getGroceryListItems:', err);
+        throw new Error('Could not retrieve grocery list items.');
+    } finally {
+        client.release();
+    }
+};
+
+export const generateGroceryList = async (userId, planIds = [], listName) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Create the new list
+        const createListQuery = `INSERT INTO grocery_lists (user_id, name, is_active) VALUES ($1, $2, TRUE) RETURNING id;`;
+        const listRes = await client.query(createListQuery, [userId, listName]);
+        const newListId = listRes.rows[0].id;
+        
+        // Deactivate other lists since this one is now active
+        await client.query('UPDATE grocery_lists SET is_active = FALSE WHERE user_id = $1 AND id != $2', [userId, newListId]);
+
+        if (planIds.length > 0) {
+            // 2. Get ingredients
+            const mealQuery = `
+                SELECT sm.meal_data
+                FROM saved_meals sm
+                JOIN meal_plan_items mpi ON sm.id = mpi.saved_meal_id
+                WHERE mpi.user_id = $1 AND mpi.meal_plan_id = ANY($2::int[]);
+            `;
+            const mealRes = await client.query(mealQuery, [userId, planIds]);
+            const allIngredients = mealRes.rows.flatMap(row => row.meal_data?.ingredients || []);
+            const uniqueIngredientNames = [...new Set(allIngredients.map(ing => ing.name))].sort();
+
+            // 3. Insert items linked to the new list
+            if (uniqueIngredientNames.length > 0) {
+                const insertQuery = `
+                    INSERT INTO grocery_list_items (user_id, grocery_list_id, name)
+                    SELECT $1, $2, unnest($3::text[]);
+                `;
+                await client.query(insertQuery, [userId, newListId, uniqueIngredientNames]);
+            }
+        }
+        
+        await client.query('COMMIT');
+
+        // Return the full list object with items
+        const items = await getGroceryListItems(userId, newListId);
+        return {
+            id: newListId,
+            name: listName,
+            is_active: true,
+            items: items
+        };
+
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Database transaction error in generateGroceryList:', err);
@@ -622,21 +712,35 @@ export const updateGroceryListItem = async (userId, itemId, checked) => {
     }
 };
 
-export const clearGroceryList = async (userId, type) => {
+export const addGroceryListItem = async (userId, listId, name) => {
     const client = await pool.connect();
     try {
-        let query;
-        if (type === 'checked') {
-            query = `DELETE FROM grocery_list_items WHERE user_id = $1 AND checked = TRUE;`;
-        } else if (type === 'all') {
-            query = `DELETE FROM grocery_list_items WHERE user_id = $1;`;
-        } else {
-            throw new Error("Invalid clear type specified.");
-        }
-        await client.query(query, [userId]);
+        // Ensure user owns the list
+        const check = await client.query('SELECT id FROM grocery_lists WHERE id = $1 AND user_id = $2', [listId, userId]);
+        if (check.rows.length === 0) throw new Error("List not found.");
+
+        const query = `
+            INSERT INTO grocery_list_items (user_id, grocery_list_id, name)
+            VALUES ($1, $2, $3)
+            RETURNING id, name, checked;
+        `;
+        const res = await client.query(query, [userId, listId, name]);
+        return res.rows[0];
     } catch (err) {
-        console.error('Database error in clearGroceryList:', err);
-        throw new Error('Could not clear grocery list items.');
+        console.error('Database error in addGroceryListItem:', err);
+        throw new Error('Could not add item.');
+    } finally {
+        client.release();
+    }
+};
+
+export const removeGroceryListItem = async (userId, itemId) => {
+    const client = await pool.connect();
+    try {
+        await client.query('DELETE FROM grocery_list_items WHERE id = $1 AND user_id = $2', [itemId, userId]);
+    } catch (err) {
+        console.error('Database error in removeGroceryListItem:', err);
+        throw new Error('Could not remove item.');
     } finally {
         client.release();
     }
