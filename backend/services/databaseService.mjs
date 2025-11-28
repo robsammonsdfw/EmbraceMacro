@@ -33,47 +33,13 @@ const processMealDataForClient = (mealData) => {
     return dataForClient;
 };
 
-
-export const findOrCreateUserByEmail = async (email) => {
-    const client = await pool.connect();
-    try {
-        const insertQuery = `
-            INSERT INTO users (email) 
-            VALUES ($1) 
-            ON CONFLICT (email) 
-            DO NOTHING;
-        `;
-        await client.query(insertQuery, [email]);
-
-        const selectQuery = `SELECT id, email FROM users WHERE email = $1;`;
-        const res = await client.query(selectQuery, [email]);
-        
-        if (res.rows.length === 0) {
-            throw new Error("Failed to find or create user after insert operation.");
-        }
-        
-        // Ensure database tables exist
-        await ensureDatabaseSchema(client);
-        
-        // Ensure rewards balance entry exists for this user
-        await client.query(`
-            INSERT INTO rewards_balances (user_id, points_total, points_available, tier)
-            VALUES ($1, 0, 0, 'Bronze')
-            ON CONFLICT (user_id) DO NOTHING;
-        `, [res.rows[0].id]);
-
-        return res.rows[0];
-
-    } catch (err) {
-        console.error('Database error in findOrCreateUserByEmail:', err);
-        throw new Error('Could not save or retrieve user data from the database.');
-    } finally {
-        client.release();
-    }
-};
+// --- Schema Management ---
+let _schemaChecked = false;
 
 const ensureDatabaseSchema = async (client) => {
-    // Rewards Tables
+    if (_schemaChecked) return;
+
+    // 1. Rewards Tables
     await client.query(`
         CREATE TABLE IF NOT EXISTS rewards_balances (
             user_id VARCHAR(255) PRIMARY KEY,
@@ -92,7 +58,14 @@ const ensureDatabaseSchema = async (client) => {
         );
     `);
 
-    // Grocery List Tables (New Schema)
+    // 2. Core App Tables (Ensure existence)
+    await client.query(`CREATE TABLE IF NOT EXISTS saved_meals (id SERIAL PRIMARY KEY, user_id VARCHAR(255) NOT NULL, meal_data JSONB, created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP);`);
+    await client.query(`CREATE TABLE IF NOT EXISTS meal_plans (id SERIAL PRIMARY KEY, user_id VARCHAR(255) NOT NULL, name VARCHAR(255) NOT NULL, created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP);`);
+    await client.query(`CREATE TABLE IF NOT EXISTS meal_plan_items (id SERIAL PRIMARY KEY, user_id VARCHAR(255) NOT NULL, meal_plan_id INT NOT NULL, saved_meal_id INT NOT NULL, created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP);`);
+    await client.query(`CREATE TABLE IF NOT EXISTS meal_log_entries (id SERIAL PRIMARY KEY, user_id VARCHAR(255) NOT NULL, meal_data JSONB, image_base64 TEXT, created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP);`);
+    await client.query(`CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, email VARCHAR(255) UNIQUE NOT NULL);`);
+
+    // 3. Grocery List Tables (New Schema)
     await client.query(`
         CREATE TABLE IF NOT EXISTS grocery_lists (
             id SERIAL PRIMARY KEY,
@@ -103,15 +76,67 @@ const ensureDatabaseSchema = async (client) => {
         );
     `);
     
-    // Add grocery_list_id to items if it doesn't exist
+    // Ensure grocery_list_items exists (handle both legacy and new)
+    await client.query(`
+        CREATE TABLE IF NOT EXISTS grocery_list_items (
+            id SERIAL PRIMARY KEY,
+            user_id VARCHAR(255) NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            checked BOOLEAN DEFAULT FALSE,
+            grocery_list_id INT
+        );
+    `);
+
+    // Add grocery_list_id to items if it doesn't exist (Migration for legacy tables)
     try {
         await client.query(`ALTER TABLE grocery_list_items ADD COLUMN IF NOT EXISTS grocery_list_id INT;`);
-        // We create an index for performance
         await client.query(`CREATE INDEX IF NOT EXISTS idx_grocery_list_items_list_id ON grocery_list_items(grocery_list_id);`);
     } catch (e) {
-        console.log("Error updating grocery_list_items schema:", e.message);
+        console.log("Info: Grocery list schema update skipped or failed (might already exist):", e.message);
+    }
+
+    _schemaChecked = true;
+};
+
+
+export const findOrCreateUserByEmail = async (email) => {
+    const client = await pool.connect();
+    try {
+        // Ensure schema is up to date when user logs in
+        await ensureDatabaseSchema(client);
+
+        const insertQuery = `
+            INSERT INTO users (email) 
+            VALUES ($1) 
+            ON CONFLICT (email) 
+            DO NOTHING;
+        `;
+        await client.query(insertQuery, [email]);
+
+        const selectQuery = `SELECT id, email FROM users WHERE email = $1;`;
+        const res = await client.query(selectQuery, [email]);
+        
+        if (res.rows.length === 0) {
+            throw new Error("Failed to find or create user after insert operation.");
+        }
+        
+        // Ensure rewards balance entry exists for this user
+        await client.query(`
+            INSERT INTO rewards_balances (user_id, points_total, points_available, tier)
+            VALUES ($1, 0, 0, 'Bronze')
+            ON CONFLICT (user_id) DO NOTHING;
+        `, [res.rows[0].id]);
+
+        return res.rows[0];
+
+    } catch (err) {
+        console.error('Database error in findOrCreateUserByEmail:', err);
+        throw new Error('Could not save or retrieve user data from the database.');
+    } finally {
+        client.release();
     }
 };
+
 
 // --- Rewards Logic ---
 
@@ -200,7 +225,6 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
         const res = await client.query(query, [userId, mealData, imageBase64]);
         const row = res.rows[0];
         
-        // Award points for logging a meal
         await awardPoints(userId, 'meal_photo.logged', 50, { meal_log_id: row.id });
 
         const mealDataFromDb = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
@@ -327,7 +351,6 @@ export const saveMeal = async (userId, mealData) => {
         const res = await client.query(query, [userId, mealDataForDb]);
         const row = res.rows[0];
         
-        // Award points for saving a meal
         await awardPoints(userId, 'meal.saved', 10, { saved_meal_id: row.id });
         
         const mealDataFromDb = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
@@ -371,7 +394,6 @@ export const getMealPlans = async (userId) => {
         `;
         const res = await client.query(query, [userId]);
         
-        // Process flat results into nested structure
         const plans = new Map();
         res.rows.forEach(row => {
             if (!plans.has(row.plan_id)) {
@@ -381,7 +403,7 @@ export const getMealPlans = async (userId) => {
                     items: [],
                 });
             }
-            if (row.item_id) { // Ensure item exists (for empty plans)
+            if (row.item_id) { 
                 const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
                 plans.get(row.plan_id).items.push({
                     id: row.item_id,
@@ -406,9 +428,9 @@ export const createMealPlan = async (userId, name) => {
     try {
         const query = `INSERT INTO meal_plans (user_id, name) VALUES ($1, $2) RETURNING id, name;`;
         const res = await client.query(query, [userId, name]);
-        return { ...res.rows[0], items: [] }; // Return new plan with empty items
+        return { ...res.rows[0], items: [] }; 
     } catch(err) {
-        if (err.code === '23505') { // unique_violation
+        if (err.code === '23505') { 
             throw new Error(`A meal plan with the name "${name}" already exists.`);
         }
         console.error('Database error in createMealPlan:', err);
@@ -421,7 +443,6 @@ export const createMealPlan = async (userId, name) => {
 export const deleteMealPlan = async (userId, planId) => {
     const client = await pool.connect();
     try {
-        // ON DELETE CASCADE will handle deleting items from meal_plan_items
         await client.query(`DELETE FROM meal_plans WHERE id = $1 AND user_id = $2;`, [planId, userId]);
     } catch(err) {
         console.error('Database error in deleteMealPlan:', err);
@@ -435,7 +456,6 @@ export const deleteMealPlan = async (userId, planId) => {
 export const addMealToPlanItem = async (userId, planId, savedMealId) => {
     const client = await pool.connect();
     try {
-        // Verify the user owns the plan and the meal before inserting
         const checkQuery = `
            SELECT (SELECT user_id FROM meal_plans WHERE id = $1) = $3 AS owns_plan,
                   (SELECT user_id FROM saved_meals WHERE id = $2) = $3 AS owns_meal;
@@ -453,7 +473,6 @@ export const addMealToPlanItem = async (userId, planId, savedMealId) => {
         const insertRes = await client.query(insertQuery, [userId, planId, savedMealId]);
         const newItemId = insertRes.rows[0].id;
 
-        // Fetch the full data for the new item to return to client
         const selectQuery = `
             SELECT 
                 i.id,
@@ -472,7 +491,7 @@ export const addMealToPlanItem = async (userId, planId, savedMealId) => {
         };
 
     } catch (err) {
-        if (err.code === '23505') { // unique_violation on (meal_plan_id, saved_meal_id)
+        if (err.code === '23505') { 
             console.warn(`Meal ${savedMealId} is already in plan ${planId}.`);
             throw new Error('This meal is already in the selected plan.');
         }
@@ -488,17 +507,10 @@ export const addMealAndLinkToPlan = async (userId, mealData, planId) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        
-        // Step 1: Save the new meal to get an ID.
         const newMeal = await saveMeal(userId, mealData);
-        
-        // Step 2: Add the newly saved meal to the specified plan.
         const newPlanItem = await addMealToPlanItem(userId, planId, newMeal.id);
-        
         await client.query('COMMIT');
-        
         return newPlanItem;
-
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Database transaction error in addMealAndLinkToPlan:', err);
@@ -527,10 +539,12 @@ export const removeMealFromPlanItem = async (userId, planItemId) => {
 export const getGroceryLists = async (userId) => {
     const client = await pool.connect();
     try {
+        // AUTO-HEAL: Ensure database schema exists before querying
+        await ensureDatabaseSchema(client);
+
         // 1. Check for legacy items (NULL grocery_list_id)
         const checkLegacy = await client.query('SELECT count(*) FROM grocery_list_items WHERE user_id = $1 AND grocery_list_id IS NULL', [userId]);
         if (parseInt(checkLegacy.rows[0].count) > 0) {
-            // Migrate legacy items to a new "My List"
             await client.query('BEGIN');
             const insertList = `INSERT INTO grocery_lists (user_id, name, is_active) VALUES ($1, 'My List', TRUE) RETURNING id`;
             const listRes = await client.query(insertList, [userId]);
@@ -547,7 +561,6 @@ export const getGroceryLists = async (userId) => {
         `;
         const res = await client.query(query, [userId]);
         
-        // If user has no lists at all, create a default one
         if (res.rows.length === 0) {
              const insertList = `INSERT INTO grocery_lists (user_id, name, is_active) VALUES ($1, 'My List', TRUE) RETURNING id, name, is_active, created_at`;
              const newRes = await client.query(insertList, [userId]);
@@ -566,8 +579,6 @@ export const getGroceryLists = async (userId) => {
 export const createGroceryList = async (userId, name) => {
     const client = await pool.connect();
     try {
-        // Create new list. Do not automatically make it active unless it's the first one, but UI can handle that.
-        // Let's make it active by default for better UX, and deactivate others? No, user explicitly chooses.
         const query = `INSERT INTO grocery_lists (user_id, name) VALUES ($1, $2) RETURNING id, name, is_active, created_at;`;
         const res = await client.query(query, [userId, name]);
         return res.rows[0];
@@ -583,9 +594,7 @@ export const setActiveGroceryList = async (userId, listId) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        // Deactivate all
         await client.query('UPDATE grocery_lists SET is_active = FALSE WHERE user_id = $1', [userId]);
-        // Activate target
         await client.query('UPDATE grocery_lists SET is_active = TRUE WHERE user_id = $1 AND id = $2', [userId, listId]);
         await client.query('COMMIT');
     } catch (err) {
@@ -601,7 +610,7 @@ export const deleteGroceryList = async (userId, listId) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        await client.query('DELETE FROM grocery_list_items WHERE grocery_list_id = $1', [listId]); // Cleanup items
+        await client.query('DELETE FROM grocery_list_items WHERE grocery_list_id = $1', [listId]);
         await client.query('DELETE FROM grocery_lists WHERE id = $1 AND user_id = $2', [listId, userId]);
         await client.query('COMMIT');
     } catch (err) {
@@ -616,8 +625,6 @@ export const deleteGroceryList = async (userId, listId) => {
 export const getGroceryListItems = async (userId, listId) => {
     const client = await pool.connect();
     try {
-        // Verify ownership indirectly by checking list exists for user, or just query items. 
-        // We'll join to ensure security.
         const query = `
             SELECT i.id, i.name, i.checked 
             FROM grocery_list_items i
@@ -640,16 +647,13 @@ export const generateGroceryList = async (userId, planIds = [], listName) => {
     try {
         await client.query('BEGIN');
 
-        // 1. Create the new list
         const createListQuery = `INSERT INTO grocery_lists (user_id, name, is_active) VALUES ($1, $2, TRUE) RETURNING id;`;
         const listRes = await client.query(createListQuery, [userId, listName]);
         const newListId = listRes.rows[0].id;
         
-        // Deactivate other lists since this one is now active
         await client.query('UPDATE grocery_lists SET is_active = FALSE WHERE user_id = $1 AND id != $2', [userId, newListId]);
 
         if (planIds.length > 0) {
-            // 2. Get ingredients
             const mealQuery = `
                 SELECT sm.meal_data
                 FROM saved_meals sm
@@ -660,7 +664,6 @@ export const generateGroceryList = async (userId, planIds = [], listName) => {
             const allIngredients = mealRes.rows.flatMap(row => row.meal_data?.ingredients || []);
             const uniqueIngredientNames = [...new Set(allIngredients.map(ing => ing.name))].sort();
 
-            // 3. Insert items linked to the new list
             if (uniqueIngredientNames.length > 0) {
                 const insertQuery = `
                     INSERT INTO grocery_list_items (user_id, grocery_list_id, name)
@@ -672,7 +675,6 @@ export const generateGroceryList = async (userId, planIds = [], listName) => {
         
         await client.query('COMMIT');
 
-        // Return the full list object with items
         const items = await getGroceryListItems(userId, newListId);
         return {
             id: newListId,
@@ -715,6 +717,9 @@ export const updateGroceryListItem = async (userId, itemId, checked) => {
 export const addGroceryListItem = async (userId, listId, name) => {
     const client = await pool.connect();
     try {
+        // Ensure database schema exists before adding item
+        await ensureDatabaseSchema(client);
+
         // Ensure user owns the list
         const check = await client.query('SELECT id FROM grocery_lists WHERE id = $1 AND user_id = $2', [listId, userId]);
         if (check.rows.length === 0) throw new Error("List not found.");
