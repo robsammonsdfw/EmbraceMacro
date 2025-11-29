@@ -232,6 +232,7 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
             id: row.id,
             ...mealDataFromDb,
             imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
+            hasImage: true,
             createdAt: row.created_at
         };
     } catch (err) {
@@ -246,8 +247,11 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
 export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
     try {
+        // OPTIMIZATION: Do not select image_base64 here to prevent exceeding Lambda payload limits (6MB).
+        // Instead, check if it exists.
         const query = `
-            SELECT id, meal_data, image_base64, created_at 
+            SELECT id, meal_data, created_at,
+            (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image
             FROM meal_log_entries
             WHERE user_id = $1 
             ORDER BY created_at DESC;
@@ -258,7 +262,8 @@ export const getMealLogEntries = async (userId) => {
             return {
                 id: row.id,
                 ...mealData,
-                imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
+                imageUrl: undefined, // Don't send the full image list
+                hasImage: row.has_image,
                 createdAt: row.created_at,
             };
         });
@@ -288,6 +293,7 @@ export const getMealLogEntryById = async (userId, logId) => {
             id: row.id,
             ...mealData,
             imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
+            hasImage: !!row.image_base64,
             createdAt: row.created_at
         };
     } catch (err) {
@@ -303,15 +309,23 @@ export const getMealLogEntryById = async (userId, logId) => {
 export const getSavedMeals = async (userId) => {
     const client = await pool.connect();
     try {
+        // OPTIMIZATION: Exclude imageBase64 from JSONB meal_data to save bandwidth.
         const query = `
-            SELECT id, meal_data FROM saved_meals 
+            SELECT id, meal_data - 'imageBase64' as meal_data,
+            (meal_data->>'imageBase64' IS NOT NULL AND length(meal_data->>'imageBase64') > 0) as has_image,
+            created_at
+            FROM saved_meals 
             WHERE user_id = $1 
             ORDER BY created_at DESC;
         `;
         const res = await client.query(query, [userId]);
         return res.rows.map(row => {
             const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
-            return { id: row.id, ...processMealDataForClient(mealData) };
+            return { 
+                id: row.id, 
+                ...processMealDataForClient(mealData),
+                hasImage: row.has_image
+            };
         });
     } catch (err) {
         console.error('Database error in getSavedMeals:', err);
@@ -330,7 +344,11 @@ export const getSavedMealById = async (userId, mealId) => {
         
         const row = res.rows[0];
         const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
-        return { id: row.id, ...processMealDataForClient(mealData) };
+        return { 
+            id: row.id, 
+            ...processMealDataForClient(mealData),
+            hasImage: !!mealData.imageBase64
+        };
     } catch (err) {
         console.error('Database error in getSavedMealById:', err);
         throw new Error('Could not retrieve saved meal.');
@@ -355,7 +373,11 @@ export const saveMeal = async (userId, mealData) => {
         
         const mealDataFromDb = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
 
-        return { id: row.id, ...processMealDataForClient(mealDataFromDb) };
+        return { 
+            id: row.id, 
+            ...processMealDataForClient(mealDataFromDb),
+            hasImage: !!mealDataForDb.imageBase64
+        };
     } catch (err) {
         console.error('Database error in saveMeal:', err);
         throw new Error('Could not save meal.');
@@ -381,11 +403,13 @@ export const deleteMeal = async (userId, mealId) => {
 export const getMealPlans = async (userId) => {
     const client = await pool.connect();
     try {
+        // OPTIMIZATION: Strip imageBase64 from the joined saved_meals data
         const query = `
             SELECT 
                 p.id as plan_id, p.name as plan_name,
                 i.id as item_id,
-                sm.id as meal_id, sm.meal_data
+                sm.id as meal_id, sm.meal_data - 'imageBase64' as meal_data,
+                (sm.meal_data->>'imageBase64' IS NOT NULL AND length(sm.meal_data->>'imageBase64') > 0) as has_image
             FROM meal_plans p
             LEFT JOIN meal_plan_items i ON p.id = i.meal_plan_id
             LEFT JOIN saved_meals sm ON i.saved_meal_id = sm.id
@@ -409,7 +433,8 @@ export const getMealPlans = async (userId) => {
                     id: row.item_id,
                     meal: {
                         id: row.meal_id,
-                        ...processMealDataForClient(mealData)
+                        ...processMealDataForClient(mealData),
+                        hasImage: row.has_image
                     }
                 });
             }
@@ -473,11 +498,13 @@ export const addMealToPlanItem = async (userId, planId, savedMealId) => {
         const insertRes = await client.query(insertQuery, [userId, planId, savedMealId]);
         const newItemId = insertRes.rows[0].id;
 
+        // Fetch without the huge image, but include flag
         const selectQuery = `
             SELECT 
                 i.id,
                 m.id as meal_id,
-                m.meal_data
+                m.meal_data - 'imageBase64' as meal_data,
+                (m.meal_data->>'imageBase64' IS NOT NULL AND length(m.meal_data->>'imageBase64') > 0) as has_image
             FROM meal_plan_items i
             JOIN saved_meals m ON i.saved_meal_id = m.id
             WHERE i.id = $1;
@@ -487,7 +514,11 @@ export const addMealToPlanItem = async (userId, planId, savedMealId) => {
         const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
         return {
             id: row.id,
-            meal: { id: row.meal_id, ...processMealDataForClient(mealData) }
+            meal: { 
+                id: row.meal_id, 
+                ...processMealDataForClient(mealData),
+                hasImage: row.has_image
+            }
         };
 
     } catch (err) {
@@ -654,6 +685,7 @@ export const generateGroceryList = async (userId, planIds = [], listName) => {
         await client.query('UPDATE grocery_lists SET is_active = FALSE WHERE user_id = $1 AND id != $2', [userId, newListId]);
 
         if (planIds.length > 0) {
+            // Need to handle potential base64 in meal_data here too, but we are only reading ingredients.
             const mealQuery = `
                 SELECT sm.meal_data
                 FROM saved_meals sm
