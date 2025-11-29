@@ -51,7 +51,7 @@ export const Login: React.FC = () => {
             <div className="max-w-md w-full p-8 bg-white rounded-xl shadow-lg border border-slate-200">
                 <header className="text-center mb-8">
                     <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500">
-                        EmbraceHealth Meals
+                        EmbraceHealth AI
                     </h1>
                     <p className="text-slate-600 mt-2 text-lg">Sign in to your account.</p>
                 </header>

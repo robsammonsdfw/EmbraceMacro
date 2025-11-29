@@ -50,7 +50,7 @@ export const Hub: React.FC<HubProps> = ({ onEnterMeals, onLogout }) => {
              <header className="bg-white border-b border-slate-200 shadow-sm">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
                      <span className="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500">
-                        EmbraceHealth
+                        EmbraceHealth AI
                     </span>
                     <button 
                         onClick={onLogout}
