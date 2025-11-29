@@ -399,7 +399,12 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800">
-      <Navbar activeView={activeView} onNavigate={handleNavigation} onLogout={handleLogout} />
+      <Navbar 
+        activeView={activeView} 
+        onNavigate={handleNavigation} 
+        onLogout={handleLogout} 
+        onBackToHub={() => setAppMode('hub')} 
+      />
       
       {isScanning && <BarcodeScanner onScanSuccess={handleScanSuccess} onCancel={() => setIsScanning(false)} />}
       

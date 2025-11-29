@@ -1,11 +1,12 @@
 
 import React, { useState } from 'react';
-import { MenuIcon, XIcon, HomeIcon, PlusIcon, BookOpenIcon, ClockIcon, LightBulbIcon, ClipboardListIcon, StarIcon } from './icons';
+import { MenuIcon, XIcon, HomeIcon, PlusIcon, BookOpenIcon, ClockIcon, LightBulbIcon, ClipboardListIcon, StarIcon, Squares2X2Icon } from './icons';
 
 interface NavbarProps {
   activeView: string;
   onNavigate: (view: string) => void;
   onLogout: () => void;
+  onBackToHub: () => void;
 }
 
 const NavLink: React.FC<{ 
@@ -46,11 +47,16 @@ const MobileNavLink: React.FC<{
     </button>
 );
 
-export const Navbar: React.FC<NavbarProps> = ({ activeView, onNavigate, onLogout }) => {
+export const Navbar: React.FC<NavbarProps> = ({ activeView, onNavigate, onLogout, onBackToHub }) => {
     const [isOpen, setIsOpen] = useState(false);
 
     const handleNav = (view: string) => {
         onNavigate(view);
+        setIsOpen(false);
+    };
+
+    const handleBackToHub = () => {
+        onBackToHub();
         setIsOpen(false);
     };
 
@@ -66,6 +72,8 @@ export const Navbar: React.FC<NavbarProps> = ({ activeView, onNavigate, onLogout
 
                     {/* Desktop Menu */}
                     <div className="hidden md:flex items-center space-x-2 lg:space-x-4">
+                        <NavLink active={false} onClick={handleBackToHub} icon={<Squares2X2Icon />}>Main Menu</NavLink>
+                        <div className="h-6 w-px bg-slate-200 mx-1"></div>
                         <NavLink active={activeView === 'home'} onClick={() => handleNav('home')} icon={<HomeIcon />}>Home</NavLink>
                         <NavLink active={activeView === 'plan'} onClick={() => handleNav('plan')} icon={<PlusIcon />}>Plan</NavLink>
                         <NavLink active={activeView === 'meals'} onClick={() => handleNav('meals')} icon={<BookOpenIcon />}>Meals</NavLink>
@@ -100,6 +108,8 @@ export const Navbar: React.FC<NavbarProps> = ({ activeView, onNavigate, onLogout
             {isOpen && (
                 <div className="md:hidden bg-white border-t border-slate-200 absolute w-full left-0 z-50 shadow-lg">
                     <div className="pt-2 pb-3 space-y-1">
+                        <MobileNavLink active={false} onClick={handleBackToHub} icon={<Squares2X2Icon />}>Main Menu</MobileNavLink>
+                        <div className="border-t border-slate-100 my-1"></div>
                         <MobileNavLink active={activeView === 'home'} onClick={() => handleNav('home')} icon={<HomeIcon />}>Home</MobileNavLink>
                         <MobileNavLink active={activeView === 'plan'} onClick={() => handleNav('plan')} icon={<PlusIcon />}>Plan</MobileNavLink>
                         <MobileNavLink active={activeView === 'meals'} onClick={() => handleNav('meals')} icon={<BookOpenIcon />}>Meals</MobileNavLink>
