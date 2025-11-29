@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import * as apiService from './services/apiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
@@ -20,14 +21,20 @@ import { GroceryList } from './components/GroceryList';
 import { AddToPlanModal } from './components/AddToPlanModal';
 import { MealPlanManager } from './components/MealPlanManager';
 import { RewardsDashboard } from './components/RewardsDashboard';
+import { Hub } from './components/Hub';
 
 type ActiveView = 'home' | 'plan' | 'meals' | 'history' | 'suggestions' | 'grocery' | 'rewards';
 type MealDataType = NutritionInfo | SavedMeal | MealLogEntry;
+type AppMode = 'hub' | 'meals';
 
 const App: React.FC = () => {
   const { isAuthenticated, isLoading: isAuthLoading, logout } = useAuth();
   
-  // App State
+  // App Navigation State
+  const [appMode, setAppMode] = useState<AppMode>('hub');
+  const [activeView, setActiveView] = useState<ActiveView>('home');
+
+  // App Data State
   const [image, setImage] = useState<string | null>(null);
   const [nutritionData, setNutritionData] = useState<NutritionInfo | null>(null);
   const [recipes, setRecipes] = useState<Recipe[] | null>(null);
@@ -41,7 +48,6 @@ const App: React.FC = () => {
   const [processingMessage, setProcessingMessage] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState<boolean>(false);
-  const [activeView, setActiveView] = useState<ActiveView>('home');
   const [isDataLoading, setIsDataLoading] = useState<boolean>(true);
   
   // Modal State
@@ -66,6 +72,8 @@ const App: React.FC = () => {
     if (isAuthenticated) {
       const loadInitialData = async () => {
         try {
+          // Keep data loading in background if we are at the hub, or load it immediately.
+          // Loading immediately ensures smoother transition.
           setIsDataLoading(true);
           const [plans, meals, log] = await Promise.all([
             apiService.getMealPlans(),
@@ -98,6 +106,11 @@ const App: React.FC = () => {
   const handleNavigation = (view: string) => {
     resetAnalysisState();
     setActiveView(view as ActiveView);
+  };
+
+  const handleLogout = () => {
+      setAppMode('hub');
+      logout();
   };
 
   const resizeImage = (file: File): Promise<string> => {
@@ -289,7 +302,15 @@ const App: React.FC = () => {
   const handleTriggerScanner = () => { setIsScanning(true); };
   
   if (isAuthLoading) { return <div className="min-h-screen flex items-center justify-center"><Loader message="Loading session..." /></div>; }
+  
   if (!isAuthenticated) { return <Login />; }
+
+  // New Navigation Hub
+  if (appMode === 'hub') {
+      return <Hub onEnterMeals={() => setAppMode('meals')} onLogout={handleLogout} />;
+  }
+
+  // Meal Planning App
   if (isDataLoading) { return <div className="min-h-screen flex items-center justify-center"><Loader message="Loading your data..." /></div>; }
 
   const hasAnalysisContent = image || isProcessing || error || nutritionData || recipes;
@@ -378,7 +399,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800">
-      <Navbar activeView={activeView} onNavigate={handleNavigation} onLogout={logout} />
+      <Navbar activeView={activeView} onNavigate={handleNavigation} onLogout={handleLogout} />
       
       {isScanning && <BarcodeScanner onScanSuccess={handleScanSuccess} onCancel={() => setIsScanning(false)} />}
       
