@@ -84,7 +84,7 @@ export const Hub: React.FC<HubProps> = ({ onEnterMeals, onLogout }) => {
                             onClick={onEnterMeals}
                         />
                          <MenuCard 
-                            title="EmbraceHealth" 
+                            title="Other" 
                             description="Visit our main website to learn more about us."
                             icon={<GlobeAltIcon />}
                             colorClass="bg-cyan-500 text-cyan-500"
