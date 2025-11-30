@@ -1,7 +1,7 @@
 import type { NutritionInfo, Recipe, SavedMeal, MealLogEntry, MealPlan, MealPlanItem, GroceryList, GroceryItem, RewardsSummary } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
-const AUTH_TOKEN_KEY = 'embracehealth-meals-auth-token';
+const AUTH_TOKEN_KEY = 'embracehealth-api-token';
 
 const Type = {
   OBJECT: 'OBJECT',

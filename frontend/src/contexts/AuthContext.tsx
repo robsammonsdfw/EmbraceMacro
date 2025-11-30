@@ -12,7 +12,7 @@ interface AuthContextType {
 // Initialize the context with `undefined` and a specific generic type.
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const AUTH_TOKEN_KEY = 'embracehealth-meals-auth-token';
+const AUTH_TOKEN_KEY = 'embracehealth-api-token';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [token, setToken] = useState<string | null>(null);
