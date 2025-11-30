@@ -13,7 +13,13 @@ const Type = {
 // --- Generic API Caller ---
 
 const callApi = async (endpoint: string, method: string, body?: any) => {
-    const token = localStorage.getItem(AUTH_TOKEN_KEY);
+    let token: string | null = null;
+    try {
+        token = localStorage.getItem(AUTH_TOKEN_KEY);
+    } catch (e) {
+        console.error("Error retrieving auth token from storage", e);
+    }
+
     const url = `${API_BASE_URL}${endpoint}`;
     
     const headers: HeadersInit = { 'Content-Type': 'application/json' };

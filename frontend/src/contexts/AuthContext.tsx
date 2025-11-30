@@ -10,9 +10,6 @@ interface AuthContextType {
 }
 
 // Initialize the context with `undefined` and a specific generic type.
-// This prevents TypeScript from inferring the type as `{}`, which was causing
-// errors in components consuming this context. The `useAuth` hook will handle
-// the `undefined` case to ensure the provider is used.
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const AUTH_TOKEN_KEY = 'embracehealth-meals-auth-token';
@@ -29,7 +26,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (tokenFromUrl) {
       setToken(tokenFromUrl);
-      localStorage.setItem(AUTH_TOKEN_KEY, tokenFromUrl);
+      try {
+        localStorage.setItem(AUTH_TOKEN_KEY, tokenFromUrl);
+      } catch (e) {
+        console.error("Failed to save token to localStorage:", e);
+      }
       // Clean the URL
       window.history.replaceState({}, document.title, window.location.pathname);
     } else {
@@ -44,12 +45,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = useCallback((newToken: string) => {
     setToken(newToken);
-    localStorage.setItem(AUTH_TOKEN_KEY, newToken);
+    try {
+        localStorage.setItem(AUTH_TOKEN_KEY, newToken);
+    } catch (e) {
+        console.error("Failed to save token to localStorage:", e);
+    }
   }, []);
 
   const logout = useCallback(() => {
     setToken(null);
-    localStorage.removeItem(AUTH_TOKEN_KEY);
+    try {
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+    } catch (e) {
+        console.error("Failed to remove token from localStorage:", e);
+    }
   }, []);
 
   const value = {
