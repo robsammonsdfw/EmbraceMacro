@@ -25,7 +25,9 @@ import {
     removeGroceryListItem,
     getRewardsSummary,
     getSavedMealById,
-    getMealLogEntryById
+    getMealLogEntryById,
+    saveBodyScan,
+    getBodyScans
 } from './services/databaseService.mjs';
 import { Buffer } from 'buffer';
 
@@ -45,6 +47,7 @@ export const handler = async (event) => {
     const allowedOrigins = [
         "https://food.embracehealth.ai",
         "https://app.embracehealth.ai",
+        "https://scan.embracehealth.ai", // Added for Prism App
         "https://main.dfp0msdoew280.amplifyapp.com",
         "http://localhost:5173",
         "http://localhost:3000",
@@ -137,6 +140,12 @@ export const handler = async (event) => {
     const resource = pathParts[0];
 
     try {
+        // --- NEW RESOURCE FOR BODY SCANS ---
+        if (resource === 'body-scans') {
+            return await handleBodyScansRequest(event, headers, method, pathParts);
+        }
+        
+        // --- EXISTING RESOURCES ---
         if (resource === 'meal-log') {
             return await handleMealLogRequest(event, headers, method, pathParts);
         }
@@ -146,10 +155,9 @@ export const handler = async (event) => {
         if (resource === 'meal-plans') {
             return await handleMealPlansRequest(event, headers, method, pathParts);
         }
-        if (resource === 'grocery-lists') { // New Resource
+        if (resource === 'grocery-lists') { 
             return await handleGroceryListRequest(event, headers, method, pathParts);
         }
-        // Legacy Support for old grocery-list path (optional, or redirect logic)
         if (resource === 'grocery-list') { 
              return await handleGroceryListRequest(event, headers, method, ['grocery-lists', ...pathParts.slice(1)]);
         }
@@ -174,81 +182,78 @@ export const handler = async (event) => {
     };
 };
 
+// --- NEW HANDLER FOR BODY SCANS ---
+async function handleBodyScansRequest(event, headers, method, pathParts) {
+    const userId = event.user.userId;
+
+    // GET /body-scans (Fetch history)
+    if (method === 'GET') {
+        const scans = await getBodyScans(userId);
+        return { statusCode: 200, headers, body: JSON.stringify(scans) };
+    }
+
+    // POST /body-scans (Save new scan)
+    if (method === 'POST') {
+        const scanData = JSON.parse(event.body);
+        if (!scanData) {
+            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing scan data.' }) };
+        }
+        const newScan = await saveBodyScan(userId, scanData);
+        return { statusCode: 201, headers, body: JSON.stringify(newScan) };
+    }
+
+    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
+}
+
+// --- EXISTING HANDLERS ---
+
 async function handleGroceryListRequest(event, headers, method, pathParts) {
     const userId = event.user.userId;
-    // URL structures:
-    // GET /grocery-lists -> Get all lists
-    // POST /grocery-lists -> Create list { name }
-    // POST /grocery-lists/generate -> Generate { name, mealPlanIds }
-    // GET /grocery-lists/:id/items -> Get items
-    // POST /grocery-lists/:id/active -> Set Active
-    // DELETE /grocery-lists/:id -> Delete list
-    // POST /grocery-lists/:id/items -> Add item
-    // PUT /grocery-lists/items/:itemId -> Toggle check
-    // DELETE /grocery-lists/items/:itemId -> Remove item
-
     if (method === 'GET' && pathParts.length === 1) {
         const lists = await getGroceryLists(userId);
         return { statusCode: 200, headers, body: JSON.stringify(lists) };
     }
-
     if (method === 'POST' && pathParts.length === 1) {
         const { name } = JSON.parse(event.body);
         const newList = await createGroceryList(userId, name);
         return { statusCode: 201, headers, body: JSON.stringify(newList) };
     }
-
     if (method === 'POST' && pathParts.length === 2 && pathParts[1] === 'generate') {
         const { name, mealPlanIds } = JSON.parse(event.body);
         const newList = await generateGroceryList(userId, mealPlanIds, name);
         return { statusCode: 201, headers, body: JSON.stringify(newList) };
     }
-
-    // ID based operations
     const subId = parseInt(pathParts[1], 10);
-
     if (method === 'GET' && pathParts.length === 3 && pathParts[2] === 'items' && subId) {
         const items = await getGroceryListItems(userId, subId);
         return { statusCode: 200, headers, body: JSON.stringify(items) };
     }
-
     if (method === 'POST' && pathParts.length === 3 && pathParts[2] === 'active' && subId) {
         await setActiveGroceryList(userId, subId);
         return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
     }
-
     if (method === 'DELETE' && pathParts.length === 2 && subId) {
         await deleteGroceryList(userId, subId);
         return { statusCode: 204, headers, body: '' };
     }
-    
-    // Item management
     if (method === 'POST' && pathParts.length === 3 && pathParts[2] === 'items' && subId) {
         const { name } = JSON.parse(event.body);
         const item = await addGroceryListItem(userId, subId, name);
         return { statusCode: 201, headers, body: JSON.stringify(item) };
     }
-
     if (method === 'PUT' && pathParts.length === 3 && pathParts[1] === 'items') {
         const itemId = parseInt(pathParts[2], 10);
         const { checked } = JSON.parse(event.body);
         const item = await updateGroceryListItem(userId, itemId, checked);
         return { statusCode: 200, headers, body: JSON.stringify(item) };
     }
-
     if (method === 'DELETE' && pathParts.length === 3 && pathParts[1] === 'items') {
         const itemId = parseInt(pathParts[2], 10);
         await removeGroceryListItem(userId, itemId);
         return { statusCode: 204, headers, body: '' };
     }
-
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' })};
 }
-
-// ... (Rest of the handlers remain unchanged: handleMealLogRequest, handleSavedMealsRequest, etc.)
-// Re-pasting them for completeness if needed, but XML logic implies I can skip if unchanged. 
-// However, I need to ensure the exports are correct. 
-// For safety, I will include the other handlers as they were, just compacted visually here.
 
 async function handleMealLogRequest(event, headers, method, pathParts) {
     const userId = event.user.userId;
