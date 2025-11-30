@@ -45,6 +45,16 @@ const MenuCard: React.FC<{
 };
 
 export const Hub: React.FC<HubProps> = ({ onEnterMeals, onLogout }) => {
+
+    const handleGoToScanner = () => {
+        const token = localStorage.getItem('embracehealth-api-token');
+        if (token) {
+            window.location.href = `https://app.embracehealth.ai?token=${encodeURIComponent(token)}`;
+        } else {
+            window.location.href = 'https://app.embracehealth.ai';
+        }
+    };
+
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
              <header className="bg-white border-b border-slate-200 shadow-sm">
@@ -74,7 +84,7 @@ export const Hub: React.FC<HubProps> = ({ onEnterMeals, onLogout }) => {
                             description="View your biometric reports and scan results."
                             icon={<UserCircleIcon />}
                             colorClass="bg-indigo-500 text-indigo-500"
-                            href="https://app.embracehealth.ai"
+                            onClick={handleGoToScanner}
                         />
                         <MenuCard 
                             title="Meal Planning" 
