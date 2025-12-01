@@ -1,5 +1,5 @@
 import React, { useMemo, useEffect, useState } from 'react';
-import { CameraIcon, UploadIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, ActivityIcon, FireIcon, UserGroupIcon, BeakerIcon, UserCircleIcon, TrophyIcon, ClockIcon } from './icons';
+import { CameraIcon, UploadIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, FireIcon, UserGroupIcon, BeakerIcon, UserCircleIcon, TrophyIcon, ClockIcon } from './icons';
 import type { MealLogEntry, RewardsSummary } from '../types';
 import * as apiService from '../services/apiService';
 

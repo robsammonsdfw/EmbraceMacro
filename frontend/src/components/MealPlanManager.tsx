@@ -1,8 +1,6 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import type { MealPlan, SavedMeal, NutritionInfo } from '../types';
-import { PlusIcon, UserCircleIcon, GlobeAltIcon, BookOpenIcon, StarIcon } from './icons';
-import { MealLibrary } from './MealLibrary'; 
+import { PlusIcon, UserCircleIcon, GlobeAltIcon, StarIcon } from './icons';
 
 interface MealPlanManagerProps {
     plans: MealPlan[];
@@ -23,7 +21,6 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
     const [viewMode, setViewMode] = useState<'plan' | 'discover'>('plan');
     const [selectedDay, setSelectedDay] = useState<string>(DAYS[0]);
     const [isDrawerOpen, setIsDrawerOpen] = useState(true);
-    const [newPlanName, setNewPlanName] = useState('');
 
     const activePlan = plans.find(p => p.id === activePlanId);
 
@@ -35,14 +32,6 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
             const itemSlot = item.metadata?.slot || 'Lunch';
             return itemDay === selectedDay && itemSlot === slot;
         });
-    };
-
-    const handleCreate = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (newPlanName.trim()) {
-            onCreatePlan(newPlanName.trim());
-            setNewPlanName('');
-        }
     };
 
     // --- Discover View ---
