@@ -99,3 +99,9 @@ export interface RewardsSummary {
   tier: string;
   history: RewardsLedgerEntry[];
 }
+
+export interface BodyScan {
+    id: number;
+    scan_data: any;
+    created_at: string;
+}

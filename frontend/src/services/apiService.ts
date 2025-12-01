@@ -1,4 +1,4 @@
-import type { NutritionInfo, Recipe, SavedMeal, MealLogEntry, MealPlan, MealPlanItem, GroceryList, GroceryItem, RewardsSummary } from '../types';
+import type { NutritionInfo, Recipe, SavedMeal, MealLogEntry, MealPlan, MealPlanItem, GroceryList, GroceryItem, RewardsSummary, BodyScan } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
 const AUTH_TOKEN_KEY = 'embracehealth-api-token';
@@ -285,4 +285,9 @@ export const removeGroceryItem = (itemId: number): Promise<null> => {
 
 export const getRewardsSummary = (): Promise<RewardsSummary> => {
     return callApi('/rewards', 'GET');
+};
+
+// --- Body Scans Endpoints ---
+export const getBodyScans = (): Promise<BodyScan[]> => {
+    return callApi('/body-scans', 'GET');
 };

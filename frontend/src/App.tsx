@@ -8,7 +8,7 @@ import { NutritionCard } from './components/NutritionCard';
 import { FoodPlan } from './components/FoodPlan';
 import { Loader } from './components/Loader';
 import { ErrorAlert } from './components/ErrorAlert';
-import { Hero } from './components/Hero';
+import { HomeDashboard } from './components/HomeDashboard';
 import { BarcodeScanner } from './components/BarcodeScanner';
 import { MealLibrary } from './components/MealLibrary';
 import { Navbar } from './components/Navbar';
@@ -204,7 +204,7 @@ const App: React.FC = () => {
       const newLogEntry = await apiService.createMealLogEntry(mealData, imageBase64);
       setMealLog(prevLog => [newLogEntry, ...prevLog]);
       resetAnalysisState();
-      handleNavigation('rewards'); 
+      handleNavigation('history'); 
     } catch (err) {
       setError("Could not save to history. Please try again.");
     } finally {
@@ -359,12 +359,13 @@ const App: React.FC = () => {
 
       switch(activeView) {
         case 'home': return (
-            <Hero 
+            <HomeDashboard 
               onCameraClick={handleTriggerCamera} 
               onUploadClick={handleTriggerUpload} 
               onBarcodeClick={handleTriggerScanner} 
               onPantryChefClick={handleTriggerPantryUpload} 
               onGetRecipeClick={handleTriggerRecipeUpload}
+              mealLog={mealLog}
             />
         );
         case 'plan': return (
@@ -387,13 +388,16 @@ const App: React.FC = () => {
                                   />;
         case 'grocery': return <GroceryList mealPlans={mealPlans} />;
         case 'rewards': return <RewardsDashboard />;
-        default: return <Hero 
-                    onCameraClick={handleTriggerCamera} 
-                    onUploadClick={handleTriggerUpload} 
-                    onBarcodeClick={handleTriggerScanner} 
-                    onPantryChefClick={handleTriggerPantryUpload} 
-                    onGetRecipeClick={handleTriggerRecipeUpload}
-                />;
+        default: return (
+             <HomeDashboard 
+              onCameraClick={handleTriggerCamera} 
+              onUploadClick={handleTriggerUpload} 
+              onBarcodeClick={handleTriggerScanner} 
+              onPantryChefClick={handleTriggerPantryUpload} 
+              onGetRecipeClick={handleTriggerRecipeUpload}
+              mealLog={mealLog}
+            />
+        );
     }
   };
 
