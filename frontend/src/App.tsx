@@ -27,7 +27,7 @@ type MealDataType = NutritionInfo | SavedMeal | MealLogEntry;
 type AppMode = 'hub' | 'meals';
 
 const App: React.FC = () => {
-  const { isAuthenticated, isLoading: isAuthLoading, logout } = useAuth();
+  const { isAuthenticated, isLoading: isAuthLoading, logout, user } = useAuth();
   
   // App Navigation State
   const [appMode, setAppMode] = useState<AppMode>('hub');
@@ -369,6 +369,7 @@ const App: React.FC = () => {
               onPantryChefClick={handleTriggerPantryUpload} 
               onGetRecipeClick={handleTriggerRecipeUpload}
               mealLog={mealLog}
+              userName={user?.firstName || 'User'}
             />
         );
         case 'plan': return (
@@ -399,6 +400,7 @@ const App: React.FC = () => {
               onPantryChefClick={handleTriggerPantryUpload} 
               onGetRecipeClick={handleTriggerRecipeUpload}
               mealLog={mealLog}
+              userName={user?.firstName || 'User'}
             />
         );
     }

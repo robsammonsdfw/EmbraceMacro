@@ -1,9 +1,18 @@
-import React, { createContext, useState, useEffect, useCallback } from 'react';
+
+import React, { createContext, useState, useEffect, useCallback, useMemo } from 'react';
+
+interface User {
+  userId: string;
+  email: string;
+  firstName?: string;
+  [key: string]: any;
+}
 
 // This is the shape of the data we'll store in our context
 interface AuthContextType {
   token: string | null;
   isAuthenticated: boolean;
+  user: User | null;
   login: (token: string) => void;
   logout: () => void;
   isLoading: boolean;
@@ -13,6 +22,19 @@ interface AuthContextType {
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const AUTH_TOKEN_KEY = 'embracehealth-api-token';
+
+const parseJwt = (token: string): User | null => {
+    try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        return JSON.parse(jsonPayload);
+    } catch (e) {
+        return null;
+    }
+};
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [token, setToken] = useState<string | null>(null);
@@ -61,9 +83,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  const user = useMemo(() => {
+    if (!token) return null;
+    return parseJwt(token);
+  }, [token]);
+
   const value = {
     token,
     isAuthenticated: !!token,
+    user,
     login,
     logout,
     isLoading,

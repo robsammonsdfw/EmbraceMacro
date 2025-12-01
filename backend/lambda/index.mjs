@@ -48,7 +48,7 @@ export const handler = async (event) => {
     const allowedOrigins = [
         "https://food.embracehealth.ai",
         "https://app.embracehealth.ai",
-        "https://scan.embracehealth.ai", 
+        "https://scan.embracehealth.ai", // Added for Prism App
         "https://main.dfp0msdoew280.amplifyapp.com",
         "http://localhost:5173",
         "http://localhost:3000",
@@ -141,9 +141,12 @@ export const handler = async (event) => {
     const resource = pathParts[0];
 
     try {
+        // --- NEW RESOURCE FOR BODY SCANS ---
         if (resource === 'body-scans') {
             return await handleBodyScansRequest(event, headers, method, pathParts);
         }
+        
+        // --- EXISTING RESOURCES ---
         if (resource === 'meal-log') {
             return await handleMealLogRequest(event, headers, method, pathParts);
         }
@@ -180,14 +183,17 @@ export const handler = async (event) => {
     };
 };
 
+// --- NEW HANDLER FOR BODY SCANS ---
 async function handleBodyScansRequest(event, headers, method, pathParts) {
     const userId = event.user.userId;
 
+    // GET /body-scans (Fetch history)
     if (method === 'GET') {
         const scans = await getBodyScans(userId);
         return { statusCode: 200, headers, body: JSON.stringify(scans) };
     }
 
+    // POST /body-scans (Save new scan)
     if (method === 'POST') {
         const scanData = JSON.parse(event.body);
         if (!scanData) {
@@ -199,6 +205,8 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
 
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
 }
+
+// --- EXISTING HANDLERS ---
 
 async function handleGroceryListRequest(event, headers, method, pathParts) {
     const userId = event.user.userId;
@@ -312,12 +320,12 @@ async function handleMealPlansRequest(event, headers, method, pathParts) {
     }
     if (method === 'POST' && pathParts.length === 3 && pathParts[2] === 'items') {
         const planId = parseInt(pathParts[1], 10);
-        const { savedMealId, mealData, metadata } = JSON.parse(event.body); // Extract metadata
+        const { savedMealId, mealData } = JSON.parse(event.body);
         if (savedMealId) {
-            const newItem = await addMealToPlanItem(userId, planId, savedMealId, metadata);
+            const newItem = await addMealToPlanItem(userId, planId, savedMealId);
             return { statusCode: 201, headers, body: JSON.stringify(newItem) };
         } else if (mealData) {
-             const newItem = await addMealAndLinkToPlan(userId, mealData, planId, metadata);
+             const newItem = await addMealAndLinkToPlan(userId, mealData, planId);
              return { statusCode: 201, headers, body: JSON.stringify(newItem) };
         }
          return { statusCode: 400, headers, body: JSON.stringify({ error: 'Either savedMealId or mealData is required.' })};
@@ -348,8 +356,16 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         if (!shopifyResponse) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Login failed: Invalid response.' }) };
         const data = shopifyResponse['customerAccessTokenCreate'];
         if (!data || data.customerUserErrors.length > 0) return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid credentials.', details: data?.customerUserErrors[0]?.message }) };
+        
+        const accessToken = data.customerAccessToken.accessToken;
+
+        // Fetch Customer Details (FirstName) using the Access Token
+        const customerQuery = `query { customer { firstName } }`;
+        const customerData = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
+        const firstName = customerData?.customer?.firstName || '';
+
         const user = await findOrCreateUserByEmail(email);
-        const sessionToken = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+        const sessionToken = jwt.sign({ userId: user.id, email: user.email, firstName }, JWT_SECRET, { expiresIn: '7d' });
         return { statusCode: 200, headers, body: JSON.stringify({ token: sessionToken }) };
     } catch (error) {
         console.error('[CRITICAL] LOGIN_HANDLER_CRASH:', error);
@@ -373,10 +389,18 @@ async function handleMealSuggestionRequest(event, ai, headers) {
     return { statusCode: 200, headers: { ...headers, 'Content-Type': 'application/json' }, body: response.text };
 }
 
-function callShopifyStorefrontAPI(query, variables) {
+/**
+ * @returns {Promise<any>}
+ */
+function callShopifyStorefrontAPI(query, variables, customerAccessToken = null) {
     const { SHOPIFY_STORE_DOMAIN, SHOPIFY_STOREFRONT_TOKEN } = process.env;
     const postData = JSON.stringify({ query, variables });
     const options = { hostname: SHOPIFY_STORE_DOMAIN, path: '/api/2024-04/graphql.json', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData), 'X-Shopify-Storefront-Access-Token': SHOPIFY_STOREFRONT_TOKEN } };
+    
+    if (customerAccessToken) {
+        options.headers['X-Shopify-Customer-Access-Token'] = customerAccessToken;
+    }
+
     return new Promise((resolve, reject) => {
         const req = https.request(options, (res) => {
             let data = '';

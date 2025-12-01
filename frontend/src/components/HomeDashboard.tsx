@@ -1,3 +1,4 @@
+
 import React, { useMemo, useEffect, useState } from 'react';
 import { CameraIcon, UploadIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, FireIcon, UserGroupIcon, BeakerIcon, UserCircleIcon, TrophyIcon, ClockIcon } from './icons';
 import type { MealLogEntry, RewardsSummary } from '../types';
@@ -118,6 +119,13 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         return { text: "Plan tomorrow's nutrition to stay ahead.", btn: "View Plan", action: () => {} }; // Placeholder action
     }, []);
 
+    const greeting = useMemo(() => {
+        const hour = new Date().getHours();
+        if (hour < 12) return 'Good Morning';
+        if (hour < 17) return 'Good Afternoon';
+        return 'Good Evening';
+    }, []);
+
     // Placeholder activity score (would come from device integration)
     const activityScore = 65; 
 
@@ -140,7 +148,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
             {/* Header */}
             <header className="flex justify-between items-start mb-6">
                 <div>
-                    <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">Good Morning, {userName}</h1>
+                    <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">{greeting}, {userName}</h1>
                     <p className="text-slate-500 font-medium">Let's hit your goals today.</p>
                 </div>
                 {/* Health Wallet Pill - Extra Prominent */}
