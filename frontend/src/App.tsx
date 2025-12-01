@@ -2,10 +2,9 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import * as apiService from './services/apiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
-import type { NutritionInfo, SavedMeal, Recipe, MealLogEntry, MealPlan } from './types';
+import type { NutritionInfo, SavedMeal, Recipe, MealLogEntry, MealPlan, MealPlanItemMetadata } from './types';
 import { ImageUploader } from './components/ImageUploader';
 import { NutritionCard } from './components/NutritionCard';
-import { FoodPlan } from './components/FoodPlan';
 import { Loader } from './components/Loader';
 import { ErrorAlert } from './components/ErrorAlert';
 import { HomeDashboard } from './components/HomeDashboard';
@@ -73,7 +72,6 @@ const App: React.FC = () => {
       const loadInitialData = async () => {
         try {
           // Keep data loading in background if we are at the hub, or load it immediately.
-          // Loading immediately ensures smoother transition.
           setIsDataLoading(true);
           const [plans, meals, log] = await Promise.all([
             apiService.getMealPlans(),
@@ -257,21 +255,26 @@ const App: React.FC = () => {
     setIsAddToPlanModalOpen(true);
   };
   
-  const handleConfirmAddToPlan = async (planId: number) => {
+  const handleConfirmAddToPlan = async (planId: number, metadata: MealPlanItemMetadata) => {
     if (!mealToAdd) return;
     try {
         let newItem;
         if ('id' in mealToAdd && 'createdAt' in mealToAdd) { // MealLogEntry
-            newItem = await apiService.addMealFromHistoryToPlan(planId, mealToAdd);
+            newItem = await apiService.addMealFromHistoryToPlan(planId, mealToAdd, metadata);
         } else if ('id' in mealToAdd) { // SavedMeal
-            newItem = await apiService.addMealToPlan(planId, mealToAdd.id);
+            newItem = await apiService.addMealToPlan(planId, mealToAdd.id, metadata);
         } else { // NutritionInfo from suggestion or recipe
-            newItem = await apiService.addMealFromHistoryToPlan(planId, mealToAdd);
+            newItem = await apiService.addMealFromHistoryToPlan(planId, mealToAdd, metadata);
         }
         
         if (newItem) {
             setMealPlans(plans => plans.map(p => p.id === planId ? { ...p, items: [...p.items, newItem] } : p));
         }
+
+        if (metadata.addToGrocery) {
+             await apiService.addGroceryItem(activePlanId || 0, mealToAdd.mealName); // Simplistic, ideally check for active grocery list
+        }
+
     } catch(err) {
         setError("Failed to add meal to plan.");
     } finally {
@@ -369,15 +372,15 @@ const App: React.FC = () => {
             />
         );
         case 'plan': return (
-            <>
-              <MealPlanManager 
+             <MealPlanManager 
                 plans={mealPlans} 
                 activePlanId={activePlanId} 
+                savedMeals={savedMeals}
                 onPlanChange={setActivePlanId}
                 onCreatePlan={handleCreateMealPlan}
-              />
-              <FoodPlan plan={activePlan} onRemove={handleRemoveFromPlan} />
-            </>
+                onAddToPlan={handleInitiateAddToPlan}
+                onRemoveFromPlan={handleRemoveFromPlan}
+            />
         );
         case 'meals': return <MealLibrary meals={savedMeals} onAdd={handleInitiateAddToPlan} onDelete={handleDeleteMeal} />;
         case 'history': return <MealHistory logEntries={mealLog} onSaveMeal={handleSaveMeal} onAddToPlan={handleInitiateAddToPlan} />;
@@ -420,7 +423,7 @@ const App: React.FC = () => {
         />
       )}
       
-      <main className="max-w-4xl mx-auto p-4 md:p-8">
+      <main className="max-w-7xl mx-auto p-4 md:p-6 lg:p-8">
          <input type="file" accept="image/*" capture="environment" ref={cameraInputRef} onChange={(e) => handleFileChange(e, 'nutrition')} className="hidden"/>
          <input type="file" accept="image/*" ref={uploadInputRef} onChange={(e) => handleFileChange(e, 'nutrition')} className="hidden"/>
          <input type="file" accept="image/*" ref={pantryInputRef} onChange={(e) => handleFileChange(e, 'pantry')} className="hidden"/>

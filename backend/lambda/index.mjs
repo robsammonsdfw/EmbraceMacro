@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import https from 'https';
@@ -47,7 +48,7 @@ export const handler = async (event) => {
     const allowedOrigins = [
         "https://food.embracehealth.ai",
         "https://app.embracehealth.ai",
-        "https://scan.embracehealth.ai", // Added for Prism App
+        "https://scan.embracehealth.ai", 
         "https://main.dfp0msdoew280.amplifyapp.com",
         "http://localhost:5173",
         "http://localhost:3000",
@@ -140,12 +141,9 @@ export const handler = async (event) => {
     const resource = pathParts[0];
 
     try {
-        // --- NEW RESOURCE FOR BODY SCANS ---
         if (resource === 'body-scans') {
             return await handleBodyScansRequest(event, headers, method, pathParts);
         }
-        
-        // --- EXISTING RESOURCES ---
         if (resource === 'meal-log') {
             return await handleMealLogRequest(event, headers, method, pathParts);
         }
@@ -182,17 +180,14 @@ export const handler = async (event) => {
     };
 };
 
-// --- NEW HANDLER FOR BODY SCANS ---
 async function handleBodyScansRequest(event, headers, method, pathParts) {
     const userId = event.user.userId;
 
-    // GET /body-scans (Fetch history)
     if (method === 'GET') {
         const scans = await getBodyScans(userId);
         return { statusCode: 200, headers, body: JSON.stringify(scans) };
     }
 
-    // POST /body-scans (Save new scan)
     if (method === 'POST') {
         const scanData = JSON.parse(event.body);
         if (!scanData) {
@@ -204,8 +199,6 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
 
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
 }
-
-// --- EXISTING HANDLERS ---
 
 async function handleGroceryListRequest(event, headers, method, pathParts) {
     const userId = event.user.userId;
@@ -319,12 +312,12 @@ async function handleMealPlansRequest(event, headers, method, pathParts) {
     }
     if (method === 'POST' && pathParts.length === 3 && pathParts[2] === 'items') {
         const planId = parseInt(pathParts[1], 10);
-        const { savedMealId, mealData } = JSON.parse(event.body);
+        const { savedMealId, mealData, metadata } = JSON.parse(event.body); // Extract metadata
         if (savedMealId) {
-            const newItem = await addMealToPlanItem(userId, planId, savedMealId);
+            const newItem = await addMealToPlanItem(userId, planId, savedMealId, metadata);
             return { statusCode: 201, headers, body: JSON.stringify(newItem) };
         } else if (mealData) {
-             const newItem = await addMealAndLinkToPlan(userId, mealData, planId);
+             const newItem = await addMealAndLinkToPlan(userId, mealData, planId, metadata);
              return { statusCode: 201, headers, body: JSON.stringify(newItem) };
         }
          return { statusCode: 400, headers, body: JSON.stringify({ error: 'Either savedMealId or mealData is required.' })};

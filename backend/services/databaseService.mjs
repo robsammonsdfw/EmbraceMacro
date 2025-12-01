@@ -1,3 +1,4 @@
+
 import pg from 'pg';
 
 const { Pool } = pg;
@@ -58,14 +59,23 @@ const ensureDatabaseSchema = async (client) => {
         );
     `);
 
-    // 2. Core App Tables (Ensure existence)
+    // 2. Core App Tables
     await client.query(`CREATE TABLE IF NOT EXISTS saved_meals (id SERIAL PRIMARY KEY, user_id VARCHAR(255) NOT NULL, meal_data JSONB, created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP);`);
     await client.query(`CREATE TABLE IF NOT EXISTS meal_plans (id SERIAL PRIMARY KEY, user_id VARCHAR(255) NOT NULL, name VARCHAR(255) NOT NULL, created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP);`);
+    
+    // Update meal_plan_items to have metadata
     await client.query(`CREATE TABLE IF NOT EXISTS meal_plan_items (id SERIAL PRIMARY KEY, user_id VARCHAR(255) NOT NULL, meal_plan_id INT NOT NULL, saved_meal_id INT NOT NULL, created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP);`);
+    
+    try {
+        await client.query(`ALTER TABLE meal_plan_items ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}';`);
+    } catch (e) {
+        console.log("Migration note: metadata column might already exist.");
+    }
+
     await client.query(`CREATE TABLE IF NOT EXISTS meal_log_entries (id SERIAL PRIMARY KEY, user_id VARCHAR(255) NOT NULL, meal_data JSONB, image_base64 TEXT, created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP);`);
     await client.query(`CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, email VARCHAR(255) UNIQUE NOT NULL);`);
 
-    // 3. Grocery List Tables (New Schema)
+    // 3. Grocery List Tables
     await client.query(`
         CREATE TABLE IF NOT EXISTS grocery_lists (
             id SERIAL PRIMARY KEY,
@@ -76,7 +86,6 @@ const ensureDatabaseSchema = async (client) => {
         );
     `);
     
-    // Ensure grocery_list_items exists (handle both legacy and new)
     await client.query(`
         CREATE TABLE IF NOT EXISTS grocery_list_items (
             id SERIAL PRIMARY KEY,
@@ -86,16 +95,8 @@ const ensureDatabaseSchema = async (client) => {
             grocery_list_id INT
         );
     `);
-
-    // Add grocery_list_id to items if it doesn't exist (Migration for legacy tables)
-    try {
-        await client.query(`ALTER TABLE grocery_list_items ADD COLUMN IF NOT EXISTS grocery_list_id INT;`);
-        await client.query(`CREATE INDEX IF NOT EXISTS idx_grocery_list_items_list_id ON grocery_list_items(grocery_list_id);`);
-    } catch (e) {
-        console.log("Info: Grocery list schema update skipped or failed (might already exist):", e.message);
-    }
-
-    // 4. Body Scans Table (New for Prism App)
+    
+    // 4. Body Scans
     await client.query(`
         CREATE TABLE IF NOT EXISTS body_scans (
             id SERIAL PRIMARY KEY,
@@ -104,7 +105,6 @@ const ensureDatabaseSchema = async (client) => {
             created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         );
     `);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_body_scans_user_id ON body_scans(user_id);`);
 
     _schemaChecked = true;
 };
@@ -113,7 +113,6 @@ const ensureDatabaseSchema = async (client) => {
 export const findOrCreateUserByEmail = async (email) => {
     const client = await pool.connect();
     try {
-        // Ensure schema is up to date when user logs in
         await ensureDatabaseSchema(client);
 
         const insertQuery = `
@@ -243,7 +242,6 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
             id: row.id,
             ...mealDataFromDb,
             imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
-            hasImage: true,
             createdAt: row.created_at
         };
     } catch (err) {
@@ -259,8 +257,7 @@ export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
     try {
         const query = `
-            SELECT id, meal_data, created_at,
-            (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image
+            SELECT id, meal_data, image_base64, created_at 
             FROM meal_log_entries
             WHERE user_id = $1 
             ORDER BY created_at DESC;
@@ -271,8 +268,7 @@ export const getMealLogEntries = async (userId) => {
             return {
                 id: row.id,
                 ...mealData,
-                imageUrl: undefined, // Don't send the full image list
-                hasImage: row.has_image,
+                imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
                 createdAt: row.created_at,
             };
         });
@@ -302,7 +298,6 @@ export const getMealLogEntryById = async (userId, logId) => {
             id: row.id,
             ...mealData,
             imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
-            hasImage: !!row.image_base64,
             createdAt: row.created_at
         };
     } catch (err) {
@@ -319,21 +314,14 @@ export const getSavedMeals = async (userId) => {
     const client = await pool.connect();
     try {
         const query = `
-            SELECT id, meal_data - 'imageBase64' as meal_data,
-            (meal_data->>'imageBase64' IS NOT NULL AND length(meal_data->>'imageBase64') > 0) as has_image,
-            created_at
-            FROM saved_meals 
+            SELECT id, meal_data FROM saved_meals 
             WHERE user_id = $1 
             ORDER BY created_at DESC;
         `;
         const res = await client.query(query, [userId]);
         return res.rows.map(row => {
             const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
-            return { 
-                id: row.id, 
-                ...processMealDataForClient(mealData),
-                hasImage: row.has_image
-            };
+            return { id: row.id, ...processMealDataForClient(mealData) };
         });
     } catch (err) {
         console.error('Database error in getSavedMeals:', err);
@@ -352,11 +340,7 @@ export const getSavedMealById = async (userId, mealId) => {
         
         const row = res.rows[0];
         const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
-        return { 
-            id: row.id, 
-            ...processMealDataForClient(mealData),
-            hasImage: !!mealData.imageBase64
-        };
+        return { id: row.id, ...processMealDataForClient(mealData) };
     } catch (err) {
         console.error('Database error in getSavedMealById:', err);
         throw new Error('Could not retrieve saved meal.');
@@ -381,11 +365,7 @@ export const saveMeal = async (userId, mealData) => {
         
         const mealDataFromDb = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
 
-        return { 
-            id: row.id, 
-            ...processMealDataForClient(mealDataFromDb),
-            hasImage: !!mealDataForDb.imageBase64
-        };
+        return { id: row.id, ...processMealDataForClient(mealDataFromDb) };
     } catch (err) {
         console.error('Database error in saveMeal:', err);
         throw new Error('Could not save meal.');
@@ -411,12 +391,12 @@ export const deleteMeal = async (userId, mealId) => {
 export const getMealPlans = async (userId) => {
     const client = await pool.connect();
     try {
+        await ensureDatabaseSchema(client);
         const query = `
             SELECT 
                 p.id as plan_id, p.name as plan_name,
-                i.id as item_id,
-                sm.id as meal_id, sm.meal_data - 'imageBase64' as meal_data,
-                (sm.meal_data->>'imageBase64' IS NOT NULL AND length(sm.meal_data->>'imageBase64') > 0) as has_image
+                i.id as item_id, i.metadata as item_metadata,
+                sm.id as meal_id, sm.meal_data
             FROM meal_plans p
             LEFT JOIN meal_plan_items i ON p.id = i.meal_plan_id
             LEFT JOIN saved_meals sm ON i.saved_meal_id = sm.id
@@ -438,10 +418,10 @@ export const getMealPlans = async (userId) => {
                 const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
                 plans.get(row.plan_id).items.push({
                     id: row.item_id,
+                    metadata: row.item_metadata || {},
                     meal: {
                         id: row.meal_id,
-                        ...processMealDataForClient(mealData),
-                        hasImage: row.has_image
+                        ...processMealDataForClient(mealData)
                     }
                 });
             }
@@ -485,7 +465,7 @@ export const deleteMealPlan = async (userId, planId) => {
 };
 
 
-export const addMealToPlanItem = async (userId, planId, savedMealId) => {
+export const addMealToPlanItem = async (userId, planId, savedMealId, metadata = {}) => {
     const client = await pool.connect();
     try {
         const checkQuery = `
@@ -498,40 +478,32 @@ export const addMealToPlanItem = async (userId, planId, savedMealId) => {
         }
 
         const insertQuery = `
-            INSERT INTO meal_plan_items (user_id, meal_plan_id, saved_meal_id)
-            VALUES ($1, $2, $3)
-            RETURNING id;
+            INSERT INTO meal_plan_items (user_id, meal_plan_id, saved_meal_id, metadata)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id, metadata;
         `;
-        const insertRes = await client.query(insertQuery, [userId, planId, savedMealId]);
-        const newItemId = insertRes.rows[0].id;
+        const insertRes = await client.query(insertQuery, [userId, planId, savedMealId, metadata]);
+        const newItem = insertRes.rows[0];
 
         const selectQuery = `
             SELECT 
                 i.id,
                 m.id as meal_id,
-                m.meal_data - 'imageBase64' as meal_data,
-                (m.meal_data->>'imageBase64' IS NOT NULL AND length(m.meal_data->>'imageBase64') > 0) as has_image
+                m.meal_data
             FROM meal_plan_items i
             JOIN saved_meals m ON i.saved_meal_id = m.id
             WHERE i.id = $1;
         `;
-        const selectRes = await client.query(selectQuery, [newItemId]);
+        const selectRes = await client.query(selectQuery, [newItem.id]);
         const row = selectRes.rows[0];
         const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
         return {
             id: row.id,
-            meal: { 
-                id: row.meal_id, 
-                ...processMealDataForClient(mealData),
-                hasImage: row.has_image
-            }
+            metadata: newItem.metadata || {},
+            meal: { id: row.meal_id, ...processMealDataForClient(mealData) }
         };
 
     } catch (err) {
-        if (err.code === '23505') { 
-            console.warn(`Meal ${savedMealId} is already in plan ${planId}.`);
-            throw new Error('This meal is already in the selected plan.');
-        }
         console.error('Database error in addMealToPlanItem:', err);
         throw new Error('Could not add meal to plan.');
     } finally {
@@ -540,12 +512,12 @@ export const addMealToPlanItem = async (userId, planId, savedMealId) => {
 };
 
 
-export const addMealAndLinkToPlan = async (userId, mealData, planId) => {
+export const addMealAndLinkToPlan = async (userId, mealData, planId, metadata = {}) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
         const newMeal = await saveMeal(userId, mealData);
-        const newPlanItem = await addMealToPlanItem(userId, planId, newMeal.id);
+        const newPlanItem = await addMealToPlanItem(userId, planId, newMeal.id, metadata);
         await client.query('COMMIT');
         return newPlanItem;
     } catch (err) {
@@ -576,8 +548,6 @@ export const getGroceryLists = async (userId) => {
     const client = await pool.connect();
     try {
         await ensureDatabaseSchema(client);
-        // ... legacy check omitted for brevity, assuming established schema ...
-
         const query = `
             SELECT id, name, is_active, created_at 
             FROM grocery_lists 
@@ -774,12 +744,11 @@ export const removeGroceryListItem = async (userId, itemId) => {
     }
 };
 
-// --- Body Scans Persistence (New) ---
+// --- Body Scans Persistence ---
 
 export const saveBodyScan = async (userId, scanData) => {
     const client = await pool.connect();
     try {
-        // Ensure table exists on first run
         await ensureDatabaseSchema(client);
         
         const query = `
@@ -800,7 +769,6 @@ export const saveBodyScan = async (userId, scanData) => {
 export const getBodyScans = async (userId) => {
     const client = await pool.connect();
     try {
-        // Ensure table exists on first run
         await ensureDatabaseSchema(client);
 
         const query = `

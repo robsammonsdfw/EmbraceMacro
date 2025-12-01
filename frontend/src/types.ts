@@ -24,29 +24,36 @@ export interface NutritionInfo {
   ingredients: Ingredient[];
   justification?: string;
   imageUrl?: string; 
-  hasImage?: boolean; // New flag to indicate if an image exists for this record
+  hasImage?: boolean; 
   nutriScore?: string;
   ecoScore?: string;
   allergens?: string[];
+  source?: 'user' | 'coach' | 'community'; // Added source
 }
 
 export interface SavedMeal extends NutritionInfo {
-  id: number; // Database ID is a number
+  id: number;
 }
 
-// Represents a meal analysis that has been saved to the user's history
 export interface MealLogEntry extends NutritionInfo {
   id: number;
   createdAt: string;
 }
 
-// Represents a meal that has been added to a specific meal plan
-export interface MealPlanItem {
-  id: number; // This is the ID of the entry in the meal_plan_items table
-  meal: SavedMeal;
+export interface MealPlanItemMetadata {
+  day?: string;      // e.g., "Monday", "Tuesday"
+  slot?: string;     // e.g., "Breakfast", "Lunch", "Dinner", "Snack"
+  portion?: number;  // e.g., 1.0, 0.5, 2.0
+  context?: string;  // e.g., "Home", "Restaurant", "Ordered"
+  addToGrocery?: boolean;
 }
 
-// Represents a named list of meals
+export interface MealPlanItem {
+  id: number; 
+  meal: SavedMeal;
+  metadata?: MealPlanItemMetadata; // Added metadata
+}
+
 export interface MealPlan {
   id: number;
   name: string;
@@ -80,7 +87,7 @@ export interface GroceryList {
     name: string;
     is_active: boolean;
     created_at: string;
-    items?: GroceryItem[]; // Optional, as we might load lists without items first
+    items?: GroceryItem[]; 
 }
 
 export interface RewardsLedgerEntry {

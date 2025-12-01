@@ -1,4 +1,5 @@
-import type { NutritionInfo, Recipe, SavedMeal, MealLogEntry, MealPlan, MealPlanItem, GroceryList, GroceryItem, RewardsSummary, BodyScan } from '../types';
+
+import type { NutritionInfo, Recipe, SavedMeal, MealLogEntry, MealPlan, MealPlanItem, GroceryList, GroceryItem, RewardsSummary, BodyScan, MealPlanItemMetadata } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
 const AUTH_TOKEN_KEY = 'embracehealth-api-token';
@@ -228,15 +229,15 @@ export const deleteMealPlan = (planId: number): Promise<null> => {
     return callApi(`/meal-plans/${planId}`, 'DELETE');
 };
 
-export const addMealToPlan = (planId: number, savedMealId: number): Promise<MealPlanItem> => {
-    return callApi(`/meal-plans/${planId}/items`, 'POST', { savedMealId });
+export const addMealToPlan = (planId: number, savedMealId: number, metadata?: MealPlanItemMetadata): Promise<MealPlanItem> => {
+    return callApi(`/meal-plans/${planId}/items`, 'POST', { savedMealId, metadata });
 };
 
-export const addMealFromHistoryToPlan = (planId: number, mealData: NutritionInfo): Promise<MealPlanItem> => {
+export const addMealFromHistoryToPlan = (planId: number, mealData: NutritionInfo, metadata?: MealPlanItemMetadata): Promise<MealPlanItem> => {
     // If it's a MealLogEntry, strip ID and timestamps.
     // If it's NutritionInfo, it's just data.
     const { id, createdAt, ...pureMealData } = mealData as any;
-    return callApi(`/meal-plans/${planId}/items`, 'POST', { mealData: pureMealData });
+    return callApi(`/meal-plans/${planId}/items`, 'POST', { mealData: pureMealData, metadata });
 };
 
 export const removeMealFromPlanItem = (itemId: number): Promise<null> => {
