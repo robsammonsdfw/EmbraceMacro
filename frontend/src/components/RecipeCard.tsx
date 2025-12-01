@@ -54,6 +54,7 @@ export const RecipeCard: React.FC<{ recipe: Recipe; onAddToPlan: () => void; }> 
         >
           <PlusIcon />
           <span>Add to Today's Plan</span>
+          <span className="ml-1 bg-white/20 text-white text-[10px] px-1.5 py-0.5 rounded border border-white/20">+5 pts</span>
         </button>
       </div>
     </div>

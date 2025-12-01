@@ -48,17 +48,19 @@ const HistoryEntryCard: React.FC<{
             <div className="flex items-center justify-end space-x-2">
                 <button
                     onClick={onSave}
-                    className="p-2 text-slate-500 bg-white border border-slate-300 hover:bg-slate-200 rounded-full transition-colors"
+                    className="flex items-center space-x-1 p-2 pr-3 text-slate-500 bg-white border border-slate-300 hover:bg-slate-200 rounded-full transition-colors group"
                     aria-label={`Save ${entry.mealName} to My Meals`}
                 >
                     <BookmarkIcon />
+                    <span className="text-[9px] font-bold text-slate-400 group-hover:text-slate-600">+10 pts</span>
                 </button>
                 <button
                     onClick={onAdd}
-                    className="p-2 text-emerald-500 bg-emerald-100 hover:bg-emerald-200 rounded-full transition-colors"
+                    className="flex items-center space-x-1 p-2 pr-3 text-emerald-500 bg-emerald-100 hover:bg-emerald-200 rounded-full transition-colors group"
                     aria-label={`Add ${entry.mealName} to today's plan`}
                 >
                     <PlusIcon />
+                     <span className="text-[9px] font-bold text-emerald-600 group-hover:text-emerald-800">+5 pts</span>
                 </button>
             </div>
         </div>

@@ -49,10 +49,13 @@ export const NutritionCard: React.FC<NutritionCardProps> = ({ data, onSaveToHist
       <div className="p-4 bg-slate-50 border-t border-slate-200">
         <button
           onClick={onSaveToHistory}
-          className="w-full bg-emerald-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-emerald-600 transition-colors flex items-center justify-center space-x-2"
+          className="w-full bg-emerald-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-emerald-600 transition-colors flex items-center justify-center space-x-2 relative group"
         >
           <ArchiveIcon />
           <span>Save to History</span>
+          <span className="ml-2 bg-white/20 text-white text-[10px] font-bold px-1.5 py-0.5 rounded border border-white/30 animate-pulse group-hover:animate-none">
+              +50 pts
+          </span>
         </button>
       </div>
     </div>

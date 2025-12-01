@@ -42,17 +42,19 @@ export const MealSuggestionCard: React.FC<MealSuggestionCardProps> = ({ meal, on
       <div className="p-3 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row gap-2">
         <button
           onClick={() => onSaveMeal(meal)}
-          className="w-full bg-slate-600 text-white font-bold py-2 px-3 rounded-lg hover:bg-slate-700 transition-colors flex items-center justify-center space-x-2 text-sm"
+          className="w-full bg-slate-600 text-white font-bold py-2 px-3 rounded-lg hover:bg-slate-700 transition-colors flex items-center justify-center space-x-1 text-sm group"
         >
           <BookmarkIcon />
-          <span>Save Meal</span>
+          <span>Save</span>
+          <span className="ml-1 bg-white/20 text-white text-[9px] px-1.5 py-0.5 rounded">+10 pts</span>
         </button>
         <button
           onClick={() => onAddToPlan(meal)}
-          className="w-full bg-emerald-500 text-white font-bold py-2 px-3 rounded-lg hover:bg-emerald-600 transition-colors flex items-center justify-center space-x-2 text-sm"
+          className="w-full bg-emerald-500 text-white font-bold py-2 px-3 rounded-lg hover:bg-emerald-600 transition-colors flex items-center justify-center space-x-1 text-sm"
         >
           <PlusIcon />
-          <span>Add to Plan</span>
+          <span>Plan</span>
+          <span className="ml-1 bg-white/20 text-white text-[9px] px-1.5 py-0.5 rounded">+5 pts</span>
         </button>
       </div>
     </div>
