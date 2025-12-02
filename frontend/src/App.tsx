@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import * as apiService from './services/apiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
 import type { NutritionInfo, SavedMeal, Recipe, MealLogEntry, MealPlan, MealPlanItemMetadata } from './types';

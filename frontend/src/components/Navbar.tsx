@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { MenuIcon, XIcon, HomeIcon, PlusIcon, BookOpenIcon, ClockIcon, LightBulbIcon, ClipboardListIcon, StarIcon, Squares2X2Icon, TrophyIcon, CameraIcon } from './icons';
+import { HomeIcon, PlusIcon, BookOpenIcon, ClockIcon, ClipboardListIcon, Squares2X2Icon, TrophyIcon, CameraIcon } from './icons';
 import * as apiService from '../services/apiService';
 
 interface NavbarProps {
@@ -30,27 +30,7 @@ const NavLink: React.FC<{
     </button>
 );
 
-const MobileNavLink: React.FC<{ 
-    active: boolean; 
-    onClick: () => void; 
-    children: React.ReactNode; 
-    icon?: React.ReactNode
-}> = ({ active, onClick, children, icon }) => (
-    <button
-        onClick={onClick}
-        className={`w-full text-left px-4 py-3 text-base font-medium border-l-4 transition-colors flex items-center space-x-3 ${
-            active
-                ? 'border-emerald-500 text-emerald-700 bg-emerald-50'
-                : 'border-transparent text-slate-600 hover:bg-slate-50 hover:text-emerald-600'
-        }`}
-    >
-        {icon && <span className="text-current w-5 h-5">{icon}</span>}
-        <span>{children}</span>
-    </button>
-);
-
 export const Navbar: React.FC<NavbarProps> = ({ activeView, onNavigate, onLogout, onBackToHub, onCaptureClick }) => {
-    const [isOpen, setIsOpen] = useState(false);
     const [points, setPoints] = useState<number>(0);
 
     // Fetch basic rewards data for the wallet pill
@@ -68,12 +48,10 @@ export const Navbar: React.FC<NavbarProps> = ({ activeView, onNavigate, onLogout
 
     const handleNav = (view: string) => {
         onNavigate(view);
-        setIsOpen(false);
     };
 
     const handleBackToHub = () => {
         onBackToHub();
-        setIsOpen(false);
     };
     
     const cashValue = (points * 0.009).toFixed(2);
