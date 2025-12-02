@@ -1,4 +1,5 @@
 
+
 import type { NutritionInfo, Recipe, SavedMeal, MealLogEntry, MealPlan, MealPlanItem, GroceryList, GroceryItem, RewardsSummary, BodyScan, MealPlanItemMetadata } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
@@ -106,6 +107,11 @@ const nutritionSchema = {
 
 export const analyzeImageWithGemini = (base64Image: string, mimeType: string): Promise<NutritionInfo> => {
     const prompt = "Analyze the image of the food and identify the meal and all its ingredients...";
+    return callApi('/analyze-image', 'POST', { base64Image, mimeType, prompt, schema: nutritionSchema });
+};
+
+export const analyzeRestaurantMeal = (base64Image: string, mimeType: string): Promise<NutritionInfo> => {
+    const prompt = "Analyze this restaurant meal. Identify the dish and potential hidden ingredients like butter, oil, or sugar often used in restaurant cooking. Estimate nutritional values conservatively, accounting for larger portion sizes common in restaurants. Return the result in the specified JSON format.";
     return callApi('/analyze-image', 'POST', { base64Image, mimeType, prompt, schema: nutritionSchema });
 };
 

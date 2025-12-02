@@ -8,7 +8,6 @@ import { NutritionCard } from './components/NutritionCard';
 import { Loader } from './components/Loader';
 import { ErrorAlert } from './components/ErrorAlert';
 import { HomeDashboard } from './components/HomeDashboard';
-import { BarcodeScanner } from './components/BarcodeScanner';
 import { MealLibrary } from './components/MealLibrary';
 import { Navbar } from './components/Navbar';
 import { MealHistory } from './components/MealHistory';
@@ -21,6 +20,7 @@ import { AddToPlanModal } from './components/AddToPlanModal';
 import { MealPlanManager } from './components/MealPlanManager';
 import { RewardsDashboard } from './components/RewardsDashboard';
 import { Hub } from './components/Hub';
+import { CaptureFlow } from './components/CaptureFlow';
 
 type ActiveView = 'home' | 'plan' | 'meals' | 'history' | 'suggestions' | 'grocery' | 'rewards';
 type MealDataType = NutritionInfo | SavedMeal | MealLogEntry;
@@ -32,6 +32,7 @@ const App: React.FC = () => {
   // App Navigation State
   const [appMode, setAppMode] = useState<AppMode>('hub');
   const [activeView, setActiveView] = useState<ActiveView>('home');
+  const [isCaptureOpen, setIsCaptureOpen] = useState(false);
 
   // App Data State
   const [image, setImage] = useState<string | null>(null);
@@ -46,7 +47,6 @@ const App: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [processingMessage, setProcessingMessage] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
-  const [isScanning, setIsScanning] = useState<boolean>(false);
   const [isDataLoading, setIsDataLoading] = useState<boolean>(true);
   
   // Modal State
@@ -57,11 +57,6 @@ const App: React.FC = () => {
   const [suggestedMeals, setSuggestedMeals] = useState<NutritionInfo[] | null>(null);
   const [isSuggesting, setIsSuggesting] = useState<boolean>(false);
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
-
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const uploadInputRef = useRef<HTMLInputElement>(null);
-  const pantryInputRef = useRef<HTMLInputElement>(null);
-  const recipeInputRef = useRef<HTMLInputElement>(null);
 
   const activePlan = useMemo(() => {
     return mealPlans.find(p => p.id === activePlanId) || null;
@@ -111,89 +106,65 @@ const App: React.FC = () => {
       logout();
   };
 
-  const resizeImage = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (event) => {
-        const img = new Image();
-        img.src = event.target?.result as string;
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 1024;
-          const MAX_HEIGHT = 1024;
-          let width = img.width;
-          let height = img.height;
-
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height *= MAX_WIDTH / width;
-              width = MAX_WIDTH;
-            }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width *= MAX_HEIGHT / height;
-              height = MAX_HEIGHT;
-            }
-          }
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', 0.7)); 
-        };
-        img.onerror = (err) => reject(err);
-      };
-      reader.onerror = (err) => reject(err);
-    });
-  };
-
-  const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>, mode: 'nutrition' | 'pantry' | 'recipe' = 'nutrition') => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    
+  const handleCaptureResult = useCallback(async (
+      img: string | null, 
+      mode: 'meal' | 'barcode' | 'pantry' | 'restaurant', 
+      barcode?: string
+  ) => {
+    setIsCaptureOpen(false);
     resetAnalysisState();
     setIsProcessing(true);
-    
-    try {
-      setProcessingMessage('Processing image...');
-      const resizedBase64 = await resizeImage(file);
-      const base64Data = resizedBase64.split(',')[1];
-      setImage(resizedBase64);
 
-      if(mode === 'pantry') {
-        setProcessingMessage('Generating recipe ideas from ingredients...');
-        const recipeData = await apiService.getRecipesFromImage(base64Data, 'image/jpeg');
-        setRecipes(recipeData);
-      } else if (mode === 'recipe') {
-        setProcessingMessage('Identifying dish and fetching recipes...');
-        const recipeData = await apiService.getRecipesFromPlate(base64Data, 'image/jpeg');
-        setRecipes(recipeData);
-      } else {
-        setProcessingMessage('Analyzing your meal nutritional data...');
-        const data = await apiService.analyzeImageWithGemini(base64Data, 'image/jpeg');
-        setNutritionData(data);
-      }
+    try {
+        if (mode === 'barcode' && barcode) {
+            setProcessingMessage('Fetching product data...');
+            const data = await getProductByBarcode(barcode);
+            setNutritionData(data);
+        } else if (img) {
+            setImage(img);
+            const base64Data = img.split(',')[1];
+
+            if (mode === 'pantry') {
+                setProcessingMessage('Generating recipe ideas from ingredients...');
+                const recipeData = await apiService.getRecipesFromImage(base64Data, 'image/jpeg');
+                setRecipes(recipeData);
+            } else if (mode === 'restaurant') {
+                 setProcessingMessage('Analyzing restaurant meal...');
+                 const data = await apiService.analyzeRestaurantMeal(base64Data, 'image/jpeg');
+                 setNutritionData(data);
+            } else {
+                 setProcessingMessage('Analyzing nutritional data...');
+                 const data = await apiService.analyzeImageWithGemini(base64Data, 'image/jpeg');
+                 setNutritionData(data);
+            }
+        }
     } catch (err) {
-      setError('Analysis failed. Please try again.');
-      console.error(err);
+        setError('Analysis failed. Please try again.');
+        console.error(err);
     } finally {
-      setIsProcessing(false);
+        setIsProcessing(false);
     }
-    
-    event.target.value = '';
   }, []);
 
-  const handleScanSuccess = useCallback(async (barcode: string) => {
-    setIsScanning(false);
-    resetAnalysisState();
-    setIsProcessing(true);
-    setProcessingMessage('Fetching product data...');
-    try {
-        const data = await getProductByBarcode(barcode);
-        setNutritionData(data);
-    } catch(err) { setError(`Could not find product for barcode ${barcode}.`); } finally { setIsProcessing(false); }
+  const handleRepeatMeal = useCallback((meal: MealLogEntry) => {
+      setIsCaptureOpen(false);
+      resetAnalysisState();
+      // Directly hydrate the nutrition card with the previous meal data
+      setNutritionData({
+          ...meal,
+          // Use generic image if original is gone, or keep it if possible (though complex with types)
+          imageUrl: meal.imageUrl 
+      });
   }, []);
+  
+  const handleBodyScanClick = () => {
+      const token = localStorage.getItem('embracehealth-api-token');
+      if (token) {
+          window.location.href = `https://app.embracehealth.ai?token=${encodeURIComponent(token)}`;
+      } else {
+          window.location.href = 'https://app.embracehealth.ai';
+      }
+  };
 
   const handleSaveToHistory = useCallback(async (mealData: NutritionInfo, imageBase64: string) => {
     setIsProcessing(true);
@@ -272,7 +243,7 @@ const App: React.FC = () => {
         }
 
         if (metadata.addToGrocery) {
-             await apiService.addGroceryItem(activePlanId || 0, mealToAdd.mealName); // Simplistic, ideally check for active grocery list
+             await apiService.addGroceryItem(activePlanId || 0, mealToAdd.mealName); 
         }
 
     } catch(err) {
@@ -297,12 +268,6 @@ const App: React.FC = () => {
       }
   }, [activePlan, activePlanId]);
 
-
-  const handleTriggerCamera = () => { cameraInputRef.current?.click(); };
-  const handleTriggerUpload = () => { uploadInputRef.current?.click(); };
-  const handleTriggerPantryUpload = () => { pantryInputRef.current?.click(); };
-  const handleTriggerRecipeUpload = () => { recipeInputRef.current?.click(); };
-  const handleTriggerScanner = () => { setIsScanning(true); };
   
   if (isAuthLoading) { return <div className="min-h-screen flex items-center justify-center"><Loader message="Loading session..." /></div>; }
   
@@ -363,11 +328,11 @@ const App: React.FC = () => {
       switch(activeView) {
         case 'home': return (
             <HomeDashboard 
-              onCameraClick={handleTriggerCamera} 
-              onUploadClick={handleTriggerUpload} 
-              onBarcodeClick={handleTriggerScanner} 
-              onPantryChefClick={handleTriggerPantryUpload} 
-              onGetRecipeClick={handleTriggerRecipeUpload}
+              onCameraClick={() => setIsCaptureOpen(true)}
+              onUploadClick={() => setIsCaptureOpen(true)}
+              onBarcodeClick={() => setIsCaptureOpen(true)}
+              onPantryChefClick={() => setIsCaptureOpen(true)}
+              onGetRecipeClick={() => setIsCaptureOpen(true)}
               mealLog={mealLog}
               userName={user?.firstName || 'User'}
             />
@@ -394,11 +359,11 @@ const App: React.FC = () => {
         case 'rewards': return <RewardsDashboard />;
         default: return (
              <HomeDashboard 
-              onCameraClick={handleTriggerCamera} 
-              onUploadClick={handleTriggerUpload} 
-              onBarcodeClick={handleTriggerScanner} 
-              onPantryChefClick={handleTriggerPantryUpload} 
-              onGetRecipeClick={handleTriggerRecipeUpload}
+              onCameraClick={() => setIsCaptureOpen(true)}
+              onUploadClick={() => setIsCaptureOpen(true)}
+              onBarcodeClick={() => setIsCaptureOpen(true)}
+              onPantryChefClick={() => setIsCaptureOpen(true)}
+              onGetRecipeClick={() => setIsCaptureOpen(true)}
               mealLog={mealLog}
               userName={user?.firstName || 'User'}
             />
@@ -412,10 +377,19 @@ const App: React.FC = () => {
         activeView={activeView} 
         onNavigate={handleNavigation} 
         onLogout={handleLogout} 
-        onBackToHub={() => setAppMode('hub')} 
+        onBackToHub={() => setAppMode('hub')}
+        onCaptureClick={() => setIsCaptureOpen(true)}
       />
       
-      {isScanning && <BarcodeScanner onScanSuccess={handleScanSuccess} onCancel={() => setIsScanning(false)} />}
+      {isCaptureOpen && (
+          <CaptureFlow 
+            onClose={() => setIsCaptureOpen(false)}
+            onCapture={handleCaptureResult}
+            lastMeal={mealLog.length > 0 ? mealLog[0] : undefined}
+            onRepeatMeal={handleRepeatMeal}
+            onBodyScanClick={handleBodyScanClick}
+          />
+      )}
       
       {isAddToPlanModalOpen && (
         <AddToPlanModal 
@@ -426,11 +400,6 @@ const App: React.FC = () => {
       )}
       
       <main className="max-w-7xl mx-auto p-4 md:p-6 lg:p-8">
-         <input type="file" accept="image/*" capture="environment" ref={cameraInputRef} onChange={(e) => handleFileChange(e, 'nutrition')} className="hidden"/>
-         <input type="file" accept="image/*" ref={uploadInputRef} onChange={(e) => handleFileChange(e, 'nutrition')} className="hidden"/>
-         <input type="file" accept="image/*" ref={pantryInputRef} onChange={(e) => handleFileChange(e, 'pantry')} className="hidden"/>
-         <input type="file" accept="image/*" ref={recipeInputRef} onChange={(e) => handleFileChange(e, 'recipe')} className="hidden"/>
-
         <div className="space-y-8">
             {renderContent()}
         </div>
