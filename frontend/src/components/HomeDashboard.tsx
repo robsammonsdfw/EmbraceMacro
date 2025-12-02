@@ -94,9 +94,24 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
 }) => {
     const [rewards, setRewards] = useState<RewardsSummary | null>(null);
     const [socialOpen, setSocialOpen] = useState(false);
+    const [greeting, setGreeting] = useState('');
 
     useEffect(() => {
         apiService.getRewardsSummary().then(setRewards).catch(console.error);
+    }, []);
+
+    useEffect(() => {
+        const updateGreeting = () => {
+            const hour = new Date().getHours();
+            if (hour < 5) setGreeting('Good Night');
+            else if (hour < 12) setGreeting('Good Morning');
+            else if (hour < 17) setGreeting('Good Afternoon');
+            else setGreeting('Good Evening');
+        };
+        updateGreeting();
+        // Update greeting every minute to keep it accurate if page stays open
+        const interval = setInterval(updateGreeting, 60000);
+        return () => clearInterval(interval);
     }, []);
 
     // Calculate daily totals
@@ -118,13 +133,6 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         if (hour < 19) return { text: "Dinner time. Record your nutrition.", btn: "Log Dinner", action: onCameraClick };
         return { text: "Plan tomorrow's nutrition to stay ahead.", btn: "View Plan", action: () => {} }; // Placeholder action
     }, [onCameraClick]);
-
-    const greeting = useMemo(() => {
-        const hour = new Date().getHours();
-        if (hour < 12) return 'Good Morning';
-        if (hour < 18) return 'Good Afternoon';
-        return 'Good Evening';
-    }, []);
 
     // Placeholder activity score (would come from device integration)
     const activityScore = 65; 
