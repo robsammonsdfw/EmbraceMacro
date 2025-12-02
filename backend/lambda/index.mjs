@@ -42,7 +42,11 @@ export const handler = async (event) => {
         SHOPIFY_STORE_DOMAIN,
         JWT_SECRET,
         FRONTEND_URL,
-        PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGPORT
+        PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGPORT,
+        // NEW ENV VARS FOR PRISM
+        PRISM_API_KEY,
+        PRISM_ENV, // 'sandbox' or 'production'
+        PRISM_API_URL // Optional override
     } = process.env;
     
     // Dynamic CORS configuration
@@ -363,8 +367,7 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         // Fetch Customer Details (FirstName) using the Access Token
         const customerQuery = `query { customer { firstName } }`;
         const shopifyPayload = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
-        /** @type {any} */
-        const customerData = shopifyPayload;
+        const customerData = /** @type {any} */ (shopifyPayload);
         
         // Improved Name Logic with Fallback: Use Shopify name, or derive from email
         let firstName = customerData?.customer?.firstName;
