@@ -361,8 +361,9 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
 
         // Fetch Customer Details (FirstName) using the Access Token
         const customerQuery = `query { customer { firstName } }`;
+        const customerDataRaw = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
         /** @type {any} */
-        const customerData = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
+        const customerData = customerDataRaw;
         
         // Improved Name Logic with Fallback: Use Shopify name, or derive from email
         let firstName = customerData?.customer?.firstName;
