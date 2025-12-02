@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { MapPinIcon, XIcon } from './icons';
 import { searchPlaces } from '../services/apiService';
@@ -13,7 +12,8 @@ export const LocationPicker: React.FC<LocationPickerProps> = ({ onSelect, onCanc
     const [query, setQuery] = useState('');
     const [results, setResults] = useState<GooglePlaceResult[]>([]);
     const [loading, setLoading] = useState(false);
-    const debounceRef = useRef<NodeJS.Timeout | null>(null);
+    // Use ReturnType<typeof setTimeout> to be compatible with browser environment (returns number)
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         if (!query.trim()) {
