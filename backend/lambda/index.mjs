@@ -362,7 +362,7 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         // Fetch Customer Details (FirstName) using the Access Token
         const customerQuery = `query { customer { firstName } }`;
         const customerData = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
-        const firstName = customerData?.customer?.firstName || '';
+        const firstName = (/** @type {any} */ (customerData))?.customer?.firstName || '';
 
         const user = await findOrCreateUserByEmail(email);
         const sessionToken = jwt.sign({ userId: user.id, email: user.email, firstName }, JWT_SECRET, { expiresIn: '7d' });

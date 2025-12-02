@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import https from 'https';
@@ -355,8 +356,16 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         if (!shopifyResponse) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Login failed: Invalid response.' }) };
         const data = shopifyResponse['customerAccessTokenCreate'];
         if (!data || data.customerUserErrors.length > 0) return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid credentials.', details: data?.customerUserErrors[0]?.message }) };
+        
+        const accessToken = data.customerAccessToken.accessToken;
+
+        // Fetch Customer Details (FirstName) using the Access Token
+        const customerQuery = `query { customer { firstName } }`;
+        const customerData = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
+        const firstName = (/** @type {any} */ (customerData))?.customer?.firstName || '';
+
         const user = await findOrCreateUserByEmail(email);
-        const sessionToken = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+        const sessionToken = jwt.sign({ userId: user.id, email: user.email, firstName }, JWT_SECRET, { expiresIn: '7d' });
         return { statusCode: 200, headers, body: JSON.stringify({ token: sessionToken }) };
     } catch (error) {
         console.error('[CRITICAL] LOGIN_HANDLER_CRASH:', error);
@@ -380,10 +389,18 @@ async function handleMealSuggestionRequest(event, ai, headers) {
     return { statusCode: 200, headers: { ...headers, 'Content-Type': 'application/json' }, body: response.text };
 }
 
-function callShopifyStorefrontAPI(query, variables) {
+/**
+ * @returns {Promise<any>}
+ */
+function callShopifyStorefrontAPI(query, variables, customerAccessToken = null) {
     const { SHOPIFY_STORE_DOMAIN, SHOPIFY_STOREFRONT_TOKEN } = process.env;
     const postData = JSON.stringify({ query, variables });
     const options = { hostname: SHOPIFY_STORE_DOMAIN, path: '/api/2024-04/graphql.json', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData), 'X-Shopify-Storefront-Access-Token': SHOPIFY_STOREFRONT_TOKEN } };
+    
+    if (customerAccessToken) {
+        options.headers['X-Shopify-Customer-Access-Token'] = customerAccessToken;
+    }
+
     return new Promise((resolve, reject) => {
         const req = https.request(options, (res) => {
             let data = '';
