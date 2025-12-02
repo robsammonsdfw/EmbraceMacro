@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import https from 'https';
@@ -44,7 +43,8 @@ export const handler = async (event) => {
         PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGPORT,
         // NEW ENV VARS FOR PRISM
         PRISM_API_KEY,
-        PRISM_ENV // 'sandbox' or 'production'
+        PRISM_ENV, // 'sandbox' or 'production'
+        PRISM_API_URL // Optional override
     } = process.env;
     
     // Dynamic CORS configuration
@@ -195,61 +195,115 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
     // POST /body-scans/init -> Initialize a new session with Prism (Server-to-Server to avoid CORS)
     if (method === 'POST' && pathParts[1] === 'init') {
         try {
-            const { PRISM_API_KEY, PRISM_ENV } = process.env;
+            const { PRISM_API_KEY, PRISM_ENV, PRISM_API_URL } = process.env;
             if (!PRISM_API_KEY) {
                 console.error("[BodyScans] CRITICAL ERROR: PRISM_API_KEY is missing in environment variables.");
                 return { statusCode: 500, headers, body: JSON.stringify({ error: 'Server configuration error: PRISM_API_KEY missing.' }) };
             }
 
-            const isProd = PRISM_ENV === 'production';
-            const baseUrl = isProd ? "https://api.hosted.prismlabs.tech" : "https://sandbox-api.hosted.prismlabs.tech";
+            // Determine Environment and Base URL
+            // Default to 'sandbox' environment logic, but use the 'api.hosted' URL as the user reported it works.
+            // If PRISM_API_URL env var is provided, it takes precedence.
+            const env = PRISM_ENV === 'production' ? 'production' : 'sandbox';
+            const baseUrl = PRISM_API_URL || "https://api.hosted.prismlabs.tech";
+
+            // Mask key for logging safety
+            const maskedKey = PRISM_API_KEY ? `${PRISM_API_KEY.substring(0, 4)}...${PRISM_API_KEY.substring(PRISM_API_KEY.length - 4)}` : 'MISSING';
+            console.log(`[BodyScans] Init Config - Env: ${env}, Url: ${baseUrl}, Key: ${maskedKey}`);
+
             const assetConfigId = "ee651a9e-6de1-4621-a5c9-5d31ca874718";
             
-            // 1. Create User
-            const userExternalId = `user_${userId}`; 
-            // Note: We use the userId to keep it consistent.
-            const userRes = await fetch(`${baseUrl}/v1/users`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'x-api-key': PRISM_API_KEY },
-                body: JSON.stringify({ externalId: userExternalId })
-            });
+            // Generate a unique token for the user.
+            const prismUserToken = `user_${userId}`; 
             
-            let prismUserToken;
-            if (!userRes.ok) {
-                 if (userRes.status === 409) {
-                     // If user exists, try to create a unique session user or handle retrieval.
-                     // For stability in this demo, we ensure a fresh ID if the conflict occurs on a strict environment,
-                     // or we could implement a GET /users lookup. 
-                     // Here we try to create a distinct session ID fallback.
-                     const uniqueId = `${userExternalId}_${Date.now()}`;
-                     const retryRes = await fetch(`${baseUrl}/v1/users`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'x-api-key': PRISM_API_KEY },
-                        body: JSON.stringify({ externalId: uniqueId })
-                    });
-                    const retryData = await retryRes.json();
-                    prismUserToken = retryData.id || retryData._id || retryData.userToken;
-                 } else {
-                     const errorText = await userRes.text();
-                     console.error(`[BodyScans] Prism Create User Error: ${errorText}`);
-                     throw new Error(`Prism User Error: ${errorText}`);
+            // 1. CHECK IF USER EXISTS
+            // GET /users/{token}
+            let userExists = false;
+            try {
+                console.log(`[BodyScans] Checking if user exists at: ${baseUrl}/users/${prismUserToken}`);
+                const checkUserRes = await fetch(`${baseUrl}/users/${prismUserToken}`, {
+                    method: 'GET',
+                    headers: { 'x-api-key': PRISM_API_KEY }
+                });
+
+                if (checkUserRes.ok) {
+                    userExists = true;
+                    console.log(`[BodyScans] User ${prismUserToken} already exists.`);
+                } else if (checkUserRes.status !== 404) {
+                    const checkErr = await checkUserRes.text();
+                    console.warn(`[BodyScans] Check user warning (${checkUserRes.status}): ${checkErr}`);
+                    
+                    if (checkUserRes.status === 401 || checkUserRes.status === 403) {
+                         throw new Error(`Authorization Failed during User Check: The PRISM_API_KEY appears invalid for the target URL (${baseUrl}).`);
+                    }
+                }
+            } catch (checkErr) {
+                 // Propagate auth errors specifically
+                 if (checkErr.message && checkErr.message.includes("Authorization Failed")) {
+                     throw checkErr;
                  }
-            } else {
-                const userData = await userRes.json();
-                prismUserToken = userData.id || userData._id || userData.userToken;
+                 console.warn(`[BodyScans] Failed to check user existence:`, checkErr);
             }
 
-            // 2. Create Scan
-            const scanRes = await fetch(`${baseUrl}/v1/scans`, {
+            // 2. REGISTER NEW USER IF NOT EXISTS
+            // POST /users
+            if (!userExists) {
+                console.log(`[BodyScans] Registering new user at: ${baseUrl}/users`);
+                
+                // Use a complete payload structure
+                const userPayload = {
+                    token: prismUserToken,
+                    email: null, // Explicitly null as per documentation if not provided
+                    researchConsent: false,
+                    termsOfService: {
+                        accepted: true,
+                        version: "1"
+                    }
+                    // Optional: weight, height, sex could be added here if available in 'event.user' or 'event.body'
+                };
+
+                const createUserRes = await fetch(`${baseUrl}/users`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-api-key': PRISM_API_KEY },
+                    body: JSON.stringify(userPayload) 
+                });
+
+                if (!createUserRes.ok) {
+                    // If 409 Conflict, it means user was created in a race condition, which is fine to proceed.
+                    if (createUserRes.status !== 409) {
+                        const createErr = await createUserRes.text();
+                        console.error(`[BodyScans] Create User Error: ${createErr}`);
+                        
+                        if (createUserRes.status === 401 || createUserRes.status === 403) {
+                             throw new Error(`Authorization Failed during User Registration: The PRISM_API_KEY appears invalid for the target URL (${baseUrl}).`);
+                        }
+                        
+                        throw new Error(`Prism User Registration Failed: ${createErr}`);
+                    }
+                }
+            }
+
+            // 3. CREATE SCAN
+            // POST /scans
+            console.log(`[BodyScans] Creating scan at: ${baseUrl}/scans`);
+            const scanRes = await fetch(`${baseUrl}/scans`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'x-api-key': PRISM_API_KEY },
-                body: JSON.stringify({ userToken: prismUserToken, assetConfigId: assetConfigId })
+                body: JSON.stringify({ 
+                    userToken: prismUserToken, 
+                    assetConfigId: assetConfigId 
+                })
             });
 
             if (!scanRes.ok) {
                 const errorText = await scanRes.text();
-                console.error(`[BodyScans] Prism Create Scan Error: ${errorText}`);
-                throw new Error(`Prism Scan Error: ${errorText}`);
+                console.error(`[BodyScans] Prism Create Scan Error (${scanRes.status}): ${errorText}`);
+                
+                if (scanRes.status === 401 || scanRes.status === 403) {
+                     throw new Error(`Authorization Failed during Scan Creation: The PRISM_API_KEY appears invalid for the target URL (${baseUrl}).`);
+                }
+                
+                throw new Error(`Prism Scan Creation Failed: ${errorText}`);
             }
             const scanData = await scanRes.json();
 
@@ -261,7 +315,8 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
                     scanId: scanData.id || scanData._id,
                     securityToken: scanData.securityToken,
                     apiBaseUrl: baseUrl,
-                    assetConfigId: assetConfigId
+                    assetConfigId: assetConfigId,
+                    mode: env // Return the mode so frontend uses correct visual indicators
                 })
             };
 
@@ -281,13 +336,12 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
     if (method === 'POST') {
         const body = JSON.parse(event.body);
         
-        // If the frontend sends a 'scanId', it means the SDK scan is done.
-        // We must now fetch the Health Metrics from Prism (Server-to-Server)
         if (body.scanId) {
             try {
-                const { PRISM_API_KEY, PRISM_ENV } = process.env;
-                const isProd = PRISM_ENV === 'production';
-                const baseUrl = isProd ? "https://api.hosted.prismlabs.tech" : "https://sandbox-api.hosted.prismlabs.tech";
+                const { PRISM_API_KEY, PRISM_ENV, PRISM_API_URL } = process.env;
+                
+                // Determine base URL (same logic as init)
+                const baseUrl = PRISM_API_URL || "https://api.hosted.prismlabs.tech";
 
                 const fetchPrism = async (endpoint) => {
                     const res = await fetch(`${baseUrl}${endpoint}`, {
@@ -299,19 +353,19 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
                 };
 
                 // 1. Get Basic Scan Status/Details
-                const scanDetails = await fetchPrism(`/v1/scans/${body.scanId}`);
+                const scanDetails = await fetchPrism(`/scans/${body.scanId}`);
                 
-                // 2. Get Measurements (Step 6a)
-                const measurements = await fetchPrism(`/v1/scans/${body.scanId}/measurements`);
+                // 2. Get Measurements
+                const measurements = await fetchPrism(`/scans/${body.scanId}/measurements`);
                 
-                // 3. Get Mass/Body Fat (Step 6b)
-                const mass = await fetchPrism(`/v1/scans/${body.scanId}/mass`);
+                // 3. Get Mass/Body Fat
+                const mass = await fetchPrism(`/scans/${body.scanId}/mass`);
 
                 // Combine all data
                 const enrichedScanData = {
                     ...scanDetails,
                     measurements: measurements || {},
-                    composition: mass || {}, // Mass endpoint usually contains bodyFatPercentage
+                    composition: mass || {}, 
                     userGoal: body.userGoal,
                     status: scanDetails?.status || 'completed'
                 };
@@ -323,7 +377,7 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
 
             } catch (e) {
                 console.error("Error fetching/saving Prism data:", e);
-                // Fallback: Save what the frontend sent if server fetch fails, so we don't lose the record
+                // Fallback: Save what the frontend sent if server fetch fails
                 const fallbackScan = await saveBodyScan(userId, { ...body, note: "Server fetch failed, raw data only" });
                 return { statusCode: 201, headers, body: JSON.stringify(fallbackScan) };
             }
