@@ -54,8 +54,6 @@ export const Navbar: React.FC<NavbarProps> = ({ activeView, onNavigate, onLogout
         onBackToHub();
     };
     
-    const cashValue = (points * 0.009).toFixed(2);
-
     return (
         <>
             <nav className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm hidden md:block">
