@@ -20,10 +20,13 @@ export const Login: React.FC = () => {
         setError(null);
 
         try {
+            // Force email to lowercase to prevent duplicate accounts due to capitalization
+            const normalizedEmail = email.toLowerCase().trim();
+
             const response = await fetch(`${API_BASE_URL}/auth/customer-login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password }),
+                body: JSON.stringify({ email: normalizedEmail, password }),
             });
 
             const data = await response.json();

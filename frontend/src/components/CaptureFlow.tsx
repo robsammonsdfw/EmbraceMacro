@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { XIcon, CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, UserCircleIcon, PlusIcon, SearchIcon, TagIcon, PhotoIcon } from './icons';
 import { BarcodeScanner } from './BarcodeScanner';
@@ -65,14 +66,31 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
     const video = videoRef.current;
     const canvas = canvasRef.current;
     
-    // Set canvas dimensions to match video
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    // Scale Down Logic: Limit max dimension to 1024px to reduce base64 size for Lambda
+    const MAX_DIMENSION = 1024;
+    let width = video.videoWidth;
+    let height = video.videoHeight;
+
+    if (width > height) {
+        if (width > MAX_DIMENSION) {
+            height *= MAX_DIMENSION / width;
+            width = MAX_DIMENSION;
+        }
+    } else {
+        if (height > MAX_DIMENSION) {
+            width *= MAX_DIMENSION / height;
+            height = MAX_DIMENSION;
+        }
+    }
+    
+    canvas.width = width;
+    canvas.height = height;
     
     const context = canvas.getContext('2d');
     if (context) {
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const imageData = canvas.toDataURL('image/jpeg', 0.8);
+      context.drawImage(video, 0, 0, width, height);
+      // Reduce quality slightly to 0.7 to ensure small payload size
+      const imageData = canvas.toDataURL('image/jpeg', 0.7);
       setCapturedImage(imageData);
       
       // Simulate AI Detection sequence
@@ -80,7 +98,6 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
       setTimeout(() => {
         setDetectedLabel("Identifying...");
         setTimeout(() => {
-            // In a real app, this would come from a lightweight local model or the initial API handshake
             const mockLabels: Record<string, string> = {
                 'meal': 'Dish Detected',
                 'pantry': 'Ingredients',
@@ -100,21 +117,46 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      // Automatically switch to 'meal' mode if uploading while in 'barcode' to ensure correct analysis
       if (mode === 'barcode') setMode('meal');
 
       const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result as string;
-        setCapturedImage(result);
-        
-        // Show scanning state for uploaded image
-        setIsAnalyzing(true);
-        setDetectedLabel("Analyzing...");
-        setTimeout(() => {
-             setDetectedLabel("Image Selected");
-             setIsAnalyzing(false);
-        }, 800);
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+             // Resize uploaded image as well
+             const canvas = document.createElement('canvas');
+             const MAX_DIMENSION = 1024;
+             let width = img.width;
+             let height = img.height;
+
+             if (width > height) {
+                 if (width > MAX_DIMENSION) {
+                     height *= MAX_DIMENSION / width;
+                     width = MAX_DIMENSION;
+                 }
+             } else {
+                 if (height > MAX_DIMENSION) {
+                     width *= MAX_DIMENSION / height;
+                     height = MAX_DIMENSION;
+                 }
+             }
+             canvas.width = width;
+             canvas.height = height;
+             const ctx = canvas.getContext('2d');
+             ctx?.drawImage(img, 0, 0, width, height);
+             const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+             
+             setCapturedImage(dataUrl);
+             setIsAnalyzing(true);
+             setDetectedLabel("Analyzing...");
+             setTimeout(() => {
+                  setDetectedLabel("Image Selected");
+                  setIsAnalyzing(false);
+             }, 800);
+        };
+        if(e.target?.result) {
+            img.src = e.target.result as string;
+        }
       };
       reader.readAsDataURL(file);
     }
@@ -130,7 +172,6 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
     setIsAnalyzing(false);
     setShowSelfLabelInput(false);
     setSelfLabel('');
-    // Clear file input so same file can be selected again if needed
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -147,7 +188,6 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col font-sans animate-fade-in text-white">
-      {/* Hidden File Input */}
       <input 
         type="file" 
         accept="image/*" 
@@ -156,7 +196,6 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
         className="hidden" 
       />
 
-      {/* --- Top Controls --- */}
       <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start z-20 bg-gradient-to-b from-black/60 to-transparent h-24">
         <button onClick={onClose} className="p-2 bg-black/20 backdrop-blur-md rounded-full hover:bg-white/20 transition">
           <XIcon />
@@ -171,7 +210,6 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
         </button>
       </div>
 
-      {/* --- Main Viewport --- */}
       <div className="flex-grow relative bg-gray-900 overflow-hidden">
         {mode === 'barcode' && !capturedImage ? (
            <BarcodeScanner onScanSuccess={handleBarcodeSuccess} onCancel={() => setMode('meal')} />
@@ -188,11 +226,9 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
                   <div className="absolute inset-0 w-full h-full bg-black relative">
                       <img src={capturedImage} alt="Captured" className="w-full h-full object-contain bg-black" />
                       
-                      {/* Detection Overlay */}
                       <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64 pointer-events-none">
                           {!showSelfLabelInput && (
                              <div className={`absolute inset-0 border-2 border-emerald-400 rounded-lg transition-all duration-500 ${isAnalyzing ? 'scale-110 opacity-50 animate-pulse' : 'scale-100 opacity-100'}`}>
-                                 {/* Corners */}
                                  <div className="absolute -top-1 -left-1 w-4 h-4 border-t-4 border-l-4 border-emerald-500"></div>
                                  <div className="absolute -top-1 -right-1 w-4 h-4 border-t-4 border-r-4 border-emerald-500"></div>
                                  <div className="absolute -bottom-1 -left-1 w-4 h-4 border-b-4 border-l-4 border-emerald-500"></div>
@@ -200,7 +236,6 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
                              </div>
                           )}
                           
-                          {/* Label Chip */}
                           {(detectedLabel || isAnalyzing) && (
                               <div className="absolute -top-12 left-0 right-0 flex justify-center">
                                   <div className="bg-emerald-500 text-white px-4 py-1.5 rounded-full font-bold shadow-lg flex items-center gap-2 animate-bounce-short">
@@ -218,7 +253,6 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
                           )}
                       </div>
 
-                      {/* Fallback Input */}
                       {showSelfLabelInput && (
                           <div className="absolute top-1/3 left-8 right-8 bg-white p-4 rounded-xl shadow-2xl animate-fade-in text-slate-800 z-50">
                               <h3 className="font-bold text-lg mb-2">What is this?</h3>
@@ -245,11 +279,9 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
         <canvas ref={canvasRef} className="hidden" />
       </div>
 
-      {/* --- Bottom Controls (UI Layer) --- */}
       {!capturedImage && mode !== 'barcode' && (
         <div className="absolute bottom-0 left-0 right-0 pb-8 pt-12 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex flex-col items-center z-30 space-y-6">
             
-            {/* Repeat Meal Chip */}
             {lastMeal && (
                 <button 
                     onClick={() => onRepeatMeal(lastMeal)}
@@ -262,9 +294,7 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
                 </button>
             )}
 
-            {/* Shutter Area */}
             <div className="flex items-center justify-center w-full relative px-8">
-                {/* Gallery / Upload Button - Left of Shutter */}
                 <button 
                     onClick={triggerUpload}
                     className="absolute left-8 md:left-24 w-12 h-12 bg-white/20 backdrop-blur-md rounded-xl border border-white/20 flex items-center justify-center text-white hover:bg-white/30 transition shadow-lg"
@@ -273,7 +303,6 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
                     <PhotoIcon />
                 </button>
 
-                {/* Shutter Button */}
                 <button 
                     onClick={takePhoto}
                     className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center relative group"
@@ -282,7 +311,6 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
                 </button>
             </div>
 
-            {/* Mode Selector */}
             <div className="flex space-x-6 overflow-x-auto w-full justify-center px-4 no-scrollbar pb-2">
                 {modes.map((m) => (
                     <button
@@ -300,7 +328,6 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
         </div>
       )}
 
-      {/* --- Post-Capture Controls --- */}
       {capturedImage && (
           <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/90 to-transparent z-40 flex flex-col gap-4">
               {!isAnalyzing && !showSelfLabelInput && (
