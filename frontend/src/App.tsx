@@ -1,9 +1,8 @@
 
-
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import * as apiService from './services/apiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
-import type { NutritionInfo, SavedMeal, Recipe, MealLogEntry, MealPlan, MealPlanItemMetadata, GooglePlaceResult } from './types';
+import type { NutritionInfo, SavedMeal, Recipe, MealLogEntry, MealPlan, MealPlanItemMetadata } from './types';
 import { ImageUploader } from './components/ImageUploader';
 import { NutritionCard } from './components/NutritionCard';
 import { Loader } from './components/Loader';
@@ -28,7 +27,7 @@ type MealDataType = NutritionInfo | SavedMeal | MealLogEntry;
 type AppMode = 'hub' | 'meals';
 
 const App: React.FC = () => {
-  const { isAuthenticated, isLoading: isAuthLoading, logout } = useAuth();
+  const { isAuthenticated, isLoading: isAuthLoading, logout, user } = useAuth();
   
   // App Navigation State
   const [appMode, setAppMode] = useState<AppMode>('hub');
@@ -196,12 +195,11 @@ const App: React.FC = () => {
     } catch(err) { setError(`Could not find product for barcode ${barcode}.`); } finally { setIsProcessing(false); }
   }, []);
 
-  // UPDATED: Handle placeData for venue tagging
-  const handleSaveToHistory = useCallback(async (mealData: NutritionInfo, imageBase64: string, placeData?: GooglePlaceResult | null) => {
+  const handleSaveToHistory = useCallback(async (mealData: NutritionInfo, imageBase64: string) => {
     setIsProcessing(true);
     setProcessingMessage("Saving to your history...");
     try {
-      const newLogEntry = await apiService.createMealLogEntry(mealData, imageBase64, placeData);
+      const newLogEntry = await apiService.createMealLogEntry(mealData, imageBase64);
       setMealLog(prevLog => [newLogEntry, ...prevLog]);
       resetAnalysisState();
       handleNavigation('history'); 
@@ -327,8 +325,7 @@ const App: React.FC = () => {
                 <ImageUploader image={image} />
                 {isProcessing && <Loader message={processingMessage} />}
                 {error && <ErrorAlert message={error} />}
-                {/* Updated NutritionCard to accept placeData */}
-                {nutritionData && !isProcessing && image && ( <NutritionCard data={nutritionData} onSaveToHistory={(placeData) => handleSaveToHistory(nutritionData, image, placeData)} /> )}
+                {nutritionData && !isProcessing && image && ( <NutritionCard data={nutritionData} onSaveToHistory={() => handleSaveToHistory(nutritionData, image)} /> )}
                 {recipes && !isProcessing && (
                   <div className="space-y-4">
                       <h2 className="text-2xl font-bold text-slate-800 text-center pt-4 border-t border-slate-200">
@@ -372,6 +369,7 @@ const App: React.FC = () => {
               onPantryChefClick={handleTriggerPantryUpload} 
               onGetRecipeClick={handleTriggerRecipeUpload}
               mealLog={mealLog}
+              userName={user?.firstName || 'User'}
             />
         );
         case 'plan': return (
@@ -402,6 +400,7 @@ const App: React.FC = () => {
               onPantryChefClick={handleTriggerPantryUpload} 
               onGetRecipeClick={handleTriggerRecipeUpload}
               mealLog={mealLog}
+              userName={user?.firstName || 'User'}
             />
         );
     }

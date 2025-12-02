@@ -1,9 +1,7 @@
-
 import React, { useState } from 'react';
-import type { MealLogEntry, NutritionInfo, Venue } from '../types';
-import { PlusIcon, BookmarkIcon, ClockIcon, CameraIcon, CameraOffIcon, MapPinIcon } from './icons';
+import type { MealLogEntry, NutritionInfo } from '../types';
+import { PlusIcon, BookmarkIcon, ClockIcon, CameraIcon, CameraOffIcon } from './icons';
 import { ImageViewModal } from './ImageViewModal';
-import { VenueProfile } from './VenueProfile';
 
 interface MealHistoryProps {
   logEntries: MealLogEntry[];
@@ -16,8 +14,7 @@ const HistoryEntryCard: React.FC<{
     onAdd: () => void; 
     onSave: () => void;
     onViewImage: () => void;
-    onViewVenue: (venue: Venue) => void;
-}> = ({ entry, onAdd, onSave, onViewImage, onViewVenue }) => {
+}> = ({ entry, onAdd, onSave, onViewImage }) => {
     const hasImage = entry.hasImage;
 
     return (
@@ -42,15 +39,7 @@ const HistoryEntryCard: React.FC<{
 
                 <div>
                     <p className="font-bold text-slate-800">{entry.mealName}</p>
-                    <p className="text-sm text-slate-500 mb-1">{Math.round(entry.totalCalories)} kcal</p>
-                    {entry.venue && (
-                        <button 
-                            onClick={() => onViewVenue(entry.venue!)}
-                            className="flex items-center gap-1 text-xs text-emerald-600 hover:underline font-medium mb-1"
-                        >
-                            <MapPinIcon /> {entry.venue.name}
-                        </button>
-                    )}
+                    <p className="text-sm text-slate-500">{Math.round(entry.totalCalories)} kcal</p>
                     <p className="text-xs text-slate-500">
                         P:{Math.round(entry.totalProtein)}g C:{Math.round(entry.totalCarbs)}g F:{Math.round(entry.totalFat)}g
                     </p>
@@ -97,7 +86,6 @@ export const MealHistory: React.FC<MealHistoryProps> = ({ logEntries, onAddToPla
   const groupedEntries = groupEntriesByDate(logEntries);
   const dates = Object.keys(groupedEntries);
   const [viewImageId, setViewImageId] = useState<number | null>(null);
-  const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
 
   return (
     <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200">
@@ -107,13 +95,6 @@ export const MealHistory: React.FC<MealHistoryProps> = ({ logEntries, onAddToPla
             itemId={viewImageId} 
             type="history" 
             onClose={() => setViewImageId(null)} 
-          />
-      )}
-
-      {selectedVenue && (
-          <VenueProfile 
-            venue={selectedVenue}
-            onClose={() => setSelectedVenue(null)}
           />
       )}
 
@@ -130,7 +111,6 @@ export const MealHistory: React.FC<MealHistoryProps> = ({ logEntries, onAddToPla
                                 onAdd={() => onAddToPlan(entry)} 
                                 onSave={() => onSaveMeal(entry)} 
                                 onViewImage={() => setViewImageId(entry.id)}
-                                onViewVenue={(v) => setSelectedVenue(v)}
                             />
                         </li>
                     ))}

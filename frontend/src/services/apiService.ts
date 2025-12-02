@@ -1,6 +1,5 @@
 
-
-import type { NutritionInfo, Recipe, SavedMeal, MealLogEntry, MealPlan, MealPlanItem, GroceryList, GroceryItem, RewardsSummary, BodyScan, MealPlanItemMetadata, GooglePlaceResult } from '../types';
+import type { NutritionInfo, Recipe, SavedMeal, MealLogEntry, MealPlan, MealPlanItem, GroceryList, GroceryItem, RewardsSummary, BodyScan, MealPlanItemMetadata } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
 const AUTH_TOKEN_KEY = 'embracehealth-api-token';
@@ -183,11 +182,6 @@ export const getRecipesFromPlate = (base64Image: string, mimeType: string): Prom
     return callApi('/analyze-image-recipes', 'POST', { base64Image, mimeType, prompt, schema: recipesSchema });
 };
 
-// --- Places Search ---
-export const searchPlaces = async (query: string): Promise<GooglePlaceResult[]> => {
-    const result = await callApi(`/places/search?query=${encodeURIComponent(query)}`, 'GET');
-    return result?.results || [];
-};
 
 // --- Meal Log (History) Endpoints ---
 
@@ -199,8 +193,8 @@ export const getMealLogEntryById = (id: number): Promise<MealLogEntry> => {
     return callApi(`/meal-log/${id}`, 'GET');
 };
 
-export const createMealLogEntry = (mealData: NutritionInfo, imageBase64: string, placeData?: GooglePlaceResult | null): Promise<MealLogEntry> => {
-    return callApi('/meal-log', 'POST', { mealData, imageBase64, placeData });
+export const createMealLogEntry = (mealData: NutritionInfo, imageBase64: string): Promise<MealLogEntry> => {
+    return callApi('/meal-log', 'POST', { mealData, imageBase64 });
 };
 
 // --- Saved Meals Endpoints ---

@@ -1,5 +1,4 @@
 
-
 export interface Ingredient {
   name: string;
   weightGrams: number;
@@ -32,20 +31,6 @@ export interface NutritionInfo {
   source?: 'user' | 'coach' | 'community'; // Added source
 }
 
-export interface Venue {
-  id: number;
-  google_place_id: string;
-  name: string;
-  address: string;
-}
-
-export interface GooglePlaceResult {
-  place_id: string;
-  name: string;
-  formatted_address: string;
-  types: string[];
-}
-
 export interface SavedMeal extends NutritionInfo {
   id: number;
 }
@@ -53,7 +38,6 @@ export interface SavedMeal extends NutritionInfo {
 export interface MealLogEntry extends NutritionInfo {
   id: number;
   createdAt: string;
-  venue?: Venue | null;
 }
 
 export interface MealPlanItemMetadata {

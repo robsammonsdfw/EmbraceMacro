@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import type { MealPlan, SavedMeal, NutritionInfo } from '../types';
-import { PlusIcon, UserCircleIcon, GlobeAltIcon, StarIcon } from './icons';
+import { PlusIcon, UserCircleIcon, GlobeAltIcon, StarIcon, CameraIcon } from './icons';
 
 interface MealPlanManagerProps {
     plans: MealPlan[];
@@ -151,7 +152,13 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                                         {items.map(item => (
                                             <div key={item.id} className="bg-white border border-slate-200 shadow-sm rounded-lg p-3 flex justify-between items-center group hover:border-emerald-300 transition-colors">
                                                 <div className="flex items-center gap-3">
-                                                    {item.meal.hasImage && <div className="w-10 h-10 bg-slate-200 rounded-md bg-cover bg-center" style={{backgroundImage: `url(${item.meal.imageUrl})`}}></div>}
+                                                    {item.meal.hasImage && item.meal.imageUrl ? (
+                                                        <div className="w-10 h-10 bg-slate-200 rounded-md bg-cover bg-center" style={{backgroundImage: `url(${item.meal.imageUrl})`}}></div>
+                                                    ) : item.meal.hasImage ? (
+                                                        <div className="w-10 h-10 bg-slate-100 border border-slate-200 rounded-md flex items-center justify-center text-slate-400">
+                                                            <div className="transform scale-75"><CameraIcon /></div>
+                                                        </div>
+                                                    ) : null}
                                                     <div>
                                                         <p className="font-bold text-slate-800 text-sm">{item.meal.mealName}</p>
                                                         <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">

@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import https from 'https';
@@ -37,7 +36,6 @@ export const handler = async (event) => {
     // --- IMPORTANT: CONFIGURE THESE IN YOUR LAMBDA ENVIRONMENT VARIABLES ---
     const {
         GEMINI_API_KEY,
-        GOOGLE_PLACES_API_KEY,
         SHOPIFY_STOREFRONT_TOKEN,
         SHOPIFY_STORE_DOMAIN,
         JWT_SECRET,
@@ -49,7 +47,7 @@ export const handler = async (event) => {
     const allowedOrigins = [
         "https://food.embracehealth.ai",
         "https://app.embracehealth.ai",
-        "https://scan.embracehealth.ai", 
+        "https://scan.embracehealth.ai", // Added for Prism App
         "https://main.dfp0msdoew280.amplifyapp.com",
         "http://localhost:5173",
         "http://localhost:3000",
@@ -142,11 +140,7 @@ export const handler = async (event) => {
     const resource = pathParts[0];
 
     try {
-        // --- NEW RESOURCE: PLACES PROXY ---
-        if (resource === 'places') {
-            return await handlePlacesRequest(event, headers, method, pathParts, GOOGLE_PLACES_API_KEY || GEMINI_API_KEY); // Use separate key if available, else fallback might fail if restricted
-        }
-
+        // --- NEW RESOURCE FOR BODY SCANS ---
         if (resource === 'body-scans') {
             return await handleBodyScansRequest(event, headers, method, pathParts);
         }
@@ -188,32 +182,7 @@ export const handler = async (event) => {
     };
 };
 
-// --- HANDLER: PLACES PROXY ---
-async function handlePlacesRequest(event, headers, method, pathParts, apiKey) {
-    // GET /places/search?query=Starbucks
-    if (method === 'GET' && pathParts[1] === 'search') {
-        const query = event.queryStringParameters?.query;
-        if (!query) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Query parameter required' }) };
-        
-        // Using Google Maps Places Text Search API
-        // NOTE: This requires the "Places API (New)" or standard Places API enabled in Google Cloud
-        const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&key=${apiKey}`;
-        
-        return new Promise((resolve) => {
-            https.get(url, (res) => {
-                let data = '';
-                res.on('data', (chunk) => data += chunk);
-                res.on('end', () => {
-                   resolve({ statusCode: 200, headers, body: data });
-                });
-            }).on('error', (e) => {
-                resolve({ statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to fetch places' }) });
-            });
-        });
-    }
-    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
-}
-
+// --- NEW HANDLER FOR BODY SCANS ---
 async function handleBodyScansRequest(event, headers, method, pathParts) {
     const userId = event.user.userId;
 
@@ -300,9 +269,9 @@ async function handleMealLogRequest(event, headers, method, pathParts) {
         return { statusCode: 200, headers, body: JSON.stringify(entry) };
     }
     if (method === 'POST') {
-        const { mealData, imageBase64, placeData } = JSON.parse(event.body); // Updated to accept placeData
+        const { mealData, imageBase64 } = JSON.parse(event.body);
         const base64Data = imageBase64.split(',')[1] || imageBase64;
-        const newEntry = await createMealLogEntry(userId, mealData, base64Data, placeData);
+        const newEntry = await createMealLogEntry(userId, mealData, base64Data);
         return { statusCode: 201, headers, body: JSON.stringify(newEntry) };
     }
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' })};
@@ -386,8 +355,17 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         if (!shopifyResponse) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Login failed: Invalid response.' }) };
         const data = shopifyResponse['customerAccessTokenCreate'];
         if (!data || data.customerUserErrors.length > 0) return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid credentials.', details: data?.customerUserErrors[0]?.message }) };
+        
+        const accessToken = data.customerAccessToken.accessToken;
+
+        // Fetch Customer Details (FirstName) using the Access Token
+        const customerQuery = `query { customer { firstName } }`;
+        /** @type {any} */
+        const customerData = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
+        const firstName = customerData?.customer?.firstName || '';
+
         const user = await findOrCreateUserByEmail(email);
-        const sessionToken = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+        const sessionToken = jwt.sign({ userId: user.id, email: user.email, firstName }, JWT_SECRET, { expiresIn: '7d' });
         return { statusCode: 200, headers, body: JSON.stringify({ token: sessionToken }) };
     } catch (error) {
         console.error('[CRITICAL] LOGIN_HANDLER_CRASH:', error);
@@ -411,10 +389,18 @@ async function handleMealSuggestionRequest(event, ai, headers) {
     return { statusCode: 200, headers: { ...headers, 'Content-Type': 'application/json' }, body: response.text };
 }
 
-function callShopifyStorefrontAPI(query, variables) {
+/**
+ * @returns {Promise<any>}
+ */
+function callShopifyStorefrontAPI(query, variables, customerAccessToken = null) {
     const { SHOPIFY_STORE_DOMAIN, SHOPIFY_STOREFRONT_TOKEN } = process.env;
     const postData = JSON.stringify({ query, variables });
     const options = { hostname: SHOPIFY_STORE_DOMAIN, path: '/api/2024-04/graphql.json', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData), 'X-Shopify-Storefront-Access-Token': SHOPIFY_STOREFRONT_TOKEN } };
+    
+    if (customerAccessToken) {
+        options.headers['X-Shopify-Customer-Access-Token'] = customerAccessToken;
+    }
+
     return new Promise((resolve, reject) => {
         const req = https.request(options, (res) => {
             let data = '';

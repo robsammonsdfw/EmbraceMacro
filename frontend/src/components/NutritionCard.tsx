@@ -1,12 +1,10 @@
-
-import React, { useState } from 'react';
-import type { NutritionInfo, GooglePlaceResult } from '../types';
-import { ArchiveIcon, MapPinIcon } from './icons';
-import { LocationPicker } from './LocationPicker';
+import React from 'react';
+import type { NutritionInfo } from '../types';
+import { ArchiveIcon } from './icons';
 
 interface NutritionCardProps {
   data: NutritionInfo;
-  onSaveToHistory: (placeData?: GooglePlaceResult | null) => void;
+  onSaveToHistory: () => void;
 }
 
 const MacroPill: React.FC<{ label: string; value: number; unit: string; color: string }> = ({ label, value, unit, color }) => (
@@ -17,9 +15,6 @@ const MacroPill: React.FC<{ label: string; value: number; unit: string; color: s
 );
 
 export const NutritionCard: React.FC<NutritionCardProps> = ({ data, onSaveToHistory }) => {
-  const [showLocationPicker, setShowLocationPicker] = useState(false);
-  const [selectedPlace, setSelectedPlace] = useState<GooglePlaceResult | null>(null);
-
   return (
     <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden animate-fade-in">
       <div className="p-6">
@@ -49,38 +44,11 @@ export const NutritionCard: React.FC<NutritionCardProps> = ({ data, onSaveToHist
             </li>
           ))}
         </ul>
-
-        {/* Location Tagging Section */}
-        {selectedPlace ? (
-            <div className="bg-emerald-50 p-3 rounded-lg flex justify-between items-center border border-emerald-100 mt-4">
-                <div className="flex items-center gap-2 text-emerald-800">
-                    <MapPinIcon />
-                    <div>
-                        <p className="font-bold text-sm">{selectedPlace.name}</p>
-                        <p className="text-xs opacity-75 truncate max-w-[200px]">{selectedPlace.formatted_address}</p>
-                    </div>
-                </div>
-                <button onClick={() => setSelectedPlace(null)} className="text-xs text-emerald-600 font-bold hover:underline">Change</button>
-            </div>
-        ) : showLocationPicker ? (
-            <LocationPicker 
-                onSelect={(place) => { setSelectedPlace(place); setShowLocationPicker(false); }} 
-                onCancel={() => setShowLocationPicker(false)}
-            />
-        ) : (
-             <button 
-                onClick={() => setShowLocationPicker(true)}
-                className="w-full mt-2 py-2 border border-dashed border-slate-300 rounded-lg text-slate-500 text-sm font-semibold hover:bg-slate-50 hover:border-emerald-400 hover:text-emerald-600 transition-colors flex items-center justify-center gap-2"
-             >
-                <MapPinIcon /> Tag Location (Optional)
-             </button>
-        )}
-
       </div>
       
       <div className="p-4 bg-slate-50 border-t border-slate-200">
         <button
-          onClick={() => onSaveToHistory(selectedPlace)}
+          onClick={onSaveToHistory}
           className="w-full bg-emerald-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-emerald-600 transition-colors flex items-center justify-center space-x-2 relative group"
         >
           <ArchiveIcon />

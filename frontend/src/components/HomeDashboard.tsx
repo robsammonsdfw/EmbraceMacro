@@ -1,3 +1,4 @@
+
 import React, { useMemo, useEffect, useState } from 'react';
 import { CameraIcon, UploadIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, FireIcon, UserGroupIcon, BeakerIcon, UserCircleIcon, TrophyIcon, ClockIcon } from './icons';
 import type { MealLogEntry, RewardsSummary } from '../types';
@@ -89,7 +90,7 @@ const DigitalTwin: React.FC<{
 };
 
 export const HomeDashboard: React.FC<HomeDashboardProps> = ({ 
-    onCameraClick, onUploadClick, onBarcodeClick, onPantryChefClick, onGetRecipeClick, mealLog, userName = "Amit"
+    onCameraClick, onUploadClick, onBarcodeClick, onPantryChefClick, onGetRecipeClick, mealLog, userName
 }) => {
     const [rewards, setRewards] = useState<RewardsSummary | null>(null);
     const [socialOpen, setSocialOpen] = useState(false);
@@ -116,6 +117,13 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         if (hour < 14) return { text: "It's lunchtime. Snap a photo of your meal.", btn: "Log Lunch", action: onCameraClick };
         if (hour < 19) return { text: "Dinner time. Record your nutrition.", btn: "Log Dinner", action: onCameraClick };
         return { text: "Plan tomorrow's nutrition to stay ahead.", btn: "View Plan", action: () => {} }; // Placeholder action
+    }, [onCameraClick]);
+
+    const greeting = useMemo(() => {
+        const hour = new Date().getHours();
+        if (hour < 12) return 'Good Morning';
+        if (hour < 18) return 'Good Afternoon';
+        return 'Good Evening';
     }, []);
 
     // Placeholder activity score (would come from device integration)
@@ -140,7 +148,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
             {/* Header */}
             <header className="flex justify-between items-start mb-6">
                 <div>
-                    <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">Good Morning, {userName}</h1>
+                    <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">{greeting}, {userName || 'User'}</h1>
                     <p className="text-slate-500 font-medium">Let's hit your goals today.</p>
                 </div>
                 {/* Health Wallet Pill - Extra Prominent */}
