@@ -1,4 +1,5 @@
 
+
 import { GoogleGenAI } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import https from 'https';
@@ -361,7 +362,9 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
 
         // Fetch Customer Details (FirstName) using the Access Token
         const customerQuery = `query { customer { firstName } }`;
-        const customerData = /** @type {any} */ (await callShopifyStorefrontAPI(customerQuery, {}, accessToken));
+        const shopifyPayload = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
+        /** @type {any} */
+        const customerData = shopifyPayload;
         
         // Improved Name Logic with Fallback: Use Shopify name, or derive from email
         let firstName = customerData?.customer?.firstName;
@@ -398,6 +401,9 @@ async function handleMealSuggestionRequest(event, ai, headers) {
 }
 
 /**
+ * @param {string} query
+ * @param {any} variables
+ * @param {string|null} customerAccessToken
  * @returns {Promise<any>}
  */
 function callShopifyStorefrontAPI(query, variables, customerAccessToken = null) {

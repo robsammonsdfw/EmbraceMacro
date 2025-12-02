@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { XIcon, CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, UserCircleIcon, PlusIcon, SearchIcon, TagIcon } from './icons';
+import { XIcon, CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, UserCircleIcon, PlusIcon, SearchIcon, TagIcon, PhotoIcon } from './icons';
 import { BarcodeScanner } from './BarcodeScanner';
 import type { MealLogEntry } from '../types';
 
@@ -23,6 +23,7 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [mode, setMode] = useState<CaptureMode>('meal');
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -92,6 +93,33 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
     }
   }, [mode]);
 
+  const triggerUpload = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Automatically switch to 'meal' mode if uploading while in 'barcode' to ensure correct analysis
+      if (mode === 'barcode') setMode('meal');
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result as string;
+        setCapturedImage(result);
+        
+        // Show scanning state for uploaded image
+        setIsAnalyzing(true);
+        setDetectedLabel("Analyzing...");
+        setTimeout(() => {
+             setDetectedLabel("Image Selected");
+             setIsAnalyzing(false);
+        }, 800);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleConfirm = () => {
     onCapture(capturedImage, mode);
   };
@@ -101,6 +129,9 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
     setDetectedLabel(null);
     setIsAnalyzing(false);
     setShowSelfLabelInput(false);
+    setSelfLabel('');
+    // Clear file input so same file can be selected again if needed
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleBarcodeSuccess = (code: string) => {
@@ -116,6 +147,15 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col font-sans animate-fade-in text-white">
+      {/* Hidden File Input */}
+      <input 
+        type="file" 
+        accept="image/*" 
+        ref={fileInputRef} 
+        onChange={handleFileChange} 
+        className="hidden" 
+      />
+
       {/* --- Top Controls --- */}
       <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start z-20 bg-gradient-to-b from-black/60 to-transparent h-24">
         <button onClick={onClose} className="p-2 bg-black/20 backdrop-blur-md rounded-full hover:bg-white/20 transition">
@@ -133,7 +173,7 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
 
       {/* --- Main Viewport --- */}
       <div className="flex-grow relative bg-gray-900 overflow-hidden">
-        {mode === 'barcode' ? (
+        {mode === 'barcode' && !capturedImage ? (
            <BarcodeScanner onScanSuccess={handleBarcodeSuccess} onCancel={() => setMode('meal')} />
         ) : (
            <>
@@ -146,10 +186,10 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
                   />
               ) : (
                   <div className="absolute inset-0 w-full h-full bg-black relative">
-                      <img src={capturedImage} alt="Captured" className="w-full h-full object-cover opacity-80" />
+                      <img src={capturedImage} alt="Captured" className="w-full h-full object-contain bg-black" />
                       
                       {/* Detection Overlay */}
-                      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64">
+                      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64 pointer-events-none">
                           {!showSelfLabelInput && (
                              <div className={`absolute inset-0 border-2 border-emerald-400 rounded-lg transition-all duration-500 ${isAnalyzing ? 'scale-110 opacity-50 animate-pulse' : 'scale-100 opacity-100'}`}>
                                  {/* Corners */}
@@ -180,7 +220,7 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
 
                       {/* Fallback Input */}
                       {showSelfLabelInput && (
-                          <div className="absolute top-1/3 left-8 right-8 bg-white p-4 rounded-xl shadow-2xl animate-fade-in text-slate-800">
+                          <div className="absolute top-1/3 left-8 right-8 bg-white p-4 rounded-xl shadow-2xl animate-fade-in text-slate-800 z-50">
                               <h3 className="font-bold text-lg mb-2">What is this?</h3>
                               <input 
                                 type="text" 
@@ -222,8 +262,18 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
                 </button>
             )}
 
-            {/* Shutter */}
-            <div className="flex items-center justify-center w-full relative">
+            {/* Shutter Area */}
+            <div className="flex items-center justify-center w-full relative px-8">
+                {/* Gallery / Upload Button - Left of Shutter */}
+                <button 
+                    onClick={triggerUpload}
+                    className="absolute left-8 md:left-24 w-12 h-12 bg-white/20 backdrop-blur-md rounded-xl border border-white/20 flex items-center justify-center text-white hover:bg-white/30 transition shadow-lg"
+                    title="Upload from Photos"
+                >
+                    <PhotoIcon />
+                </button>
+
+                {/* Shutter Button */}
                 <button 
                     onClick={takePhoto}
                     className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center relative group"

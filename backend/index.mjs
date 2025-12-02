@@ -1,3 +1,5 @@
+
+
 import { GoogleGenAI } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import https from 'https';
@@ -40,17 +42,14 @@ export const handler = async (event) => {
         SHOPIFY_STORE_DOMAIN,
         JWT_SECRET,
         FRONTEND_URL,
-        PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGPORT,
-        // NEW ENV VARS FOR PRISM
-        PRISM_API_KEY,
-        PRISM_ENV // 'sandbox' or 'production'
+        PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGPORT
     } = process.env;
     
     // Dynamic CORS configuration
     const allowedOrigins = [
         "https://food.embracehealth.ai",
         "https://app.embracehealth.ai",
-        "https://scan.embracehealth.ai",
+        "https://scan.embracehealth.ai", // Added for Prism App
         "https://main.dfp0msdoew280.amplifyapp.com",
         "http://localhost:5173",
         "http://localhost:3000",
@@ -76,7 +75,6 @@ export const handler = async (event) => {
         'GEMINI_API_KEY', 'SHOPIFY_STOREFRONT_TOKEN', 'SHOPIFY_STORE_DOMAIN',
         'JWT_SECRET', 'FRONTEND_URL', 'PGHOST', 'PGUSER', 'PGPASSWORD',
         'PGDATABASE', 'PGPORT'
-        // PRISM_API_KEY is validated inside the specific handler to allow partial app function if missing
     ];
     
     const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
@@ -186,81 +184,9 @@ export const handler = async (event) => {
     };
 };
 
-// --- HANDLER FOR BODY SCANS ---
+// --- NEW HANDLER FOR BODY SCANS ---
 async function handleBodyScansRequest(event, headers, method, pathParts) {
     const userId = event.user.userId;
-
-    // POST /body-scans/init -> Initialize a new session with Prism (Server-to-Server to avoid CORS)
-    if (method === 'POST' && pathParts[1] === 'init') {
-        try {
-            const { PRISM_API_KEY, PRISM_ENV } = process.env;
-            if (!PRISM_API_KEY) {
-                return { statusCode: 500, headers, body: JSON.stringify({ error: 'Server configuration error: PRISM_API_KEY missing.' }) };
-            }
-
-            const isProd = PRISM_ENV === 'production';
-            const baseUrl = isProd ? "https://api.hosted.prismlabs.tech" : "https://sandbox-api.hosted.prismlabs.tech";
-            const assetConfigId = "ee651a9e-6de1-4621-a5c9-5d31ca874718";
-            
-            // 1. Create User
-            const userExternalId = `user_${userId}`; 
-            // Note: We use the userId to keep it consistent.
-            const userRes = await fetch(`${baseUrl}/v1/users`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'x-api-key': PRISM_API_KEY },
-                body: JSON.stringify({ externalId: userExternalId })
-            });
-            
-            let prismUserToken;
-            if (!userRes.ok) {
-                 if (userRes.status === 409) {
-                     // If user exists, try to create a unique session user or handle retrieval.
-                     // For stability in this demo, we ensure a fresh ID if the conflict occurs on a strict environment,
-                     // or we could implement a GET /users lookup. 
-                     // Here we try to create a distinct session ID fallback.
-                     const uniqueId = `${userExternalId}_${Date.now()}`;
-                     const retryRes = await fetch(`${baseUrl}/v1/users`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'x-api-key': PRISM_API_KEY },
-                        body: JSON.stringify({ externalId: uniqueId })
-                    });
-                    const retryData = await retryRes.json();
-                    prismUserToken = retryData.id || retryData._id || retryData.userToken;
-                 } else {
-                     throw new Error(`Prism User Error: ${await userRes.text()}`);
-                 }
-            } else {
-                const userData = await userRes.json();
-                prismUserToken = userData.id || userData._id || userData.userToken;
-            }
-
-            // 2. Create Scan
-            const scanRes = await fetch(`${baseUrl}/v1/scans`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'x-api-key': PRISM_API_KEY },
-                body: JSON.stringify({ userToken: prismUserToken, assetConfigId: assetConfigId })
-            });
-
-            if (!scanRes.ok) throw new Error(`Prism Scan Error: ${await scanRes.text()}`);
-            const scanData = await scanRes.json();
-
-            // Return credentials to frontend
-            return {
-                statusCode: 201,
-                headers,
-                body: JSON.stringify({
-                    scanId: scanData.id || scanData._id,
-                    securityToken: scanData.securityToken,
-                    apiBaseUrl: baseUrl,
-                    assetConfigId: assetConfigId
-                })
-            };
-
-        } catch (e) {
-            console.error("Prism Initialization Error:", e);
-            return { statusCode: 502, headers, body: JSON.stringify({ error: 'Failed to initialize scan session with provider.' }) };
-        }
-    }
 
     // GET /body-scans (Fetch history)
     if (method === 'GET') {
@@ -268,59 +194,14 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
         return { statusCode: 200, headers, body: JSON.stringify(scans) };
     }
 
-    // POST /body-scans (Process & Save Completed Scan)
+    // POST /body-scans (Save new scan)
     if (method === 'POST') {
-        const body = JSON.parse(event.body);
-        
-        // If the frontend sends a 'scanId', it means the SDK scan is done.
-        // We must now fetch the Health Metrics from Prism (Server-to-Server)
-        if (body.scanId) {
-            try {
-                const { PRISM_API_KEY, PRISM_ENV } = process.env;
-                const isProd = PRISM_ENV === 'production';
-                const baseUrl = isProd ? "https://api.hosted.prismlabs.tech" : "https://sandbox-api.hosted.prismlabs.tech";
-
-                const fetchPrism = async (endpoint) => {
-                    const res = await fetch(`${baseUrl}${endpoint}`, {
-                        headers: { 'x-api-key': PRISM_API_KEY }
-                    });
-                    if (res.status === 404) return null; // Not ready or not found
-                    if (!res.ok) throw new Error(`Prism API ${endpoint} Failed: ${res.status}`);
-                    return res.json();
-                };
-
-                // 1. Get Basic Scan Status/Details
-                const scanDetails = await fetchPrism(`/v1/scans/${body.scanId}`);
-                
-                // 2. Get Measurements (Step 6a)
-                const measurements = await fetchPrism(`/v1/scans/${body.scanId}/measurements`);
-                
-                // 3. Get Mass/Body Fat (Step 6b)
-                const mass = await fetchPrism(`/v1/scans/${body.scanId}/mass`);
-
-                // Combine all data
-                const enrichedScanData = {
-                    ...scanDetails,
-                    measurements: measurements || {},
-                    composition: mass || {}, // Mass endpoint usually contains bodyFatPercentage
-                    userGoal: body.userGoal,
-                    status: scanDetails?.status || 'completed'
-                };
-
-                // 4. Save to Database
-                const newScan = await saveBodyScan(userId, enrichedScanData);
-                
-                return { statusCode: 201, headers, body: JSON.stringify(newScan) };
-
-            } catch (e) {
-                console.error("Error fetching/saving Prism data:", e);
-                // Fallback: Save what the frontend sent if server fetch fails, so we don't lose the record
-                const fallbackScan = await saveBodyScan(userId, { ...body, note: "Server fetch failed, raw data only" });
-                return { statusCode: 201, headers, body: JSON.stringify(fallbackScan) };
-            }
-        } else {
-             return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing scanId in request.' }) };
+        const scanData = JSON.parse(event.body);
+        if (!scanData) {
+            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing scan data.' }) };
         }
+        const newScan = await saveBodyScan(userId, scanData);
+        return { statusCode: 201, headers, body: JSON.stringify(newScan) };
     }
 
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
@@ -476,8 +357,26 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         if (!shopifyResponse) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Login failed: Invalid response.' }) };
         const data = shopifyResponse['customerAccessTokenCreate'];
         if (!data || data.customerUserErrors.length > 0) return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid credentials.', details: data?.customerUserErrors[0]?.message }) };
+        
+        const accessToken = data.customerAccessToken.accessToken;
+
+        // Fetch Customer Details (FirstName) using the Access Token
+        const customerQuery = `query { customer { firstName } }`;
+        const shopifyPayload = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
+        /** @type {any} */
+        const customerData = shopifyPayload;
+        
+        // Improved Name Logic with Fallback: Use Shopify name, or derive from email
+        let firstName = customerData?.customer?.firstName;
+        if (!firstName && email) {
+            const namePart = email.split('@')[0];
+            // Capitalize first letter of derived name
+            firstName = namePart.charAt(0).toUpperCase() + namePart.slice(1);
+        }
+        firstName = firstName || '';
+
         const user = await findOrCreateUserByEmail(email);
-        const sessionToken = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+        const sessionToken = jwt.sign({ userId: user.id, email: user.email, firstName }, JWT_SECRET, { expiresIn: '7d' });
         return { statusCode: 200, headers, body: JSON.stringify({ token: sessionToken }) };
     } catch (error) {
         console.error('[CRITICAL] LOGIN_HANDLER_CRASH:', error);
@@ -501,10 +400,21 @@ async function handleMealSuggestionRequest(event, ai, headers) {
     return { statusCode: 200, headers: { ...headers, 'Content-Type': 'application/json' }, body: response.text };
 }
 
-function callShopifyStorefrontAPI(query, variables) {
+/**
+ * @param {string} query
+ * @param {any} variables
+ * @param {string|null} customerAccessToken
+ * @returns {Promise<any>}
+ */
+function callShopifyStorefrontAPI(query, variables, customerAccessToken = null) {
     const { SHOPIFY_STORE_DOMAIN, SHOPIFY_STOREFRONT_TOKEN } = process.env;
     const postData = JSON.stringify({ query, variables });
     const options = { hostname: SHOPIFY_STORE_DOMAIN, path: '/api/2024-04/graphql.json', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData), 'X-Shopify-Storefront-Access-Token': SHOPIFY_STOREFRONT_TOKEN } };
+    
+    if (customerAccessToken) {
+        options.headers['X-Shopify-Customer-Access-Token'] = customerAccessToken;
+    }
+
     return new Promise((resolve, reject) => {
         const req = https.request(options, (res) => {
             let data = '';
