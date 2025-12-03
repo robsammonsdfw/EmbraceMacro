@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import https from 'https';
@@ -203,9 +202,15 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
             }
 
             // Determine Environment and Base URL
-            // Appending /v1 to ensure we hit the correct versioned endpoint as per analysis of 404 errors.
+            // Default to Sandbox unless explicitly set to production
             const env = PRISM_ENV === 'production' ? 'production' : 'sandbox';
-            const baseUrl = PRISM_API_URL || "https://api.hosted.prismlabs.tech/v1";
+            
+            let defaultUrl = "https://sandbox-api.hosted.prismlabs.tech";
+            if (env === 'production') {
+                defaultUrl = "https://api.hosted.prismlabs.tech";
+            }
+            
+            const baseUrl = PRISM_API_URL || defaultUrl;
 
             // Mask key for logging safety
             const maskedKey = PRISM_API_KEY ? `${PRISM_API_KEY.substring(0, 4)}...${PRISM_API_KEY.substring(PRISM_API_KEY.length - 4)}` : 'MISSING';
@@ -216,6 +221,13 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
             // Generate a unique token for the user.
             const prismUserToken = `user_${userId}`; 
             
+            // Standard Headers for Prism v1 API
+            const prismHeaders = {
+                'x-api-key': PRISM_API_KEY,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json;v=1'
+            };
+
             // 1. CHECK IF USER EXISTS
             // GET /users/{token}
             let userExists = false;
@@ -223,7 +235,7 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
                 console.log(`[BodyScans] Checking if user exists at: ${baseUrl}/users/${prismUserToken}`);
                 const checkUserRes = await fetch(`${baseUrl}/users/${prismUserToken}`, {
                     method: 'GET',
-                    headers: { 'x-api-key': PRISM_API_KEY }
+                    headers: prismHeaders
                 });
 
                 if (checkUserRes.ok) {
@@ -273,7 +285,7 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
 
                 const createUserRes = await fetch(`${baseUrl}/users`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'x-api-key': PRISM_API_KEY },
+                    headers: prismHeaders,
                     body: JSON.stringify(userPayload) 
                 });
 
@@ -297,7 +309,7 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
             console.log(`[BodyScans] Creating scan at: ${baseUrl}/scans`);
             const scanRes = await fetch(`${baseUrl}/scans`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'x-api-key': PRISM_API_KEY },
+                headers: prismHeaders,
                 body: JSON.stringify({ 
                     userToken: prismUserToken, 
                     assetConfigId: assetConfigId 
@@ -350,11 +362,19 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
                 const { PRISM_API_KEY, PRISM_ENV, PRISM_API_URL } = process.env;
                 
                 // Determine base URL (same logic as init)
-                const baseUrl = PRISM_API_URL || "https://api.hosted.prismlabs.tech/v1";
+                const env = PRISM_ENV === 'production' ? 'production' : 'sandbox';
+                let baseUrl = "https://sandbox-api.hosted.prismlabs.tech";
+                if (env === 'production') {
+                    baseUrl = "https://api.hosted.prismlabs.tech";
+                }
+                if (PRISM_API_URL) baseUrl = PRISM_API_URL;
 
                 const fetchPrism = async (endpoint) => {
                     const res = await fetch(`${baseUrl}${endpoint}`, {
-                        headers: { 'x-api-key': PRISM_API_KEY }
+                        headers: { 
+                            'x-api-key': PRISM_API_KEY,
+                            'Accept': 'application/json;v=1'
+                        }
                     });
                     if (res.status === 404) return null; // Not ready or not found
                     if (!res.ok) throw new Error(`Prism API ${endpoint} Failed: ${res.status}`);
@@ -541,12 +561,8 @@ async function handleRewardsRequest(event, headers, method) {
 async function handleCustomerLogin(event, headers, JWT_SECRET) {
     const mutation = `mutation customerAccessTokenCreate($input: CustomerAccessTokenCreateInput!) { customerAccessTokenCreate(input: $input) { customerAccessToken { accessToken expiresAt } customerUserErrors { code field message } } }`;
     try {
-        let { email, password } = JSON.parse(event.body);
+        const { email, password } = JSON.parse(event.body);
         if (!email || !password) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Email/password required.' }) };
-        
-        // FIX: Force email to lowercase to match existing users regardless of device casing
-        email = email.toLowerCase().trim();
-
         const variables = { input: { email, password } };
         const shopifyResponse = await callShopifyStorefrontAPI(mutation, variables);
         if (!shopifyResponse) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Login failed: Invalid response.' }) };
