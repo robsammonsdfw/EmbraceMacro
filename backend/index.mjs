@@ -251,12 +251,11 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
                 console.log(`[BodyScans] Registering new user at: ${baseUrl}/users`);
                 
                 // Use a COMPLETE payload structure satisfying the strict schema
-                // Using safe defaults as we are in the pre-scan onboarding phase
                 const userPayload = {
                     token: prismUserToken,
                     email: event.user.email || "user@example.com", 
                     
-                    // Demographic placehodlers (Required by Schema)
+                    // Demographic placeholders (Required by Schema)
                     weight: { value: 70, unit: 'kg' }, 
                     height: { value: 1.7, unit: 'm' }, 
                     sex: 'undefined', // Valid enum value per docs
@@ -264,8 +263,8 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
                     usaResidence: 'California',
                     birthDate: '1990-01-01',
                     
-                    // Consent
-                    researchConsent: false,
+                    // Consent - MUST BE TRUE per dev feedback
+                    researchConsent: true,
                     termsOfService: {
                         accepted: true,
                         version: "1"
@@ -542,8 +541,12 @@ async function handleRewardsRequest(event, headers, method) {
 async function handleCustomerLogin(event, headers, JWT_SECRET) {
     const mutation = `mutation customerAccessTokenCreate($input: CustomerAccessTokenCreateInput!) { customerAccessTokenCreate(input: $input) { customerAccessToken { accessToken expiresAt } customerUserErrors { code field message } } }`;
     try {
-        const { email, password } = JSON.parse(event.body);
+        let { email, password } = JSON.parse(event.body);
         if (!email || !password) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Email/password required.' }) };
+        
+        // FIX: Force email to lowercase to match existing users regardless of device casing
+        email = email.toLowerCase().trim();
+
         const variables = { input: { email, password } };
         const shopifyResponse = await callShopifyStorefrontAPI(mutation, variables);
         if (!shopifyResponse) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Login failed: Invalid response.' }) };

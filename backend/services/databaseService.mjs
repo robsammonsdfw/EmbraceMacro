@@ -49,7 +49,7 @@ export const findOrCreateUserByEmail = async (email) => {
         `;
         await client.query(insertQuery, [lowerEmail]);
 
-        // Case-insensitive select to match existing users who might have mixed case in DB
+        // FIX: Case-insensitive select to match existing users who might have mixed case in DB
         const selectQuery = `SELECT id, email FROM users WHERE LOWER(email) = LOWER($1);`;
         const res = await client.query(selectQuery, [email]);
         
@@ -207,8 +207,10 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
 export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
     try {
+        // FIX: Optimization - Do NOT fetch the full image_base64 for the list view to prevent 6MB lambda payload error.
+        // Just check if it exists (length > 0)
         const query = `
-            SELECT id, meal_data, image_base64, created_at 
+            SELECT id, meal_data, created_at, (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image
             FROM meal_log_entries
             WHERE user_id = $1 
             ORDER BY created_at DESC;
@@ -219,7 +221,8 @@ export const getMealLogEntries = async (userId) => {
             return {
                 id: row.id,
                 ...mealData,
-                imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
+                // NO imageUrl here to save bandwidth
+                hasImage: row.has_image, 
                 createdAt: row.created_at,
             };
         });
@@ -262,6 +265,8 @@ export const getMealLogEntryById = async (userId, logId) => {
 export const getSavedMeals = async (userId) => {
     const client = await pool.connect();
     try {
+        // Fetch meal_data which might contain the imageBase64 string. 
+        // We must strip it out before sending to client list view.
         const query = `
             SELECT id, meal_data FROM saved_meals 
             WHERE user_id = $1 
@@ -270,7 +275,16 @@ export const getSavedMeals = async (userId) => {
         const res = await client.query(query, [userId]);
         return res.rows.map(row => {
             const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
-            return { id: row.id, ...processMealDataForClient(mealData) };
+            // FIX: Strip large image data for list view
+            const clientData = processMealDataForClient(mealData);
+            const hasImage = !!clientData.imageUrl || !!mealData.imageBase64;
+            delete clientData.imageUrl; // Remove the massive string
+            
+            return { 
+                id: row.id, 
+                ...clientData,
+                hasImage: hasImage
+            };
         });
     } catch (err) {
         console.error('Database error in getSavedMeals:', err);
@@ -369,12 +383,18 @@ export const getMealPlans = async (userId) => {
             }
             if (row.item_id) { // Ensure item exists (for empty plans)
                 const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
+                const clientData = processMealDataForClient(mealData);
+                // Optimize: Remove full image URL for plan view as well
+                const hasImage = !!clientData.imageUrl;
+                delete clientData.imageUrl;
+
                 plans.get(row.plan_id).items.push({
                     id: row.item_id,
                     metadata: row.metadata || {},
                     meal: {
                         id: row.meal_id,
-                        ...processMealDataForClient(mealData)
+                        ...clientData,
+                        hasImage
                     }
                 });
             }

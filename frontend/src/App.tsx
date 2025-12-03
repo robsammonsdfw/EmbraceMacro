@@ -1,5 +1,4 @@
 
-
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import * as apiService from './services/apiService';
 import { getProductByBarcode } from './services/openFoodFactsService';

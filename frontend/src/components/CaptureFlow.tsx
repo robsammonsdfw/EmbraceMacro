@@ -1,5 +1,4 @@
 
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { XIcon, CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, UserCircleIcon, PlusIcon, SearchIcon, TagIcon, PhotoIcon } from './icons';
 import { BarcodeScanner } from './BarcodeScanner';
