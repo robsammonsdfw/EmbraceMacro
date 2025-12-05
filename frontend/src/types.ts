@@ -112,3 +112,21 @@ export interface BodyScan {
     scan_data: any;
     created_at: string;
 }
+
+export interface SleepRecord {
+    id: number;
+    durationMinutes: number;
+    qualityScore?: number;
+    startTime: string;
+    endTime: string;
+    createdAt: string;
+}
+
+export interface UserEntitlement {
+    id: number;
+    source: string;
+    externalProductId?: string;
+    status: string;
+    startsAt: string;
+    expiresAt?: string;
+}

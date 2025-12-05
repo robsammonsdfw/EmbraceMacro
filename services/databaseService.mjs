@@ -1,3 +1,4 @@
+
 import pg from 'pg';
 
 const { Pool } = pg;
@@ -45,7 +46,7 @@ export const findOrCreateUserByEmail = async (email) => {
         `;
         await client.query(insertQuery, [email]);
 
-        const selectQuery = `SELECT id, email FROM users WHERE email = $1;`;
+        const selectQuery = `SELECT id, email, shopify_customer_id FROM users WHERE email = $1;`;
         const res = await client.query(selectQuery, [email]);
         
         if (res.rows.length === 0) {
@@ -562,6 +563,162 @@ export const clearGroceryList = async (userId, type) => {
     } catch (err) {
         console.error('Database error in clearGroceryList:', err);
         throw new Error('Could not clear grocery list items.');
+    } finally {
+        client.release();
+    }
+};
+
+// --- Sleep Records (New) ---
+
+export const saveSleepRecord = async (userId, sleepData) => {
+    const client = await pool.connect();
+    try {
+        const query = `
+            INSERT INTO sleep_records (user_id, duration_minutes, quality_score, start_time, end_time)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id, duration_minutes, quality_score, start_time, end_time, created_at;
+        `;
+        const res = await client.query(query, [
+            userId, 
+            sleepData.durationMinutes, 
+            sleepData.qualityScore || null, 
+            sleepData.startTime, 
+            sleepData.endTime
+        ]);
+        
+        // Award points for tracking sleep
+        await awardPoints(userId, 'sleep.tracked', 20);
+
+        const row = res.rows[0];
+        return {
+            id: row.id,
+            durationMinutes: row.duration_minutes,
+            qualityScore: row.quality_score,
+            startTime: row.start_time,
+            endTime: row.end_time,
+            createdAt: row.created_at
+        };
+    } catch (err) {
+        console.error('Database error in saveSleepRecord:', err);
+        throw new Error('Could not save sleep record.');
+    } finally {
+        client.release();
+    }
+};
+
+export const getSleepRecords = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const query = `
+            SELECT id, duration_minutes, quality_score, start_time, end_time, created_at 
+            FROM sleep_records 
+            WHERE user_id = $1 
+            ORDER BY created_at DESC;
+        `;
+        const res = await client.query(query, [userId]);
+        return res.rows.map(row => ({
+            id: row.id,
+            durationMinutes: row.duration_minutes,
+            qualityScore: row.quality_score,
+            startTime: row.start_time,
+            endTime: row.end_time,
+            createdAt: row.created_at
+        }));
+    } catch (err) {
+        console.error('Database error in getSleepRecords:', err);
+        throw new Error('Could not retrieve sleep records.');
+    } finally {
+        client.release();
+    }
+};
+
+// --- User Entitlements (New) ---
+
+export const getUserEntitlements = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const query = `
+            SELECT id, source, external_product_id, status, starts_at, expires_at 
+            FROM user_entitlements 
+            WHERE user_id = $1 AND status = 'active'
+            ORDER BY starts_at DESC;
+        `;
+        const res = await client.query(query, [userId]);
+        return res.rows.map(row => ({
+            id: row.id,
+            source: row.source,
+            externalProductId: row.external_product_id,
+            status: row.status,
+            startsAt: row.starts_at,
+            expiresAt: row.expires_at
+        }));
+    } catch (err) {
+        console.error('Database error in getUserEntitlements:', err);
+        throw new Error('Could not retrieve entitlements.');
+    } finally {
+        client.release();
+    }
+};
+
+export const grantEntitlement = async (userId, entitlementData) => {
+    const client = await pool.connect();
+    try {
+        const query = `
+            INSERT INTO user_entitlements (user_id, source, external_product_id, status, expires_at)
+            VALUES ($1, $2, $3, 'active', $4)
+            RETURNING id, source, external_product_id, status, starts_at, expires_at;
+        `;
+        const res = await client.query(query, [
+            userId, 
+            entitlementData.source, 
+            entitlementData.externalProductId,
+            entitlementData.expiresAt || null
+        ]);
+        
+        const row = res.rows[0];
+        return {
+            id: row.id,
+            source: row.source,
+            externalProductId: row.external_product_id,
+            status: row.status,
+            startsAt: row.starts_at,
+            expiresAt: row.expires_at
+        };
+    } catch (err) {
+        console.error('Database error in grantEntitlement:', err);
+        throw new Error('Could not grant entitlement.');
+    } finally {
+        client.release();
+    }
+};
+
+// --- Body Scans (Existing) ---
+export const saveBodyScan = async (userId, scanData) => {
+    const client = await pool.connect();
+    try {
+        const query = `INSERT INTO body_scans (user_id, scan_data) VALUES ($1, $2) RETURNING id, scan_data, created_at;`;
+        const res = await client.query(query, [userId, scanData]);
+        
+        await awardPoints(userId, 'body_scan.completed', 100);
+
+        return res.rows[0];
+    } catch (err) {
+        console.error('Database error in saveBodyScan:', err);
+        throw new Error('Could not save scan.');
+    } finally {
+        client.release();
+    }
+};
+
+export const getBodyScans = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const query = `SELECT id, scan_data, created_at FROM body_scans WHERE user_id = $1 ORDER BY created_at DESC;`;
+        const res = await client.query(query, [userId]);
+        return res.rows;
+    } catch (err) {
+        console.error('Database error in getBodyScans:', err);
+        throw new Error('Could not retrieve scans.');
     } finally {
         client.release();
     }

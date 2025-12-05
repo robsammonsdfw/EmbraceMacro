@@ -35,28 +35,29 @@ const processMealDataForClient = (mealData) => {
 };
 
 
-export const findOrCreateUserByEmail = async (email) => {
+// Updated to accept shopifyCustomerId
+export const findOrCreateUserByEmail = async (email, shopifyCustomerId = null) => {
     const client = await pool.connect();
     try {
-        // Lowercase email for consistent storage if creating new
-        const lowerEmail = email.toLowerCase().trim();
-
+        // 1. Try to insert new user
         const insertQuery = `
-            INSERT INTO users (email) 
-            VALUES ($1) 
+            INSERT INTO users (email, shopify_customer_id) 
+            VALUES ($1, $2) 
             ON CONFLICT (email) 
-            DO NOTHING;
+            DO UPDATE SET shopify_customer_id = COALESCE(users.shopify_customer_id, EXCLUDED.shopify_customer_id);
         `;
-        await client.query(insertQuery, [lowerEmail]);
+        await client.query(insertQuery, [email, shopifyCustomerId]);
 
-        // FIX: Case-insensitive select to match existing users who might have mixed case in DB
-        const selectQuery = `SELECT id, email FROM users WHERE LOWER(email) = LOWER($1);`;
+        // 2. Fetch the user
+        const selectQuery = `SELECT id, email, shopify_customer_id FROM users WHERE email = $1;`;
         const res = await client.query(selectQuery, [email]);
         
         if (res.rows.length === 0) {
             throw new Error("Failed to find or create user after insert operation.");
         }
         
+        const user = res.rows[0];
+
         // Ensure rewards tables exist (Simplified migration strategy for this demo)
         await ensureRewardsTables(client);
         
@@ -65,9 +66,9 @@ export const findOrCreateUserByEmail = async (email) => {
             INSERT INTO rewards_balances (user_id, points_total, points_available, tier)
             VALUES ($1, 0, 0, 'Bronze')
             ON CONFLICT (user_id) DO NOTHING;
-        `, [res.rows[0].id]);
+        `, [user.id]);
 
-        return res.rows[0];
+        return user;
 
     } catch (err) {
         console.error('Database error in findOrCreateUserByEmail:', err);
@@ -76,6 +77,16 @@ export const findOrCreateUserByEmail = async (email) => {
         client.release();
     }
 };
+
+export const getUserByShopifyId = async (shopifyCustomerId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, email FROM users WHERE shopify_customer_id = $1`, [shopifyCustomerId]);
+        return res.rows[0] || null;
+    } finally {
+        client.release();
+    }
+}
 
 const ensureRewardsTables = async (client) => {
     await client.query(`
@@ -207,7 +218,7 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
 export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
     try {
-        // FIX: Optimization - Do NOT fetch the full image_base64 for the list view to prevent 6MB lambda payload error.
+        // Optimization: Do NOT fetch the full image_base64 for the list view to prevent 6MB lambda payload error.
         // Just check if it exists (length > 0)
         const query = `
             SELECT id, meal_data, created_at, (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image
@@ -221,8 +232,8 @@ export const getMealLogEntries = async (userId) => {
             return {
                 id: row.id,
                 ...mealData,
-                // NO imageUrl here to save bandwidth
-                hasImage: row.has_image, 
+                imageUrl: undefined,
+                hasImage: row.has_image,
                 createdAt: row.created_at,
             };
         });
@@ -265,8 +276,6 @@ export const getMealLogEntryById = async (userId, logId) => {
 export const getSavedMeals = async (userId) => {
     const client = await pool.connect();
     try {
-        // Fetch meal_data which might contain the imageBase64 string. 
-        // We must strip it out before sending to client list view.
         const query = `
             SELECT id, meal_data FROM saved_meals 
             WHERE user_id = $1 
@@ -275,10 +284,10 @@ export const getSavedMeals = async (userId) => {
         const res = await client.query(query, [userId]);
         return res.rows.map(row => {
             const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
-            // FIX: Strip large image data for list view
+            // Strip large image data for list view
             const clientData = processMealDataForClient(mealData);
             const hasImage = !!clientData.imageUrl || !!mealData.imageBase64;
-            delete clientData.imageUrl; // Remove the massive string
+            delete clientData.imageUrl; 
             
             return { 
                 id: row.id, 
@@ -384,7 +393,6 @@ export const getMealPlans = async (userId) => {
             if (row.item_id) { // Ensure item exists (for empty plans)
                 const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
                 const clientData = processMealDataForClient(mealData);
-                // Optimize: Remove full image URL for plan view as well
                 const hasImage = !!clientData.imageUrl;
                 delete clientData.imageUrl;
 
@@ -545,6 +553,29 @@ const ensureGroceryTables = async (client) => {
             checked BOOLEAN DEFAULT FALSE
         );
     `);
+};
+
+export const getGroceryList = async (userId) => {
+    // Legacy support (assumes one main list logic if needed, or simply return active items)
+    const client = await pool.connect();
+    try {
+        await ensureGroceryTables(client);
+        // Returns items from the active list
+        const query = `
+            SELECT i.id, i.name, i.checked 
+            FROM grocery_list_items i
+            JOIN grocery_lists l ON i.list_id = l.id
+            WHERE l.user_id = $1 AND l.is_active = TRUE
+            ORDER BY i.name ASC;
+        `;
+        const res = await client.query(query, [userId]);
+        return res.rows;
+    } catch (err) {
+        console.error('Database error in getGroceryList:', err);
+        throw new Error('Could not retrieve grocery list.');
+    } finally {
+        client.release();
+    }
 };
 
 export const getGroceryLists = async (userId) => {
@@ -741,18 +772,152 @@ export const clearGroceryList = async (userId, type) => {
     }
 };
 
-// Body Scans
+// --- Sleep Records ---
+
+export const saveSleepRecord = async (userId, sleepData) => {
+    const client = await pool.connect();
+    try {
+        const query = `
+            INSERT INTO sleep_records (user_id, duration_minutes, quality_score, start_time, end_time)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id, duration_minutes, quality_score, start_time, end_time, created_at;
+        `;
+        const res = await client.query(query, [
+            userId, 
+            sleepData.durationMinutes, 
+            sleepData.qualityScore || null, 
+            sleepData.startTime, 
+            sleepData.endTime
+        ]);
+        
+        await awardPoints(userId, 'sleep.tracked', 20);
+
+        const row = res.rows[0];
+        return {
+            id: row.id,
+            durationMinutes: row.duration_minutes,
+            qualityScore: row.quality_score,
+            startTime: row.start_time,
+            endTime: row.end_time,
+            createdAt: row.created_at
+        };
+    } catch (err) {
+        console.error('Database error in saveSleepRecord:', err);
+        throw new Error('Could not save sleep record.');
+    } finally {
+        client.release();
+    }
+};
+
+export const getSleepRecords = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const query = `
+            SELECT id, duration_minutes, quality_score, start_time, end_time, created_at 
+            FROM sleep_records 
+            WHERE user_id = $1 
+            ORDER BY created_at DESC;
+        `;
+        const res = await client.query(query, [userId]);
+        return res.rows.map(row => ({
+            id: row.id,
+            durationMinutes: row.duration_minutes,
+            qualityScore: row.quality_score,
+            startTime: row.start_time,
+            endTime: row.end_time,
+            createdAt: row.created_at
+        }));
+    } catch (err) {
+        console.error('Database error in getSleepRecords:', err);
+        throw new Error('Could not retrieve sleep records.');
+    } finally {
+        client.release();
+    }
+};
+
+// --- User Entitlements ---
+
+export const getUserEntitlements = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const query = `
+            SELECT id, source, external_product_id, status, starts_at, expires_at 
+            FROM user_entitlements 
+            WHERE user_id = $1 AND status = 'active'
+            ORDER BY starts_at DESC;
+        `;
+        const res = await client.query(query, [userId]);
+        return res.rows.map(row => ({
+            id: row.id,
+            source: row.source,
+            externalProductId: row.external_product_id,
+            status: row.status,
+            startsAt: row.starts_at,
+            expiresAt: row.expires_at
+        }));
+    } catch (err) {
+        console.error('Database error in getUserEntitlements:', err);
+        throw new Error('Could not retrieve entitlements.');
+    } finally {
+        client.release();
+    }
+};
+
+export const grantEntitlement = async (userId, entitlementData) => {
+    const client = await pool.connect();
+    try {
+        const query = `
+            INSERT INTO user_entitlements (user_id, source, external_product_id, status, expires_at)
+            VALUES ($1, $2, $3, 'active', $4)
+            RETURNING id, source, external_product_id, status, starts_at, expires_at;
+        `;
+        const res = await client.query(query, [
+            userId, 
+            entitlementData.source, 
+            entitlementData.externalProductId,
+            entitlementData.expiresAt || null
+        ]);
+        
+        const row = res.rows[0];
+        return {
+            id: row.id,
+            source: row.source,
+            externalProductId: row.external_product_id,
+            status: row.status,
+            startsAt: row.starts_at,
+            expiresAt: row.expires_at
+        };
+    } catch (err) {
+        console.error('Database error in grantEntitlement:', err);
+        throw new Error('Could not grant entitlement.');
+    } finally {
+        client.release();
+    }
+};
+
+// --- Purchase History ---
+
+export const recordPurchase = async (userId, orderId, sku, productName = null) => {
+    const client = await pool.connect();
+    try {
+        const query = `
+            INSERT INTO user_purchase_history (user_id, order_id, sku, product_name)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id;
+        `;
+        await client.query(query, [userId, orderId, sku, productName]);
+    } catch (err) {
+        console.error('Database error in recordPurchase:', err);
+        // Do not throw, just log. Webhook shouldn't fail hard on this.
+    } finally {
+        client.release();
+    }
+};
+
+// --- Body Scans (Existing) ---
 export const saveBodyScan = async (userId, scanData) => {
     const client = await pool.connect();
     try {
-         await client.query(`
-            CREATE TABLE IF NOT EXISTS body_scans (
-                id SERIAL PRIMARY KEY,
-                user_id VARCHAR(255) NOT NULL,
-                scan_data JSONB,
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-            );
-        `);
         const query = `INSERT INTO body_scans (user_id, scan_data) VALUES ($1, $2) RETURNING id, scan_data, created_at;`;
         const res = await client.query(query, [userId, scanData]);
         
@@ -770,14 +935,6 @@ export const saveBodyScan = async (userId, scanData) => {
 export const getBodyScans = async (userId) => {
     const client = await pool.connect();
     try {
-         await client.query(`
-            CREATE TABLE IF NOT EXISTS body_scans (
-                id SERIAL PRIMARY KEY,
-                user_id VARCHAR(255) NOT NULL,
-                scan_data JSONB,
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-            );
-        `);
         const query = `SELECT id, scan_data, created_at FROM body_scans WHERE user_id = $1 ORDER BY created_at DESC;`;
         const res = await client.query(query, [userId]);
         return res.rows;
