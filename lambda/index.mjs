@@ -49,9 +49,10 @@ export const handler = async (event) => {
         JWT_SECRET,
         FRONTEND_URL,
         PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGPORT,
+        // NEW ENV VARS FOR PRISM
         PRISM_API_KEY,
-        PRISM_ENV,
-        PRISM_API_URL,
+        PRISM_ENV, // 'sandbox' or 'production'
+        PRISM_API_URL, // Optional override
         SHOPIFY_WEBHOOK_SECRET
     } = process.env;
     
@@ -116,7 +117,7 @@ export const handler = async (event) => {
     if (path === '/auth/customer-login') {
         return handleCustomerLogin(event, headers, JWT_SECRET);
     }
-    
+
     // --- AUTHENTICATED ROUTES ---
 
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
@@ -143,9 +144,12 @@ export const handler = async (event) => {
     const resource = pathParts[0];
 
     try {
+        // --- NEW RESOURCE FOR BODY SCANS ---
         if (resource === 'body-scans') {
             return await handleBodyScansRequest(event, headers, method, pathParts);
         }
+        
+        // --- EXISTING RESOURCES ---
         if (resource === 'sleep-records') {
             return await handleSleepRecordsRequest(event, headers, method);
         }
@@ -188,6 +192,246 @@ export const handler = async (event) => {
     };
 };
 
+// --- HANDLER FOR BODY SCANS ---
+async function handleBodyScansRequest(event, headers, method, pathParts) {
+    const userId = event.user.userId;
+    console.log(`[BodyScans] Processing request: ${method} ${pathParts.join('/')}`);
+
+    // POST /body-scans/init -> Initialize a new session with Prism (Server-to-Server to avoid CORS)
+    if (method === 'POST' && pathParts[1] === 'init') {
+        try {
+            const { PRISM_API_KEY, PRISM_ENV, PRISM_API_URL } = process.env;
+
+            // --- DEBUG: LOG RAW KEY ---
+            console.log(`[BodyScans] Raw PRISM_API_KEY: "${PRISM_API_KEY}"`);
+            
+            if (!PRISM_API_KEY) {
+                console.error("[BodyScans] CRITICAL ERROR: PRISM_API_KEY is missing in environment variables.");
+                return { statusCode: 500, headers, body: JSON.stringify({ error: 'Server configuration error: PRISM_API_KEY missing.' }) };
+            }
+
+            const finalApiKey = PRISM_API_KEY.trim();
+
+            // Determine Environment and Base URL
+            // Robust check for 'production' (case insensitive, trimmed)
+            const isProduction = (PRISM_ENV || '').trim().toLowerCase() === 'production';
+            const env = isProduction ? 'production' : 'sandbox';
+            
+            let defaultUrl = "https://sandbox-api.hosted.prismlabs.tech";
+            if (isProduction) {
+                defaultUrl = "https://api.hosted.prismlabs.tech";
+            }
+            
+            const baseUrl = PRISM_API_URL || defaultUrl;
+
+            // Mask key for logging safety
+            const maskedKey = finalApiKey ? `${finalApiKey.substring(0, 4)}...${finalApiKey.substring(finalApiKey.length - 4)}` : 'MISSING';
+            console.log(`[BodyScans] Init Config - Env: ${env}, Url: ${baseUrl}, Key: ${maskedKey}`);
+
+            const assetConfigId = "ee651a9e-6de1-4621-a5c9-5d31ca874718";
+            
+            // Generate a unique token for the user.
+            const prismUserToken = `user_${userId}`; 
+            
+            // Standard Headers for Prism v1 API
+            const prismHeaders = {
+                'x-api-key': finalApiKey,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json;v=1'
+            };
+
+            // 1. CHECK IF USER EXISTS
+            // GET /users/{token}
+            let userExists = false;
+            try {
+                console.log(`[BodyScans] Checking if user exists at: ${baseUrl}/users/${prismUserToken}`);
+                const checkUserRes = await fetch(`${baseUrl}/users/${prismUserToken}`, {
+                    method: 'GET',
+                    headers: prismHeaders
+                });
+
+                if (checkUserRes.ok) {
+                    userExists = true;
+                    console.log(`[BodyScans] User ${prismUserToken} already exists.`);
+                } else if (checkUserRes.status !== 404) {
+                    const checkErr = await checkUserRes.text();
+                    console.warn(`[BodyScans] Check user warning (${checkUserRes.status}): ${checkErr}`);
+                    
+                    if (checkUserRes.status === 401 || checkUserRes.status === 403) {
+                         throw new Error(`Authorization Failed during User Check: The PRISM_API_KEY appears invalid for the target URL (${baseUrl}).`);
+                    }
+                }
+            } catch (checkErr) {
+                 // Propagate auth errors specifically
+                 if (checkErr.message && checkErr.message.includes("Authorization Failed")) {
+                     throw checkErr;
+                 }
+                 console.warn(`[BodyScans] Failed to check user existence:`, checkErr);
+            }
+
+            // 2. REGISTER NEW USER IF NOT EXISTS
+            // POST /users
+            if (!userExists) {
+                console.log(`[BodyScans] Registering new user at: ${baseUrl}/users`);
+                
+                // Use a COMPLETE payload structure satisfying the strict schema
+                const userPayload = {
+                    token: prismUserToken,
+                    email: event.user.email || "user@example.com", 
+                    
+                    // Demographic placeholders (Required by Schema)
+                    weight: { value: 70, unit: 'kg' }, 
+                    height: { value: 1.7, unit: 'm' }, 
+                    sex: 'undefined', // Valid enum value per docs
+                    region: 'north_america',
+                    usaResidence: 'California',
+                    birthDate: '1990-01-01',
+                    
+                    // Consent - MUST BE TRUE per dev feedback
+                    researchConsent: true,
+                    termsOfService: {
+                        accepted: true,
+                        version: "1"
+                    }
+                };
+
+                const createUserRes = await fetch(`${baseUrl}/users`, {
+                    method: 'POST',
+                    headers: prismHeaders,
+                    body: JSON.stringify(userPayload) 
+                });
+
+                if (!createUserRes.ok) {
+                    // If 409 Conflict, it means user was created in a race condition, which is fine to proceed.
+                    if (createUserRes.status !== 409) {
+                        const createErr = await createUserRes.text();
+                        console.error(`[BodyScans] Create User Error: ${createErr}`);
+                        
+                        if (createUserRes.status === 401 || createUserRes.status === 403) {
+                             throw new Error(`Authorization Failed during User Registration: The PRISM_API_KEY appears invalid for the target URL (${baseUrl}).`);
+                        }
+                        
+                        throw new Error(`Prism User Registration Failed: ${createErr}`);
+                    }
+                }
+            }
+
+            // 3. CREATE SCAN
+            // POST /scans
+            console.log(`[BodyScans] Creating scan at: ${baseUrl}/scans`);
+            const scanRes = await fetch(`${baseUrl}/scans`, {
+                method: 'POST',
+                headers: prismHeaders,
+                body: JSON.stringify({ 
+                    userToken: prismUserToken, 
+                    assetConfigId: assetConfigId 
+                })
+            });
+
+            if (!scanRes.ok) {
+                const errorText = await scanRes.text();
+                console.error(`[BodyScans] Prism Create Scan Error (${scanRes.status}): ${errorText}`);
+                
+                if (scanRes.status === 401 || scanRes.status === 403) {
+                     throw new Error(`Authorization Failed during Scan Creation: The PRISM_API_KEY appears invalid for the target URL (${baseUrl}).`);
+                }
+                
+                throw new Error(`Prism Scan Creation Failed: ${errorText}`);
+            }
+            const scanData = await scanRes.json();
+
+            // Return credentials to frontend
+            return {
+                statusCode: 201,
+                headers,
+                body: JSON.stringify({
+                    scanId: scanData.id || scanData._id,
+                    securityToken: scanData.securityToken,
+                    apiBaseUrl: baseUrl,
+                    assetConfigId: assetConfigId,
+                    mode: env // Return the mode so frontend uses correct visual indicators
+                })
+            };
+
+        } catch (e) {
+            console.error("Prism Initialization Error:", e);
+            return { statusCode: 502, headers, body: JSON.stringify({ error: 'Failed to initialize scan session with provider.', details: e.message }) };
+        }
+    }
+
+    // GET /body-scans (Fetch history)
+    if (method === 'GET') {
+        const scans = await getBodyScans(userId);
+        return { statusCode: 200, headers, body: JSON.stringify(scans) };
+    }
+
+    // POST /body-scans (Process & Save Completed Scan)
+    if (method === 'POST') {
+        const body = JSON.parse(event.body);
+        
+        if (body.scanId) {
+            try {
+                const { PRISM_API_KEY, PRISM_ENV, PRISM_API_URL } = process.env;
+                
+                // Determine base URL (same logic as init)
+                const isProduction = (PRISM_ENV || '').trim().toLowerCase() === 'production';
+                let baseUrl = "https://sandbox-api.hosted.prismlabs.tech";
+                if (isProduction) {
+                    baseUrl = "https://api.hosted.prismlabs.tech";
+                }
+                if (PRISM_API_URL) baseUrl = PRISM_API_URL;
+                
+                const finalApiKey = PRISM_API_KEY ? PRISM_API_KEY.trim() : '';
+
+                const fetchPrism = async (endpoint) => {
+                    const res = await fetch(`${baseUrl}${endpoint}`, {
+                        headers: { 
+                            'x-api-key': finalApiKey,
+                            'Accept': 'application/json;v=1'
+                        }
+                    });
+                    if (res.status === 404) return null; // Not ready or not found
+                    if (!res.ok) throw new Error(`Prism API ${endpoint} Failed: ${res.status}`);
+                    return res.json();
+                };
+
+                // 1. Get Basic Scan Status/Details
+                const scanDetails = await fetchPrism(`/scans/${body.scanId}`);
+                
+                // 2. Get Measurements
+                const measurements = await fetchPrism(`/scans/${body.scanId}/measurements`);
+                
+                // 3. Get Mass/Body Fat
+                const mass = await fetchPrism(`/scans/${body.scanId}/mass`);
+
+                // Combine all data
+                const enrichedScanData = {
+                    ...scanDetails,
+                    measurements: measurements || {},
+                    composition: mass || {}, 
+                    userGoal: body.userGoal,
+                    status: scanDetails?.status || 'completed'
+                };
+
+                // 4. Save to Database
+                const newScan = await saveBodyScan(userId, enrichedScanData);
+                
+                return { statusCode: 201, headers, body: JSON.stringify(newScan) };
+
+            } catch (e) {
+                console.error("Error fetching/saving Prism data:", e);
+                // Fallback: Save what the frontend sent if server fetch fails
+                const fallbackScan = await saveBodyScan(userId, { ...body, note: "Server fetch failed, raw data only" });
+                return { statusCode: 201, headers, body: JSON.stringify(fallbackScan) };
+            }
+        } else {
+             return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing scanId in request.' }) };
+        }
+    }
+
+    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
+}
+
 // --- HANDLER FOR SHOPIFY WEBHOOKS ---
 async function handleShopifyWebhook(event, secret) {
     try {
@@ -206,8 +450,6 @@ async function handleShopifyWebhook(event, secret) {
         const order = JSON.parse(body);
         const email = order.email;
         const customerId = order.customer?.id; 
-        // Note: shopify returns GID usually, e.g. "gid://shopify/Customer/123", or just id
-        // We will try to map via email first as it's reliable.
         
         let user = await findOrCreateUserByEmail(email, customerId ? String(customerId) : null);
         
@@ -246,7 +488,6 @@ async function handleShopifyWebhook(event, secret) {
     }
 }
 
-
 // --- HANDLER FOR SLEEP RECORDS ---
 async function handleSleepRecordsRequest(event, headers, method) {
     const userId = event.user.userId;
@@ -272,139 +513,6 @@ async function handleEntitlementsRequest(event, headers, method) {
         const entitlements = await getUserEntitlements(userId);
         return { statusCode: 200, headers, body: JSON.stringify(entitlements) };
     }
-    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
-}
-
-
-// --- HANDLER FOR BODY SCANS ---
-async function handleBodyScansRequest(event, headers, method, pathParts) {
-    const userId = event.user.userId;
-
-    // POST /body-scans/init -> Initialize a new session with Prism
-    if (method === 'POST' && pathParts[1] === 'init') {
-        try {
-            const { PRISM_API_KEY, PRISM_ENV, PRISM_API_URL } = process.env;
-            if (!PRISM_API_KEY) {
-                return { statusCode: 500, headers, body: JSON.stringify({ error: 'Server configuration error: PRISM_API_KEY missing.' }) };
-            }
-
-            const env = PRISM_ENV === 'production' ? 'production' : 'sandbox';
-            const baseUrl = PRISM_API_URL || "https://api.hosted.prismlabs.tech/v1";
-            const assetConfigId = "ee651a9e-6de1-4621-a5c9-5d31ca874718";
-            const prismUserToken = `user_${userId}`; 
-            
-            // 1. CHECK IF USER EXISTS
-            let userExists = false;
-            try {
-                const checkUserRes = await fetch(`${baseUrl}/users/${prismUserToken}`, {
-                    method: 'GET',
-                    headers: { 'x-api-key': PRISM_API_KEY }
-                });
-                if (checkUserRes.ok) userExists = true;
-            } catch (checkErr) { console.warn("Prism check user error", checkErr); }
-
-            // 2. REGISTER NEW USER IF NOT EXISTS
-            if (!userExists) {
-                const userPayload = {
-                    token: prismUserToken,
-                    email: event.user.email || "user@example.com", 
-                    weight: { value: 70, unit: 'kg' }, 
-                    height: { value: 1.7, unit: 'm' }, 
-                    sex: 'undefined',
-                    region: 'north_america',
-                    usaResidence: 'California',
-                    birthDate: '1990-01-01',
-                    researchConsent: true,
-                    termsOfService: { accepted: true, version: "1" }
-                };
-
-                const createUserRes = await fetch(`${baseUrl}/users`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'x-api-key': PRISM_API_KEY },
-                    body: JSON.stringify(userPayload) 
-                });
-                // Proceed even if 409 conflict
-            }
-
-            // 3. CREATE SCAN
-            const scanRes = await fetch(`${baseUrl}/scans`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'x-api-key': PRISM_API_KEY },
-                body: JSON.stringify({ userToken: prismUserToken, assetConfigId: assetConfigId })
-            });
-
-            if (!scanRes.ok) {
-                const errorText = await scanRes.text();
-                throw new Error(`Prism Scan Creation Failed: ${errorText}`);
-            }
-            const scanData = await scanRes.json();
-
-            return {
-                statusCode: 201,
-                headers,
-                body: JSON.stringify({
-                    scanId: scanData.id || scanData._id,
-                    securityToken: scanData.securityToken,
-                    apiBaseUrl: baseUrl,
-                    assetConfigId: assetConfigId,
-                    mode: env
-                })
-            };
-
-        } catch (e) {
-            console.error("Prism Initialization Error:", e);
-            return { statusCode: 502, headers, body: JSON.stringify({ error: 'Failed to initialize scan session.', details: e.message }) };
-        }
-    }
-
-    // GET /body-scans (Fetch history)
-    if (method === 'GET') {
-        const scans = await getBodyScans(userId);
-        return { statusCode: 200, headers, body: JSON.stringify(scans) };
-    }
-
-    // POST /body-scans (Process & Save Completed Scan)
-    if (method === 'POST') {
-        const body = JSON.parse(event.body);
-        if (body.scanId) {
-            try {
-                const { PRISM_API_KEY, PRISM_API_URL } = process.env;
-                const baseUrl = PRISM_API_URL || "https://api.hosted.prismlabs.tech/v1";
-
-                const fetchPrism = async (endpoint) => {
-                    const res = await fetch(`${baseUrl}${endpoint}`, {
-                        headers: { 'x-api-key': PRISM_API_KEY }
-                    });
-                    if (res.status === 404) return null; 
-                    if (!res.ok) throw new Error(`Prism API ${endpoint} Failed: ${res.status}`);
-                    return res.json();
-                };
-
-                const scanDetails = await fetchPrism(`/scans/${body.scanId}`);
-                const measurements = await fetchPrism(`/scans/${body.scanId}/measurements`);
-                const mass = await fetchPrism(`/scans/${body.scanId}/mass`);
-
-                const enrichedScanData = {
-                    ...scanDetails,
-                    measurements: measurements || {},
-                    composition: mass || {}, 
-                    userGoal: body.userGoal,
-                    status: scanDetails?.status || 'completed'
-                };
-
-                const newScan = await saveBodyScan(userId, enrichedScanData);
-                return { statusCode: 201, headers, body: JSON.stringify(newScan) };
-
-            } catch (e) {
-                console.error("Error fetching/saving Prism data:", e);
-                const fallbackScan = await saveBodyScan(userId, { ...body, note: "Server fetch failed, raw data only" });
-                return { statusCode: 201, headers, body: JSON.stringify(fallbackScan) };
-            }
-        } else {
-             return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing scanId in request.' }) };
-        }
-    }
-
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
 }
 
@@ -558,28 +666,23 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         
         email = email.toLowerCase().trim();
 
-        // 1. Get Access Token
         const variables = { input: { email, password } };
         const shopifyResponse = await callShopifyStorefrontAPI(mutation, variables);
         if (!shopifyResponse) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Login failed: Invalid response.' }) };
         const data = shopifyResponse['customerAccessTokenCreate'];
-        
         if (!data || data.customerUserErrors.length > 0) return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid credentials.', details: data?.customerUserErrors[0]?.message }) };
         
         const accessToken = data.customerAccessToken.accessToken;
 
-        // 2. Get Customer Details (ID) using the new token
-        const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
-        
+        // Get Customer Details (ID) using the new token
         /** @type {any} */
-        const responseData = customerDataResponse;
-        const customer = responseData?.customer;
+        const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
+        const customer = customerDataResponse?.customer;
 
-        // 3. Sync User in Postgres (Login Hook)
+        // Sync User in Postgres (Login Hook)
         // Store the Shopify ID (e.g. "gid://shopify/Customer/123")
         const user = await findOrCreateUserByEmail(email, customer?.id ? String(customer.id) : null);
         
-        // 4. Issue App Session Token
         const sessionToken = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
         return { statusCode: 200, headers, body: JSON.stringify({ token: sessionToken }) };
     } catch (error) {
@@ -604,7 +707,9 @@ async function handleMealSuggestionRequest(event, ai, headers) {
     return { statusCode: 200, headers: { ...headers, 'Content-Type': 'application/json' }, body: response.text };
 }
 
-/** @returns {Promise<any>} */
+/**
+ * @returns {Promise<any>}
+ */
 function callShopifyStorefrontAPI(query, variables, customerAccessToken = null) {
     const { SHOPIFY_STORE_DOMAIN, SHOPIFY_STOREFRONT_TOKEN } = process.env;
     const postData = JSON.stringify({ query, variables });
