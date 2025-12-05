@@ -2,6 +2,7 @@
 import { GoogleGenAI } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import https from 'https';
+import crypto from 'crypto';
 import { 
     findOrCreateUserByEmail,
     getSavedMeals,
@@ -28,7 +29,13 @@ import {
     getSavedMealById,
     getMealLogEntryById,
     saveBodyScan,
-    getBodyScans
+    getBodyScans,
+    getSleepRecords,
+    saveSleepRecord,
+    getUserEntitlements,
+    getUserByShopifyId,
+    grantEntitlement,
+    recordPurchase
 } from './services/databaseService.mjs';
 import { Buffer } from 'buffer';
 
@@ -45,7 +52,8 @@ export const handler = async (event) => {
         // NEW ENV VARS FOR PRISM
         PRISM_API_KEY,
         PRISM_ENV, // 'sandbox' or 'production'
-        PRISM_API_URL // Optional override
+        PRISM_API_URL, // Optional override
+        SHOPIFY_WEBHOOK_SECRET
     } = process.env;
     
     // Dynamic CORS configuration
@@ -74,25 +82,6 @@ export const handler = async (event) => {
         "Access-Control-Allow-Methods": "OPTIONS,POST,GET,DELETE,PUT"
     };
 
-    const requiredEnvVars = [
-        'GEMINI_API_KEY', 'SHOPIFY_STOREFRONT_TOKEN', 'SHOPIFY_STORE_DOMAIN',
-        'JWT_SECRET', 'FRONTEND_URL', 'PGHOST', 'PGUSER', 'PGPASSWORD',
-        'PGDATABASE', 'PGPORT'
-        // PRISM_API_KEY is validated inside the specific handler to allow partial app function if missing
-    ];
-    
-    const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
-    
-    if (missingVars.length > 0) {
-        const errorMessage = `Configuration error: The following required environment variables are missing: ${missingVars.join(', ')}.`;
-        console.error(errorMessage);
-        return {
-            statusCode: 500,
-            headers,
-            body: JSON.stringify({ error: errorMessage }),
-        };
-    }
-
     let path;
     let method;
 
@@ -118,11 +107,20 @@ export const handler = async (event) => {
         return { statusCode: 204, headers };
     }
 
-    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+    // --- PUBLIC WEBHOOKS ---
+    // Handle Shopify Order Creation Webhook
+    if (path === '/webhooks/shopify/order-created' && method === 'POST') {
+         return await handleShopifyWebhook(event, SHOPIFY_WEBHOOK_SECRET);
+    }
     
+    // --- AUTH ROUTES ---
     if (path === '/auth/customer-login') {
         return handleCustomerLogin(event, headers, JWT_SECRET);
     }
+
+    // --- AUTHENTICATED ROUTES ---
+
+    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
     
     const normalizedHeaders = {};
     if (event.headers) {
@@ -152,6 +150,12 @@ export const handler = async (event) => {
         }
         
         // --- EXISTING RESOURCES ---
+        if (resource === 'sleep-records') {
+            return await handleSleepRecordsRequest(event, headers, method);
+        }
+        if (resource === 'entitlements') {
+            return await handleEntitlementsRequest(event, headers, method);
+        }
         if (resource === 'meal-log') {
             return await handleMealLogRequest(event, headers, method, pathParts);
         }
@@ -197,18 +201,31 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
     if (method === 'POST' && pathParts[1] === 'init') {
         try {
             const { PRISM_API_KEY, PRISM_ENV, PRISM_API_URL } = process.env;
+
+            // --- DEBUG: LOG RAW KEY ---
+            console.log(`[BodyScans] Raw PRISM_API_KEY: "${PRISM_API_KEY}"`);
+            
             if (!PRISM_API_KEY) {
                 console.error("[BodyScans] CRITICAL ERROR: PRISM_API_KEY is missing in environment variables.");
                 return { statusCode: 500, headers, body: JSON.stringify({ error: 'Server configuration error: PRISM_API_KEY missing.' }) };
             }
 
+            const finalApiKey = PRISM_API_KEY.trim();
+
             // Determine Environment and Base URL
-            // Appending /v1 to ensure we hit the correct versioned endpoint as per analysis of 404 errors.
-            const env = PRISM_ENV === 'production' ? 'production' : 'sandbox';
-            const baseUrl = PRISM_API_URL || "https://api.hosted.prismlabs.tech/v1";
+            // Robust check for 'production' (case insensitive, trimmed)
+            const isProduction = (PRISM_ENV || '').trim().toLowerCase() === 'production';
+            const env = isProduction ? 'production' : 'sandbox';
+            
+            let defaultUrl = "https://sandbox-api.hosted.prismlabs.tech";
+            if (isProduction) {
+                defaultUrl = "https://api.hosted.prismlabs.tech";
+            }
+            
+            const baseUrl = PRISM_API_URL || defaultUrl;
 
             // Mask key for logging safety
-            const maskedKey = PRISM_API_KEY ? `${PRISM_API_KEY.substring(0, 4)}...${PRISM_API_KEY.substring(PRISM_API_KEY.length - 4)}` : 'MISSING';
+            const maskedKey = finalApiKey ? `${finalApiKey.substring(0, 4)}...${finalApiKey.substring(finalApiKey.length - 4)}` : 'MISSING';
             console.log(`[BodyScans] Init Config - Env: ${env}, Url: ${baseUrl}, Key: ${maskedKey}`);
 
             const assetConfigId = "ee651a9e-6de1-4621-a5c9-5d31ca874718";
@@ -216,6 +233,13 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
             // Generate a unique token for the user.
             const prismUserToken = `user_${userId}`; 
             
+            // Standard Headers for Prism v1 API
+            const prismHeaders = {
+                'x-api-key': finalApiKey,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json;v=1'
+            };
+
             // 1. CHECK IF USER EXISTS
             // GET /users/{token}
             let userExists = false;
@@ -223,7 +247,7 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
                 console.log(`[BodyScans] Checking if user exists at: ${baseUrl}/users/${prismUserToken}`);
                 const checkUserRes = await fetch(`${baseUrl}/users/${prismUserToken}`, {
                     method: 'GET',
-                    headers: { 'x-api-key': PRISM_API_KEY }
+                    headers: prismHeaders
                 });
 
                 if (checkUserRes.ok) {
@@ -273,7 +297,7 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
 
                 const createUserRes = await fetch(`${baseUrl}/users`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'x-api-key': PRISM_API_KEY },
+                    headers: prismHeaders,
                     body: JSON.stringify(userPayload) 
                 });
 
@@ -297,7 +321,7 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
             console.log(`[BodyScans] Creating scan at: ${baseUrl}/scans`);
             const scanRes = await fetch(`${baseUrl}/scans`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'x-api-key': PRISM_API_KEY },
+                headers: prismHeaders,
                 body: JSON.stringify({ 
                     userToken: prismUserToken, 
                     assetConfigId: assetConfigId 
@@ -350,11 +374,21 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
                 const { PRISM_API_KEY, PRISM_ENV, PRISM_API_URL } = process.env;
                 
                 // Determine base URL (same logic as init)
-                const baseUrl = PRISM_API_URL || "https://api.hosted.prismlabs.tech/v1";
+                const isProduction = (PRISM_ENV || '').trim().toLowerCase() === 'production';
+                let baseUrl = "https://sandbox-api.hosted.prismlabs.tech";
+                if (isProduction) {
+                    baseUrl = "https://api.hosted.prismlabs.tech";
+                }
+                if (PRISM_API_URL) baseUrl = PRISM_API_URL;
+                
+                const finalApiKey = PRISM_API_KEY ? PRISM_API_KEY.trim() : '';
 
                 const fetchPrism = async (endpoint) => {
                     const res = await fetch(`${baseUrl}${endpoint}`, {
-                        headers: { 'x-api-key': PRISM_API_KEY }
+                        headers: { 
+                            'x-api-key': finalApiKey,
+                            'Accept': 'application/json;v=1'
+                        }
                     });
                     if (res.status === 404) return null; // Not ready or not found
                     if (!res.ok) throw new Error(`Prism API ${endpoint} Failed: ${res.status}`);
@@ -395,6 +429,90 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
         }
     }
 
+    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
+}
+
+// --- HANDLER FOR SHOPIFY WEBHOOKS ---
+async function handleShopifyWebhook(event, secret) {
+    try {
+        const body = event.body;
+        const hmacHeader = event.headers['x-shopify-hmac-sha256'] || event.headers['X-Shopify-Hmac-Sha256'];
+        
+        // 1. Verify HMAC
+        if (secret) {
+            const hash = crypto.createHmac('sha256', secret).update(body).digest('base64');
+            if (hash !== hmacHeader) {
+                console.warn("Shopify Webhook HMAC verification failed.");
+                return { statusCode: 401, body: 'Unauthorized' };
+            }
+        }
+
+        const order = JSON.parse(body);
+        const email = order.email;
+        const customerId = order.customer?.id; 
+        
+        let user = await findOrCreateUserByEmail(email, customerId ? String(customerId) : null);
+        
+        if (!user) {
+            console.error(`Could not find or create user for email ${email}`);
+            return { statusCode: 200, body: 'User processing failed' };
+        }
+
+        const lineItems = order.line_items || [];
+        
+        for (const item of lineItems) {
+            const sku = item.sku;
+            
+            // 2. Unlock Medical Dashboard
+            if (sku === 'GLP1-MONTHLY') {
+                await grantEntitlement(user.id, {
+                    source: 'shopify_order',
+                    externalProductId: sku,
+                    expiresAt: null // or calculate 30 days from now
+                });
+                console.log(`Granted Medical Dashboard to user ${user.id}`);
+            }
+
+            // 3. Record Purchase History
+            if (sku === 'SUPPLEMENT-X') {
+                await recordPurchase(user.id, String(order.id), sku, item.name);
+                console.log(`Recorded purchase of SUPPLEMENT-X for user ${user.id}`);
+            }
+        }
+
+        return { statusCode: 200, body: 'Webhook processed' };
+
+    } catch (e) {
+        console.error("Webhook Error:", e);
+        return { statusCode: 500, body: 'Server Error' };
+    }
+}
+
+// --- HANDLER FOR SLEEP RECORDS ---
+async function handleSleepRecordsRequest(event, headers, method) {
+    const userId = event.user.userId;
+    if (method === 'GET') {
+        const records = await getSleepRecords(userId);
+        return { statusCode: 200, headers, body: JSON.stringify(records) };
+    }
+    if (method === 'POST') {
+        const sleepData = JSON.parse(event.body);
+        if (!sleepData.durationMinutes || !sleepData.startTime || !sleepData.endTime) {
+            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing required fields: durationMinutes, startTime, endTime' }) };
+        }
+        const record = await saveSleepRecord(userId, sleepData);
+        return { statusCode: 201, headers, body: JSON.stringify(record) };
+    }
+    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
+}
+
+// --- HANDLER FOR ENTITLEMENTS ---
+async function handleEntitlementsRequest(event, headers, method) {
+    const userId = event.user.userId;
+    if (method === 'GET') {
+        const entitlements = await getUserEntitlements(userId);
+        return { statusCode: 200, headers, body: JSON.stringify(entitlements) };
+    }
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
 }
 
@@ -540,11 +658,12 @@ async function handleRewardsRequest(event, headers, method) {
 
 async function handleCustomerLogin(event, headers, JWT_SECRET) {
     const mutation = `mutation customerAccessTokenCreate($input: CustomerAccessTokenCreateInput!) { customerAccessTokenCreate(input: $input) { customerAccessToken { accessToken expiresAt } customerUserErrors { code field message } } }`;
+    const customerQuery = `query { customer { id email firstName lastName } }`;
+
     try {
         let { email, password } = JSON.parse(event.body);
         if (!email || !password) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Email/password required.' }) };
         
-        // FIX: Force email to lowercase to match existing users regardless of device casing
         email = email.toLowerCase().trim();
 
         const variables = { input: { email, password } };
@@ -552,7 +671,18 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         if (!shopifyResponse) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Login failed: Invalid response.' }) };
         const data = shopifyResponse['customerAccessTokenCreate'];
         if (!data || data.customerUserErrors.length > 0) return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid credentials.', details: data?.customerUserErrors[0]?.message }) };
-        const user = await findOrCreateUserByEmail(email);
+        
+        const accessToken = data.customerAccessToken.accessToken;
+
+        // Get Customer Details (ID) using the new token
+        const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
+        // Cast to any to avoid TS error on 'unknown'
+        const customer = (/** @type {any} */ (customerDataResponse))?.customer;
+
+        // Sync User in Postgres (Login Hook)
+        // Store the Shopify ID (e.g. "gid://shopify/Customer/123")
+        const user = await findOrCreateUserByEmail(email, customer?.id ? String(customer.id) : null);
+        
         const sessionToken = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
         return { statusCode: 200, headers, body: JSON.stringify({ token: sessionToken }) };
     } catch (error) {
@@ -577,10 +707,23 @@ async function handleMealSuggestionRequest(event, ai, headers) {
     return { statusCode: 200, headers: { ...headers, 'Content-Type': 'application/json' }, body: response.text };
 }
 
-function callShopifyStorefrontAPI(query, variables) {
+/**
+ * @returns {Promise<any>}
+ */
+function callShopifyStorefrontAPI(query, variables, customerAccessToken = null) {
     const { SHOPIFY_STORE_DOMAIN, SHOPIFY_STOREFRONT_TOKEN } = process.env;
     const postData = JSON.stringify({ query, variables });
-    const options = { hostname: SHOPIFY_STORE_DOMAIN, path: '/api/2024-04/graphql.json', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData), 'X-Shopify-Storefront-Access-Token': SHOPIFY_STOREFRONT_TOKEN } };
+    const headers = { 
+        'Content-Type': 'application/json', 
+        'Content-Length': Buffer.byteLength(postData), 
+        'X-Shopify-Storefront-Access-Token': SHOPIFY_STOREFRONT_TOKEN 
+    };
+    
+    if (customerAccessToken) {
+        headers['X-Shopify-Customer-Access-Token'] = customerAccessToken;
+    }
+
+    const options = { hostname: SHOPIFY_STORE_DOMAIN, path: '/api/2024-04/graphql.json', method: 'POST', headers };
     return new Promise((resolve, reject) => {
         const req = https.request(options, (res) => {
             let data = '';
