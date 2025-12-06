@@ -199,6 +199,14 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
         // Award points for logging a meal
         await awardPoints(userId, 'meal_photo.logged', 50, { meal_log_id: row.id });
 
+        // --- NEW DASHBOARD LOGIC ---
+        // Fire-and-forget: Log metric snapshot for BI Dashboard.
+        // We do NOT await this to prevent slowing down the user response.
+        logMetricSnapshot('meals_logged', 1, { region: 'US' }).catch(err => {
+            console.error('Background metric logging failed:', err);
+        });
+        // ---------------------------
+
         const mealDataFromDb = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
         return { 
             id: row.id,
@@ -945,3 +953,98 @@ export const getBodyScans = async (userId) => {
         client.release();
     }
 };
+
+// =============================================================================
+// --- NEW DASHBOARD LOGIC START ---
+// =============================================================================
+
+/**
+ * Logs a specific metric snapshot for the BI Dashboard.
+ * This should generally be called asynchronously (fire-and-forget).
+ * Logic: If value > 100, status is GREEN, else YELLOW.
+ */
+export const logMetricSnapshot = async (metricKey, value, dimension = {}) => {
+    const status = value > 100 ? 'GREEN' : 'YELLOW';
+    const client = await pool.connect();
+    try {
+        await client.query(
+            `INSERT INTO metric_snapshot (metric_key, metric_value, dimension, traffic_light_status)
+             VALUES ($1, $2, $3, $4)`,
+            [metricKey, value, dimension, status]
+        );
+    } catch (err) {
+        console.error(`Failed to log metric snapshot for ${metricKey}:`, err);
+        // We do not throw here to ensure background telemetry doesn't break main flow.
+    } finally {
+        client.release();
+    }
+};
+
+/**
+ * Retrieves the latest snapshot for every unique metric key (The "Pulse").
+ */
+export const getDashboardPulse = async () => {
+    const client = await pool.connect();
+    try {
+        // DISTINCT ON (metric_key) ensures we get the most recent row per key
+        const query = `
+            SELECT DISTINCT ON (metric_key) * 
+            FROM metric_snapshot 
+            ORDER BY metric_key, captured_at DESC;
+        `;
+        const res = await client.query(query);
+        return res.rows;
+    } catch (err) {
+        console.error('Database error in getDashboardPulse:', err);
+        throw new Error('Could not retrieve dashboard pulse.');
+    } finally {
+        client.release();
+    }
+};
+
+/**
+ * Retrieves all competitors.
+ */
+export const getCompetitors = async () => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query('SELECT * FROM competitors ORDER BY created_at DESC');
+        return res.rows;
+    } catch (err) {
+        console.error('Database error in getCompetitors:', err);
+        throw new Error('Could not retrieve competitors.');
+    } finally {
+        client.release();
+    }
+};
+
+/**
+ * Retrieves SWOT insights, optionally filtered by region/scope.
+ * If region is provided, it attempts to match specific region OR global scope.
+ */
+export const getSWOTInsights = async (region = null) => {
+    const client = await pool.connect();
+    try {
+        let query = `SELECT * FROM swot_insights`;
+        const params = [];
+
+        if (region) {
+            query += ` WHERE region_scope = $1 OR region_scope = 'global'`;
+            params.push(region);
+        }
+
+        query += ` ORDER BY created_at DESC`;
+
+        const res = await client.query(query, params);
+        return res.rows;
+    } catch (err) {
+        console.error('Database error in getSWOTInsights:', err);
+        throw new Error('Could not retrieve SWOT insights.');
+    } finally {
+        client.release();
+    }
+};
+
+// =============================================================================
+// --- NEW DASHBOARD LOGIC END ---
+// =============================================================================

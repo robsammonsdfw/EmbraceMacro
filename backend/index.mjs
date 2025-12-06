@@ -35,7 +35,11 @@ import {
     getUserEntitlements,
     getUserByShopifyId,
     grantEntitlement,
-    recordPurchase
+    recordPurchase,
+    // --- NEW DASHBOARD LOGIC IMPORTS ---
+    getDashboardPulse,
+    getCompetitors,
+    getSWOTInsights
 } from './services/databaseService.mjs';
 import { Buffer } from 'buffer';
 
@@ -144,6 +148,11 @@ export const handler = async (event) => {
     const resource = pathParts[0];
 
     try {
+        // --- NEW DASHBOARD ROUTE ---
+        if (resource === 'dashboard') {
+            return await handleDashboardRequest(event, headers, method, pathParts);
+        }
+        
         // --- NEW RESOURCE FOR BODY SCANS ---
         if (resource === 'body-scans') {
             return await handleBodyScansRequest(event, headers, method, pathParts);
@@ -191,6 +200,34 @@ export const handler = async (event) => {
         body: JSON.stringify({ error: `Not Found: The path "${path}" could not be handled.` }),
     };
 };
+
+// --- HANDLER FOR DASHBOARD (NEW) ---
+async function handleDashboardRequest(event, headers, method, pathParts) {
+    if (method !== 'GET') {
+        return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
+    }
+
+    const subResource = pathParts[1];
+
+    if (subResource === 'pulse') {
+        const pulseData = await getDashboardPulse();
+        return { statusCode: 200, headers, body: JSON.stringify(pulseData) };
+    }
+
+    if (subResource === 'swot') {
+        // Optional region filtering via query params
+        const region = event.queryStringParameters?.region || null;
+        const insights = await getSWOTInsights(region);
+        return { statusCode: 200, headers, body: JSON.stringify(insights) };
+    }
+
+    if (subResource === 'competitors') {
+        const competitors = await getCompetitors();
+        return { statusCode: 200, headers, body: JSON.stringify(competitors) };
+    }
+
+    return { statusCode: 404, headers, body: JSON.stringify({ error: 'Dashboard resource not found.' }) };
+}
 
 // --- HANDLER FOR BODY SCANS ---
 async function handleBodyScansRequest(event, headers, method, pathParts) {
@@ -675,9 +712,9 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         const accessToken = data.customerAccessToken.accessToken;
 
         // Get Customer Details (ID) using the new token
+        /** @type {any} */
         const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
-        // Cast to any to avoid TS error on 'unknown'
-        const customer = (/** @type {any} */ (customerDataResponse))?.customer;
+        const customer = customerDataResponse?.customer;
 
         // Sync User in Postgres (Login Hook)
         // Store the Shopify ID (e.g. "gid://shopify/Customer/123")
