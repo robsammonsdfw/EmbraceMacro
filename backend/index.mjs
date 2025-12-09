@@ -203,25 +203,31 @@ export const handler = async (event) => {
 
 // --- HANDLER FOR DASHBOARD (NEW) ---
 async function handleDashboardRequest(event, headers, method, pathParts) {
-    if (method !== 'GET') {
-        return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
-    }
-
+    // API Shell: Routing logic for dashboard namespace
     const subResource = pathParts[1];
 
-    if (subResource === 'pulse') {
+    if (subResource === 'exec-pulse') {
+        if (method !== 'GET') {
+            return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
+        }
         const pulseData = await getDashboardPulse();
         return { statusCode: 200, headers, body: JSON.stringify(pulseData) };
     }
 
     if (subResource === 'swot') {
-        // Optional region filtering via query params
-        const region = event.queryStringParameters?.region || null;
-        const insights = await getSWOTInsights(region);
-        return { statusCode: 200, headers, body: JSON.stringify(insights) };
+        if (method === 'GET') {
+            // Optional region filtering via query params
+            const region = event.queryStringParameters?.region || null;
+            const insights = await getSWOTInsights(region);
+            return { statusCode: 200, headers, body: JSON.stringify(insights) };
+        }
+        // POST to be handled in next steps
     }
 
     if (subResource === 'competitors') {
+         if (method !== 'GET') {
+            return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
+        }
         const competitors = await getCompetitors();
         return { statusCode: 200, headers, body: JSON.stringify(competitors) };
     }
@@ -713,10 +719,10 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
 
         // Get Customer Details (ID) using the new token
         const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
-        // Fix for potential TS error on unknown type
-        /** @type {any} */
-        const typedResponse = customerDataResponse;
-        const customer = typedResponse ? typedResponse.customer : null;
+        
+        // FIX: Cast to any to prevent 'unknown' type error on customer property access
+        const customerData = /** @type {any} */ (customerDataResponse);
+        const customer = customerData?.customer;
 
         // Sync User in Postgres (Login Hook)
         // Store the Shopify ID (e.g. "gid://shopify/Customer/123")
