@@ -277,8 +277,9 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
             const prismUserToken = `user_${userId}`; 
             
             // Standard Headers for Prism v1 API
+            // SWITCHED TO BEARER TOKEN AUTH AS REQUESTED
             const prismHeaders = {
-                'x-api-key': finalApiKey,
+                'Authorization': `Bearer ${finalApiKey}`,
                 'Content-Type': 'application/json',
                 'Accept': 'application/json;v=1'
             };
@@ -337,6 +338,13 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
                         version: "1"
                     }
                 };
+
+                // --- DEBUG: LOG FULL REQUEST FOR DEVELOPER ---
+                console.log("[BodyScans] DEBUG: Sending User Registration Request");
+                console.log("URL:", `${baseUrl}/users`);
+                console.log("Headers:", JSON.stringify({ ...prismHeaders, 'Authorization': 'Bearer ***MASKED***' }, null, 2));
+                console.log("Body:", JSON.stringify(userPayload, null, 2));
+                // ---------------------------------------------
 
                 const createUserRes = await fetch(`${baseUrl}/users`, {
                     method: 'POST',
@@ -429,7 +437,7 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
                 const fetchPrism = async (endpoint) => {
                     const res = await fetch(`${baseUrl}${endpoint}`, {
                         headers: { 
-                            'x-api-key': finalApiKey,
+                            'Authorization': `Bearer ${finalApiKey}`,
                             'Accept': 'application/json;v=1'
                         }
                     });
@@ -720,9 +728,7 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         // Get Customer Details (ID) using the new token
         const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
         
-        // FIX: Cast to any to prevent 'unknown' type error on customer property access
-        const customerData = /** @type {any} */ (customerDataResponse);
-        const customer = customerData?.customer;
+        const customer = (/** @type {any} */ (customerDataResponse))?.customer;
 
         // Sync User in Postgres (Login Hook)
         // Store the Shopify ID (e.g. "gid://shopify/Customer/123")
