@@ -141,6 +141,75 @@ export const getSWOTInsights = async (region = null) => {
 };
 
 // =============================================================================
+// --- DATING & CARE LOGIC ---
+// =============================================================================
+
+const ensureDatingTables = async (client) => {
+    await client.query(`
+        CREATE TABLE IF NOT EXISTS user_test_sessions (
+            id SERIAL PRIMARY KEY,
+            user_id INT REFERENCES users(id),
+            test_type VARCHAR(50),
+            status VARCHAR(20) DEFAULT 'started',
+            started_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            completed_at TIMESTAMPTZ,
+            metadata JSONB DEFAULT '{}'
+        );
+        CREATE TABLE IF NOT EXISTS user_trait_scores (
+            id SERIAL PRIMARY KEY,
+            user_id INT REFERENCES users(id),
+            trait_key VARCHAR(50),
+            score DECIMAL(5,2),
+            percentile INT,
+            category VARCHAR(50),
+            updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, trait_key)
+        );
+        CREATE TABLE IF NOT EXISTS partner_preferences (
+            user_id INT PRIMARY KEY REFERENCES users(id),
+            age_range_min INT,
+            age_range_max INT,
+            gender_interest VARCHAR(50),
+            trait_filters JSONB DEFAULT '{}',
+            deal_breakers JSONB DEFAULT '[]',
+            updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS user_risk_flags (
+            id SERIAL PRIMARY KEY,
+            user_id INT REFERENCES users(id),
+            flag_type VARCHAR(50),
+            severity VARCHAR(20),
+            details TEXT,
+            detected_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            status VARCHAR(20) DEFAULT 'active'
+        );
+    `);
+};
+
+export const getUserDatingProfile = async (userId) => {
+    const client = await pool.connect();
+    try {
+        await ensureDatingTables(client);
+        
+        // Fetch preferences
+        const prefRes = await client.query('SELECT * FROM partner_preferences WHERE user_id = $1', [userId]);
+        
+        // Fetch traits
+        const traitsRes = await client.query('SELECT * FROM user_trait_scores WHERE user_id = $1', [userId]);
+        
+        return {
+            preferences: prefRes.rows[0] || null,
+            traits: traitsRes.rows
+        };
+    } catch (err) {
+        console.error('Database error in getUserDatingProfile:', err);
+        throw new Error('Could not retrieve dating profile.');
+    } finally {
+        client.release();
+    }
+};
+
+// =============================================================================
 // --- USER & REWARDS LOGIC ---
 // =============================================================================
 
