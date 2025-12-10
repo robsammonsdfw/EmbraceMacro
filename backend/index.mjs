@@ -44,6 +44,13 @@ import { Buffer } from 'buffer';
 
 // --- MAIN HANDLER (ROUTER) ---
 export const handler = async (event) => {
+    // --- DEBUG LOGGING START (Added from index.js) ---
+    console.log("[Handler] Request Received");
+    console.log("[Handler] Runtime:", process.version);
+    console.log("[Handler] Path:", event.rawPath || event.path || event.requestContext?.http?.path);
+    console.log("[Handler] Headers Keys:", event.headers ? Object.keys(event.headers).join(', ') : "None");
+    // ---------------------------
+
     // --- IMPORTANT: CONFIGURE THESE IN YOUR LAMBDA ENVIRONMENT VARIABLES ---
     const {
         GEMINI_API_KEY,
@@ -58,6 +65,9 @@ export const handler = async (event) => {
         PRISM_API_URL, // Optional override
         SHOPIFY_WEBHOOK_SECRET
     } = process.env;
+
+    // Debug Config (Safe)
+    console.log(`[Handler] Config Check - JWT_SECRET present: ${!!JWT_SECRET}`);
 
     // Dynamic CORS configuration
     const allowedOrigins = [
@@ -85,7 +95,7 @@ export const handler = async (event) => {
         "Access-Control-Allow-Methods": "OPTIONS,POST,GET,DELETE,PUT"
     };
 
-    // --- SAFETY CHECK (Ported from index.js) ---
+    // --- SAFETY CHECK ---
     const requiredEnvVars = [
         'GEMINI_API_KEY', 'SHOPIFY_STOREFRONT_TOKEN', 'SHOPIFY_STORE_DOMAIN',
         'JWT_SECRET', 'FRONTEND_URL', 'PGHOST', 'PGUSER', 'PGPASSWORD',
@@ -155,13 +165,23 @@ export const handler = async (event) => {
 
     const token = normalizedHeaders['authorization']?.split(' ')[1];
     if (!token) {
+        console.warn("[Auth] No Bearer token provided in headers.");
         return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized: No token provided.' }) };
     }
 
     try {
         event.user = jwt.verify(token, JWT_SECRET);
     } catch (err) {
-        return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized: Invalid token.' }) };
+        console.error(`[Auth] JWT Verification Failed: ${err.message}`);
+        // Return detailed error to help debug frontend/backend mismatch
+        return {
+            statusCode: 401,
+            headers,
+            body: JSON.stringify({
+                error: 'Unauthorized: Invalid token.',
+                details: err.message
+            })
+        };
     }
 
     const pathParts = path.split('/').filter(Boolean);
