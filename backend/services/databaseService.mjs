@@ -22,14 +22,36 @@ const processMealDataForSave = (mealData) => {
 };
 
 /**
- * Helper function to prepare meal data for the client.
+ * Helper function to prepare meal data for the client (Full Details).
  */
 const processMealDataForClient = (mealData) => {
     const dataForClient = { ...mealData };
     if (dataForClient.imageBase64) {
         dataForClient.imageUrl = `data:image/jpeg;base64,${dataForClient.imageBase64}`;
+        dataForClient.hasImage = true;
         delete dataForClient.imageBase64;
     }
+    return dataForClient;
+};
+
+/**
+ * Helper function to prepare meal data for Lists (Lightweight).
+ * Strips base64 data to prevent Lambda payload limits.
+ */
+const processMealDataForList = (mealData) => {
+    const dataForClient = { ...mealData };
+    
+    // Check if image exists
+    if (dataForClient.imageBase64 || (dataForClient.imageUrl && dataForClient.imageUrl.startsWith('data:'))) {
+        dataForClient.hasImage = true;
+    }
+
+    // Remove heavy data
+    delete dataForClient.imageBase64;
+    if (dataForClient.imageUrl && dataForClient.imageUrl.startsWith('data:')) {
+        delete dataForClient.imageUrl;
+    }
+    
     return dataForClient;
 };
 
@@ -395,6 +417,7 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
             id: row.id,
             ...mealDataFromDb,
             imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
+            hasImage: true,
             createdAt: row.created_at
         };
     } catch (err) {
@@ -408,8 +431,12 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
 export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
     try {
+        // Optimization: Do NOT fetch the full image_base64 for the list view
+        // to prevent 413 Payload Too Large errors.
         const query = `
-            SELECT id, meal_data, image_base64, created_at 
+            SELECT id, meal_data, 
+                   (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image, 
+                   created_at 
             FROM meal_log_entries
             WHERE user_id = $1 
             ORDER BY created_at DESC;
@@ -420,7 +447,8 @@ export const getMealLogEntries = async (userId) => {
             return {
                 id: row.id,
                 ...mealData,
-                imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
+                hasImage: row.has_image,
+                imageUrl: undefined, // Explicitly undefined for list view
                 createdAt: row.created_at,
             };
         });
@@ -443,6 +471,7 @@ export const getMealLogEntryById = async (userId, logId) => {
             id: row.id,
             ...mealData,
             imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
+            hasImage: !!row.image_base64,
             createdAt: row.created_at,
         };
     } finally {
@@ -469,7 +498,7 @@ export const getSavedMeals = async (userId) => {
         const res = await client.query(query, [userId]);
         return res.rows.map(row => {
             const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
-            return { id: row.id, ...processMealDataForClient(mealData) };
+            return { id: row.id, ...processMealDataForList(mealData) };
         });
     } catch (err) {
         console.error('Database error in getSavedMeals:', err);
@@ -579,7 +608,8 @@ export const getMealPlans = async (userId) => {
                     metadata: row.metadata || {},
                     meal: {
                         id: row.meal_id,
-                        ...processMealDataForClient(mealData)
+                        // Use processMealDataForList to avoid sending huge images in the plan view
+                        ...processMealDataForList(mealData)
                     }
                 });
             }
