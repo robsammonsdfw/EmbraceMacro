@@ -296,13 +296,13 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
             const finalApiKey = PRISM_API_KEY.trim();
 
             // Determine Environment and Base URL
-            // Robust check for 'production' (case insensitive, trimmed)
-            const isProduction = (PRISM_ENV || '').trim().toLowerCase() === 'production';
-            const env = isProduction ? 'production' : 'sandbox';
-
-            let defaultUrl = "https://sandbox-api.hosted.prismlabs.tech";
-            if (isProduction) {
-                defaultUrl = "https://api.hosted.prismlabs.tech";
+            // Default to PRODUCTION per user request
+            const isSandbox = (PRISM_ENV || '').trim().toLowerCase() === 'sandbox';
+            const env = isSandbox ? 'sandbox' : 'production';
+            
+            let defaultUrl = "https://api.hosted.prismlabs.tech";
+            if (isSandbox) {
+                defaultUrl = "https://sandbox-api.hosted.prismlabs.tech";
             }
 
             const baseUrl = PRISM_API_URL || defaultUrl;
@@ -320,7 +320,8 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
             // SWITCHED TO BEARER TOKEN AUTH AS REQUESTED
             const prismHeaders = {
                 'Authorization': `Bearer ${finalApiKey}`,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Accept': 'application/json;v=1'
             };
 
             // 1. CHECK IF USER EXISTS
@@ -464,10 +465,11 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
                 const { PRISM_API_KEY, PRISM_ENV, PRISM_API_URL } = process.env;
 
                 // Determine base URL (same logic as init)
-                const isProduction = (PRISM_ENV || '').trim().toLowerCase() === 'production';
-                let baseUrl = "https://sandbox-api.hosted.prismlabs.tech";
-                if (isProduction) {
-                    baseUrl = "https://api.hosted.prismlabs.tech";
+                const isSandbox = (PRISM_ENV || '').trim().toLowerCase() === 'sandbox';
+                
+                let baseUrl = "https://api.hosted.prismlabs.tech"; // Default to Prod
+                if (isSandbox) {
+                    baseUrl = "https://sandbox-api.hosted.prismlabs.tech";
                 }
                 if (PRISM_API_URL) baseUrl = PRISM_API_URL;
 
@@ -537,7 +539,7 @@ async function handleShopifyWebhook(event, secret) {
             }
         }
 
-        const order = JSON.parse(body);
+        const order = /** @type {any} */ (JSON.parse(body));
         const email = order.email;
         const customerId = order.customer?.id;
 
@@ -757,7 +759,7 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         email = email.toLowerCase().trim();
 
         const variables = { input: { email, password } };
-        const shopifyResponse = await callShopifyStorefrontAPI(mutation, variables);
+        const shopifyResponse = /** @type {any} */ (await callShopifyStorefrontAPI(mutation, variables));
         if (!shopifyResponse) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Login failed: Invalid response.' }) };
         const data = shopifyResponse['customerAccessTokenCreate'];
         if (!data || data.customerUserErrors.length > 0) return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid credentials.', details: data?.customerUserErrors[0]?.message }) };
@@ -765,8 +767,7 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         const accessToken = data.customerAccessToken.accessToken;
 
         // Get Customer Details (ID) using the new token
-        /** @type {any} */
-        const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
+        const customerDataResponse = /** @type {any} */ (await callShopifyStorefrontAPI(customerQuery, {}, accessToken));
 
         const customer = customerDataResponse?.customer;
 
