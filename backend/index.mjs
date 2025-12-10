@@ -1,9 +1,8 @@
-
 import { GoogleGenAI } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import https from 'https';
 import crypto from 'crypto';
-import { 
+import {
     findOrCreateUserByEmail,
     getSavedMeals,
     saveMeal,
@@ -59,7 +58,7 @@ export const handler = async (event) => {
         PRISM_API_URL, // Optional override
         SHOPIFY_WEBHOOK_SECRET
     } = process.env;
-    
+
     // Dynamic CORS configuration
     const allowedOrigins = [
         "https://food.embracehealth.ai",
@@ -73,7 +72,7 @@ export const handler = async (event) => {
 
     const requestHeaders = event.headers || {};
     const origin = requestHeaders.origin || requestHeaders.Origin;
-    
+
     let accessControlAllowOrigin = FRONTEND_URL || (allowedOrigins.length > 0 ? allowedOrigins[0] : '*');
 
     if (origin && allowedOrigins.includes(origin)) {
@@ -85,6 +84,27 @@ export const handler = async (event) => {
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
         "Access-Control-Allow-Methods": "OPTIONS,POST,GET,DELETE,PUT"
     };
+
+    // --- SAFETY CHECK (Ported from index.js) ---
+    const requiredEnvVars = [
+        'GEMINI_API_KEY', 'SHOPIFY_STOREFRONT_TOKEN', 'SHOPIFY_STORE_DOMAIN',
+        'JWT_SECRET', 'FRONTEND_URL', 'PGHOST', 'PGUSER', 'PGPASSWORD',
+        'PGDATABASE', 'PGPORT'
+        // PRISM_API_KEY is validated inside the specific handler to allow partial app function if missing
+    ];
+
+    const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+    if (missingVars.length > 0) {
+        const errorMessage = `Configuration error: The following required environment variables are missing: ${missingVars.join(', ')}.`;
+        console.error(errorMessage);
+        return {
+            statusCode: 500,
+            headers,
+            body: JSON.stringify({ error: errorMessage }),
+        };
+    }
+    // -------------------------------------------
 
     let path;
     let method;
@@ -98,7 +118,7 @@ export const handler = async (event) => {
     } else {
         return { statusCode: 500, headers, body: JSON.stringify({ error: 'Internal Server Error: Malformed request event.' }) };
     }
-    
+
     const stage = event.requestContext?.stage;
     if (stage && stage !== '$default') {
         const stagePrefix = `/${stage}`;
@@ -106,7 +126,7 @@ export const handler = async (event) => {
             path = path.substring(stagePrefix.length);
         }
     }
-    
+
     if (method === 'OPTIONS') {
         return { statusCode: 204, headers };
     }
@@ -114,9 +134,9 @@ export const handler = async (event) => {
     // --- PUBLIC WEBHOOKS ---
     // Handle Shopify Order Creation Webhook
     if (path === '/webhooks/shopify/order-created' && method === 'POST') {
-         return await handleShopifyWebhook(event, SHOPIFY_WEBHOOK_SECRET);
+        return await handleShopifyWebhook(event, SHOPIFY_WEBHOOK_SECRET);
     }
-    
+
     // --- AUTH ROUTES ---
     if (path === '/auth/customer-login') {
         return handleCustomerLogin(event, headers, JWT_SECRET);
@@ -125,7 +145,7 @@ export const handler = async (event) => {
     // --- AUTHENTICATED ROUTES ---
 
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-    
+
     const normalizedHeaders = {};
     if (event.headers) {
         for (const key in event.headers) {
@@ -135,13 +155,13 @@ export const handler = async (event) => {
 
     const token = normalizedHeaders['authorization']?.split(' ')[1];
     if (!token) {
-        return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized: No token provided.' })};
+        return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized: No token provided.' }) };
     }
 
     try {
         event.user = jwt.verify(token, JWT_SECRET);
     } catch (err) {
-        return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized: Invalid token.' })};
+        return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized: Invalid token.' }) };
     }
 
     const pathParts = path.split('/').filter(Boolean);
@@ -152,12 +172,12 @@ export const handler = async (event) => {
         if (resource === 'dashboard') {
             return await handleDashboardRequest(event, headers, method, pathParts);
         }
-        
+
         // --- NEW RESOURCE FOR BODY SCANS ---
         if (resource === 'body-scans') {
             return await handleBodyScansRequest(event, headers, method, pathParts);
         }
-        
+
         // --- EXISTING RESOURCES ---
         if (resource === 'sleep-records') {
             return await handleSleepRecordsRequest(event, headers, method);
@@ -174,11 +194,11 @@ export const handler = async (event) => {
         if (resource === 'meal-plans') {
             return await handleMealPlansRequest(event, headers, method, pathParts);
         }
-        if (resource === 'grocery-lists') { 
+        if (resource === 'grocery-lists') {
             return await handleGroceryListRequest(event, headers, method, pathParts);
         }
-        if (resource === 'grocery-list') { 
-             return await handleGroceryListRequest(event, headers, method, ['grocery-lists', ...pathParts.slice(1)]);
+        if (resource === 'grocery-list') {
+            return await handleGroceryListRequest(event, headers, method, ['grocery-lists', ...pathParts.slice(1)]);
         }
         if (resource === 'analyze-image' || resource === 'analyze-image-recipes') {
             return await handleGeminiRequest(event, ai, headers);
@@ -225,7 +245,7 @@ async function handleDashboardRequest(event, headers, method, pathParts) {
     }
 
     if (subResource === 'competitors') {
-         if (method !== 'GET') {
+        if (method !== 'GET') {
             return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
         }
         const competitors = await getCompetitors();
@@ -247,7 +267,7 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
 
             // --- DEBUG: LOG RAW KEY ---
             console.log(`[BodyScans] Raw PRISM_API_KEY: "${PRISM_API_KEY}"`);
-            
+
             if (!PRISM_API_KEY) {
                 console.error("[BodyScans] CRITICAL ERROR: PRISM_API_KEY is missing in environment variables.");
                 return { statusCode: 500, headers, body: JSON.stringify({ error: 'Server configuration error: PRISM_API_KEY missing.' }) };
@@ -259,12 +279,12 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
             // Robust check for 'production' (case insensitive, trimmed)
             const isProduction = (PRISM_ENV || '').trim().toLowerCase() === 'production';
             const env = isProduction ? 'production' : 'sandbox';
-            
+
             let defaultUrl = "https://sandbox-api.hosted.prismlabs.tech";
             if (isProduction) {
                 defaultUrl = "https://api.hosted.prismlabs.tech";
             }
-            
+
             const baseUrl = PRISM_API_URL || defaultUrl;
 
             // Mask key for logging safety
@@ -272,10 +292,10 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
             console.log(`[BodyScans] Init Config - Env: ${env}, Url: ${baseUrl}, Key: ${maskedKey}`);
 
             const assetConfigId = "ee651a9e-6de1-4621-a5c9-5d31ca874718";
-            
+
             // Generate a unique token for the user.
-            const prismUserToken = `user_${userId}`; 
-            
+            const prismUserToken = `user_${userId}`;
+
             // Standard Headers for Prism v1 API
             // SWITCHED TO BEARER TOKEN AUTH AS REQUESTED
             const prismHeaders = {
@@ -300,37 +320,37 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
                 } else if (checkUserRes.status !== 404) {
                     const checkErr = await checkUserRes.text();
                     console.warn(`[BodyScans] Check user warning (${checkUserRes.status}): ${checkErr}`);
-                    
+
                     if (checkUserRes.status === 401 || checkUserRes.status === 403) {
-                         throw new Error(`Authorization Failed during User Check: The PRISM_API_KEY appears invalid for the target URL (${baseUrl}).`);
+                        throw new Error(`Authorization Failed during User Check: The PRISM_API_KEY appears invalid for the target URL (${baseUrl}).`);
                     }
                 }
             } catch (checkErr) {
-                 // Propagate auth errors specifically
-                 if (checkErr.message && checkErr.message.includes("Authorization Failed")) {
-                     throw checkErr;
-                 }
-                 console.warn(`[BodyScans] Failed to check user existence:`, checkErr);
+                // Propagate auth errors specifically
+                if (checkErr.message && checkErr.message.includes("Authorization Failed")) {
+                    throw checkErr;
+                }
+                console.warn(`[BodyScans] Failed to check user existence:`, checkErr);
             }
 
             // 2. REGISTER NEW USER IF NOT EXISTS
             // POST /users
             if (!userExists) {
                 console.log(`[BodyScans] Registering new user at: ${baseUrl}/users`);
-                
+
                 // Use a COMPLETE payload structure satisfying the strict schema
                 const userPayload = {
                     token: prismUserToken,
-                    email: event.user.email || "user@example.com", 
-                    
+                    email: event.user.email || "user@example.com",
+
                     // Demographic placeholders (Required by Schema)
-                    weight: { value: 70, unit: 'kg' }, 
-                    height: { value: 1.7, unit: 'm' }, 
+                    weight: { value: 70, unit: 'kg' },
+                    height: { value: 1.7, unit: 'm' },
                     sex: 'undefined', // Valid enum value per docs
                     region: 'north_america',
                     usaResidence: 'California',
                     birthDate: '1990-01-01',
-                    
+
                     // Consent - MUST BE TRUE per dev feedback
                     researchConsent: true,
                     termsOfService: {
@@ -349,7 +369,7 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
                 const createUserRes = await fetch(`${baseUrl}/users`, {
                     method: 'POST',
                     headers: prismHeaders,
-                    body: JSON.stringify(userPayload) 
+                    body: JSON.stringify(userPayload)
                 });
 
                 if (!createUserRes.ok) {
@@ -357,11 +377,11 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
                     if (createUserRes.status !== 409) {
                         const createErr = await createUserRes.text();
                         console.error(`[BodyScans] Create User Error: ${createErr}`);
-                        
+
                         if (createUserRes.status === 401 || createUserRes.status === 403) {
-                             throw new Error(`Authorization Failed during User Registration: The PRISM_API_KEY appears invalid for the target URL (${baseUrl}).`);
+                            throw new Error(`Authorization Failed during User Registration: The PRISM_API_KEY appears invalid for the target URL (${baseUrl}).`);
                         }
-                        
+
                         throw new Error(`Prism User Registration Failed: ${createErr}`);
                     }
                 }
@@ -373,20 +393,20 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
             const scanRes = await fetch(`${baseUrl}/scans`, {
                 method: 'POST',
                 headers: prismHeaders,
-                body: JSON.stringify({ 
-                    userToken: prismUserToken, 
-                    assetConfigId: assetConfigId 
+                body: JSON.stringify({
+                    userToken: prismUserToken,
+                    assetConfigId: assetConfigId
                 })
             });
 
             if (!scanRes.ok) {
                 const errorText = await scanRes.text();
                 console.error(`[BodyScans] Prism Create Scan Error (${scanRes.status}): ${errorText}`);
-                
+
                 if (scanRes.status === 401 || scanRes.status === 403) {
-                     throw new Error(`Authorization Failed during Scan Creation: The PRISM_API_KEY appears invalid for the target URL (${baseUrl}).`);
+                    throw new Error(`Authorization Failed during Scan Creation: The PRISM_API_KEY appears invalid for the target URL (${baseUrl}).`);
                 }
-                
+
                 throw new Error(`Prism Scan Creation Failed: ${errorText}`);
             }
             const scanData = await scanRes.json();
@@ -419,11 +439,11 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
     // POST /body-scans (Process & Save Completed Scan)
     if (method === 'POST') {
         const body = JSON.parse(event.body);
-        
+
         if (body.scanId) {
             try {
                 const { PRISM_API_KEY, PRISM_ENV, PRISM_API_URL } = process.env;
-                
+
                 // Determine base URL (same logic as init)
                 const isProduction = (PRISM_ENV || '').trim().toLowerCase() === 'production';
                 let baseUrl = "https://sandbox-api.hosted.prismlabs.tech";
@@ -431,12 +451,12 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
                     baseUrl = "https://api.hosted.prismlabs.tech";
                 }
                 if (PRISM_API_URL) baseUrl = PRISM_API_URL;
-                
+
                 const finalApiKey = PRISM_API_KEY ? PRISM_API_KEY.trim() : '';
 
                 const fetchPrism = async (endpoint) => {
                     const res = await fetch(`${baseUrl}${endpoint}`, {
-                        headers: { 
+                        headers: {
                             'Authorization': `Bearer ${finalApiKey}`,
                             'Accept': 'application/json;v=1'
                         }
@@ -448,10 +468,10 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
 
                 // 1. Get Basic Scan Status/Details
                 const scanDetails = await fetchPrism(`/scans/${body.scanId}`);
-                
+
                 // 2. Get Measurements
                 const measurements = await fetchPrism(`/scans/${body.scanId}/measurements`);
-                
+
                 // 3. Get Mass/Body Fat
                 const mass = await fetchPrism(`/scans/${body.scanId}/mass`);
 
@@ -459,14 +479,14 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
                 const enrichedScanData = {
                     ...scanDetails,
                     measurements: measurements || {},
-                    composition: mass || {}, 
+                    composition: mass || {},
                     userGoal: body.userGoal,
                     status: scanDetails?.status || 'completed'
                 };
 
                 // 4. Save to Database
                 const newScan = await saveBodyScan(userId, enrichedScanData);
-                
+
                 return { statusCode: 201, headers, body: JSON.stringify(newScan) };
 
             } catch (e) {
@@ -476,7 +496,7 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
                 return { statusCode: 201, headers, body: JSON.stringify(fallbackScan) };
             }
         } else {
-             return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing scanId in request.' }) };
+            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing scanId in request.' }) };
         }
     }
 
@@ -488,7 +508,7 @@ async function handleShopifyWebhook(event, secret) {
     try {
         const body = event.body;
         const hmacHeader = event.headers['x-shopify-hmac-sha256'] || event.headers['X-Shopify-Hmac-Sha256'];
-        
+
         // 1. Verify HMAC
         if (secret) {
             const hash = crypto.createHmac('sha256', secret).update(body).digest('base64');
@@ -500,20 +520,20 @@ async function handleShopifyWebhook(event, secret) {
 
         const order = JSON.parse(body);
         const email = order.email;
-        const customerId = order.customer?.id; 
-        
+        const customerId = order.customer?.id;
+
         let user = await findOrCreateUserByEmail(email, customerId ? String(customerId) : null);
-        
+
         if (!user) {
             console.error(`Could not find or create user for email ${email}`);
             return { statusCode: 200, body: 'User processing failed' };
         }
 
         const lineItems = order.line_items || [];
-        
+
         for (const item of lineItems) {
             const sku = item.sku;
-            
+
             // 2. Unlock Medical Dashboard
             if (sku === 'GLP1-MONTHLY') {
                 await grantEntitlement(user.id, {
@@ -614,7 +634,7 @@ async function handleGroceryListRequest(event, headers, method, pathParts) {
         await removeGroceryListItem(userId, itemId);
         return { statusCode: 204, headers, body: '' };
     }
-    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' })};
+    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
 }
 
 async function handleMealLogRequest(event, headers, method, pathParts) {
@@ -636,7 +656,7 @@ async function handleMealLogRequest(event, headers, method, pathParts) {
         const newEntry = await createMealLogEntry(userId, mealData, base64Data);
         return { statusCode: 201, headers, body: JSON.stringify(newEntry) };
     }
-    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' })};
+    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
 }
 
 async function handleSavedMealsRequest(event, headers, method, pathParts) {
@@ -657,10 +677,10 @@ async function handleSavedMealsRequest(event, headers, method, pathParts) {
         return { statusCode: 201, headers, body: JSON.stringify(newMeal) };
     }
     if (method === 'DELETE' && mealId) {
-         await deleteMeal(userId, mealId);
-         return { statusCode: 204, headers, body: '' };
+        await deleteMeal(userId, mealId);
+        return { statusCode: 204, headers, body: '' };
     }
-    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' })};
+    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
 }
 
 async function handleMealPlansRequest(event, headers, method, pathParts) {
@@ -686,17 +706,17 @@ async function handleMealPlansRequest(event, headers, method, pathParts) {
             const newItem = await addMealToPlanItem(userId, planId, savedMealId);
             return { statusCode: 201, headers, body: JSON.stringify(newItem) };
         } else if (mealData) {
-             const newItem = await addMealAndLinkToPlan(userId, mealData, planId);
-             return { statusCode: 201, headers, body: JSON.stringify(newItem) };
+            const newItem = await addMealAndLinkToPlan(userId, mealData, planId);
+            return { statusCode: 201, headers, body: JSON.stringify(newItem) };
         }
-         return { statusCode: 400, headers, body: JSON.stringify({ error: 'Either savedMealId or mealData is required.' })};
+        return { statusCode: 400, headers, body: JSON.stringify({ error: 'Either savedMealId or mealData is required.' }) };
     }
     if (method === 'DELETE' && pathParts.length === 3 && pathParts[1] === 'items') {
         const itemId = parseInt(pathParts[2], 10);
         await removeMealFromPlanItem(userId, itemId);
         return { statusCode: 204, headers, body: '' };
     }
-    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' })};
+    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
 }
 
 async function handleRewardsRequest(event, headers, method) {
@@ -704,7 +724,7 @@ async function handleRewardsRequest(event, headers, method) {
         const summary = await getRewardsSummary(event.user.userId);
         return { statusCode: 200, headers, body: JSON.stringify(summary) };
     }
-    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' })};
+    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
 }
 
 async function handleCustomerLogin(event, headers, JWT_SECRET) {
@@ -714,7 +734,7 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
     try {
         let { email, password } = JSON.parse(event.body);
         if (!email || !password) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Email/password required.' }) };
-        
+
         email = email.toLowerCase().trim();
 
         const variables = { input: { email, password } };
@@ -722,12 +742,12 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         if (!shopifyResponse) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Login failed: Invalid response.' }) };
         const data = shopifyResponse['customerAccessTokenCreate'];
         if (!data || data.customerUserErrors.length > 0) return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid credentials.', details: data?.customerUserErrors[0]?.message }) };
-        
+
         const accessToken = data.customerAccessToken.accessToken;
 
         // Get Customer Details (ID) using the new token
         const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
-        
+
         /** @type {any} */
         const customerDataAny = customerDataResponse;
         const customer = customerDataAny?.customer;
@@ -735,7 +755,7 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         // Sync User in Postgres (Login Hook)
         // Store the Shopify ID (e.g. "gid://shopify/Customer/123")
         const user = await findOrCreateUserByEmail(email, customer?.id ? String(customer.id) : null);
-        
+
         const sessionToken = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
         return { statusCode: 200, headers, body: JSON.stringify({ token: sessionToken }) };
     } catch (error) {
@@ -766,12 +786,12 @@ async function handleMealSuggestionRequest(event, ai, headers) {
 function callShopifyStorefrontAPI(query, variables, customerAccessToken = null) {
     const { SHOPIFY_STORE_DOMAIN, SHOPIFY_STOREFRONT_TOKEN } = process.env;
     const postData = JSON.stringify({ query, variables });
-    const headers = { 
-        'Content-Type': 'application/json', 
-        'Content-Length': Buffer.byteLength(postData), 
-        'X-Shopify-Storefront-Access-Token': SHOPIFY_STOREFRONT_TOKEN 
+    const headers = {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData),
+        'X-Shopify-Storefront-Access-Token': SHOPIFY_STOREFRONT_TOKEN
     };
-    
+
     if (customerAccessToken) {
         headers['X-Shopify-Customer-Access-Token'] = customerAccessToken;
     }
