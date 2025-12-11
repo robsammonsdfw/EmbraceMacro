@@ -251,6 +251,18 @@ async function handleDashboardRequest(event, headers, method, pathParts) {
     // API Shell: Routing logic for dashboard namespace
     const subResource = pathParts[1];
 
+    if (!subResource) {
+        return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({
+                service: "EmbraceHealth Dashboard API",
+                status: "operational",
+                endpoints: ["/exec-pulse", "/swot", "/competitors"]
+            })
+        };
+    }
+
     if (subResource === 'exec-pulse') {
         if (method !== 'GET') {
             return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
@@ -774,7 +786,7 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         // Get Customer Details (ID) using the new token
         const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
 
-        const customer = /** @type {any} */ (customerDataResponse)?.customer;
+        const customer = (/** @type {any} */ (customerDataResponse))?.customer;
 
         // Sync User in Postgres (Login Hook)
         // Store the Shopify ID (e.g. "gid://shopify/Customer/123")
