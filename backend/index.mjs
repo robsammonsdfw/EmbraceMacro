@@ -46,7 +46,7 @@ import { Buffer } from 'buffer';
 export const handler = async (event) => {
     // --- DEBUG LOGGING START (Added from index.js) ---
     console.log("[Handler] Request Received");
-    console.log("[Handler] Runtime:", process.version);
+    console.log("[Handler] Runtime:", process['version']);
     console.log("[Handler] Path:", event.rawPath || event.path || event.requestContext?.http?.path);
     console.log("[Handler] Headers Keys:", event.headers ? Object.keys(event.headers).join(', ') : "None");
     // ---------------------------
@@ -63,11 +63,16 @@ export const handler = async (event) => {
         PRISM_API_KEY,
         PRISM_ENV, // 'sandbox' or 'production'
         PRISM_API_URL, // Optional override
-        SHOPIFY_WEBHOOK_SECRET
+        SHOPIFY_WEBHOOK_SECRET,
+        // JWT CONFIG
+        JWT_EXPIRATION_HOURS
     } = process.env;
 
     // Debug Config (Safe)
     console.log(`[Handler] Config Check - JWT_SECRET present: ${!!JWT_SECRET}`);
+    if (JWT_EXPIRATION_HOURS) {
+        console.log(`[Handler] Config Check - Custom JWT Expiration: ${JWT_EXPIRATION_HOURS} hours`);
+    }
 
     // Dynamic CORS configuration
     const allowedOrigins = [
@@ -767,15 +772,20 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         const accessToken = data.customerAccessToken.accessToken;
 
         // Get Customer Details (ID) using the new token
-        const customerDataResponse = /** @type {any} */ (await callShopifyStorefrontAPI(customerQuery, {}, accessToken));
+        const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
 
-        const customer = customerDataResponse?.customer;
+        const customer = /** @type {any} */ (customerDataResponse)?.customer;
 
         // Sync User in Postgres (Login Hook)
         // Store the Shopify ID (e.g. "gid://shopify/Customer/123")
         const user = await findOrCreateUserByEmail(email, customer?.id ? String(customer.id) : null);
 
-        const sessionToken = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+        // CONFIGURABLE JWT EXPIRATION
+        const expirationHours = process.env.JWT_EXPIRATION_HOURS;
+        // Default to 7 days ('7d') if not configured. Otherwise use hours (e.g., '8h').
+        const expiresIn = expirationHours ? `${expirationHours}h` : '7d';
+
+        const sessionToken = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn });
         return { statusCode: 200, headers, body: JSON.stringify({ token: sessionToken }) };
     } catch (error) {
         console.error('[CRITICAL] LOGIN_HANDLER_CRASH:', error);
