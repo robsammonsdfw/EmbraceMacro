@@ -784,9 +784,9 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         const accessToken = data.customerAccessToken.accessToken;
 
         // Get Customer Details (ID) using the new token
-        const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
+        const customerDataResponse = /** @type {any} */ (await callShopifyStorefrontAPI(customerQuery, {}, accessToken));
 
-        const customer = (/** @type {any} */ (customerDataResponse))?.customer;
+        const customer = customerDataResponse?.customer;
 
         // Sync User in Postgres (Login Hook)
         // Store the Shopify ID (e.g. "gid://shopify/Customer/123")
