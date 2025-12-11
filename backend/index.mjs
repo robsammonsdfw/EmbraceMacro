@@ -333,6 +333,19 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
             // Generate a unique token for the user.
             const prismUserToken = `user_${userId}`;
 
+            // Extract deviceConfigName from request body (REQUIRED by Prism)
+            let deviceConfigName = 'IPHONE_SCANNER'; // Fallback
+            if (event.body) {
+                try {
+                    const bodyParams = JSON.parse(event.body);
+                    if (bodyParams.deviceConfigName) {
+                        deviceConfigName = bodyParams.deviceConfigName;
+                    }
+                } catch (e) {
+                    console.warn("[BodyScans] Could not parse init body for device config:", e);
+                }
+            }
+
             // Standard Headers for Prism v1 API
             // SWITCHED TO BEARER TOKEN AUTH AS REQUESTED
             const prismHeaders = {
@@ -426,13 +439,14 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
 
             // 3. CREATE SCAN
             // POST /scans
-            console.log(`[BodyScans] Creating scan at: ${baseUrl}/scans`);
+            console.log(`[BodyScans] Creating scan at: ${baseUrl}/scans with config: ${deviceConfigName}`);
             const scanRes = await fetch(`${baseUrl}/scans`, {
                 method: 'POST',
                 headers: prismHeaders,
                 body: JSON.stringify({
                     userToken: prismUserToken,
-                    assetConfigId: assetConfigId
+                    assetConfigId: assetConfigId,
+                    deviceConfigName: deviceConfigName // Pass the device config from client
                 })
             });
 
@@ -786,7 +800,7 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         // Get Customer Details (ID) using the new token
         const customerDataResponse = /** @type {any} */ (await callShopifyStorefrontAPI(customerQuery, {}, accessToken));
 
-        const customer = customerDataResponse?.customer;
+        const customer = (/** @type {any} */ (customerDataResponse))?.customer;
 
         // Sync User in Postgres (Login Hook)
         // Store the Shopify ID (e.g. "gid://shopify/Customer/123")
