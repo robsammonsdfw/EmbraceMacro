@@ -210,8 +210,9 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         const accessToken = data.customerAccessToken.accessToken;
 
         // Get Customer Details
+        /** @type {any} */
         const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, { token: accessToken });
-        const customer = /** @type {any} */ (customerDataResponse)?.customer;
+        const customer = customerDataResponse?.customer;
 
         if (!customer) throw new Error("Could not retrieve customer details from Shopify.");
 

@@ -27,7 +27,7 @@ type MealDataType = NutritionInfo | SavedMeal | MealLogEntry;
 type AppMode = 'hub' | 'meals';
 
 const App: React.FC = () => {
-  const { isAuthenticated, isLoading: isAuthLoading, logout, user } = useAuth();
+  const { isAuthenticated, isLoading: isAuthLoading, logout } = useAuth();
   
   // App Navigation State
   const [appMode, setAppMode] = useState<AppMode>('hub');
