@@ -34,33 +34,79 @@ const processMealDataForClient = (mealData) => {
     return dataForClient;
 };
 
+// --- Migration / Table Setup ---
+const ensureRewardsTables = async (client) => {
+    try {
+        // Run these sequentially to ensure one failure doesn't block the others
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS rewards_balances (
+                user_id INT PRIMARY KEY,
+                points_total INT DEFAULT 0,
+                points_available INT DEFAULT 0,
+                tier VARCHAR(50) DEFAULT 'Bronze',
+                updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+        
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS rewards_ledger (
+                entry_id SERIAL PRIMARY KEY,
+                user_id INT NOT NULL,
+                event_type VARCHAR(100) NOT NULL,
+                points_delta INT NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                metadata JSONB DEFAULT '{}'
+            );
+        `);
+
+        // Ensure Users table exists
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                email VARCHAR(255) UNIQUE NOT NULL
+            );
+        `);
+
+        // Add columns individually to be safe
+        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS shopify_access_token TEXT;`);
+        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS shopify_token_expires_at TIMESTAMPTZ;`);
+        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS shopify_customer_id VARCHAR(255);`);
+
+    } catch (e) {
+        console.error("Migration warning:", e.message);
+    }
+};
 
 export const findOrCreateUserByEmail = async (email, shopifyId = null) => {
     const client = await pool.connect();
     try {
+        // Run migration first to ensure columns exist
+        await ensureRewardsTables(client);
+
         // Insert if not exists
         const insertQuery = `
-            INSERT INTO users (email, shopify_customer_id) 
-            VALUES ($1, $2) 
+            INSERT INTO users (email) 
+            VALUES ($1) 
             ON CONFLICT (email) 
             DO NOTHING;
         `;
-        await client.query(insertQuery, [email, shopifyId]);
+        await client.query(insertQuery, [email]);
 
-        // If shopifyId provided, try to update it (in case user existed but wasn't linked)
+        // If shopifyId is provided, try to update it
         if (shopifyId) {
-            await client.query(`UPDATE users SET shopify_customer_id = $2 WHERE email = $1`, [email, shopifyId]);
+            try {
+                await client.query(`UPDATE users SET shopify_customer_id = $2 WHERE email = $1`, [email, shopifyId]);
+            } catch (e) {
+                console.warn("Could not update shopify_customer_id, likely column missing despite migration attempt.", e);
+            }
         }
 
-        const selectQuery = `SELECT id, email, shopify_customer_id FROM users WHERE email = $1;`;
+        const selectQuery = `SELECT id, email FROM users WHERE email = $1;`;
         const res = await client.query(selectQuery, [email]);
         
         if (res.rows.length === 0) {
             throw new Error("Failed to find or create user after insert operation.");
         }
-        
-        // Ensure rewards tables exist (Simplified migration strategy for this demo)
-        await ensureRewardsTables(client);
         
         // Ensure rewards balance entry exists for this user
         await client.query(`
@@ -77,30 +123,6 @@ export const findOrCreateUserByEmail = async (email, shopifyId = null) => {
     } finally {
         client.release();
     }
-};
-
-const ensureRewardsTables = async (client) => {
-    await client.query(`
-        CREATE TABLE IF NOT EXISTS rewards_balances (
-            user_id INT PRIMARY KEY,
-            points_total INT DEFAULT 0,
-            points_available INT DEFAULT 0,
-            tier VARCHAR(50) DEFAULT 'Bronze',
-            updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE TABLE IF NOT EXISTS rewards_ledger (
-            entry_id SERIAL PRIMARY KEY,
-            user_id INT NOT NULL,
-            event_type VARCHAR(100) NOT NULL,
-            points_delta INT NOT NULL,
-            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-            metadata JSONB DEFAULT '{}'
-        );
-        -- Ensure Shopify Token columns exist on users
-        ALTER TABLE users ADD COLUMN IF NOT EXISTS shopify_access_token TEXT;
-        ALTER TABLE users ADD COLUMN IF NOT EXISTS shopify_token_expires_at TIMESTAMPTZ;
-        ALTER TABLE users ADD COLUMN IF NOT EXISTS shopify_customer_id VARCHAR(255);
-    `);
 };
 
 // --- User Token Management ---
@@ -126,6 +148,9 @@ export const getUserShopifyToken = async (userId) => {
         const res = await client.query(`SELECT shopify_access_token, shopify_token_expires_at FROM users WHERE id = $1`, [userId]);
         if (res.rows.length === 0) return null;
         return res.rows[0];
+    } catch (err) {
+        // If column doesn't exist, return null
+        return null;
     } finally {
         client.release();
     }
@@ -155,21 +180,22 @@ export const awardPoints = async (userId, eventType, points, metadata = {}) => {
         `, [userId, points]);
         
         // 3. Recalculate Tier
-        const newTotal = updateRes.rows[0].points_total;
-        let newTier = 'Bronze';
-        if (newTotal >= 5000) newTier = 'Platinum';
-        else if (newTotal >= 1000) newTier = 'Gold';
-        else if (newTotal >= 200) newTier = 'Silver';
+        if (updateRes.rows.length > 0) {
+            const newTotal = updateRes.rows[0].points_total;
+            let newTier = 'Bronze';
+            if (newTotal >= 5000) newTier = 'Platinum';
+            else if (newTotal >= 1000) newTier = 'Gold';
+            else if (newTotal >= 200) newTier = 'Silver';
 
-        await client.query(`
-            UPDATE rewards_balances SET tier = $2 WHERE user_id = $1
-        `, [userId, newTier]);
+            await client.query(`
+                UPDATE rewards_balances SET tier = $2 WHERE user_id = $1
+            `, [userId, newTier]);
+        }
 
         await client.query('COMMIT');
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Error awarding points:', err);
-        // We don't throw here to avoid blocking the main user action if rewards fail
     } finally {
         client.release();
     }
@@ -178,6 +204,17 @@ export const awardPoints = async (userId, eventType, points, metadata = {}) => {
 export const getRewardsSummary = async (userId) => {
     const client = await pool.connect();
     try {
+        // Run basic migration just in case
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS rewards_balances (
+                user_id INT PRIMARY KEY,
+                points_total INT DEFAULT 0,
+                points_available INT DEFAULT 0,
+                tier VARCHAR(50) DEFAULT 'Bronze',
+                updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
         const balanceRes = await client.query(`
             SELECT points_total, points_available, tier 
             FROM rewards_balances WHERE user_id = $1
@@ -195,11 +232,11 @@ export const getRewardsSummary = async (userId) => {
 
         return {
             ...balance,
-            history: historyRes.rows
+            history: historyRes.rows || []
         };
     } catch (err) {
         console.error('Error getting rewards summary:', err);
-        throw new Error('Could not retrieve rewards.');
+        return { points_total: 0, points_available: 0, tier: 'Bronze', history: [] };
     } finally {
         client.release();
     }

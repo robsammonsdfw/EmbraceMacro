@@ -232,6 +232,7 @@ async function handleOrdersRequest(event, headers, method) {
             }
         }`;
         
+        /** @type {any} */
         const response = await callShopifyStorefrontAPI(query, {});
         
         if (!response || !response.customer || !response.customer.orders) {
@@ -316,6 +317,7 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         email = email.toLowerCase().trim();
 
         const variables = { input: { email, password } };
+        /** @type {any} */
         const shopifyResponse = await callShopifyStorefrontAPI(mutation, variables);
         
         const data = shopifyResponse['customerAccessTokenCreate'];
@@ -325,6 +327,7 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         const expiresAt = data.customerAccessToken.expiresAt;
 
         // Get Customer Details
+        /** @type {any} */
         const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, { token: accessToken });
         const customer = customerDataResponse?.customer;
 

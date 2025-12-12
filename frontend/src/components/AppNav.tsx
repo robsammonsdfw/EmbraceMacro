@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { PlusIcon, BookOpenIcon, ClockIcon, LightBulbIcon, ClipboardListIcon, StarIcon } from './icons';
 
@@ -16,20 +17,20 @@ const NavButton: React.FC<{
 }> = ({ isActive, onClick, icon, label }) => (
     <button
         onClick={onClick}
-        className={`w-full flex items-center justify-center space-x-2 font-bold py-3 px-4 rounded-lg transition-all text-sm md:text-base ${
+        className={`w-full flex flex-col items-center justify-center py-3 px-2 rounded-lg transition-all text-xs font-bold ${
             isActive
                 ? 'bg-emerald-500 text-white shadow-md'
-                : 'bg-white text-slate-600 hover:bg-slate-100'
+                : 'bg-white text-slate-500 hover:bg-slate-100 hover:text-emerald-600'
         }`}
     >
-        {icon}
+        <span className="mb-1">{icon}</span>
         <span>{label}</span>
     </button>
 );
 
 export const AppNav: React.FC<AppNavProps> = ({ activeView, onViewChange }) => {
     return (
-        <div className="grid grid-cols-3 md:grid-cols-6 gap-3 p-2 bg-slate-100 rounded-xl border border-slate-200">
+        <div className="grid grid-cols-4 md:grid-cols-6 gap-2 p-2 bg-slate-100 rounded-xl border border-slate-200">
             <NavButton
                 isActive={activeView === 'plan'}
                 onClick={() => onViewChange('plan')}

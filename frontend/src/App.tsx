@@ -20,15 +20,9 @@ import { MealPlanManager } from './components/MealPlanManager';
 import { RewardsDashboard } from './components/RewardsDashboard';
 import { Hub } from './components/Hub';
 import { CaptureFlow } from './components/CaptureFlow';
+import { Hero } from './components/Hero';
 
-// --- NEW IMPORTS FOR SPRINT 6 ---
-import { AppLayout } from './components/layout/AppLayout';
-import { CommandCenter } from './components/dashboard/CommandCenter';
-import { OrdersCard } from './components/dashboard/OrdersCard';
-import { LabsCard } from './components/dashboard/LabsCard';
-// ---------------------------------
-
-type ActiveView = 'home' | 'plan' | 'meals' | 'history' | 'suggestions' | 'grocery' | 'rewards' | 'body' | 'labs' | 'orders';
+type ActiveView = 'home' | 'plan' | 'meals' | 'history' | 'suggestions' | 'grocery' | 'rewards';
 type MealDataType = NutritionInfo | SavedMeal | MealLogEntry;
 type AppMode = 'hub' | 'meals';
 
@@ -37,7 +31,7 @@ const App: React.FC = () => {
   
   // App Navigation State
   const [appMode, setAppMode] = useState<AppMode>('hub');
-  const [activeView, setActiveView] = useState<ActiveView>('home');
+  const [activeView, setActiveView] = useState<ActiveView>('plan');
   const [isCaptureOpen, setIsCaptureOpen] = useState(false);
 
   // App Data State
@@ -48,7 +42,6 @@ const App: React.FC = () => {
   const [activePlanId, setActivePlanId] = useState<number | null>(null);
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
   const [mealLog, setMealLog] = useState<MealLogEntry[]>([]);
-  const [rewardsBalance, setRewardsBalance] = useState<number>(0);
   
   // UI/Process State
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -69,27 +62,15 @@ const App: React.FC = () => {
     return mealPlans.find(p => p.id === activePlanId) || null;
   }, [mealPlans, activePlanId]);
 
-  // Calculate Daily Stats for Dashboard
-  const dailyStats = useMemo(() => {
-    const today = new Date().toDateString();
-    return mealLog
-        .filter(entry => new Date(entry.createdAt).toDateString() === today)
-        .reduce((acc, curr) => ({
-            calories: acc.calories + curr.totalCalories,
-            protein: acc.protein + curr.totalProtein
-        }), { calories: 0, protein: 0 });
-  }, [mealLog]);
-
   useEffect(() => {
     if (isAuthenticated) {
       const loadInitialData = async () => {
         try {
           setIsDataLoading(true);
-          const [plans, meals, log, rewards] = await Promise.all([
+          const [plans, meals, log] = await Promise.all([
             apiService.getMealPlans(),
             apiService.getSavedMeals(),
             apiService.getMealLog(),
-            apiService.getRewardsSummary()
           ]);
           setMealPlans(plans);
           if (plans.length > 0 && !activePlanId) {
@@ -97,7 +78,6 @@ const App: React.FC = () => {
           }
           setSavedMeals(meals);
           setMealLog(log);
-          setRewardsBalance(rewards.points_total);
         } catch (err) {
           setError("Could not load your data. Please try refreshing the page.");
         } finally {
@@ -294,68 +274,17 @@ const App: React.FC = () => {
   
   if (!isAuthenticated) { return <Login />; }
 
-  // New Navigation Hub
   if (appMode === 'hub') {
       return <Hub onEnterMeals={() => setAppMode('meals')} onLogout={handleLogout} />;
   }
 
-  // Meal Planning App
   if (isDataLoading) { return <div className="min-h-screen flex items-center justify-center"><Loader message="Loading your data..." /></div>; }
 
   const hasAnalysisContent = image || isProcessing || error || nutritionData || recipes;
   
   const renderContent = () => {
-      if (hasAnalysisContent) {
-          return (
-            <div className="space-y-6">
-                <ImageUploader image={image} />
-                {isProcessing && <Loader message={processingMessage} />}
-                {error && <ErrorAlert message={error} />}
-                {nutritionData && !isProcessing && image && ( <NutritionCard data={nutritionData} onSaveToHistory={() => handleSaveToHistory(nutritionData, image)} /> )}
-                {recipes && !isProcessing && (
-                  <div className="space-y-4">
-                      <h2 className="text-2xl font-bold text-slate-800 text-center pt-4 border-t border-slate-200">
-                        {processingMessage.includes('ingredients') ? 'Pantry Chef Ideas' : 'Recipe for Your Dish'}
-                      </h2>
-                      {recipes.map((recipe, index) => ( 
-                        <RecipeCard 
-                          key={index} 
-                          recipe={recipe} 
-                          onAddToPlan={() => {
-                            const ingredientsList = recipe.ingredients.map(i => ({
-                                name: i.name,
-                                weightGrams: 0, 
-                                calories: 0,
-                                protein: 0,
-                                carbs: 0,
-                                fat: 0
-                            }));
-                            
-                            const mealData: NutritionInfo = { 
-                              ...recipe.nutrition, 
-                              mealName: recipe.recipeName, 
-                              ingredients: ingredientsList 
-                            };
-                            handleInitiateAddToPlan(mealData);
-                          }} 
-                        /> 
-                      ))}
-                  </div>
-                )}
-            </div>
-          );
-      }
-
       switch(activeView) {
-        case 'home': return (
-            <CommandCenter 
-                dailyCalories={dailyStats.calories}
-                dailyProtein={dailyStats.protein}
-                rewardsBalance={rewardsBalance}
-                userName={user?.firstName || 'User'}
-                onScanClick={handleBodyScanClick}
-            />
-        );
+        case 'home': // Fallback to plan for home view in simple mode
         case 'plan': return (
              <MealPlanManager 
                 plans={mealPlans} 
@@ -376,53 +305,22 @@ const App: React.FC = () => {
                                   />;
         case 'grocery': return <GroceryList mealPlans={mealPlans} />;
         case 'rewards': return <RewardsDashboard />;
-        case 'orders': return (
-            <div className="space-y-6">
-                <h2 className="text-2xl font-bold text-slate-800">Your Orders</h2>
-                <OrdersCard />
-            </div>
-        );
-        case 'labs': return (
-            <div className="space-y-6">
-                <h2 className="text-2xl font-bold text-slate-800">Your Lab Results</h2>
-                <LabsCard />
-            </div>
-        );
-        case 'body': return (
-            <div className="space-y-6">
-                 <h2 className="text-2xl font-bold text-slate-800">My Body</h2>
-                 {/* Placeholder for Body view using the Dashboard panel for now */}
-                 <CommandCenter 
-                    dailyCalories={dailyStats.calories}
-                    dailyProtein={dailyStats.protein}
-                    rewardsBalance={rewardsBalance}
-                    userName={user?.firstName || 'User'}
-                    onScanClick={handleBodyScanClick}
-                />
-            </div>
-        );
         default: return (
-            <CommandCenter 
-                dailyCalories={dailyStats.calories}
-                dailyProtein={dailyStats.protein}
-                rewardsBalance={rewardsBalance}
-                userName={user?.firstName || 'User'}
-                onScanClick={handleBodyScanClick}
+             <MealPlanManager 
+                plans={mealPlans} 
+                activePlanId={activePlanId} 
+                savedMeals={savedMeals}
+                onPlanChange={setActivePlanId}
+                onCreatePlan={handleCreateMealPlan}
+                onAddToPlan={handleInitiateAddToPlan}
+                onRemoveFromPlan={handleRemoveFromPlan}
             />
         );
     }
   };
 
   return (
-    <div className="font-sans text-slate-800">
-      {/* 
-         Use the AppLayout (Sidebar + Right Rail) wrapper. 
-         We pass the content as children.
-         The Mobile Bottom Navbar is still rendered inside the main layout content or can be managed separately.
-         In this implementation, AppLayout handles Desktop Sidebar. 
-         The existing Navbar component handles Mobile Bottom Nav.
-      */}
-      
+    <div className="font-sans text-slate-800 bg-slate-50 min-h-screen">
       {isCaptureOpen && (
           <CaptureFlow 
             onClose={() => setIsCaptureOpen(false)}
@@ -441,33 +339,73 @@ const App: React.FC = () => {
         />
       )}
 
-      {/* SPRINT 6: WRAP IN APP SHELL */}
-      <AppLayout
-          activeView={activeView}
-          onNavigate={handleNavigation}
-          onLogout={handleLogout}
-          rightPanel={
-              <div className="space-y-6">
-                  <OrdersCard />
-                  <LabsCard />
-              </div>
-          }
-      >
-          {/* Main Content Render */}
-          {renderContent()}
+      <main className="max-w-4xl mx-auto p-4 md:p-8 pb-24">
+        {!hasAnalysisContent && (
+            <header className="text-center mb-8 relative">
+              <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500">
+                EmbraceHealth
+              </h1>
+              <button onClick={handleLogout} className="absolute top-0 right-0 text-slate-400 hover:text-slate-600 text-sm font-semibold">Logout</button>
+            </header>
+        )}
 
-          {/* Mobile Bottom Nav (Visible only on small screens via CSS in Navbar) */}
-          <div className="md:hidden">
-            <Navbar 
-                activeView={activeView} 
-                onNavigate={handleNavigation} 
-                onLogout={handleLogout} 
-                onBackToHub={() => setAppMode('hub')}
-                onCaptureClick={() => setIsCaptureOpen(true)}
-            />
-          </div>
-      </AppLayout>
-      
+        <div className="space-y-8">
+          {/* Show Hero only when not analyzing and on Plan view (default) */}
+          {!hasAnalysisContent && activeView === 'plan' && (
+             <Hero 
+                onCameraClick={() => setIsCaptureOpen(true)} 
+                onUploadClick={() => setIsCaptureOpen(true)} 
+                onBarcodeClick={() => setIsCaptureOpen(true)} 
+                onPantryChefClick={() => setIsCaptureOpen(true)}
+                onGetRecipeClick={() => setIsCaptureOpen(true)}
+             />
+          )}
+
+          {hasAnalysisContent ? (
+            <div className="space-y-6">
+                <ImageUploader image={image} />
+                {isProcessing && <Loader message={processingMessage} />}
+                {error && <ErrorAlert message={error} />}
+                {nutritionData && !isProcessing && image && ( <NutritionCard data={nutritionData} onSaveToHistory={() => handleSaveToHistory(nutritionData, image)} /> )}
+                {recipes && !isProcessing && (
+                  <div className="space-y-4">
+                      <h2 className="text-2xl font-bold text-slate-800 text-center pt-4 border-t border-slate-200">
+                        {processingMessage.includes('ingredients') ? 'Pantry Chef Ideas' : 'Recipe for Your Dish'}
+                      </h2>
+                      {recipes.map((recipe, index) => ( 
+                        <RecipeCard 
+                          key={index} 
+                          recipe={recipe} 
+                          onAddToPlan={() => {
+                            const ingredientsList = recipe.ingredients.map(i => ({
+                                name: i.name, weightGrams: 0, calories: 0, protein: 0, carbs: 0, fat: 0
+                            }));
+                            const mealData: NutritionInfo = { 
+                              ...recipe.nutrition, mealName: recipe.recipeName, ingredients: ingredientsList 
+                            };
+                            handleInitiateAddToPlan(mealData);
+                          }} 
+                        /> 
+                      ))}
+                  </div>
+                )}
+                <button onClick={resetAnalysisState} className="w-full py-3 text-slate-500 hover:bg-slate-200 rounded-lg">Cancel Analysis</button>
+            </div>
+          ) : (
+            <div className="space-y-6">
+                {/* Simple Navbar */}
+                <Navbar 
+                    activeView={activeView} 
+                    onNavigate={handleNavigation} 
+                    onLogout={handleLogout} 
+                    onBackToHub={() => setAppMode('hub')}
+                    onCaptureClick={() => setIsCaptureOpen(true)}
+                />
+                {renderContent()}
+            </div>
+          )}
+        </div>
+      </main>
     </div>
   );
 };
