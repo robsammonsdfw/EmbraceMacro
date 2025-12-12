@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import https from 'https';
@@ -48,7 +47,8 @@ import { Buffer } from 'buffer';
 // --- MAIN HANDLER (ROUTER) ---
 export const handler = async (event) => {
     // --- DEBUG LOGGING ---
-    console.log("[Handler] Request Received", event.rawPath || event.path);
+    console.log("[Handler] Raw Path:", event.rawPath);
+    console.log("[Handler] Context Path:", event.requestContext?.http?.path);
 
     const {
         GEMINI_API_KEY,
@@ -79,8 +79,9 @@ export const handler = async (event) => {
 
     const headers = {
         "Access-Control-Allow-Origin": accessControlAllowOrigin,
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        "Access-Control-Allow-Methods": "OPTIONS,POST,GET,DELETE,PUT"
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Amz-Date, X-Api-Key, X-Amz-Security-Token",
+        "Access-Control-Allow-Methods": "OPTIONS,POST,GET,DELETE,PUT",
+        "Access-Control-Allow-Credentials": "true" 
     };
 
     let path;
@@ -101,12 +102,14 @@ export const handler = async (event) => {
     }
 
     // --- PUBLIC WEBHOOKS ---
-    if (path === '/webhooks/shopify/order-created' && method === 'POST') {
+    // Check if path contains webhook endpoint
+    if (path.includes('/webhooks/shopify/order-created') && method === 'POST') {
         return await handleShopifyWebhook(event, SHOPIFY_WEBHOOK_SECRET);
     }
 
     // --- AUTH ROUTES ---
-    if (path === '/auth/customer-login' || path === '/default/auth/customer-login') {
+    // Check if path contains auth endpoint
+    if (path.includes('/auth/customer-login')) {
         return handleCustomerLogin(event, headers, JWT_SECRET);
     }
 
@@ -130,12 +133,37 @@ export const handler = async (event) => {
         return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized: Invalid token.', details: err.message }) };
     }
 
-    // Handle Path Parsing (Strip 'default' stage if present)
+    // --- ROBUST PATH PARSING ---
+    // Split path into parts and filter out empty strings
     let pathParts = path.split('/').filter(Boolean);
-    if (pathParts.length > 0 && pathParts[0] === 'default') {
-        pathParts = pathParts.slice(1);
+
+    // List of known top-level resources to anchor the routing
+    const validResources = [
+        'orders', 'labs', 'body-scans', 'sleep-records', 'entitlements', 
+        'meal-log', 'saved-meals', 'meal-plans', 'grocery-lists', 'grocery-list', 
+        'analyze-image', 'analyze-image-recipes', 'get-meal-suggestions', 'rewards'
+    ];
+
+    // Find the first part of the path that matches a known resource
+    // This allows the router to work regardless of stage prefix (e.g. /default/orders vs /orders)
+    const resourceIndex = pathParts.findIndex(part => validResources.includes(part));
+    
+    let resource = '';
+    
+    if (resourceIndex !== -1) {
+        // Re-orient pathParts so the resource is at index 0
+        pathParts = pathParts.slice(resourceIndex);
+        resource = pathParts[0];
+    } else {
+        // Fallback: If we can't find a known resource, assume standard behavior
+        // If it starts with 'default', strip it.
+        if (pathParts.length > 0 && pathParts[0] === 'default') {
+            pathParts = pathParts.slice(1);
+        }
+        resource = pathParts[0];
     }
-    const resource = pathParts[0];
+
+    console.log(`[Router] Resolved Resource: ${resource}`);
 
     try {
         if (resource === 'orders') {
@@ -179,7 +207,7 @@ export const handler = async (event) => {
         return { statusCode: 500, headers, body: JSON.stringify({ error: 'An unexpected internal server error occurred.' }) };
     }
 
-    return { statusCode: 404, headers, body: JSON.stringify({ error: `Not Found: ${path}` }) };
+    return { statusCode: 404, headers, body: JSON.stringify({ error: `Not Found: ${path} (Resolved Resource: ${resource})` }) };
 };
 
 // --- HANDLER FOR ORDERS (REAL-TIME SHOPIFY SYNC) ---
@@ -223,8 +251,7 @@ async function handleOrdersRequest(event, headers, method) {
             }
         }`;
         
-        /** @type {any} */
-        const response = await callShopifyStorefrontAPI(query, {});
+        const response = /** @type {any} */ (await callShopifyStorefrontAPI(query, {}));
         if (!response || !response.customer) {
             return { statusCode: 200, headers, body: JSON.stringify([]) };
         }
@@ -313,8 +340,7 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         const expiresAt = data.customerAccessToken.expiresAt;
 
         // Get Customer Details
-        /** @type {any} */
-        const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, { token: accessToken });
+        const customerDataResponse = /** @type {any} */ (await callShopifyStorefrontAPI(customerQuery, { token: accessToken }));
         const customer = customerDataResponse?.customer;
 
         if (!customer) throw new Error("Could not retrieve customer details from Shopify.");
@@ -544,4 +570,44 @@ async function handleGeminiRequest(event, ai, headers) {
     const { base64Image, mimeType, prompt, schema } = body;
     const imagePart = { inlineData: { data: base64Image, mimeType } };
     const textPart = { text: prompt };
-    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: { parts: [imagePart, textPart] }, config: { responseMimeType: 'application/json', responseSchema: schema }
+    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: { parts: [imagePart, textPart] }, config: { responseMimeType: 'application/json', responseSchema: schema } });
+    return { statusCode: 200, headers: { ...headers, 'Content-Type': 'application/json' }, body: response.text };
+}
+
+async function handleMealSuggestionRequest(event, ai, headers) {
+    const body = JSON.parse(event.body);
+    const { prompt, schema } = body;
+    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt, config: { responseMimeType: 'application/json', responseSchema: schema } });
+    return { statusCode: 200, headers: { ...headers, 'Content-Type': 'application/json' }, body: response.text };
+}
+
+/**
+ * @returns {Promise<any>}
+ */
+function callShopifyStorefrontAPI(query, variables) {
+    const { SHOPIFY_STORE_DOMAIN, SHOPIFY_STOREFRONT_TOKEN } = process.env;
+    const postData = JSON.stringify({ query, variables });
+    const headers = {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData),
+        'X-Shopify-Storefront-Access-Token': SHOPIFY_STOREFRONT_TOKEN
+    };
+    
+    const options = { hostname: SHOPIFY_STORE_DOMAIN, path: '/api/2024-04/graphql.json', method: 'POST', headers };
+    return new Promise((resolve, reject) => {
+        const req = https.request(options, (res) => {
+            let data = '';
+            res.on('data', (chunk) => { data += chunk; });
+            res.on('end', () => {
+                try {
+                    const responseBody = JSON.parse(data);
+                    if (res.statusCode >= 200 && res.statusCode < 300) resolve(responseBody.data);
+                    else reject(new Error(`Shopify API failed: ${res.statusCode} - ${data}`));
+                } catch (e) { reject(new Error(`Failed to parse response: ${e.message}`)); }
+            });
+        });
+        req.on('error', (e) => reject(e));
+        req.write(postData);
+        req.end();
+    });
+}
