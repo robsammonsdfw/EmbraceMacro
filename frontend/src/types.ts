@@ -1,4 +1,5 @@
 
+
 export interface Ingredient {
   name: string;
   weightGrams: number;
@@ -129,4 +130,29 @@ export interface UserEntitlement {
     status: string;
     startsAt: string;
     expiresAt?: string;
+}
+
+export interface OrderItem {
+  title: string;
+  quantity: number;
+  image?: string;
+}
+
+export interface Order {
+  id: string;
+  orderNumber: number;
+  date: string;
+  total: string;
+  status: string; // Fulfillment status e.g. 'FULFILLED', 'UNFULFILLED'
+  paymentStatus: string;
+  items: OrderItem[];
+}
+
+export interface LabResult {
+  id: string;
+  name: string;
+  result?: string; // e.g. "Normal", "High" (Placeholder)
+  date: string;
+  status: string; // e.g. "Ordered", "Processing", "Results Ready"
+  orderNumber: number;
 }

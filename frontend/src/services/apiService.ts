@@ -1,6 +1,5 @@
 
-
-import type { NutritionInfo, Recipe, SavedMeal, MealLogEntry, MealPlan, MealPlanItem, GroceryList, GroceryItem, RewardsSummary, BodyScan, MealPlanItemMetadata } from '../types';
+import type { NutritionInfo, Recipe, SavedMeal, MealLogEntry, MealPlan, MealPlanItem, GroceryList, GroceryItem, RewardsSummary, BodyScan, MealPlanItemMetadata, Order, LabResult } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
 const AUTH_TOKEN_KEY = 'embracehealth-api-token';
@@ -183,12 +182,6 @@ export const getRecipesFromImage = (base64Image: string, mimeType: string): Prom
     return callApi('/analyze-image-recipes', 'POST', { base64Image, mimeType, prompt, schema: recipesSchema });
 };
 
-export const getRecipesFromPlate = (base64Image: string, mimeType: string): Promise<Recipe[]> => {
-    const prompt = "Identify the prepared dish in the image. Provide 3 recipe options: 1. The standard recipe for this dish. 2. A popular variation (e.g. different protein or vegetarian). 3. A quick/easy version. For each, provide a descriptive name, description, ingredients list with quantities, step-by-step instructions, and estimated nutrition.";
-    return callApi('/analyze-image-recipes', 'POST', { base64Image, mimeType, prompt, schema: recipesSchema });
-};
-
-
 // --- Meal Log (History) Endpoints ---
 
 export const getMealLog = (): Promise<MealLogEntry[]> => {
@@ -240,8 +233,6 @@ export const addMealToPlan = (planId: number, savedMealId: number, metadata?: Me
 };
 
 export const addMealFromHistoryToPlan = (planId: number, mealData: NutritionInfo, metadata?: MealPlanItemMetadata): Promise<MealPlanItem> => {
-    // If it's a MealLogEntry, strip ID and timestamps.
-    // If it's NutritionInfo, it's just data.
     const { id, createdAt, ...pureMealData } = mealData as any;
     return callApi(`/meal-plans/${planId}/items`, 'POST', { mealData: pureMealData, metadata });
 };
@@ -297,4 +288,14 @@ export const getRewardsSummary = (): Promise<RewardsSummary> => {
 // --- Body Scans Endpoints ---
 export const getBodyScans = (): Promise<BodyScan[]> => {
     return callApi('/body-scans', 'GET');
+};
+
+// --- NEW SHOPIFY SYNC ENDPOINTS ---
+
+export const getOrders = (): Promise<Order[]> => {
+    return callApi('/orders', 'GET');
+};
+
+export const getLabs = (): Promise<LabResult[]> => {
+    return callApi('/labs', 'GET');
 };
