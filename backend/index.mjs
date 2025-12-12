@@ -38,7 +38,8 @@ import {
     // --- NEW DASHBOARD LOGIC IMPORTS ---
     getDashboardPulse,
     getCompetitors,
-    getSWOTInsights
+    getSWOTInsights,
+    createSWOTInsight
 } from './services/databaseService.mjs';
 import { Buffer } from 'buffer';
 
@@ -278,7 +279,15 @@ async function handleDashboardRequest(event, headers, method, pathParts) {
             const insights = await getSWOTInsights(region);
             return { statusCode: 200, headers, body: JSON.stringify(insights) };
         }
-        // POST to be handled in next steps
+        if (method === 'POST') {
+            const { region, content } = JSON.parse(event.body);
+            if (!content) {
+                return { statusCode: 400, headers, body: JSON.stringify({ error: 'Content is required for SWOT insight.' }) };
+            }
+            const insight = await createSWOTInsight(region || 'global', content);
+            return { statusCode: 201, headers, body: JSON.stringify(insight) };
+        }
+        return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
     }
 
     if (subResource === 'competitors') {
@@ -798,9 +807,9 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         const accessToken = data.customerAccessToken.accessToken;
 
         // Get Customer Details (ID) using the new token
-        const customerDataResponse = /** @type {any} */ (await callShopifyStorefrontAPI(customerQuery, {}, accessToken));
+        const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
 
-        const customer = (/** @type {any} */ (customerDataResponse))?.customer;
+        const customer = /** @type {any} */ (customerDataResponse)?.customer;
 
         // Sync User in Postgres (Login Hook)
         // Store the Shopify ID (e.g. "gid://shopify/Customer/123")

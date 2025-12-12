@@ -162,6 +162,26 @@ export const getSWOTInsights = async (region = null) => {
     }
 };
 
+export const createSWOTInsight = async (regionScope, content) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`CREATE TABLE IF NOT EXISTS swot_insights (id SERIAL PRIMARY KEY, region_scope VARCHAR(50), content TEXT, created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP)`);
+        
+        const query = `
+            INSERT INTO swot_insights (region_scope, content)
+            VALUES ($1, $2)
+            RETURNING *;
+        `;
+        const res = await client.query(query, [regionScope, content]);
+        return res.rows[0];
+    } catch (err) {
+        console.error('Database error in createSWOTInsight:', err);
+        throw new Error('Could not create SWOT insight.');
+    } finally {
+        client.release();
+    }
+};
+
 // =============================================================================
 // --- DATING & CARE LOGIC ---
 // =============================================================================
