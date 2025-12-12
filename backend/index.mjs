@@ -2,6 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import https from 'https';
 import crypto from 'crypto';
+import { Buffer } from 'buffer';
 import {
     findOrCreateUserByEmail,
     getSavedMeals,
@@ -35,31 +36,20 @@ import {
     grantEntitlement,
     recordPurchase,
     updateUserShopifyToken,
-    getUserShopifyToken,
-    // --- NEW DASHBOARD LOGIC IMPORTS ---
-    getDashboardPulse,
-    getCompetitors,
-    getSWOTInsights,
-    createSWOTInsight
+    getUserShopifyToken
 } from './services/databaseService.mjs';
-import { Buffer } from 'buffer';
 
 // --- MAIN HANDLER (ROUTER) ---
 export const handler = async (event) => {
-    // --- DEBUG LOGGING ---
-    console.log("[Handler] Raw Path:", event.rawPath);
-    console.log("[Handler] Context Path:", event.requestContext?.http?.path);
+    console.log("[Handler] Request Received", event.rawPath || event.path);
 
     const {
         GEMINI_API_KEY,
-        SHOPIFY_STOREFRONT_TOKEN,
-        SHOPIFY_STORE_DOMAIN,
         JWT_SECRET,
         FRONTEND_URL,
         SHOPIFY_WEBHOOK_SECRET
     } = process.env;
 
-    // Dynamic CORS configuration
     const allowedOrigins = [
         "https://food.embracehealth.ai",
         "https://app.embracehealth.ai",
@@ -79,9 +69,9 @@ export const handler = async (event) => {
 
     const headers = {
         "Access-Control-Allow-Origin": accessControlAllowOrigin,
-        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Amz-Date, X-Api-Key, X-Amz-Security-Token",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
         "Access-Control-Allow-Methods": "OPTIONS,POST,GET,DELETE,PUT",
-        "Access-Control-Allow-Credentials": "true" 
+        "Access-Control-Allow-Credentials": "true"
     };
 
     let path;
@@ -102,13 +92,11 @@ export const handler = async (event) => {
     }
 
     // --- PUBLIC WEBHOOKS ---
-    // Check if path contains webhook endpoint
     if (path.includes('/webhooks/shopify/order-created') && method === 'POST') {
         return await handleShopifyWebhook(event, SHOPIFY_WEBHOOK_SECRET);
     }
 
     // --- AUTH ROUTES ---
-    // Check if path contains auth endpoint
     if (path.includes('/auth/customer-login')) {
         return handleCustomerLogin(event, headers, JWT_SECRET);
     }
@@ -133,37 +121,28 @@ export const handler = async (event) => {
         return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized: Invalid token.', details: err.message }) };
     }
 
-    // --- ROBUST PATH PARSING ---
-    // Split path into parts and filter out empty strings
-    let pathParts = path.split('/').filter(Boolean);
-
-    // List of known top-level resources to anchor the routing
-    const validResources = [
+    // --- PATH ROUTING ---
+    // Robust parsing: split by '/' and find the known resource
+    const pathParts = path.split('/').filter(Boolean);
+    
+    // Known resources mapping
+    const resources = [
         'orders', 'labs', 'body-scans', 'sleep-records', 'entitlements', 
         'meal-log', 'saved-meals', 'meal-plans', 'grocery-lists', 'grocery-list', 
         'analyze-image', 'analyze-image-recipes', 'get-meal-suggestions', 'rewards'
     ];
 
-    // Find the first part of the path that matches a known resource
-    // This allows the router to work regardless of stage prefix (e.g. /default/orders vs /orders)
-    const resourceIndex = pathParts.findIndex(part => validResources.includes(part));
+    let resource = pathParts.find(part => resources.includes(part));
     
-    let resource = '';
-    
-    if (resourceIndex !== -1) {
-        // Re-orient pathParts so the resource is at index 0
-        pathParts = pathParts.slice(resourceIndex);
-        resource = pathParts[0];
-    } else {
-        // Fallback: If we can't find a known resource, assume standard behavior
-        // If it starts with 'default', strip it.
-        if (pathParts.length > 0 && pathParts[0] === 'default') {
-            pathParts = pathParts.slice(1);
-        }
-        resource = pathParts[0];
+    // If no known resource found, try standard index 0 (handling /default/ prefix implicitly by searching above)
+    if (!resource && pathParts.length > 0) {
+        // Fallback for edge cases
+        resource = pathParts[0] === 'default' ? pathParts[1] : pathParts[0];
     }
 
-    console.log(`[Router] Resolved Resource: ${resource}`);
+    // Re-align pathParts so index 0 is the resource
+    const resourceIndex = pathParts.indexOf(resource);
+    const routedPathParts = resourceIndex !== -1 ? pathParts.slice(resourceIndex) : pathParts;
 
     try {
         if (resource === 'orders') {
@@ -173,7 +152,7 @@ export const handler = async (event) => {
             return await handleLabsRequest(event, headers, method);
         }
         if (resource === 'body-scans') {
-            return await handleBodyScansRequest(event, headers, method, pathParts);
+            return await handleBodyScansRequest(event, headers, method, routedPathParts);
         }
         if (resource === 'sleep-records') {
             return await handleSleepRecordsRequest(event, headers, method);
@@ -182,16 +161,16 @@ export const handler = async (event) => {
             return await handleEntitlementsRequest(event, headers, method);
         }
         if (resource === 'meal-log') {
-            return await handleMealLogRequest(event, headers, method, pathParts);
+            return await handleMealLogRequest(event, headers, method, routedPathParts);
         }
         if (resource === 'saved-meals') {
-            return await handleSavedMealsRequest(event, headers, method, pathParts);
+            return await handleSavedMealsRequest(event, headers, method, routedPathParts);
         }
         if (resource === 'meal-plans') {
-            return await handleMealPlansRequest(event, headers, method, pathParts);
+            return await handleMealPlansRequest(event, headers, method, routedPathParts);
         }
         if (resource === 'grocery-lists' || resource === 'grocery-list') {
-            return await handleGroceryListRequest(event, headers, method, pathParts);
+            return await handleGroceryListRequest(event, headers, method, routedPathParts);
         }
         if (resource === 'analyze-image' || resource === 'analyze-image-recipes') {
             return await handleGeminiRequest(event, ai, headers);
@@ -203,11 +182,11 @@ export const handler = async (event) => {
             return await handleRewardsRequest(event, headers, method);
         }
     } catch (error) {
-        console.error(`[ROUTER CATCH] Error:`, error);
-        return { statusCode: 500, headers, body: JSON.stringify({ error: 'An unexpected internal server error occurred.' }) };
+        console.error(`[ROUTER CATCH] Error in resource ${resource}:`, error);
+        return { statusCode: 500, headers, body: JSON.stringify({ error: 'An unexpected internal server error occurred.', details: error.message }) };
     }
 
-    return { statusCode: 404, headers, body: JSON.stringify({ error: `Not Found: ${path} (Resolved Resource: ${resource})` }) };
+    return { statusCode: 404, headers, body: JSON.stringify({ error: `Not Found: ${path}` }) };
 };
 
 // --- HANDLER FOR ORDERS (REAL-TIME SHOPIFY SYNC) ---
@@ -215,10 +194,12 @@ async function handleOrdersRequest(event, headers, method) {
     if (method !== 'GET') return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
 
     const userId = event.user.userId;
+    // Check if user has a shopify token linked
     const tokens = await getUserShopifyToken(userId);
 
     if (!tokens || !tokens.shopify_access_token) {
-        return { statusCode: 200, headers, body: JSON.stringify([]) }; // No token, no orders
+        // No token, return empty list gracefully
+        return { statusCode: 200, headers, body: JSON.stringify([]) }; 
     }
 
     try {
@@ -251,8 +232,9 @@ async function handleOrdersRequest(event, headers, method) {
             }
         }`;
         
-        const response = /** @type {any} */ (await callShopifyStorefrontAPI(query, {}));
-        if (!response || !response.customer) {
+        const response = await callShopifyStorefrontAPI(query, {});
+        
+        if (!response || !response.customer || !response.customer.orders) {
             return { statusCode: 200, headers, body: JSON.stringify([]) };
         }
         
@@ -265,14 +247,19 @@ async function handleOrdersRequest(event, headers, method) {
                 total: node.totalPrice.amount,
                 status: node.fulfillmentStatus,
                 paymentStatus: node.financialStatus,
-                items: node.lineItems.edges.map(i => ({ title: i.node.title, quantity: i.node.quantity, image: i.node.variant?.image?.url }))
+                items: node.lineItems.edges.map(i => ({ 
+                    title: i.node.title, 
+                    quantity: i.node.quantity, 
+                    image: i.node.variant?.image?.url 
+                }))
             };
         });
 
         return { statusCode: 200, headers, body: JSON.stringify(orders) };
     } catch (e) {
         console.error("Shopify Orders Fetch Error:", e);
-        return { statusCode: 502, headers, body: JSON.stringify({ error: "Failed to fetch orders from Shopify" }) };
+        // Fallback to empty list instead of crashing app
+        return { statusCode: 200, headers, body: JSON.stringify([]) };
     }
 }
 
@@ -280,7 +267,7 @@ async function handleOrdersRequest(event, headers, method) {
 async function handleLabsRequest(event, headers, method) {
     if (method !== 'GET') return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
     
-    // Logic: Fetch orders, filter for "Lab" or "Test" items
+    // Reuse orders logic
     const ordersRes = await handleOrdersRequest(event, headers, 'GET');
     if (ordersRes.statusCode !== 200) return ordersRes;
 
@@ -297,7 +284,7 @@ async function handleLabsRequest(event, headers, method) {
                     id: order.id + item.title,
                     name: item.title,
                     date: order.date,
-                    status: order.status === 'FULFILLED' ? 'Processing' : 'Ordered',
+                    status: order.status === 'FULFILLED' ? 'Results Ready' : 'Ordered',
                     orderNumber: order.orderNumber
                 });
             }
@@ -309,7 +296,6 @@ async function handleLabsRequest(event, headers, method) {
 
 // --- HANDLER FOR BODY SCANS ---
 async function handleBodyScansRequest(event, headers, method, pathParts) {
-    // ... (Existing implementation placeholder for body scans if needed or just simple CRUD)
     const userId = event.user.userId;
     if (method === 'GET') {
         const scans = await getBodyScans(userId);
@@ -318,7 +304,7 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
     return { statusCode: 200, headers, body: JSON.stringify([]) }; 
 }
 
-// --- HANDLER FOR CUSTOMER LOGIN (UPDATED) ---
+// --- HANDLER FOR CUSTOMER LOGIN ---
 async function handleCustomerLogin(event, headers, JWT_SECRET) {
     const mutation = `mutation customerAccessTokenCreate($input: CustomerAccessTokenCreateInput!) { customerAccessTokenCreate(input: $input) { customerAccessToken { accessToken expiresAt } customerUserErrors { code field message } } }`;
     const customerQuery = `query { customer(customerAccessToken: $token) { id email firstName lastName } }`;
@@ -330,7 +316,6 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         email = email.toLowerCase().trim();
 
         const variables = { input: { email, password } };
-        /** @type {any} */
         const shopifyResponse = await callShopifyStorefrontAPI(mutation, variables);
         
         const data = shopifyResponse['customerAccessTokenCreate'];
@@ -340,12 +325,13 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         const expiresAt = data.customerAccessToken.expiresAt;
 
         // Get Customer Details
-        const customerDataResponse = /** @type {any} */ (await callShopifyStorefrontAPI(customerQuery, { token: accessToken }));
+        const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, { token: accessToken });
         const customer = customerDataResponse?.customer;
 
         if (!customer) throw new Error("Could not retrieve customer details from Shopify.");
 
         // Sync User & SAVE TOKEN
+        // Passing shopifyId now
         const user = await findOrCreateUserByEmail(email, customer.id ? String(customer.id) : null);
         
         // Save the Shopify Token for future API calls
@@ -375,9 +361,8 @@ async function handleShopifyWebhook(event, secret) {
 
         const order = JSON.parse(body);
         const email = order.email;
-        const customerId = order.customer?.id;
-
-        let user = await findOrCreateUserByEmail(email, customerId ? String(customerId) : null);
+        // Don't pass shopifyId here to avoid overwriting unless necessary, find by email implies existence
+        let user = await findOrCreateUserByEmail(email);
 
         if (user) {
             const lineItems = order.line_items || [];
@@ -391,7 +376,7 @@ async function handleShopifyWebhook(event, secret) {
                         expiresAt: null 
                     });
                 }
-                // Record purchase history in Postgres
+                // Record purchase history
                 await recordPurchase(user.id, String(order.id), sku, item.name);
             }
         }
@@ -539,12 +524,12 @@ async function handleMealPlansRequest(event, headers, method, pathParts) {
     }
     if (method === 'POST' && pathParts.length === 3 && pathParts[2] === 'items') {
         const planId = parseInt(pathParts[1], 10);
-        const { savedMealId, mealData } = JSON.parse(event.body);
+        const { savedMealId, mealData, metadata } = JSON.parse(event.body);
         if (savedMealId) {
-            const newItem = await addMealToPlanItem(userId, planId, savedMealId);
+            const newItem = await addMealToPlanItem(userId, planId, savedMealId, metadata);
             return { statusCode: 201, headers, body: JSON.stringify(newItem) };
         } else if (mealData) {
-            const newItem = await addMealAndLinkToPlan(userId, mealData, planId);
+            const newItem = await addMealAndLinkToPlan(userId, mealData, planId, metadata);
             return { statusCode: 201, headers, body: JSON.stringify(newItem) };
         }
         return { statusCode: 400, headers, body: JSON.stringify({ error: 'Either savedMealId or mealData is required.' }) };
@@ -582,6 +567,8 @@ async function handleMealSuggestionRequest(event, ai, headers) {
 }
 
 /**
+ * @param {string} query
+ * @param {object} variables
  * @returns {Promise<any>}
  */
 function callShopifyStorefrontAPI(query, variables) {
@@ -601,6 +588,7 @@ function callShopifyStorefrontAPI(query, variables) {
             res.on('end', () => {
                 try {
                     const responseBody = JSON.parse(data);
+                    // Resolve even if errors to let handler decide (Shopify returns 200 even on errors sometimes)
                     if (res.statusCode >= 200 && res.statusCode < 300) resolve(responseBody.data);
                     else reject(new Error(`Shopify API failed: ${res.statusCode} - ${data}`));
                 } catch (e) { reject(new Error(`Failed to parse response: ${e.message}`)); }

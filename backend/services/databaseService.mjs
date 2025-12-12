@@ -38,13 +38,19 @@ const processMealDataForClient = (mealData) => {
 export const findOrCreateUserByEmail = async (email, shopifyId = null) => {
     const client = await pool.connect();
     try {
+        // Insert if not exists
         const insertQuery = `
             INSERT INTO users (email, shopify_customer_id) 
             VALUES ($1, $2) 
             ON CONFLICT (email) 
-            DO UPDATE SET shopify_customer_id = COALESCE(users.shopify_customer_id, EXCLUDED.shopify_customer_id);
+            DO NOTHING;
         `;
         await client.query(insertQuery, [email, shopifyId]);
+
+        // If shopifyId provided, try to update it (in case user existed but wasn't linked)
+        if (shopifyId) {
+            await client.query(`UPDATE users SET shopify_customer_id = $2 WHERE email = $1`, [email, shopifyId]);
+        }
 
         const selectQuery = `SELECT id, email, shopify_customer_id FROM users WHERE email = $1;`;
         const res = await client.query(selectQuery, [email]);
@@ -93,6 +99,7 @@ const ensureRewardsTables = async (client) => {
         -- Ensure Shopify Token columns exist on users
         ALTER TABLE users ADD COLUMN IF NOT EXISTS shopify_access_token TEXT;
         ALTER TABLE users ADD COLUMN IF NOT EXISTS shopify_token_expires_at TIMESTAMPTZ;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS shopify_customer_id VARCHAR(255);
     `);
 };
 
@@ -101,7 +108,6 @@ const ensureRewardsTables = async (client) => {
 export const updateUserShopifyToken = async (userId, token, expiresAt) => {
     const client = await pool.connect();
     try {
-        await ensureRewardsTables(client); // Ensure columns exist
         await client.query(`
             UPDATE users 
             SET shopify_access_token = $2, shopify_token_expires_at = $3
@@ -853,11 +859,3 @@ export const getBodyScans = async (userId) => {
         client.release();
     }
 };
-
-// --- Dashboard Logic Placeholders ---
-export const getDashboardPulse = async () => { return []; }
-export const getCompetitors = async () => { return []; }
-export const getSWOTInsights = async () => { return []; }
-export const createSWOTInsight = async () => { return {}; }
-export const getUserDatingProfile = async () => { return {}; }
-export const getUserByShopifyId = async (id) => { return null; }
