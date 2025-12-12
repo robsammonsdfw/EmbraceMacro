@@ -8,7 +8,7 @@ import { NutritionCard } from './components/NutritionCard';
 import { Loader } from './components/Loader';
 import { ErrorAlert } from './components/ErrorAlert';
 import { MealLibrary } from './components/MealLibrary';
-import { Navbar } from './components/Navbar';
+import { Navbar } from './components/Navbar'; // Mobile Bottom Nav
 import { MealHistory } from './components/MealHistory';
 import { MealSuggester } from './components/MealSuggester';
 import { RecipeCard } from './components/RecipeCard';
@@ -21,17 +21,21 @@ import { RewardsDashboard } from './components/RewardsDashboard';
 import { Hub } from './components/Hub';
 import { CaptureFlow } from './components/CaptureFlow';
 import { Hero } from './components/Hero';
+import { AppLayout } from './components/layout/AppLayout';
+import { CommandCenter } from './components/dashboard/CommandCenter';
+import { OrdersCard } from './components/dashboard/OrdersCard';
+import { LabsCard } from './components/dashboard/LabsCard';
 
-type ActiveView = 'home' | 'plan' | 'meals' | 'history' | 'suggestions' | 'grocery' | 'rewards';
+type ActiveView = 'home' | 'plan' | 'meals' | 'history' | 'suggestions' | 'grocery' | 'rewards' | 'body' | 'labs' | 'orders';
 type MealDataType = NutritionInfo | SavedMeal | MealLogEntry;
 type AppMode = 'hub' | 'meals';
 
 const App: React.FC = () => {
-  const { isAuthenticated, isLoading: isAuthLoading, logout } = useAuth();
+  const { isAuthenticated, isLoading: isAuthLoading, logout, user } = useAuth();
   
   // App Navigation State
   const [appMode, setAppMode] = useState<AppMode>('hub');
-  const [activeView, setActiveView] = useState<ActiveView>('plan');
+  const [activeView, setActiveView] = useState<ActiveView>('home');
   const [isCaptureOpen, setIsCaptureOpen] = useState(false);
 
   // App Data State
@@ -63,7 +67,7 @@ const App: React.FC = () => {
   }, [mealPlans, activePlanId]);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && appMode === 'meals') {
       const loadInitialData = async () => {
         try {
           setIsDataLoading(true);
@@ -79,14 +83,15 @@ const App: React.FC = () => {
           setSavedMeals(meals);
           setMealLog(log);
         } catch (err) {
-          setError("Could not load your data. Please try refreshing the page.");
+          console.error(err);
+          // Don't block UI on error, just log it.
         } finally {
           setIsDataLoading(false);
         }
       };
       loadInitialData();
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, appMode]);
   
   const resetAnalysisState = () => {
       setImage(null);
@@ -278,90 +283,20 @@ const App: React.FC = () => {
       return <Hub onEnterMeals={() => setAppMode('meals')} onLogout={handleLogout} />;
   }
 
-  if (isDataLoading) { return <div className="min-h-screen flex items-center justify-center"><Loader message="Loading your data..." /></div>; }
+  // Calculate Daily Stats for Dashboard
+  const today = new Date().toDateString();
+  const dailyStats = mealLog
+        .filter(entry => new Date(entry.createdAt).toDateString() === today)
+        .reduce((acc, curr) => ({
+            calories: acc.calories + curr.totalCalories,
+            protein: acc.protein + curr.totalProtein
+        }), { calories: 0, protein: 0 });
 
   const hasAnalysisContent = image || isProcessing || error || nutritionData || recipes;
   
   const renderContent = () => {
-      switch(activeView) {
-        case 'home': // Fallback to plan for home view in simple mode
-        case 'plan': return (
-             <MealPlanManager 
-                plans={mealPlans} 
-                activePlanId={activePlanId} 
-                savedMeals={savedMeals}
-                onPlanChange={setActivePlanId}
-                onCreatePlan={handleCreateMealPlan}
-                onAddToPlan={handleInitiateAddToPlan}
-                onRemoveFromPlan={handleRemoveFromPlan}
-            />
-        );
-        case 'meals': return <MealLibrary meals={savedMeals} onAdd={handleInitiateAddToPlan} onDelete={handleDeleteMeal} />;
-        case 'history': return <MealHistory logEntries={mealLog} onSaveMeal={handleSaveMeal} onAddToPlan={handleInitiateAddToPlan} />;
-        case 'suggestions': return <MealSuggester 
-                                      onGetSuggestions={handleGetSuggestions} suggestions={suggestedMeals}
-                                      isLoading={isSuggesting} error={suggestionError}
-                                      onAddToPlan={handleInitiateAddToPlan} onSaveMeal={handleSaveMeal}
-                                  />;
-        case 'grocery': return <GroceryList mealPlans={mealPlans} />;
-        case 'rewards': return <RewardsDashboard />;
-        default: return (
-             <MealPlanManager 
-                plans={mealPlans} 
-                activePlanId={activePlanId} 
-                savedMeals={savedMeals}
-                onPlanChange={setActivePlanId}
-                onCreatePlan={handleCreateMealPlan}
-                onAddToPlan={handleInitiateAddToPlan}
-                onRemoveFromPlan={handleRemoveFromPlan}
-            />
-        );
-    }
-  };
-
-  return (
-    <div className="font-sans text-slate-800 bg-slate-50 min-h-screen">
-      {isCaptureOpen && (
-          <CaptureFlow 
-            onClose={() => setIsCaptureOpen(false)}
-            onCapture={handleCaptureResult}
-            lastMeal={mealLog.length > 0 ? mealLog[0] : undefined}
-            onRepeatMeal={handleRepeatMeal}
-            onBodyScanClick={handleBodyScanClick}
-          />
-      )}
-      
-      {isAddToPlanModalOpen && (
-        <AddToPlanModal 
-            plans={mealPlans}
-            onSelectPlan={handleConfirmAddToPlan}
-            onClose={() => setIsAddToPlanModalOpen(false)}
-        />
-      )}
-
-      <main className="max-w-4xl mx-auto p-4 md:p-8 pb-24">
-        {!hasAnalysisContent && (
-            <header className="text-center mb-8 relative">
-              <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500">
-                EmbraceHealth
-              </h1>
-              <button onClick={handleLogout} className="absolute top-0 right-0 text-slate-400 hover:text-slate-600 text-sm font-semibold">Logout</button>
-            </header>
-        )}
-
-        <div className="space-y-8">
-          {/* Show Hero only when not analyzing and on Plan view (default) */}
-          {!hasAnalysisContent && activeView === 'plan' && (
-             <Hero 
-                onCameraClick={() => setIsCaptureOpen(true)} 
-                onUploadClick={() => setIsCaptureOpen(true)} 
-                onBarcodeClick={() => setIsCaptureOpen(true)} 
-                onPantryChefClick={() => setIsCaptureOpen(true)}
-                onGetRecipeClick={() => setIsCaptureOpen(true)}
-             />
-          )}
-
-          {hasAnalysisContent ? (
+      if (hasAnalysisContent) {
+          return (
             <div className="space-y-6">
                 <ImageUploader image={image} />
                 {isProcessing && <Loader message={processingMessage} />}
@@ -391,22 +326,112 @@ const App: React.FC = () => {
                 )}
                 <button onClick={resetAnalysisState} className="w-full py-3 text-slate-500 hover:bg-slate-200 rounded-lg">Cancel Analysis</button>
             </div>
-          ) : (
-            <div className="space-y-6">
-                {/* Simple Navbar */}
-                <Navbar 
-                    activeView={activeView} 
-                    onNavigate={handleNavigation} 
-                    onLogout={handleLogout} 
-                    onBackToHub={() => setAppMode('hub')}
-                    onCaptureClick={() => setIsCaptureOpen(true)}
-                />
-                {renderContent()}
+          );
+      }
+
+      switch(activeView) {
+        case 'home': return (
+            <CommandCenter 
+                dailyCalories={dailyStats.calories}
+                dailyProtein={dailyStats.protein}
+                rewardsBalance={0} // Populated by component itself now
+                userName={user?.firstName || 'User'}
+                onScanClick={handleBodyScanClick}
+            />
+        );
+        case 'plan': return (
+             <MealPlanManager 
+                plans={mealPlans} 
+                activePlanId={activePlanId} 
+                savedMeals={savedMeals}
+                onPlanChange={setActivePlanId}
+                onCreatePlan={handleCreateMealPlan}
+                onAddToPlan={handleInitiateAddToPlan}
+                onRemoveFromPlan={handleRemoveFromPlan}
+            />
+        );
+        case 'meals': return <MealLibrary meals={savedMeals} onAdd={handleInitiateAddToPlan} onDelete={handleDeleteMeal} />;
+        case 'history': return <MealHistory logEntries={mealLog} onSaveMeal={handleSaveMeal} onAddToPlan={handleInitiateAddToPlan} />;
+        case 'suggestions': return <MealSuggester 
+                                      onGetSuggestions={handleGetSuggestions} suggestions={suggestedMeals}
+                                      isLoading={isSuggesting} error={suggestionError}
+                                      onAddToPlan={handleInitiateAddToPlan} onSaveMeal={handleSaveMeal}
+                                  />;
+        case 'grocery': return <GroceryList mealPlans={mealPlans} />;
+        case 'rewards': return <RewardsDashboard />;
+        case 'orders': return (
+            <div className="space-y-4">
+                <h2 className="text-2xl font-bold text-slate-800">Your Orders</h2>
+                <OrdersCard />
             </div>
-          )}
+        );
+        case 'labs': return (
+            <div className="space-y-4">
+                <h2 className="text-2xl font-bold text-slate-800">Lab Results</h2>
+                <LabsCard />
+            </div>
+        );
+        default: return null;
+    }
+  };
+
+  return (
+    <AppLayout 
+        activeView={activeView} 
+        onNavigate={handleNavigation} 
+        onLogout={handleLogout}
+        rightPanel={
+            <>
+                <OrdersCard />
+                <LabsCard />
+            </>
+        }
+    >
+        {isCaptureOpen && (
+            <CaptureFlow 
+                onClose={() => setIsCaptureOpen(false)}
+                onCapture={handleCaptureResult}
+                lastMeal={mealLog.length > 0 ? mealLog[0] : undefined}
+                onRepeatMeal={handleRepeatMeal}
+                onBodyScanClick={handleBodyScanClick}
+            />
+        )}
+        
+        {isAddToPlanModalOpen && (
+            <AddToPlanModal 
+                plans={mealPlans}
+                onSelectPlan={handleConfirmAddToPlan}
+                onClose={() => setIsAddToPlanModalOpen(false)}
+            />
+        )}
+
+        {/* Mobile Navigation (Hidden on Desktop by CSS, visible on mobile) */}
+        <div className="md:hidden fixed bottom-0 left-0 right-0 z-40">
+             <Navbar 
+                activeView={activeView} 
+                onNavigate={handleNavigation} 
+                onLogout={handleLogout} 
+                onBackToHub={() => setAppMode('hub')}
+                onCaptureClick={() => setIsCaptureOpen(true)}
+            />
         </div>
-      </main>
-    </div>
+
+        {/* Desktop Header Actions (Right side of top bar if needed, handled by Layout usually but customized here) */}
+        {!hasAnalysisContent && activeView === 'plan' && (
+             <div className="md:hidden mb-6">
+                 <Hero 
+                    onCameraClick={() => setIsCaptureOpen(true)} 
+                    onUploadClick={() => setIsCaptureOpen(true)} 
+                    onBarcodeClick={() => setIsCaptureOpen(true)} 
+                    onPantryChefClick={() => setIsCaptureOpen(true)}
+                    onGetRecipeClick={() => setIsCaptureOpen(true)}
+                 />
+             </div>
+        )}
+
+        {renderContent()}
+        
+    </AppLayout>
   );
 };
 

@@ -203,7 +203,7 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
 
         const variables = { input: { email, password } };
         /** @type {any} */
-        const shopifyResponse = await callShopifyStorefrontAPI(mutation, variables);
+        const shopifyResponse = /** @type {any} */ (await callShopifyStorefrontAPI(mutation, variables));
         
         const data = shopifyResponse['customerAccessTokenCreate'];
         if (!data || data.customerUserErrors.length > 0) return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid credentials.', details: data?.customerUserErrors[0]?.message }) };
@@ -213,7 +213,7 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
 
         // Get Customer Details
         /** @type {any} */
-        const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, { token: accessToken });
+        const customerDataResponse = /** @type {any} */ (await callShopifyStorefrontAPI(customerQuery, { token: accessToken }));
         const customer = customerDataResponse?.customer;
 
         if (!customer) throw new Error("Could not retrieve customer details from Shopify.");
