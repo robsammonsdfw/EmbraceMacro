@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import https from 'https';
@@ -34,9 +35,7 @@ import {
     saveSleepRecord,
     getUserEntitlements,
     grantEntitlement,
-    recordPurchase,
-    updateUserShopifyToken,
-    getUserShopifyToken
+    recordPurchase
 } from './services/databaseService.mjs';
 
 // --- MAIN HANDLER (ROUTER) ---
@@ -122,35 +121,26 @@ export const handler = async (event) => {
     }
 
     // --- PATH ROUTING ---
-    // Robust parsing: split by '/' and find the known resource
     const pathParts = path.split('/').filter(Boolean);
     
     // Known resources mapping
     const resources = [
-        'orders', 'labs', 'body-scans', 'sleep-records', 'entitlements', 
+        'body-scans', 'sleep-records', 'entitlements', 
         'meal-log', 'saved-meals', 'meal-plans', 'grocery-lists', 'grocery-list', 
         'analyze-image', 'analyze-image-recipes', 'get-meal-suggestions', 'rewards'
     ];
 
     let resource = pathParts.find(part => resources.includes(part));
     
-    // If no known resource found, try standard index 0 (handling /default/ prefix implicitly by searching above)
+    // Fallback logic
     if (!resource && pathParts.length > 0) {
-        // Fallback for edge cases
         resource = pathParts[0] === 'default' ? pathParts[1] : pathParts[0];
     }
 
-    // Re-align pathParts so index 0 is the resource
     const resourceIndex = pathParts.indexOf(resource);
     const routedPathParts = resourceIndex !== -1 ? pathParts.slice(resourceIndex) : pathParts;
 
     try {
-        if (resource === 'orders') {
-            return await handleOrdersRequest(event, headers, method);
-        }
-        if (resource === 'labs') {
-            return await handleLabsRequest(event, headers, method);
-        }
         if (resource === 'body-scans') {
             return await handleBodyScansRequest(event, headers, method, routedPathParts);
         }
@@ -189,112 +179,6 @@ export const handler = async (event) => {
     return { statusCode: 404, headers, body: JSON.stringify({ error: `Not Found: ${path}` }) };
 };
 
-// --- HANDLER FOR ORDERS (REAL-TIME SHOPIFY SYNC) ---
-async function handleOrdersRequest(event, headers, method) {
-    if (method !== 'GET') return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
-
-    const userId = event.user.userId;
-    // Check if user has a shopify token linked
-    const tokens = await getUserShopifyToken(userId);
-
-    if (!tokens || !tokens.shopify_access_token) {
-        // No token, return empty list gracefully
-        return { statusCode: 200, headers, body: JSON.stringify([]) }; 
-    }
-
-    try {
-        const query = `
-        query {
-            customer(customerAccessToken: "${tokens.shopify_access_token}") {
-                orders(first: 20, reverse: true) {
-                    edges {
-                        node {
-                            id
-                            orderNumber
-                            processedAt
-                            financialStatus
-                            fulfillmentStatus
-                            totalPrice { amount currencyCode }
-                            lineItems(first: 5) {
-                                edges {
-                                    node {
-                                        title
-                                        quantity
-                                        variant {
-                                            image { url }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }`;
-        
-        /** @type {any} */
-        const response = await callShopifyStorefrontAPI(query, {});
-        
-        if (!response || !response.customer || !response.customer.orders) {
-            return { statusCode: 200, headers, body: JSON.stringify([]) };
-        }
-        
-        const orders = response.customer.orders.edges.map(edge => {
-            const node = edge.node;
-            return {
-                id: node.id,
-                orderNumber: node.orderNumber,
-                date: node.processedAt,
-                total: node.totalPrice.amount,
-                status: node.fulfillmentStatus,
-                paymentStatus: node.financialStatus,
-                items: node.lineItems.edges.map(i => ({ 
-                    title: i.node.title, 
-                    quantity: i.node.quantity, 
-                    image: i.node.variant?.image?.url 
-                }))
-            };
-        });
-
-        return { statusCode: 200, headers, body: JSON.stringify(orders) };
-    } catch (e) {
-        console.error("Shopify Orders Fetch Error:", e);
-        // Fallback to empty list instead of crashing app
-        return { statusCode: 200, headers, body: JSON.stringify([]) };
-    }
-}
-
-// --- HANDLER FOR LABS (DERIVED FROM ORDERS) ---
-async function handleLabsRequest(event, headers, method) {
-    if (method !== 'GET') return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
-    
-    // Reuse orders logic
-    const ordersRes = await handleOrdersRequest(event, headers, 'GET');
-    if (ordersRes.statusCode !== 200) return ordersRes;
-
-    const orders = JSON.parse(ordersRes.body);
-    const labs = [];
-
-    const labKeywords = ['LAB', 'PANEL', 'TEST', 'SCREEN', 'CHECK', 'PROFILE', 'GLP-1'];
-
-    orders.forEach(order => {
-        order.items.forEach(item => {
-            const upperTitle = item.title.toUpperCase();
-            if (labKeywords.some(keyword => upperTitle.includes(keyword))) {
-                labs.push({
-                    id: order.id + item.title,
-                    name: item.title,
-                    date: order.date,
-                    status: order.status === 'FULFILLED' ? 'Results Ready' : 'Ordered',
-                    orderNumber: order.orderNumber
-                });
-            }
-        });
-    });
-
-    return { statusCode: 200, headers, body: JSON.stringify(labs) };
-}
-
 // --- HANDLER FOR BODY SCANS ---
 async function handleBodyScansRequest(event, headers, method, pathParts) {
     const userId = event.user.userId;
@@ -324,22 +208,16 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         if (!data || data.customerUserErrors.length > 0) return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid credentials.', details: data?.customerUserErrors[0]?.message }) };
 
         const accessToken = data.customerAccessToken.accessToken;
-        const expiresAt = data.customerAccessToken.expiresAt;
 
         // Get Customer Details
-        /** @type {any} */
         const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, { token: accessToken });
-        const customer = customerDataResponse?.customer;
+        const customer = /** @type {any} */ (customerDataResponse)?.customer;
 
         if (!customer) throw new Error("Could not retrieve customer details from Shopify.");
 
-        // Sync User & SAVE TOKEN
-        // Passing shopifyId now
+        // Sync User (No Token Storage in DB)
         const user = await findOrCreateUserByEmail(email, customer.id ? String(customer.id) : null);
         
-        // Save the Shopify Token for future API calls
-        await updateUserShopifyToken(user.id, accessToken, expiresAt);
-
         const sessionToken = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
         return { statusCode: 200, headers, body: JSON.stringify({ token: sessionToken }) };
     } catch (error) {
@@ -364,7 +242,7 @@ async function handleShopifyWebhook(event, secret) {
 
         const order = JSON.parse(body);
         const email = order.email;
-        // Don't pass shopifyId here to avoid overwriting unless necessary, find by email implies existence
+        // Find by email implies existence
         let user = await findOrCreateUserByEmail(email);
 
         if (user) {

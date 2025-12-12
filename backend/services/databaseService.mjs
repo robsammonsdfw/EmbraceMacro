@@ -37,7 +37,6 @@ const processMealDataForClient = (mealData) => {
 // --- Migration / Table Setup ---
 const ensureRewardsTables = async (client) => {
     try {
-        // Run these sequentially to ensure one failure doesn't block the others
         await client.query(`
             CREATE TABLE IF NOT EXISTS rewards_balances (
                 user_id INT PRIMARY KEY,
@@ -46,9 +45,6 @@ const ensureRewardsTables = async (client) => {
                 tier VARCHAR(50) DEFAULT 'Bronze',
                 updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
             );
-        `);
-        
-        await client.query(`
             CREATE TABLE IF NOT EXISTS rewards_ledger (
                 entry_id SERIAL PRIMARY KEY,
                 user_id INT NOT NULL,
@@ -58,57 +54,37 @@ const ensureRewardsTables = async (client) => {
                 metadata JSONB DEFAULT '{}'
             );
         `);
-
-        // Ensure Users table exists
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                email VARCHAR(255) UNIQUE NOT NULL
-            );
-        `);
-
-        // Add columns individually to be safe
-        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS shopify_access_token TEXT;`);
-        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS shopify_token_expires_at TIMESTAMPTZ;`);
-        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS shopify_customer_id VARCHAR(255);`);
-
     } catch (e) {
-        console.error("Migration warning:", e.message);
+        console.error("Migration warning (safe to ignore if tables exist):", e.message);
     }
 };
 
 export const findOrCreateUserByEmail = async (email, shopifyId = null) => {
     const client = await pool.connect();
     try {
-        // Run migration first to ensure columns exist
+        // Run migration to ensure schema is up to date (standard reward tables only)
         await ensureRewardsTables(client);
 
-        // Insert if not exists
         const insertQuery = `
-            INSERT INTO users (email) 
-            VALUES ($1) 
+            INSERT INTO users (email, shopify_customer_id) 
+            VALUES ($1, $2) 
             ON CONFLICT (email) 
             DO NOTHING;
         `;
-        await client.query(insertQuery, [email]);
+        await client.query(insertQuery, [email, shopifyId]);
 
-        // If shopifyId is provided, try to update it
         if (shopifyId) {
-            try {
-                await client.query(`UPDATE users SET shopify_customer_id = $2 WHERE email = $1`, [email, shopifyId]);
-            } catch (e) {
-                console.warn("Could not update shopify_customer_id, likely column missing despite migration attempt.", e);
-            }
+            // Update existing user if needed, but we don't handle access tokens here anymore
+            await client.query(`UPDATE users SET shopify_customer_id = $2 WHERE email = $1`, [email, shopifyId]);
         }
 
-        const selectQuery = `SELECT id, email FROM users WHERE email = $1;`;
+        const selectQuery = `SELECT id, email, shopify_customer_id FROM users WHERE email = $1;`;
         const res = await client.query(selectQuery, [email]);
         
         if (res.rows.length === 0) {
             throw new Error("Failed to find or create user after insert operation.");
         }
         
-        // Ensure rewards balance entry exists for this user
         await client.query(`
             INSERT INTO rewards_balances (user_id, points_total, points_available, tier)
             VALUES ($1, 0, 0, 'Bronze')
@@ -125,51 +101,21 @@ export const findOrCreateUserByEmail = async (email, shopifyId = null) => {
     }
 };
 
-// --- User Token Management ---
-
-export const updateUserShopifyToken = async (userId, token, expiresAt) => {
-    const client = await pool.connect();
-    try {
-        await client.query(`
-            UPDATE users 
-            SET shopify_access_token = $2, shopify_token_expires_at = $3
-            WHERE id = $1
-        `, [userId, token, expiresAt]);
-    } catch (err) {
-        console.error('Error updating Shopify token:', err);
-    } finally {
-        client.release();
-    }
-};
-
-export const getUserShopifyToken = async (userId) => {
-    const client = await pool.connect();
-    try {
-        const res = await client.query(`SELECT shopify_access_token, shopify_token_expires_at FROM users WHERE id = $1`, [userId]);
-        if (res.rows.length === 0) return null;
-        return res.rows[0];
-    } catch (err) {
-        // If column doesn't exist, return null
-        return null;
-    } finally {
-        client.release();
-    }
-};
-
 // --- Rewards Logic ---
 
 export const awardPoints = async (userId, eventType, points, metadata = {}) => {
     const client = await pool.connect();
     try {
+        // Ensure tables exist before trying to insert
+        await ensureRewardsTables(client);
+
         await client.query('BEGIN');
 
-        // 1. Insert into ledger
         await client.query(`
             INSERT INTO rewards_ledger (user_id, event_type, points_delta, metadata)
             VALUES ($1, $2, $3, $4)
         `, [userId, eventType, points, metadata]);
 
-        // 2. Update balances
         const updateRes = await client.query(`
             UPDATE rewards_balances
             SET points_total = points_total + $2,
@@ -179,8 +125,13 @@ export const awardPoints = async (userId, eventType, points, metadata = {}) => {
             RETURNING points_total
         `, [userId, points]);
         
-        // 3. Recalculate Tier
-        if (updateRes.rows.length > 0) {
+        if (updateRes.rows.length === 0) {
+             // If no balance row exists, insert one
+             await client.query(`
+                INSERT INTO rewards_balances (user_id, points_total, points_available, tier)
+                VALUES ($1, $2, $2, 'Bronze')
+            `, [userId, points]);
+        } else {
             const newTotal = updateRes.rows[0].points_total;
             let newTier = 'Bronze';
             if (newTotal >= 5000) newTier = 'Platinum';
@@ -204,16 +155,8 @@ export const awardPoints = async (userId, eventType, points, metadata = {}) => {
 export const getRewardsSummary = async (userId) => {
     const client = await pool.connect();
     try {
-        // Run basic migration just in case
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS rewards_balances (
-                user_id INT PRIMARY KEY,
-                points_total INT DEFAULT 0,
-                points_available INT DEFAULT 0,
-                tier VARCHAR(50) DEFAULT 'Bronze',
-                updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-            );
-        `);
+        // Ensure tables exist
+        await ensureRewardsTables(client);
 
         const balanceRes = await client.query(`
             SELECT points_total, points_available, tier 
@@ -232,10 +175,11 @@ export const getRewardsSummary = async (userId) => {
 
         return {
             ...balance,
-            history: historyRes.rows || []
+            history: historyRes.rows
         };
     } catch (err) {
         console.error('Error getting rewards summary:', err);
+        // Return safe default instead of crashing if DB is borked
         return { points_total: 0, points_available: 0, tier: 'Bronze', history: [] };
     } finally {
         client.release();
@@ -256,7 +200,7 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
         const res = await client.query(query, [userId, mealData, imageBase64]);
         const row = res.rows[0];
         
-        // Award points for logging a meal
+        // Award points for logging a meal (Safe call)
         await awardPoints(userId, 'meal_photo.logged', 50, { meal_log_id: row.id });
 
         const mealDataFromDb = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
@@ -368,7 +312,6 @@ export const saveMeal = async (userId, mealData) => {
         const res = await client.query(query, [userId, mealDataForDb]);
         const row = res.rows[0];
         
-        // Award points for saving a meal
         await awardPoints(userId, 'meal.saved', 10, { saved_meal_id: row.id });
         
         const mealDataFromDb = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
@@ -413,7 +356,6 @@ export const getMealPlans = async (userId) => {
         `;
         const res = await client.query(query, [userId]);
         
-        // Process flat results into nested structure
         const plans = new Map();
         res.rows.forEach(row => {
             if (!plans.has(row.plan_id)) {
@@ -423,7 +365,7 @@ export const getMealPlans = async (userId) => {
                     items: [],
                 });
             }
-            if (row.item_id) { // Ensure item exists (for empty plans)
+            if (row.item_id) {
                 const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
                 plans.get(row.plan_id).items.push({
                     id: row.item_id,
@@ -449,9 +391,9 @@ export const createMealPlan = async (userId, name) => {
     try {
         const query = `INSERT INTO meal_plans (user_id, name) VALUES ($1, $2) RETURNING id, name;`;
         const res = await client.query(query, [userId, name]);
-        return { ...res.rows[0], items: [] }; // Return new plan with empty items
+        return { ...res.rows[0], items: [] };
     } catch(err) {
-        if (err.code === '23505') { // unique_violation
+        if (err.code === '23505') {
             throw new Error(`A meal plan with the name "${name}" already exists.`);
         }
         console.error('Database error in createMealPlan:', err);
@@ -464,7 +406,6 @@ export const createMealPlan = async (userId, name) => {
 export const deleteMealPlan = async (userId, planId) => {
     const client = await pool.connect();
     try {
-        // ON DELETE CASCADE will handle deleting items from meal_plan_items
         await client.query(`DELETE FROM meal_plans WHERE id = $1 AND user_id = $2;`, [planId, userId]);
     } catch(err) {
         console.error('Database error in deleteMealPlan:', err);
@@ -478,14 +419,13 @@ export const deleteMealPlan = async (userId, planId) => {
 export const addMealToPlanItem = async (userId, planId, savedMealId, metadata = {}) => {
     const client = await pool.connect();
     try {
-        // Verify the user owns the plan and the meal before inserting
         const checkQuery = `
            SELECT (SELECT user_id FROM meal_plans WHERE id = $1) = $3 AS owns_plan,
                   (SELECT user_id FROM saved_meals WHERE id = $2) = $3 AS owns_meal;
         `;
         const checkRes = await client.query(checkQuery, [planId, savedMealId, userId]);
         if (!checkRes.rows[0] || !checkRes.rows[0].owns_plan || !checkRes.rows[0].owns_meal) {
-            throw new Error("Authorization error: Cannot add meal to a plan you don't own, or meal/plan does not exist.");
+            throw new Error("Authorization error.");
         }
 
         const insertQuery = `
@@ -496,7 +436,6 @@ export const addMealToPlanItem = async (userId, planId, savedMealId, metadata = 
         const insertRes = await client.query(insertQuery, [userId, planId, savedMealId, metadata]);
         const newItemId = insertRes.rows[0].id;
 
-        // Fetch the full data for the new item to return to client
         const selectQuery = `
             SELECT 
                 i.id,
@@ -517,10 +456,6 @@ export const addMealToPlanItem = async (userId, planId, savedMealId, metadata = 
         };
 
     } catch (err) {
-        if (err.code === '23505') { // unique_violation on (meal_plan_id, saved_meal_id)
-            console.warn(`Meal ${savedMealId} is already in plan ${planId}.`);
-            throw new Error('This meal is already in the selected plan.');
-        }
         console.error('Database error in addMealToPlanItem:', err);
         throw new Error('Could not add meal to plan.');
     } finally {
@@ -533,21 +468,14 @@ export const addMealAndLinkToPlan = async (userId, mealData, planId, metadata = 
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        
-        // Step 1: Save the new meal to get an ID.
         const newMeal = await saveMeal(userId, mealData);
-        
-        // Step 2: Add the newly saved meal to the specified plan.
         const newPlanItem = await addMealToPlanItem(userId, planId, newMeal.id, metadata);
-        
         await client.query('COMMIT');
-        
         return newPlanItem;
-
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error('Database transaction error in addMealAndLinkToPlan:', err);
-        throw new Error('Could not add meal from history to plan due to a database error.');
+        console.error('Database error in addMealAndLinkToPlan:', err);
+        throw new Error('Could not add meal to plan.');
     } finally {
         client.release();
     }
@@ -608,7 +536,6 @@ export const getGroceryListItems = async (userId, listId) => {
 export const createGroceryList = async (userId, name) => {
     const client = await pool.connect();
     try {
-        // Ensure tables exist in case of first run on this flow
         await getGroceryLists(userId); 
         const res = await client.query('INSERT INTO grocery_lists (user_id, name) VALUES ($1, $2) RETURNING *', [userId, name]);
         return res.rows[0];
@@ -645,16 +572,11 @@ export const deleteGroceryList = async (userId, listId) => {
 export const generateGroceryList = async (userId, planIds, name) => {
     const client = await pool.connect();
     try {
-        // Ensure tables exist
         await getGroceryLists(userId);
         
         await client.query('BEGIN');
-
-        // Create List
         const listRes = await client.query('INSERT INTO grocery_lists (user_id, name, is_active) VALUES ($1, $2, TRUE) RETURNING *', [userId, name]);
         const newList = listRes.rows[0];
-
-        // Deactivate others
         await client.query('UPDATE grocery_lists SET is_active = FALSE WHERE user_id = $1 AND id != $2', [userId, newList.id]);
 
         if (planIds.length > 0) {
@@ -715,7 +637,7 @@ export const removeGroceryListItem = async (userId, itemId) => {
     }
 };
 
-// --- Sleep Records (New) ---
+// --- Sleep Records ---
 
 export const saveSleepRecord = async (userId, sleepData) => {
     const client = await pool.connect();
@@ -733,7 +655,6 @@ export const saveSleepRecord = async (userId, sleepData) => {
             sleepData.endTime
         ]);
         
-        // Award points for tracking sleep
         await awardPoints(userId, 'sleep.tracked', 20);
 
         const row = res.rows[0];
@@ -779,7 +700,7 @@ export const getSleepRecords = async (userId) => {
     }
 };
 
-// --- User Entitlements (New) ---
+// --- User Entitlements ---
 
 export const getUserEntitlements = async (userId) => {
     const client = await pool.connect();
@@ -871,9 +792,7 @@ export const saveBodyScan = async (userId, scanData) => {
     try {
         const query = `INSERT INTO body_scans (user_id, scan_data) VALUES ($1, $2) RETURNING id, scan_data, created_at;`;
         const res = await client.query(query, [userId, scanData]);
-        
         await awardPoints(userId, 'body_scan.completed', 100);
-
         return res.rows[0];
     } catch (err) {
         console.error('Database error in saveBodyScan:', err);
