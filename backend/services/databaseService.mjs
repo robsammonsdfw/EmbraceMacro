@@ -30,6 +30,9 @@ const processMealDataForClient = (mealData) => {
     if (dataForClient.imageBase64) {
         dataForClient.imageUrl = `data:image/jpeg;base64,${dataForClient.imageBase64}`;
         delete dataForClient.imageBase64;
+        dataForClient.hasImage = true;
+    } else {
+        dataForClient.hasImage = false;
     }
     return dataForClient;
 };
@@ -229,6 +232,7 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
             id: row.id,
             ...mealDataFromDb,
             imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
+            hasImage: true,
             createdAt: row.created_at
         };
     } catch (err) {
@@ -243,8 +247,10 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
 export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
     try {
+        // Optimization: Do NOT select the full image_base64 column for the list view.
+        // Payload size limits on Lambda (6MB) will cause crashes if we return full images for a list.
         const query = `
-            SELECT id, meal_data, image_base64, created_at 
+            SELECT id, meal_data, (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image, created_at 
             FROM meal_log_entries
             WHERE user_id = $1 
             ORDER BY created_at DESC;
@@ -255,7 +261,8 @@ export const getMealLogEntries = async (userId) => {
             return {
                 id: row.id,
                 ...mealData,
-                imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
+                hasImage: row.has_image,
+                imageUrl: null, // Do not send image data in list view
                 createdAt: row.created_at,
             };
         });
@@ -299,7 +306,17 @@ export const getSavedMeals = async (userId) => {
         const res = await client.query(query, [userId]);
         return res.rows.map(row => {
             const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
-            return { id: row.id, ...processMealDataForClient(mealData) };
+            
+            // Optimization: Remove imageBase64 from list payload
+            const hasImage = !!mealData.imageBase64;
+            const { imageBase64, ...restMealData } = mealData;
+
+            return { 
+                id: row.id, 
+                ...restMealData,
+                hasImage,
+                imageUrl: null 
+            };
         });
     } catch (err) {
         console.error('Database error in getSavedMeals:', err);
@@ -315,6 +332,7 @@ export const getSavedMealById = async (userId, mealId) => {
         const res = await client.query('SELECT id, meal_data FROM saved_meals WHERE id = $1 AND user_id = $2', [mealId, userId]);
         if (res.rows.length === 0) return null;
         const row = res.rows[0];
+        // For individual item detail, we DO return the full image info via processMealDataForClient
         return { id: row.id, ...processMealDataForClient(row.meal_data) };
     } finally {
         client.release();
@@ -390,12 +408,19 @@ export const getMealPlans = async (userId) => {
             }
             if (row.item_id) {
                 const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
+                
+                // Optimization: Strip image data for list view
+                const hasImage = !!mealData.imageBase64;
+                const { imageBase64, ...restMealData } = mealData;
+
                 plans.get(row.plan_id).items.push({
                     id: row.item_id,
                     metadata: row.metadata || {},
                     meal: {
                         id: row.meal_id,
-                        ...processMealDataForClient(mealData)
+                        ...restMealData,
+                        hasImage,
+                        imageUrl: null
                     }
                 });
             }
