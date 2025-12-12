@@ -35,7 +35,8 @@ import {
     saveSleepRecord,
     getUserEntitlements,
     grantEntitlement,
-    recordPurchase
+    recordPurchase,
+    updateUserShopifyToken
 } from './services/databaseService.mjs';
 
 // --- MAIN HANDLER (ROUTER) ---
@@ -192,7 +193,8 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
 // --- HANDLER FOR CUSTOMER LOGIN ---
 async function handleCustomerLogin(event, headers, JWT_SECRET) {
     const mutation = `mutation customerAccessTokenCreate($input: CustomerAccessTokenCreateInput!) { customerAccessTokenCreate(input: $input) { customerAccessToken { accessToken expiresAt } customerUserErrors { code field message } } }`;
-    const customerQuery = `query { customer(customerAccessToken: $token) { id email firstName lastName } }`;
+    // Explicitly define variable to prevent errors in certain Shopify API versions
+    const customerQuery = `query getCustomer($token: String!) { customer(customerAccessToken: $token) { id email firstName lastName } }`;
 
     try {
         let { email, password } = JSON.parse(event.body);
@@ -208,6 +210,7 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         if (!data || data.customerUserErrors.length > 0) return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid credentials.', details: data?.customerUserErrors[0]?.message }) };
 
         const accessToken = data.customerAccessToken.accessToken;
+        const expiresAt = data.customerAccessToken.expiresAt;
 
         // Get Customer Details
         /** @type {any} */
@@ -216,8 +219,11 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
 
         if (!customer) throw new Error("Could not retrieve customer details from Shopify.");
 
-        // Sync User (No Token Storage in DB)
+        // Sync User (WITH Token Storage)
         const user = await findOrCreateUserByEmail(email, customer.id ? String(customer.id) : null);
+        
+        // Save token for SSO as requested
+        await updateUserShopifyToken(user.id, accessToken, expiresAt);
         
         const sessionToken = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
         return { statusCode: 200, headers, body: JSON.stringify({ token: sessionToken }) };
