@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import https from 'https';
@@ -105,7 +106,7 @@ export const handler = async (event) => {
     }
 
     // --- AUTH ROUTES ---
-    if (path === '/auth/customer-login') {
+    if (path === '/auth/customer-login' || path === '/default/auth/customer-login') {
         return handleCustomerLogin(event, headers, JWT_SECRET);
     }
 
@@ -129,7 +130,11 @@ export const handler = async (event) => {
         return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized: Invalid token.', details: err.message }) };
     }
 
-    const pathParts = path.split('/').filter(Boolean);
+    // Handle Path Parsing (Strip 'default' stage if present)
+    let pathParts = path.split('/').filter(Boolean);
+    if (pathParts.length > 0 && pathParts[0] === 'default') {
+        pathParts = pathParts.slice(1);
+    }
     const resource = pathParts[0];
 
     try {
@@ -218,6 +223,7 @@ async function handleOrdersRequest(event, headers, method) {
             }
         }`;
         
+        /** @type {any} */
         const response = await callShopifyStorefrontAPI(query, {});
         if (!response || !response.customer) {
             return { statusCode: 200, headers, body: JSON.stringify([]) };
@@ -297,6 +303,7 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         email = email.toLowerCase().trim();
 
         const variables = { input: { email, password } };
+        /** @type {any} */
         const shopifyResponse = await callShopifyStorefrontAPI(mutation, variables);
         
         const data = shopifyResponse['customerAccessTokenCreate'];
@@ -306,6 +313,7 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         const expiresAt = data.customerAccessToken.expiresAt;
 
         // Get Customer Details
+        /** @type {any} */
         const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, { token: accessToken });
         const customer = customerDataResponse?.customer;
 
@@ -536,44 +544,4 @@ async function handleGeminiRequest(event, ai, headers) {
     const { base64Image, mimeType, prompt, schema } = body;
     const imagePart = { inlineData: { data: base64Image, mimeType } };
     const textPart = { text: prompt };
-    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: { parts: [imagePart, textPart] }, config: { responseMimeType: 'application/json', responseSchema: schema } });
-    return { statusCode: 200, headers: { ...headers, 'Content-Type': 'application/json' }, body: response.text };
-}
-
-async function handleMealSuggestionRequest(event, ai, headers) {
-    const body = JSON.parse(event.body);
-    const { prompt, schema } = body;
-    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt, config: { responseMimeType: 'application/json', responseSchema: schema } });
-    return { statusCode: 200, headers: { ...headers, 'Content-Type': 'application/json' }, body: response.text };
-}
-
-/**
- * @returns {Promise<any>}
- */
-function callShopifyStorefrontAPI(query, variables) {
-    const { SHOPIFY_STORE_DOMAIN, SHOPIFY_STOREFRONT_TOKEN } = process.env;
-    const postData = JSON.stringify({ query, variables });
-    const headers = {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(postData),
-        'X-Shopify-Storefront-Access-Token': SHOPIFY_STOREFRONT_TOKEN
-    };
-    
-    const options = { hostname: SHOPIFY_STORE_DOMAIN, path: '/api/2024-04/graphql.json', method: 'POST', headers };
-    return new Promise((resolve, reject) => {
-        const req = https.request(options, (res) => {
-            let data = '';
-            res.on('data', (chunk) => { data += chunk; });
-            res.on('end', () => {
-                try {
-                    const responseBody = JSON.parse(data);
-                    if (res.statusCode >= 200 && res.statusCode < 300) resolve(responseBody.data);
-                    else reject(new Error(`Shopify API failed: ${res.statusCode} - ${data}`));
-                } catch (e) { reject(new Error(`Failed to parse response: ${e.message}`)); }
-            });
-        });
-        req.on('error', (e) => reject(e));
-        req.write(postData);
-        req.end();
-    });
-}
+    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: { parts: [imagePart, textPart] }, config: { responseMimeType: 'application/json', responseSchema: schema }
