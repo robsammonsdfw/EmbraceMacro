@@ -7,7 +7,6 @@ import { ImageUploader } from './components/ImageUploader';
 import { NutritionCard } from './components/NutritionCard';
 import { Loader } from './components/Loader';
 import { ErrorAlert } from './components/ErrorAlert';
-import { HomeDashboard } from './components/HomeDashboard';
 import { MealLibrary } from './components/MealLibrary';
 import { Navbar } from './components/Navbar';
 import { MealHistory } from './components/MealHistory';

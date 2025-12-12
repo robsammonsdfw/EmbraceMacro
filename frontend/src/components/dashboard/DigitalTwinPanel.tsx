@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { HealthRing } from './HealthRing';
-import { UserCircleIcon, FireIcon, ActivityIcon, BeakerIcon } from '../icons';
+import { UserCircleIcon, FireIcon, BeakerIcon } from '../icons';
 
 interface DigitalTwinPanelProps {
     calories: number;

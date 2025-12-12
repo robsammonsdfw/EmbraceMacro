@@ -14,7 +14,7 @@ const NavItem: React.FC<{
     icon: React.ReactNode; 
     isActive: boolean; 
     onClick: () => void;
-}> = ({ id, label, icon, isActive, onClick }) => (
+}> = ({ label, icon, isActive, onClick }) => (
     <button
         onClick={onClick}
         className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
