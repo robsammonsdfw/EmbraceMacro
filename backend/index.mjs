@@ -807,8 +807,8 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         const accessToken = data.customerAccessToken.accessToken;
 
         // Get Customer Details (ID) using the new token
-        /** @type {any} */
-        const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
+        // FIX: Cast result to any to avoid "unknown" type error
+        const customerDataResponse = /** @type {any} */ (await callShopifyStorefrontAPI(customerQuery, {}, accessToken));
 
         const customer = customerDataResponse?.customer;
 
