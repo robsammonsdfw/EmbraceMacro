@@ -39,7 +39,8 @@ import {
     getDashboardPulse,
     getCompetitors,
     getSWOTInsights,
-    createSWOTInsight
+    createSWOTInsight,
+    generateInternalSWOTSignals
 } from './services/databaseService.mjs';
 import { Buffer } from 'buffer';
 
@@ -259,7 +260,7 @@ async function handleDashboardRequest(event, headers, method, pathParts) {
             body: JSON.stringify({
                 service: "EmbraceHealth Dashboard API",
                 status: "operational",
-                endpoints: ["/exec-pulse", "/swot", "/competitors"]
+                endpoints: ["/exec-pulse", "/swot", "/competitors", "/signals"]
             })
         };
     }
@@ -296,6 +297,15 @@ async function handleDashboardRequest(event, headers, method, pathParts) {
         }
         const competitors = await getCompetitors();
         return { statusCode: 200, headers, body: JSON.stringify(competitors) };
+    }
+
+    if (subResource === 'signals') {
+        // POST /dashboard/signals/internal
+        if (pathParts[2] === 'internal' && method === 'POST') {
+             const result = await generateInternalSWOTSignals();
+             return { statusCode: 201, headers, body: JSON.stringify(result) };
+        }
+        return { statusCode: 404, headers, body: JSON.stringify({ error: 'Signal type not found' }) };
     }
 
     return { statusCode: 404, headers, body: JSON.stringify({ error: 'Dashboard resource not found.' }) };
@@ -807,9 +817,9 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         const accessToken = data.customerAccessToken.accessToken;
 
         // Get Customer Details (ID) using the new token
-        const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
+        const customerDataResponse = /** @type {any} */ (await callShopifyStorefrontAPI(customerQuery, {}, accessToken));
 
-        const customer = /** @type {any} */ (customerDataResponse)?.customer;
+        const customer = customerDataResponse?.customer;
 
         // Sync User in Postgres (Login Hook)
         // Store the Shopify ID (e.g. "gid://shopify/Customer/123")

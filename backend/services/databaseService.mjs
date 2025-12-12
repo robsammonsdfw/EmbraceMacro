@@ -182,6 +182,69 @@ export const createSWOTInsight = async (regionScope, content) => {
     }
 };
 
+export const generateInternalSWOTSignals = async () => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        
+        // Ensure SWOT table exists
+        await client.query(`CREATE TABLE IF NOT EXISTS swot_insights (id SERIAL PRIMARY KEY, region_scope VARCHAR(50), content TEXT, created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP)`);
+
+        // Metric: DAU (Last 24h)
+        const dauRes = await client.query(`
+            SELECT COUNT(DISTINCT user_id) as count FROM (
+                SELECT user_id FROM meal_log_entries WHERE created_at > NOW() - INTERVAL '24 hours'
+                UNION 
+                SELECT user_id FROM rewards_ledger WHERE created_at > NOW() - INTERVAL '24 hours'
+            ) as u
+        `);
+        const dau = parseInt(dauRes.rows[0].count, 10);
+
+        // Metric: MAU (Last 30d)
+        const mauRes = await client.query(`
+            SELECT COUNT(DISTINCT user_id) as count FROM (
+                SELECT user_id FROM meal_log_entries WHERE created_at > NOW() - INTERVAL '30 days'
+                UNION 
+                SELECT user_id FROM rewards_ledger WHERE created_at > NOW() - INTERVAL '30 days'
+            ) as u
+        `);
+        const mau = parseInt(mauRes.rows[0].count, 10);
+
+        let stickiness = 0;
+        if (mau > 0) {
+            stickiness = (dau / mau) * 100;
+        }
+
+        // Generate Insight based on thresholds
+        let insightContent = null;
+        if (stickiness > 20) {
+            insightContent = `[STRENGTH] High Stickiness: DAU/MAU is ${stickiness.toFixed(1)}%, indicating strong daily habits.`;
+        } else if (mau > 10 && stickiness < 5) {
+             insightContent = `[WEAKNESS] Low Stickiness: DAU/MAU is ${stickiness.toFixed(1)}%. Users are not returning daily.`;
+        }
+        
+        // Save Insight if new (deduplicate by content and time window)
+        if (insightContent) {
+            const exists = await client.query(`SELECT id FROM swot_insights WHERE content = $1 AND created_at > NOW() - INTERVAL '24 hours'`, [insightContent]);
+            if (exists.rows.length === 0) {
+                await client.query(`INSERT INTO swot_insights (region_scope, content) VALUES ('global', $1)`, [insightContent]);
+            }
+        }
+
+        // Log Snapshot to metric_snapshot for historical tracking
+        await logMetricSnapshot('engagement_stickiness', stickiness, { dau, mau });
+
+        await client.query('COMMIT');
+        return { dau, mau, stickiness, insight: insightContent };
+    } catch (e) {
+        await client.query('ROLLBACK');
+        console.error("SWOT Signal Gen Error:", e);
+        throw e;
+    } finally {
+        client.release();
+    }
+};
+
 // =============================================================================
 // --- DATING & CARE LOGIC ---
 // =============================================================================
