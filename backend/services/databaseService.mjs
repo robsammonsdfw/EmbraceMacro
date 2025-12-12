@@ -136,6 +136,34 @@ export const getCompetitors = async () => {
     }
 };
 
+export const createCompetitor = async (name, website, region) => {
+    const client = await pool.connect();
+    try {
+        await ensureDashboardTables(client);
+        await client.query('BEGIN');
+        const res = await client.query(
+            'INSERT INTO competitors (name, website) VALUES ($1, $2) RETURNING id, name, website',
+            [name, website]
+        );
+        const compId = res.rows[0].id;
+        
+        if (region) {
+            await client.query(
+                'INSERT INTO competitor_regions (competitor_id, region, market_share) VALUES ($1, $2, $3)',
+                [compId, region, 0] // Default 0 share
+            );
+        }
+        await client.query('COMMIT');
+        return res.rows[0];
+    } catch (e) {
+        await client.query('ROLLBACK');
+        console.error('Error creating competitor:', e);
+        throw new Error('Could not create competitor.');
+    } finally {
+        client.release();
+    }
+};
+
 export const getSWOTInsights = async (region = null) => {
     const client = await pool.connect();
     try {
@@ -239,6 +267,50 @@ export const generateInternalSWOTSignals = async () => {
     } catch (e) {
         await client.query('ROLLBACK');
         console.error("SWOT Signal Gen Error:", e);
+        throw e;
+    } finally {
+        client.release();
+    }
+};
+
+export const generateExternalSWOTSignals = async () => {
+    const client = await pool.connect();
+    try {
+        await ensureDashboardTables(client);
+        // Ensure SWOT table
+        await client.query(`CREATE TABLE IF NOT EXISTS swot_insights (id SERIAL PRIMARY KEY, region_scope VARCHAR(50), content TEXT, created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP)`);
+
+        const comps = await client.query('SELECT * FROM competitors');
+        const insights = [];
+        
+        for (const comp of comps.rows) {
+            // Mock external data fetch simulation
+            // Generate a random rating between 3.0 and 5.0
+            const rawRating = Math.random() * (5.0 - 3.0) + 3.0;
+            const mockRating = rawRating.toFixed(1); 
+            
+            let insightContent = null;
+            if (rawRating > 4.7) {
+                insightContent = `[THREAT] ${comp.name} is seeing a surge in positive reviews (Rating: ${mockRating}). Market share risk increasing.`;
+            } else if (rawRating < 3.5) {
+                insightContent = `[OPPORTUNITY] ${comp.name} is facing user backlash (Rating: ${mockRating}). Opportunity to capture dissatisfied users.`;
+            }
+            
+            if (insightContent) {
+                // Deduplicate logic
+                const exists = await client.query(`SELECT id FROM swot_insights WHERE content = $1 AND created_at > NOW() - INTERVAL '24 hours'`, [insightContent]);
+                if (exists.rows.length === 0) {
+                    await client.query(`INSERT INTO swot_insights (region_scope, content) VALUES ('global', $1)`, [insightContent]);
+                    insights.push(insightContent);
+                }
+            }
+            
+            // Log metric for the chart
+            await logMetricSnapshot(`competitor_rating_${comp.id}`, mockRating, { name: comp.name });
+        }
+        return { generated: insights.length, insights };
+    } catch (e) {
+        console.error("SWOT External Signal Gen Error:", e);
         throw e;
     } finally {
         client.release();
