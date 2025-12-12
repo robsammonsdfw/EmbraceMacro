@@ -283,6 +283,14 @@ const App: React.FC = () => {
       return <Hub onEnterMeals={() => setAppMode('meals')} onLogout={handleLogout} />;
   }
 
+  if (isDataLoading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50">
+            <Loader message="Loading your data..." />
+        </div>
+      );
+  }
+
   // Calculate Daily Stats for Dashboard
   const today = new Date().toDateString();
   const dailyStats = mealLog
