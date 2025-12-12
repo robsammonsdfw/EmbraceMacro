@@ -39,10 +39,7 @@ import {
     getDashboardPulse,
     getCompetitors,
     getSWOTInsights,
-    createSWOTInsight,
-    generateInternalSWOTSignals,
-    generateExternalSWOTSignals,
-    createCompetitor
+    createSWOTInsight
 } from './services/databaseService.mjs';
 import { Buffer } from 'buffer';
 
@@ -202,11 +199,6 @@ export const handler = async (event) => {
             return await handleDashboardRequest(event, headers, method, pathParts);
         }
 
-        // --- NEW ADMIN ROUTE ---
-        if (resource === 'admin') {
-            return await handleAdminRequest(event, headers, method, pathParts);
-        }
-
         // --- NEW RESOURCE FOR BODY SCANS ---
         if (resource === 'body-scans') {
             return await handleBodyScansRequest(event, headers, method, pathParts);
@@ -267,7 +259,7 @@ async function handleDashboardRequest(event, headers, method, pathParts) {
             body: JSON.stringify({
                 service: "EmbraceHealth Dashboard API",
                 status: "operational",
-                endpoints: ["/exec-pulse", "/swot", "/competitors", "/signals"]
+                endpoints: ["/exec-pulse", "/swot", "/competitors"]
             })
         };
     }
@@ -306,42 +298,7 @@ async function handleDashboardRequest(event, headers, method, pathParts) {
         return { statusCode: 200, headers, body: JSON.stringify(competitors) };
     }
 
-    if (subResource === 'signals') {
-        // POST /dashboard/signals/internal
-        if (pathParts[2] === 'internal' && method === 'POST') {
-             const result = await generateInternalSWOTSignals();
-             return { statusCode: 201, headers, body: JSON.stringify(result) };
-        }
-        // POST /dashboard/signals/external (New)
-        if (pathParts[2] === 'external' && method === 'POST') {
-             const result = await generateExternalSWOTSignals();
-             return { statusCode: 201, headers, body: JSON.stringify(result) };
-        }
-        return { statusCode: 404, headers, body: JSON.stringify({ error: 'Signal type not found' }) };
-    }
-
     return { statusCode: 404, headers, body: JSON.stringify({ error: 'Dashboard resource not found.' }) };
-}
-
-// --- HANDLER FOR ADMIN (NEW) ---
-async function handleAdminRequest(event, headers, method, pathParts) {
-    // /admin/competitors
-    if (pathParts[1] === 'competitors') {
-        if (method === 'POST') {
-            const body = JSON.parse(event.body);
-            if (!body.name) {
-                return { statusCode: 400, headers, body: JSON.stringify({ error: 'Name is required' }) };
-            }
-            try {
-                const newComp = await createCompetitor(body.name, body.website, body.region);
-                return { statusCode: 201, headers, body: JSON.stringify(newComp) };
-            } catch (e) {
-                // Return 500 but log error (safe)
-                return { statusCode: 500, headers, body: JSON.stringify({ error: e.message }) };
-            }
-        }
-    }
-    return { statusCode: 404, headers, body: JSON.stringify({ error: 'Admin resource not found' }) };
 }
 
 // --- HANDLER FOR BODY SCANS ---
@@ -851,7 +808,7 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
 
         // Get Customer Details (ID) using the new token
         const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
-        // Cast to any to avoid TS error if inferred as unknown
+
         const customer = /** @type {any} */ (customerDataResponse)?.customer;
 
         // Sync User in Postgres (Login Hook)

@@ -22,7 +22,14 @@ import { RewardsDashboard } from './components/RewardsDashboard';
 import { Hub } from './components/Hub';
 import { CaptureFlow } from './components/CaptureFlow';
 
-type ActiveView = 'home' | 'plan' | 'meals' | 'history' | 'suggestions' | 'grocery' | 'rewards';
+// --- NEW IMPORTS FOR SPRINT 6 ---
+import { AppLayout } from './components/layout/AppLayout';
+import { CommandCenter } from './components/dashboard/CommandCenter';
+import { OrdersCard } from './components/dashboard/OrdersCard';
+import { LabsCard } from './components/dashboard/LabsCard';
+// ---------------------------------
+
+type ActiveView = 'home' | 'plan' | 'meals' | 'history' | 'suggestions' | 'grocery' | 'rewards' | 'body' | 'labs' | 'orders';
 type MealDataType = NutritionInfo | SavedMeal | MealLogEntry;
 type AppMode = 'hub' | 'meals';
 
@@ -42,6 +49,7 @@ const App: React.FC = () => {
   const [activePlanId, setActivePlanId] = useState<number | null>(null);
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
   const [mealLog, setMealLog] = useState<MealLogEntry[]>([]);
+  const [rewardsBalance, setRewardsBalance] = useState<number>(0);
   
   // UI/Process State
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -62,16 +70,27 @@ const App: React.FC = () => {
     return mealPlans.find(p => p.id === activePlanId) || null;
   }, [mealPlans, activePlanId]);
 
+  // Calculate Daily Stats for Dashboard
+  const dailyStats = useMemo(() => {
+    const today = new Date().toDateString();
+    return mealLog
+        .filter(entry => new Date(entry.createdAt).toDateString() === today)
+        .reduce((acc, curr) => ({
+            calories: acc.calories + curr.totalCalories,
+            protein: acc.protein + curr.totalProtein
+        }), { calories: 0, protein: 0 });
+  }, [mealLog]);
+
   useEffect(() => {
     if (isAuthenticated) {
       const loadInitialData = async () => {
         try {
-          // Keep data loading in background if we are at the hub, or load it immediately.
           setIsDataLoading(true);
-          const [plans, meals, log] = await Promise.all([
+          const [plans, meals, log, rewards] = await Promise.all([
             apiService.getMealPlans(),
             apiService.getSavedMeals(),
             apiService.getMealLog(),
+            apiService.getRewardsSummary()
           ]);
           setMealPlans(plans);
           if (plans.length > 0 && !activePlanId) {
@@ -79,6 +98,7 @@ const App: React.FC = () => {
           }
           setSavedMeals(meals);
           setMealLog(log);
+          setRewardsBalance(rewards.points_total);
         } catch (err) {
           setError("Could not load your data. Please try refreshing the page.");
         } finally {
@@ -97,6 +117,10 @@ const App: React.FC = () => {
   };
 
   const handleNavigation = (view: string) => {
+    if (view === 'hub') {
+        setAppMode('hub');
+        return;
+    }
     resetAnalysisState();
     setActiveView(view as ActiveView);
   };
@@ -149,10 +173,8 @@ const App: React.FC = () => {
   const handleRepeatMeal = useCallback((meal: MealLogEntry) => {
       setIsCaptureOpen(false);
       resetAnalysisState();
-      // Directly hydrate the nutrition card with the previous meal data
       setNutritionData({
           ...meal,
-          // Use generic image if original is gone, or keep it if possible (though complex with types)
           imageUrl: meal.imageUrl 
       });
   }, []);
@@ -327,14 +349,12 @@ const App: React.FC = () => {
 
       switch(activeView) {
         case 'home': return (
-            <HomeDashboard 
-              onCameraClick={() => setIsCaptureOpen(true)}
-              onUploadClick={() => setIsCaptureOpen(true)}
-              onBarcodeClick={() => setIsCaptureOpen(true)}
-              onPantryChefClick={() => setIsCaptureOpen(true)}
-              onGetRecipeClick={() => setIsCaptureOpen(true)}
-              mealLog={mealLog}
-              userName={user?.firstName || 'User'}
+            <CommandCenter 
+                dailyCalories={dailyStats.calories}
+                dailyProtein={dailyStats.protein}
+                rewardsBalance={rewardsBalance}
+                userName={user?.firstName || 'User'}
+                onScanClick={handleBodyScanClick}
             />
         );
         case 'plan': return (
@@ -357,29 +377,52 @@ const App: React.FC = () => {
                                   />;
         case 'grocery': return <GroceryList mealPlans={mealPlans} />;
         case 'rewards': return <RewardsDashboard />;
+        case 'orders': return (
+            <div className="space-y-6">
+                <h2 className="text-2xl font-bold text-slate-800">Your Orders</h2>
+                <OrdersCard />
+            </div>
+        );
+        case 'labs': return (
+            <div className="space-y-6">
+                <h2 className="text-2xl font-bold text-slate-800">Your Lab Results</h2>
+                <LabsCard />
+            </div>
+        );
+        case 'body': return (
+            <div className="space-y-6">
+                 <h2 className="text-2xl font-bold text-slate-800">My Body</h2>
+                 {/* Placeholder for Body view using the Dashboard panel for now */}
+                 <CommandCenter 
+                    dailyCalories={dailyStats.calories}
+                    dailyProtein={dailyStats.protein}
+                    rewardsBalance={rewardsBalance}
+                    userName={user?.firstName || 'User'}
+                    onScanClick={handleBodyScanClick}
+                />
+            </div>
+        );
         default: return (
-             <HomeDashboard 
-              onCameraClick={() => setIsCaptureOpen(true)}
-              onUploadClick={() => setIsCaptureOpen(true)}
-              onBarcodeClick={() => setIsCaptureOpen(true)}
-              onPantryChefClick={() => setIsCaptureOpen(true)}
-              onGetRecipeClick={() => setIsCaptureOpen(true)}
-              mealLog={mealLog}
-              userName={user?.firstName || 'User'}
+            <CommandCenter 
+                dailyCalories={dailyStats.calories}
+                dailyProtein={dailyStats.protein}
+                rewardsBalance={rewardsBalance}
+                userName={user?.firstName || 'User'}
+                onScanClick={handleBodyScanClick}
             />
         );
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-800">
-      <Navbar 
-        activeView={activeView} 
-        onNavigate={handleNavigation} 
-        onLogout={handleLogout} 
-        onBackToHub={() => setAppMode('hub')}
-        onCaptureClick={() => setIsCaptureOpen(true)}
-      />
+    <div className="font-sans text-slate-800">
+      {/* 
+         Use the AppLayout (Sidebar + Right Rail) wrapper. 
+         We pass the content as children.
+         The Mobile Bottom Navbar is still rendered inside the main layout content or can be managed separately.
+         In this implementation, AppLayout handles Desktop Sidebar. 
+         The existing Navbar component handles Mobile Bottom Nav.
+      */}
       
       {isCaptureOpen && (
           <CaptureFlow 
@@ -398,13 +441,34 @@ const App: React.FC = () => {
             onClose={() => setIsAddToPlanModalOpen(false)}
         />
       )}
+
+      {/* SPRINT 6: WRAP IN APP SHELL */}
+      <AppLayout
+          activeView={activeView}
+          onNavigate={handleNavigation}
+          onLogout={handleLogout}
+          rightPanel={
+              <div className="space-y-6">
+                  <OrdersCard />
+                  <LabsCard />
+              </div>
+          }
+      >
+          {/* Main Content Render */}
+          {renderContent()}
+
+          {/* Mobile Bottom Nav (Visible only on small screens via CSS in Navbar) */}
+          <div className="md:hidden">
+            <Navbar 
+                activeView={activeView} 
+                onNavigate={handleNavigation} 
+                onLogout={handleLogout} 
+                onBackToHub={() => setAppMode('hub')}
+                onCaptureClick={() => setIsCaptureOpen(true)}
+            />
+          </div>
+      </AppLayout>
       
-      {/* Added extra bottom padding (pb-40) to main container to ensure content is visible above mobile nav */}
-      <main className="max-w-7xl mx-auto p-4 md:p-6 lg:p-8 pb-40 md:pb-8">
-        <div className="space-y-8">
-            {renderContent()}
-        </div>
-      </main>
     </div>
   );
 };
