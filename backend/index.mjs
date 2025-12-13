@@ -1,5 +1,3 @@
-
-
 import { GoogleGenAI } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import https from 'https';
@@ -271,8 +269,7 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         const expiresAt = data.customerAccessToken.expiresAt;
 
         // Get Customer Details
-        /** @type {any} */
-        const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, { token: accessToken });
+        const customerDataResponse = /** @type {any} */ (await callShopifyStorefrontAPI(customerQuery, { token: accessToken }));
         const customer = customerDataResponse?.customer;
 
         if (!customer) throw new Error("Could not retrieve customer details from Shopify.");

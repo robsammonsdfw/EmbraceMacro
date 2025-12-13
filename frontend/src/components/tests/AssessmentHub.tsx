@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import type { Assessment } from '../../types';
 import * as apiService from '../../services/apiService';
 import { TestRunner } from './TestRunner';
-import { ClipboardCheckIcon, TrophyIcon } from '../icons';
+import { ClipboardCheckIcon } from '../icons';
 
 export const AssessmentHub: React.FC = () => {
     const [assessments, setAssessments] = useState<Assessment[]>([]);

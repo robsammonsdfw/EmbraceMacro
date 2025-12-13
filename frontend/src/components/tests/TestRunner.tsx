@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import type { Assessment, Question } from '../../types';
+import type { Assessment } from '../../types';
 import { XIcon } from '../icons';
 
 interface TestRunnerProps {
