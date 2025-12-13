@@ -245,7 +245,7 @@ async function handleCustomerLogin(event, headers, jwtSecret) {
             `;
             const variables = { input: { email, password } };
             try {
-                const shopifyData = /** @type {any} */ (await callShopifyStorefrontAPI(mutation, variables));
+                const shopifyData = await callShopifyStorefrontAPI(mutation, variables);
                 const { customerAccessToken, customerUserErrors } = shopifyData.customerAccessTokenCreate;
                 if (customerUserErrors && customerUserErrors.length > 0) {
                     throw new Error(customerUserErrors[0].message);
@@ -528,6 +528,9 @@ async function handleBodyScansRequest(event, headers, method, pathParts) {
     return { statusCode: 200, headers, body: JSON.stringify([]) }; 
 }
 
+/**
+ * @returns {Promise<any>}
+ */
 function callShopifyStorefrontAPI(query, variables) {
     const { SHOPIFY_STORE_DOMAIN, SHOPIFY_STOREFRONT_TOKEN } = process.env;
     const postData = JSON.stringify({ query, variables });

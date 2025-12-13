@@ -112,6 +112,38 @@ export const getUserShopifyToken = async (userId) => {
 };
 
 const ensureTables = async (client) => {
+    // Core Tables (Meals)
+    await client.query(`
+        CREATE TABLE IF NOT EXISTS saved_meals (
+            id SERIAL PRIMARY KEY,
+            user_id INT REFERENCES users(id),
+            meal_data JSONB,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS meal_plans (
+            id SERIAL PRIMARY KEY,
+            user_id INT REFERENCES users(id),
+            name VARCHAR(255) NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, name)
+        );
+        CREATE TABLE IF NOT EXISTS meal_plan_items (
+            id SERIAL PRIMARY KEY,
+            user_id INT REFERENCES users(id),
+            meal_plan_id INT REFERENCES meal_plans(id) ON DELETE CASCADE,
+            saved_meal_id INT REFERENCES saved_meals(id) ON DELETE CASCADE,
+            metadata JSONB DEFAULT '{}',
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS meal_log_entries (
+            id SERIAL PRIMARY KEY,
+            user_id INT REFERENCES users(id),
+            meal_data JSONB,
+            image_base64 TEXT,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+    `);
+
     // Rewards
     await client.query(`
         CREATE TABLE IF NOT EXISTS rewards_balances (
@@ -163,7 +195,7 @@ const ensureTables = async (client) => {
             DO $$ 
             DECLARE r RECORD;
             BEGIN 
-                -- Drop named unique constraints
+                -- Drop named unique constraints on meal_plan_items if they exist
                 FOR r IN (
                     SELECT conname 
                     FROM pg_constraint 
@@ -172,7 +204,7 @@ const ensureTables = async (client) => {
                     EXECUTE 'ALTER TABLE meal_plan_items DROP CONSTRAINT ' || quote_ident(r.conname); 
                 END LOOP;
 
-                -- Drop unique indexes (sometimes created without a constraint wrapper)
+                -- Drop unique indexes on meal_plan_items
                 FOR r IN (
                     SELECT indexname 
                     FROM pg_indexes 
@@ -535,13 +567,41 @@ export const addMealToPlanItem = async (userId, planId, savedMealId, metadata = 
             throw new Error("Authorization error: Cannot add meal to a plan you don't own, or meal/plan does not exist.");
         }
 
-        // NO DUPLICATE CHECK: We explicitly allow multiple of the same meal in a plan.
-        const insertQuery = `
-            INSERT INTO meal_plan_items (user_id, meal_plan_id, saved_meal_id, metadata)
-            VALUES ($1, $2, $3, $4)
-            RETURNING id;
-        `;
-        const insertRes = await client.query(insertQuery, [userId, planId, savedMealId, metadata]);
+        const runInsert = async () => {
+             const insertQuery = `
+                INSERT INTO meal_plan_items (user_id, meal_plan_id, saved_meal_id, metadata)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id;
+            `;
+            return await client.query(insertQuery, [userId, planId, savedMealId, metadata]);
+        };
+
+        let insertRes;
+        try {
+            insertRes = await runInsert();
+        } catch (err) {
+            // Check for specific unique constraint violation on meal_plan_items (Postgres Code 23505)
+            // If the old constraint exists, we drop it here dynamically to fix the issue for the user.
+            if (err.code === '23505') {
+                console.warn("Detected legacy unique constraint on meal_plan_items. Removing to allow duplicates...");
+                await client.query(`
+                    DO $$ 
+                    BEGIN 
+                        -- Attempt to drop the likely named constraint
+                        ALTER TABLE meal_plan_items DROP CONSTRAINT IF EXISTS meal_plan_items_meal_plan_id_saved_meal_id_key;
+                        -- Attempt to drop unique index if unrelated to constraint
+                        DROP INDEX IF EXISTS meal_plan_items_meal_plan_id_saved_meal_id_key;
+                    EXCEPTION 
+                        WHEN OTHERS THEN NULL; -- Ignore errors if constraint doesn't exist or other issues
+                    END $$;
+                `);
+                // Retry insertion
+                insertRes = await runInsert();
+            } else {
+                throw err;
+            }
+        }
+
         const newItemId = insertRes.rows[0].id;
 
         // Fetch the full data for the new item to return to client
@@ -578,10 +638,20 @@ export const addMealAndLinkToPlan = async (userId, mealData, planId, metadata = 
     try {
         await client.query('BEGIN');
         const newMeal = await saveMeal(userId, mealData);
-        // Add item without duplicate restriction
-        const newPlanItem = await addMealToPlanItem(userId, planId, newMeal.id, metadata);
+        // Add item with duplicate handling logic from above
+        // Note: calling addMealToPlanItem directly here would create a new client connection pool, 
+        // so we inline the logic or rely on the fact that if saveMeal succeeds, the constraint issue is handled in the next call.
+        // However, we are inside a transaction here. Calling the exported function uses a different client/transaction.
+        // For simplicity and correctness with the constraint fix, we will commit the meal save first, then call the function.
+        
+        // Actually, to use the same transaction we would need to pass the client. 
+        // Given the constraint fix requires DDL (ALTER TABLE) which can't run in a transaction block in some contexts or locks the table,
+        // it's safer to commit the saveMeal first.
         await client.query('COMMIT');
-        return newPlanItem;
+        
+        // Now link it (this will handle the constraint fix if needed)
+        return await addMealToPlanItem(userId, planId, newMeal.id, metadata);
+
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Database transaction error in addMealAndLinkToPlan:', err);
@@ -1055,6 +1125,7 @@ export const findMatches = async (userId, type) => {
 
         // 1. Get current user's blueprint
         const bpRes = await client.query('SELECT preferences FROM partner_blueprints WHERE user_id = $1', [userId]);
+        /** @type {any} */
         const preferences = bpRes.rows[0]?.preferences || {};
 
         // 2. Get other users' traits
@@ -1066,6 +1137,7 @@ export const findMatches = async (userId, type) => {
         `, [userId]);
 
         // 3. Match Logic (In-Memory for demo simplicity)
+        /** @type {Record<string, any>} */
         const userTraitsMap = {};
         traitsRes.rows.forEach(row => {
             if (!userTraitsMap[row.user_id]) {
@@ -1075,8 +1147,6 @@ export const findMatches = async (userId, type) => {
         });
 
         const matches = Object.values(userTraitsMap).map((candidate) => {
-            const c = /** @type {any} */ (candidate);
-
             let totalDiff = 0;
             let traitCount = 0;
 
@@ -1084,19 +1154,19 @@ export const findMatches = async (userId, type) => {
             for (const [key, value] of Object.entries(preferences)) {
                 const pref = /** @type {any} */ (value);
 
-                if (c.traits && c.traits[key] !== undefined) {
+                if (candidate.traits && candidate.traits[key] !== undefined) {
                     const target = typeof pref.target === 'number' ? pref.target : 0;
-                    const diff = Math.abs(c.traits[key] - target);
+                    const diff = Math.abs(candidate.traits[key] - target);
                     totalDiff += diff * (pref.importance || 1);
                     traitCount++;
                 }
             }
 
-            if (traitCount === 0) return { ...c, compatibilityScore: 50 }; // Default neutral
+            if (traitCount === 0) return { ...candidate, compatibilityScore: 50 }; // Default neutral
 
             const avgDiff = totalDiff / traitCount;
             const score = Math.max(0, Math.min(100, (1 - avgDiff) * 100));
-            return { ...c, compatibilityScore: Math.round(score) };
+            return { ...candidate, compatibilityScore: Math.round(score) };
         });
 
         // Sort by score
