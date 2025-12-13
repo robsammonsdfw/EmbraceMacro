@@ -62,10 +62,8 @@ export const findOrCreateUserByEmail = async (email, shopifyId = null) => {
             throw new Error("Failed to find or create user after insert operation.");
         }
         
-        // Ensure rewards tables exist
-        await ensureRewardsTables(client);
-        // Ensure assessment tables exist (Sprint 7)
-        await ensureAssessmentTables(client);
+        // Ensure tables exist
+        await ensureTables(client);
         
         // Ensure rewards balance entry exists for this user
         await client.query(`
@@ -113,7 +111,8 @@ export const getUserShopifyToken = async (userId) => {
     }
 };
 
-const ensureRewardsTables = async (client) => {
+const ensureTables = async (client) => {
+    // Rewards
     await client.query(`
         CREATE TABLE IF NOT EXISTS rewards_balances (
             user_id INT PRIMARY KEY,
@@ -131,11 +130,8 @@ const ensureRewardsTables = async (client) => {
             metadata JSONB DEFAULT '{}'
         );
     `);
-};
 
-// --- Sprint 7: Assessment & Matching Schema ---
-
-const ensureAssessmentTables = async (client) => {
+    // Assessments
     await client.query(`
         CREATE TABLE IF NOT EXISTS user_traits (
             user_id INT REFERENCES users(id),
@@ -159,6 +155,25 @@ const ensureAssessmentTables = async (client) => {
             created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         );
     `);
+
+    // Migration: Relax constraints on meal_plan_items to allow duplicates if desired
+    try {
+        await client.query(`
+            DO $$ 
+            BEGIN 
+                -- Drop the unique constraint if it exists (standard naming convention)
+                IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'meal_plan_items_meal_plan_id_saved_meal_id_key') THEN 
+                    ALTER TABLE meal_plan_items DROP CONSTRAINT meal_plan_items_meal_plan_id_saved_meal_id_key; 
+                END IF;
+                -- Also check for unique index
+                IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'meal_plan_items_meal_plan_id_saved_meal_id_key') THEN
+                    DROP INDEX meal_plan_items_meal_plan_id_saved_meal_id_key;
+                END IF;
+            END $$;
+        `);
+    } catch (e) {
+        console.warn("Soft migration for meal_plan_items failed (safe to ignore if constraint doesnt exist):", e.message);
+    }
 };
 
 // --- Rewards Logic ---
@@ -495,10 +510,10 @@ export const deleteMealPlan = async (userId, planId) => {
 };
 
 
-export const addMealToPlanItem = async (userId, planId, savedMealId, metadata = {}) => {
+export const addMealToPlanItem = async (userId, planId, savedMealId, metadata = {}, force = false) => {
     const client = await pool.connect();
     try {
-        // Verify the user owns the plan and the meal before inserting
+        // Verify ownership
         const checkQuery = `
            SELECT (SELECT user_id FROM meal_plans WHERE id = $1) = $3 AS owns_plan,
                   (SELECT user_id FROM saved_meals WHERE id = $2) = $3 AS owns_meal;
@@ -506,6 +521,22 @@ export const addMealToPlanItem = async (userId, planId, savedMealId, metadata = 
         const checkRes = await client.query(checkQuery, [planId, savedMealId, userId]);
         if (!checkRes.rows[0] || !checkRes.rows[0].owns_plan || !checkRes.rows[0].owns_meal) {
             throw new Error("Authorization error: Cannot add meal to a plan you don't own, or meal/plan does not exist.");
+        }
+
+        // DUPLICATE CHECK logic (since we dropped the strict constraint, we check manually)
+        // If force is false, we check for duplicates.
+        if (!force) {
+            const dupeCheck = await client.query(
+                `SELECT id FROM meal_plan_items WHERE meal_plan_id = $1 AND saved_meal_id = $2`, 
+                [planId, savedMealId]
+            );
+            if (dupeCheck.rows.length > 0) {
+                // Throw a custom error object that the handler can interpret as 409
+                const error = new Error('This meal is already in the selected plan.');
+                // @ts-ignore
+                error.status = 409; 
+                throw error;
+            }
         }
 
         const insertQuery = `
@@ -537,12 +568,14 @@ export const addMealToPlanItem = async (userId, planId, savedMealId, metadata = 
         };
 
     } catch (err) {
-        if (err.code === '23505') { 
-            console.warn(`Meal ${savedMealId} is already in plan ${planId}.`);
-            throw new Error('This meal is already in the selected plan.');
+        if (err.status === 409 || err.code === '23505') { 
+            const error = new Error('This meal is already in the selected plan.');
+            // @ts-ignore
+            error.status = 409;
+            throw error;
         }
         console.error('Database error in addMealToPlanItem:', err);
-        throw new Error('Could not add meal to plan.');
+        throw err;
     } finally {
         client.release();
     }
@@ -554,7 +587,8 @@ export const addMealAndLinkToPlan = async (userId, mealData, planId, metadata = 
     try {
         await client.query('BEGIN');
         const newMeal = await saveMeal(userId, mealData);
-        const newPlanItem = await addMealToPlanItem(userId, planId, newMeal.id, metadata);
+        // Force is true for new meals because they are by definition unique ID at this point
+        const newPlanItem = await addMealToPlanItem(userId, planId, newMeal.id, metadata, true);
         await client.query('COMMIT');
         return newPlanItem;
     } catch (err) {
@@ -946,7 +980,7 @@ export const getAssessments = async () => {
 export const submitAssessment = async (userId, assessmentId, responses) => {
     const client = await pool.connect();
     try {
-        await ensureAssessmentTables(client); // Ensure tables exist on submit
+        await ensureTables(client); 
 
         // Save raw responses
         const saveResponseQuery = `
@@ -996,7 +1030,7 @@ export const submitAssessment = async (userId, assessmentId, responses) => {
 export const getPartnerBlueprint = async (userId) => {
     const client = await pool.connect();
     try {
-        await ensureAssessmentTables(client); // Ensure tables
+        await ensureTables(client); 
         const res = await client.query('SELECT preferences FROM partner_blueprints WHERE user_id = $1', [userId]);
         if (res.rows.length === 0) return { preferences: {} };
         return { preferences: res.rows[0].preferences };
@@ -1008,7 +1042,7 @@ export const getPartnerBlueprint = async (userId) => {
 export const savePartnerBlueprint = async (userId, preferences) => {
     const client = await pool.connect();
     try {
-        await ensureAssessmentTables(client); // Ensure tables
+        await ensureTables(client); 
         const query = `
             INSERT INTO partner_blueprints (user_id, preferences)
             VALUES ($1, $2)
@@ -1026,14 +1060,13 @@ export const savePartnerBlueprint = async (userId, preferences) => {
 export const findMatches = async (userId, type) => {
     const client = await pool.connect();
     try {
-        await ensureAssessmentTables(client); // Ensure tables
+        await ensureTables(client); 
 
         // 1. Get current user's blueprint
         const bpRes = await client.query('SELECT preferences FROM partner_blueprints WHERE user_id = $1', [userId]);
         const preferences = bpRes.rows[0]?.preferences || {};
 
         // 2. Get other users' traits
-        // Note: For a real app, we'd filter strictly. For this demo, we fetch all users with traits.
         const traitsRes = await client.query(`
             SELECT t.user_id, u.email, t.trait_key, t.value 
             FROM user_traits t
@@ -1042,7 +1075,6 @@ export const findMatches = async (userId, type) => {
         `, [userId]);
 
         // 3. Match Logic (In-Memory for demo simplicity)
-        /** @type {Record<number, {userId: number, email: string, traits: Record<string, number>, score: number}>} */
         const userTraitsMap = {};
         traitsRes.rows.forEach(row => {
             if (!userTraitsMap[row.user_id]) {
@@ -1051,33 +1083,27 @@ export const findMatches = async (userId, type) => {
             userTraitsMap[row.user_id].traits[row.trait_key] = row.value;
         });
 
-        const matches = Object.values(userTraitsMap).map((entry) => {
-            /** @type {{userId: number, email: string, traits: Record<string, number>, score: number}} */
-            const candidate = entry;
+        const matches = Object.values(userTraitsMap).map((candidate) => {
             let totalDiff = 0;
             let traitCount = 0;
 
             // Loop through preferences
             for (const [key, pref] of Object.entries(preferences)) {
-                // @ts-ignore
                 if (candidate.traits[key] !== undefined) {
-                    // @ts-ignore
                     const diff = Math.abs(candidate.traits[key] - pref.target);
-                    // @ts-ignore
                     totalDiff += diff * (pref.importance || 1);
                     traitCount++;
                 }
             }
 
-            if (traitCount === 0) return { .../** @type {any} */(candidate), compatibilityScore: 50 }; // Default neutral
+            if (traitCount === 0) return { ...candidate, compatibilityScore: 50 }; // Default neutral
 
             const avgDiff = totalDiff / traitCount;
             const score = Math.max(0, Math.min(100, (1 - avgDiff) * 100));
-            return { .../** @type {any} */(candidate), compatibilityScore: Math.round(score) };
+            return { ...candidate, compatibilityScore: Math.round(score) };
         });
 
         // Sort by score
-        // @ts-ignore
         return matches.sort((a, b) => b.compatibilityScore - a.compatibilityScore);
 
     } finally {

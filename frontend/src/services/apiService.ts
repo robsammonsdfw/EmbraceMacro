@@ -35,12 +35,16 @@ const callApi = async (endpoint: string, method: string, body?: any) => {
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'API request failed with non-JSON response' }));
         console.error(`API error from ${method} ${endpoint}:`, errorData);
-        throw new Error(errorData.error || `API request failed with status: ${response.status}`);
+        // Add status to error object for frontend handling
+        const error = new Error(errorData.details || errorData.error || `API request failed with status: ${response.status}`);
+        // @ts-ignore
+        error.status = response.status;
+        throw error;
     }
     return response.status === 204 ? null : response.json();
 };
 
-// --- AI & Analysis Endpoints ---
+// ... [Existing schema definitions remain unchanged] ...
 
 const nutritionSchemaProperties = {
     mealName: { 
@@ -229,8 +233,8 @@ export const deleteMealPlan = (planId: number): Promise<null> => {
     return callApi(`/meal-plans/${planId}`, 'DELETE');
 };
 
-export const addMealToPlan = (planId: number, savedMealId: number, metadata?: MealPlanItemMetadata): Promise<MealPlanItem> => {
-    return callApi(`/meal-plans/${planId}/items`, 'POST', { savedMealId, metadata });
+export const addMealToPlan = (planId: number, savedMealId: number, metadata?: MealPlanItemMetadata, force = false): Promise<MealPlanItem> => {
+    return callApi(`/meal-plans/${planId}/items`, 'POST', { savedMealId, metadata, force });
 };
 
 export const addMealFromHistoryToPlan = (planId: number, mealData: NutritionInfo, metadata?: MealPlanItemMetadata): Promise<MealPlanItem> => {
