@@ -1,3 +1,5 @@
+
+
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import * as apiService from './services/apiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
@@ -262,8 +264,25 @@ const App: React.FC = () => {
         if (newItem) {
             setMealPlans(plans => plans.map(p => p.id === planId ? { ...p, items: [...p.items, newItem] } : p));
         }
+        
+        // Handle adding to grocery list if requested
         if (metadata.addToGrocery) {
-             await apiService.addGroceryItem(activePlanId || 0, mealToAdd.mealName); 
+            // First, fetch lists to find active one or create one
+            const lists = await apiService.getGroceryLists();
+            let activeListId = lists.find(l => l.is_active)?.id;
+            
+            if (!activeListId) {
+                if (lists.length > 0) activeListId = lists[0].id;
+                else {
+                    const newList = await apiService.createGroceryList("My Grocery List");
+                    activeListId = newList.id;
+                    await apiService.setActiveGroceryList(newList.id);
+                }
+            }
+
+            if (activeListId) {
+                await apiService.addGroceryItem(activeListId, mealToAdd.mealName); 
+            }
         }
     } catch(err: any) {
         setError("Failed to add meal to plan.");

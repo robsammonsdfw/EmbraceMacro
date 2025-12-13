@@ -1,7 +1,9 @@
+
+
 import React, { useState, useEffect } from 'react';
 import type { GroceryItem, GroceryList as GroceryListType, MealPlan } from '../types';
 import * as apiService from '../services/apiService';
-import { ClipboardListIcon, TrashIcon, PlusIcon, StarIcon } from './icons';
+import { ClipboardListIcon, TrashIcon, PlusIcon, StarIcon, BeakerIcon } from './icons';
 
 interface GroceryListProps {
   mealPlans: MealPlan[];
@@ -16,7 +18,11 @@ export const GroceryList: React.FC<GroceryListProps> = ({ mealPlans }) => {
   // Creation States
   const [isCreating, setIsCreating] = useState(false);
   const [newListName, setNewListName] = useState('');
-  const [selectedPlansForGen, setSelectedPlansForGen] = useState<Set<number>>(new Set());
+  
+  // Import States
+  const [isImporting, setIsImporting] = useState(false);
+  const [selectedPlansForImport, setSelectedPlansForImport] = useState<Set<number>>(new Set());
+
   const [newItemName, setNewItemName] = useState('');
 
   // Initial Load
@@ -66,12 +72,7 @@ export const GroceryList: React.FC<GroceryListProps> = ({ mealPlans }) => {
       if (!newListName.trim()) return;
       
       try {
-          let newList: GroceryListType;
-          if (selectedPlansForGen.size > 0) {
-              newList = await apiService.generateGroceryList(Array.from(selectedPlansForGen), newListName);
-          } else {
-              newList = await apiService.createGroceryList(newListName);
-          }
+          const newList = await apiService.createGroceryList(newListName);
           
           // Refresh lists
           const updatedLists = await apiService.getGroceryLists();
@@ -81,9 +82,23 @@ export const GroceryList: React.FC<GroceryListProps> = ({ mealPlans }) => {
           // Reset UI
           setIsCreating(false);
           setNewListName('');
-          setSelectedPlansForGen(new Set());
       } catch (err) {
           alert("Failed to create list.");
+      }
+  };
+
+  const handleImportIngredients = async () => {
+      if (!activeListId || selectedPlansForImport.size === 0) return;
+
+      try {
+          // New API call to merge ingredients
+          const updatedItems = await apiService.importIngredientsFromPlans(activeListId, Array.from(selectedPlansForImport));
+          setCurrentItems(updatedItems);
+          
+          setIsImporting(false);
+          setSelectedPlansForImport(new Set());
+      } catch (err) {
+          alert("Failed to import ingredients.");
       }
   };
 
@@ -176,31 +191,6 @@ export const GroceryList: React.FC<GroceryListProps> = ({ mealPlans }) => {
                     value={newListName}
                     onChange={e => setNewListName(e.target.value)}
                   />
-                  
-                  {mealPlans.length > 0 && (
-                    <div className="mb-3">
-                        <p className="text-xs font-semibold text-slate-500 mb-2 uppercase">Import Plans (Optional)</p>
-                        <div className="max-h-32 overflow-y-auto space-y-1">
-                            {mealPlans.map(plan => (
-                                <label key={plan.id} className="flex items-center space-x-2 text-sm text-slate-700 cursor-pointer">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={selectedPlansForGen.has(plan.id)}
-                                        onChange={(e) => {
-                                            const newSet = new Set(selectedPlansForGen);
-                                            if (e.target.checked) newSet.add(plan.id);
-                                            else newSet.delete(plan.id);
-                                            setSelectedPlansForGen(newSet);
-                                        }}
-                                        className="text-emerald-500 rounded focus:ring-emerald-500"
-                                    />
-                                    <span>{plan.name}</span>
-                                </label>
-                            ))}
-                        </div>
-                    </div>
-                  )}
-
                   <div className="flex gap-2">
                       <button 
                         onClick={handleCreateList} 
@@ -268,7 +258,50 @@ export const GroceryList: React.FC<GroceryListProps> = ({ mealPlans }) => {
                               {currentList.is_active ? 'Currently Active List' : 'Inactive List'} • {currentItems.length} Items
                           </p>
                       </div>
+                      <button 
+                        onClick={() => setIsImporting(!isImporting)}
+                        className="text-emerald-600 text-sm font-bold flex items-center gap-1 hover:bg-emerald-50 px-3 py-1 rounded-lg transition"
+                      >
+                         <BeakerIcon /> <span>Import from Plan</span>
+                      </button>
                   </div>
+
+                  {/* Import Modal Area (Inline) */}
+                  {isImporting && (
+                      <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200 animate-fade-in relative">
+                          <button onClick={() => setIsImporting(false)} className="absolute top-2 right-2 text-slate-400 hover:text-slate-600">&times;</button>
+                          <h3 className="font-bold text-slate-700 mb-2">Select Meal Plans to Import</h3>
+                          {mealPlans.length === 0 ? (
+                              <p className="text-sm text-slate-500">No meal plans found. Create a plan first.</p>
+                          ) : (
+                              <div className="max-h-40 overflow-y-auto space-y-2 mb-3 bg-white p-2 rounded border border-slate-100">
+                                   {mealPlans.map(plan => (
+                                        <label key={plan.id} className="flex items-center space-x-2 text-sm text-slate-700 cursor-pointer p-1 hover:bg-slate-50 rounded">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={selectedPlansForImport.has(plan.id)}
+                                                onChange={(e) => {
+                                                    const newSet = new Set(selectedPlansForImport);
+                                                    if (e.target.checked) newSet.add(plan.id);
+                                                    else newSet.delete(plan.id);
+                                                    setSelectedPlansForImport(newSet);
+                                                }}
+                                                className="text-emerald-500 rounded focus:ring-emerald-500"
+                                            />
+                                            <span>{plan.name}</span>
+                                        </label>
+                                    ))}
+                              </div>
+                          )}
+                          <button 
+                            onClick={handleImportIngredients}
+                            disabled={selectedPlansForImport.size === 0}
+                            className="w-full bg-emerald-500 text-white font-bold py-2 rounded-lg hover:bg-emerald-600 disabled:opacity-50 text-sm"
+                          >
+                              Import Ingredients
+                          </button>
+                      </div>
+                  )}
 
                   {/* Quick Add Form */}
                   <form onSubmit={handleAddItem} className="mb-4 flex gap-2">
@@ -311,7 +344,7 @@ export const GroceryList: React.FC<GroceryListProps> = ({ mealPlans }) => {
                         </li>
                     ))}
                     {currentItems.length === 0 && (
-                        <li className="text-center text-slate-400 py-8 italic">List is empty. Add items or generate from a meal plan.</li>
+                        <li className="text-center text-slate-400 py-8 italic">List is empty. Add items or import from a meal plan.</li>
                     )}
                   </ul>
               </>

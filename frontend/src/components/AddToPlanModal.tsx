@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import type { MealPlan, MealPlanItemMetadata } from '../types';
 import { XIcon } from './icons';
@@ -123,13 +124,15 @@ export const AddToPlanModal: React.FC<AddToPlanModalProps> = ({ plans, onSelectP
                     </div>
 
                     {/* Grocery Toggle */}
-                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    <div 
+                        className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200 cursor-pointer select-none"
+                        onClick={() => setAddToGrocery(!addToGrocery)}
+                    >
                         <span className="text-sm font-medium text-slate-700">Add ingredients to Grocery List?</span>
                         <div 
-                            className={`w-11 h-6 flex items-center bg-gray-300 rounded-full p-1 cursor-pointer transition-colors duration-300 ${addToGrocery ? 'bg-emerald-500' : ''}`}
-                            onClick={() => setAddToGrocery(!addToGrocery)}
+                            className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors duration-300 ${addToGrocery ? 'bg-emerald-500' : 'bg-slate-300'}`}
                         >
-                            <div className={`bg-white w-4 h-4 rounded-full shadow-md transform duration-300 ease-in-out ${addToGrocery ? 'translate-x-5' : ''}`}></div>
+                            <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-300 ease-in-out ${addToGrocery ? 'translate-x-5' : 'translate-x-0'}`}></div>
                         </div>
                     </div>
 

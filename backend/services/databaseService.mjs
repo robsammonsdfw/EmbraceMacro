@@ -187,6 +187,25 @@ const ensureTables = async (client) => {
             created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         );
     `);
+    
+    // Grocery Tables Check
+     await client.query(`
+            CREATE TABLE IF NOT EXISTS grocery_lists (
+                id SERIAL PRIMARY KEY,
+                user_id INT REFERENCES users(id),
+                name VARCHAR(255) NOT NULL,
+                is_active BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS grocery_list_items (
+                id SERIAL PRIMARY KEY,
+                list_id INT REFERENCES grocery_lists(id) ON DELETE CASCADE,
+                user_id INT REFERENCES users(id),
+                name VARCHAR(255) NOT NULL,
+                checked BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+    `);
 
     // Migration: Aggressively remove ANY unique constraints on meal_plan_items
     // to allow duplicate meals (e.g. leftovers, same meal every day)
@@ -581,18 +600,15 @@ export const addMealToPlanItem = async (userId, planId, savedMealId, metadata = 
             insertRes = await runInsert();
         } catch (err) {
             // Check for specific unique constraint violation on meal_plan_items (Postgres Code 23505)
-            // If the old constraint exists, we drop it here dynamically to fix the issue for the user.
             if (err.code === '23505') {
                 console.warn("Detected legacy unique constraint on meal_plan_items. Removing to allow duplicates...");
                 await client.query(`
                     DO $$ 
                     BEGIN 
-                        -- Attempt to drop the likely named constraint
                         ALTER TABLE meal_plan_items DROP CONSTRAINT IF EXISTS meal_plan_items_meal_plan_id_saved_meal_id_key;
-                        -- Attempt to drop unique index if unrelated to constraint
                         DROP INDEX IF EXISTS meal_plan_items_meal_plan_id_saved_meal_id_key;
                     EXCEPTION 
-                        WHEN OTHERS THEN NULL; -- Ignore errors if constraint doesn't exist or other issues
+                        WHEN OTHERS THEN NULL;
                     END $$;
                 `);
                 // Retry insertion
@@ -638,18 +654,8 @@ export const addMealAndLinkToPlan = async (userId, mealData, planId, metadata = 
     try {
         await client.query('BEGIN');
         const newMeal = await saveMeal(userId, mealData);
-        // Add item with duplicate handling logic from above
-        // Note: calling addMealToPlanItem directly here would create a new client connection pool, 
-        // so we inline the logic or rely on the fact that if saveMeal succeeds, the constraint issue is handled in the next call.
-        // However, we are inside a transaction here. Calling the exported function uses a different client/transaction.
-        // For simplicity and correctness with the constraint fix, we will commit the meal save first, then call the function.
-        
-        // Actually, to use the same transaction we would need to pass the client. 
-        // Given the constraint fix requires DDL (ALTER TABLE) which can't run in a transaction block in some contexts or locks the table,
-        // it's safer to commit the saveMeal first.
         await client.query('COMMIT');
         
-        // Now link it (this will handle the constraint fix if needed)
         return await addMealToPlanItem(userId, planId, newMeal.id, metadata);
 
     } catch (err) {
@@ -715,23 +721,7 @@ export const getGroceryListItems = async (userId, listId) => {
 export const createGroceryList = async (userId, name) => {
     const client = await pool.connect();
     try {
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS grocery_lists (
-                id SERIAL PRIMARY KEY,
-                user_id INT REFERENCES users(id),
-                name VARCHAR(255) NOT NULL,
-                is_active BOOLEAN DEFAULT FALSE,
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS grocery_list_items (
-                id SERIAL PRIMARY KEY,
-                list_id INT REFERENCES grocery_lists(id) ON DELETE CASCADE,
-                user_id INT REFERENCES users(id),
-                name VARCHAR(255) NOT NULL,
-                checked BOOLEAN DEFAULT FALSE,
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-            );
-        `);
+        await ensureTables(client);
         const res = await client.query('INSERT INTO grocery_lists (user_id, name) VALUES ($1, $2) RETURNING *', [userId, name]);
         return res.rows[0];
     } finally {
@@ -767,7 +757,7 @@ export const deleteGroceryList = async (userId, listId) => {
 export const generateGroceryList = async (userId, planIds, name) => {
     const client = await pool.connect();
     try {
-        await createGroceryList(userId, 'temp'); // ensure tables
+        await ensureTables(client);
         
         await client.query('BEGIN');
         const listRes = await client.query('INSERT INTO grocery_lists (user_id, name, is_active) VALUES ($1, $2, TRUE) RETURNING *', [userId, name]);
@@ -795,6 +785,53 @@ export const generateGroceryList = async (userId, planIds, name) => {
         }
         await client.query('COMMIT');
         return newList;
+    } catch (e) {
+        await client.query('ROLLBACK');
+        throw e;
+    } finally {
+        client.release();
+    }
+};
+
+export const addIngredientsFromPlans = async (userId, listId, planIds) => {
+    const client = await pool.connect();
+    try {
+        await ensureTables(client);
+        
+        await client.query('BEGIN');
+        
+        if (planIds.length > 0) {
+             // 1. Get ingredients from selected plans
+             const mealQuery = `
+                SELECT sm.meal_data
+                FROM saved_meals sm
+                JOIN meal_plan_items mpi ON sm.id = mpi.saved_meal_id
+                WHERE mpi.user_id = $1 AND mpi.meal_plan_id = ANY($2::int[]);
+            `;
+            const mealRes = await client.query(mealQuery, [userId, planIds]);
+            const allIngredients = mealRes.rows.flatMap(row => row.meal_data?.ingredients || []);
+            const uniqueNames = [...new Set(allIngredients.map(ing => ing.name))].sort();
+
+            // 2. Insert into existing list
+            if (uniqueNames.length > 0) {
+                 const insertQuery = `
+                    INSERT INTO grocery_list_items (list_id, user_id, name)
+                    SELECT $1, $2, unnest($3::text[]);
+                `;
+                await client.query(insertQuery, [listId, userId, uniqueNames]);
+            }
+        }
+        await client.query('COMMIT');
+        
+        // Return updated items for this list
+        const itemsRes = await client.query(`
+            SELECT id, name, checked FROM grocery_list_items 
+            WHERE user_id = $1 AND list_id = $2
+            ORDER BY checked ASC, name ASC;
+        `, [userId, listId]);
+        
+        return itemsRes.rows;
+
     } catch (e) {
         await client.query('ROLLBACK');
         throw e;
@@ -1125,6 +1162,7 @@ export const findMatches = async (userId, type) => {
 
         // 1. Get current user's blueprint
         const bpRes = await client.query('SELECT preferences FROM partner_blueprints WHERE user_id = $1', [userId]);
+        // Explicit any to avoid type errors in checking logic
         /** @type {any} */
         const preferences = bpRes.rows[0]?.preferences || {};
 
@@ -1141,7 +1179,7 @@ export const findMatches = async (userId, type) => {
         const userTraitsMap = {};
         traitsRes.rows.forEach(row => {
             if (!userTraitsMap[row.user_id]) {
-                userTraitsMap[row.user_id] = { userId: row.user_id, email: row.email, traits: {}, score: 0 };
+                userTraitsMap[row.user_id] = { userId: row.user_id, email: row.email, traits: {} };
             }
             userTraitsMap[row.user_id].traits[row.trait_key] = row.value;
         });
@@ -1152,9 +1190,12 @@ export const findMatches = async (userId, type) => {
 
             // Loop through preferences
             for (const [key, value] of Object.entries(preferences)) {
-                const pref = /** @type {any} */ (value);
+                // Typed access to preferences value
+                /** @type {any} */
+                const pref = value;
 
-                if (candidate.traits && candidate.traits[key] !== undefined) {
+                // Safe check using 'in' operator or direct access since it's any
+                if (candidate.traits && typeof candidate.traits[key] === 'number') {
                     const target = typeof pref.target === 'number' ? pref.target : 0;
                     const diff = Math.abs(candidate.traits[key] - target);
                     totalDiff += diff * (pref.importance || 1);
@@ -1162,7 +1203,7 @@ export const findMatches = async (userId, type) => {
                 }
             }
 
-            if (traitCount === 0) return { ...candidate, compatibilityScore: 50 }; // Default neutral
+            if (traitCount === 0) return { ...candidate, compatibilityScore: 50 };
 
             const avgDiff = totalDiff / traitCount;
             const score = Math.max(0, Math.min(100, (1 - avgDiff) * 100));
@@ -1170,7 +1211,7 @@ export const findMatches = async (userId, type) => {
         });
 
         // Sort by score
-        return matches.sort((a, b) => b.compatibilityScore - a.compatibilityScore);
+        return matches.sort((a, b) => (b.compatibilityScore || 0) - (a.compatibilityScore || 0));
 
     } finally {
         client.release();

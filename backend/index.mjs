@@ -24,6 +24,7 @@ import {
     setActiveGroceryList,
     deleteGroceryList,
     generateGroceryList,
+    addIngredientsFromPlans,
     updateGroceryListItem,
     addGroceryListItem,
     removeGroceryListItem,
@@ -52,32 +53,13 @@ export const handler = async (event) => {
     const {
         GEMINI_API_KEY,
         JWT_SECRET,
-        FRONTEND_URL,
         SHOPIFY_WEBHOOK_SECRET
     } = process.env;
 
-    const allowedOrigins = [
-        "https://food.embracehealth.ai",
-        "https://app.embracehealth.ai",
-        "https://scan.embracehealth.ai",
-        "https://main.dfp0msdoew280.amplifyapp.com",
-        "http://localhost:5173",
-        "http://localhost:3000",
-        FRONTEND_URL
-    ].filter(Boolean);
-
-    const requestHeaders = event.headers || {};
-    const origin = requestHeaders.origin || requestHeaders.Origin;
-    let accessControlAllowOrigin = FRONTEND_URL || '*';
-    if (origin && allowedOrigins.includes(origin)) {
-        accessControlAllowOrigin = origin;
-    }
-
+    // CORS is handled by API Gateway. 
+    // We only set Content-Type here.
     const headers = {
-        "Access-Control-Allow-Origin": accessControlAllowOrigin,
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        "Access-Control-Allow-Methods": "OPTIONS,POST,GET,DELETE,PUT",
-        "Access-Control-Allow-Credentials": "true"
+        "Content-Type": "application/json"
     };
 
     let path;
@@ -94,6 +76,7 @@ export const handler = async (event) => {
     }
 
     if (method === 'OPTIONS') {
+        // Gateway handles OPTIONS, but if it passes through, return 204.
         return { statusCode: 204, headers };
     }
 
@@ -245,7 +228,13 @@ async function handleCustomerLogin(event, headers, jwtSecret) {
             `;
             const variables = { input: { email, password } };
             try {
+                // Cast to any to handle type checking issues
+                /** @type {any} */
                 const shopifyData = await callShopifyStorefrontAPI(mutation, variables);
+                
+                if (!shopifyData || !shopifyData.customerAccessTokenCreate) {
+                    throw new Error("Invalid response from Shopify");
+                }
                 const { customerAccessToken, customerUserErrors } = shopifyData.customerAccessTokenCreate;
                 if (customerUserErrors && customerUserErrors.length > 0) {
                     throw new Error(customerUserErrors[0].message);
@@ -350,6 +339,11 @@ async function handleGroceryListRequest(event, headers, method, pathParts) {
     if (method === 'POST' && pathParts.length === 3 && pathParts[2] === 'active' && subId) {
         await setActiveGroceryList(userId, subId);
         return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
+    }
+    if (method === 'POST' && pathParts.length === 3 && pathParts[2] === 'import' && subId) {
+        const { planIds } = JSON.parse(event.body);
+        const items = await addIngredientsFromPlans(userId, subId, planIds);
+        return { statusCode: 200, headers, body: JSON.stringify(items) };
     }
     if (method === 'DELETE' && pathParts.length === 2 && subId) {
         await deleteGroceryList(userId, subId);

@@ -264,6 +264,10 @@ export const generateGroceryList = (mealPlanIds: number[], name: string): Promis
     return callApi('/grocery-lists/generate', 'POST', { mealPlanIds, name });
 };
 
+export const importIngredientsFromPlans = (listId: number, planIds: number[]): Promise<GroceryItem[]> => {
+    return callApi(`/grocery-lists/${listId}/import`, 'POST', { planIds });
+};
+
 export const setActiveGroceryList = (listId: number): Promise<{ success: boolean }> => {
     return callApi(`/grocery-lists/${listId}/active`, 'POST');
 };
