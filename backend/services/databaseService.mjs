@@ -1084,23 +1084,29 @@ export const findMatches = async (userId, type) => {
         });
 
         const matches = Object.values(userTraitsMap).map((candidate) => {
+            /** @type {any} */
+            const c = candidate;
+
             let totalDiff = 0;
             let traitCount = 0;
 
             // Loop through preferences
-            for (const [key, pref] of Object.entries(preferences)) {
-                if (candidate.traits[key] !== undefined) {
-                    const diff = Math.abs(candidate.traits[key] - pref.target);
+            for (const [key, value] of Object.entries(preferences)) {
+                /** @type {any} */
+                const pref = value;
+
+                if (c.traits[key] !== undefined) {
+                    const diff = Math.abs(c.traits[key] - pref.target);
                     totalDiff += diff * (pref.importance || 1);
                     traitCount++;
                 }
             }
 
-            if (traitCount === 0) return { ...candidate, compatibilityScore: 50 }; // Default neutral
+            if (traitCount === 0) return { ...c, compatibilityScore: 50 }; // Default neutral
 
             const avgDiff = totalDiff / traitCount;
             const score = Math.max(0, Math.min(100, (1 - avgDiff) * 100));
-            return { ...candidate, compatibilityScore: Math.round(score) };
+            return { ...c, compatibilityScore: Math.round(score) };
         });
 
         // Sort by score

@@ -245,6 +245,7 @@ async function handleCustomerLogin(event, headers, jwtSecret) {
             `;
             const variables = { input: { email, password } };
             try {
+                /** @type {any} */
                 const shopifyData = await callShopifyStorefrontAPI(mutation, variables);
                 const { customerAccessToken, customerUserErrors } = shopifyData.customerAccessTokenCreate;
                 if (customerUserErrors && customerUserErrors.length > 0) {

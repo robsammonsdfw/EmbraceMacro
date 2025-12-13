@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import type { MealPlan, SavedMeal, NutritionInfo } from '../types';
 import { PlusIcon, UserCircleIcon, GlobeAltIcon, StarIcon, CameraIcon } from './icons';
@@ -23,6 +24,10 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
     const [selectedDay, setSelectedDay] = useState<string>(DAYS[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1]);
     const [isDrawerOpen, setIsDrawerOpen] = useState(true);
     const [dragOverSlot, setDragOverSlot] = useState<string | null>(null);
+    
+    // Creation State
+    const [isCreating, setIsCreating] = useState(false);
+    const [newPlanName, setNewPlanName] = useState('');
 
     const activePlan = plans.find(p => p.id === activePlanId);
 
@@ -62,6 +67,15 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
         
         if (meal && activePlanId) {
             onQuickAdd(activePlanId, meal, selectedDay, slot);
+        }
+    };
+
+    const handleCreateSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (newPlanName.trim()) {
+            onCreatePlan(newPlanName);
+            setNewPlanName('');
+            setIsCreating(false);
         }
     };
 
@@ -140,92 +154,129 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                                 {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                             </select>
                         )}
-                        <button 
-                            onClick={() => { const name = prompt("New Plan Name:"); if(name) onCreatePlan(name); }}
-                            className="bg-emerald-500 text-white font-bold p-2 px-3 rounded-lg hover:bg-emerald-600 flex items-center space-x-1"
-                            title="Create New Plan"
-                        >
-                            <PlusIcon />
-                            <span className="text-xs">New Plan</span>
-                        </button>
+                        
+                        {!isCreating ? (
+                            <button 
+                                onClick={() => setIsCreating(true)}
+                                className="bg-emerald-500 text-white font-bold p-2 px-3 rounded-lg hover:bg-emerald-600 flex items-center space-x-1"
+                                title="Create New Plan"
+                            >
+                                <PlusIcon />
+                                <span className="text-xs">New Plan</span>
+                            </button>
+                        ) : (
+                            <form onSubmit={handleCreateSubmit} className="flex items-center gap-2">
+                                <input 
+                                    type="text" 
+                                    autoFocus
+                                    placeholder="Name..." 
+                                    className="p-2 border border-slate-300 rounded-lg text-sm w-32"
+                                    value={newPlanName}
+                                    onChange={e => setNewPlanName(e.target.value)}
+                                />
+                                <button type="submit" className="text-emerald-600 font-bold text-sm">Save</button>
+                                <button type="button" onClick={() => setIsCreating(false)} className="text-slate-400 font-bold text-lg">&times;</button>
+                            </form>
+                        )}
                     </div>
                 </div>
 
-                {/* Day Tabs */}
-                <div className="flex overflow-x-auto border-b border-slate-200 bg-white no-scrollbar">
-                    {DAYS.map(day => (
-                        <button
-                            key={day}
-                            onClick={() => setSelectedDay(day)}
-                            className={`flex-shrink-0 px-6 py-3 text-sm font-bold border-b-2 transition-colors ${
-                                selectedDay === day 
-                                ? 'border-emerald-500 text-emerald-700 bg-emerald-50/50' 
-                                : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-                            }`}
+                {/* Empty State if No Plans */}
+                {plans.length === 0 && !isCreating && (
+                    <div className="flex-grow flex flex-col items-center justify-center p-10 text-center">
+                        <div className="bg-slate-100 p-6 rounded-full mb-4">
+                            <PlusIcon />
+                        </div>
+                        <h3 className="text-xl font-bold text-slate-800">No Meal Plans Yet</h3>
+                        <p className="text-slate-500 mb-6 max-w-sm">Create your first weekly plan to start organizing your nutrition.</p>
+                        <button 
+                            onClick={() => setIsCreating(true)}
+                            className="bg-emerald-500 text-white font-bold py-3 px-6 rounded-lg hover:bg-emerald-600 shadow-md"
                         >
-                            {day.substring(0, 3)}
+                            Create First Plan
                         </button>
-                    ))}
-                </div>
+                    </div>
+                )}
 
-                {/* Slots Board */}
-                <div className="p-4 space-y-4 bg-slate-50/30 flex-grow overflow-y-auto">
-                    {SLOTS.map(slot => {
-                        const items = getItemsForSlot(slot);
-                        const isOver = dragOverSlot === slot;
-                        return (
-                            <div 
-                                key={slot} 
-                                className={`bg-white border rounded-xl p-4 transition-all ${
-                                    isOver 
-                                    ? 'border-emerald-400 ring-2 ring-emerald-200 bg-emerald-50' 
-                                    : 'border-slate-200'
-                                }`}
-                                onDragOver={(e) => handleDragOver(e, slot)}
-                                onDragLeave={handleDragLeave}
-                                onDrop={(e) => handleDrop(e, slot)}
-                            >
-                                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex justify-between">
-                                    {slot}
-                                    {items.length > 0 && <span className="text-slate-300">{Math.round(items.reduce((sum, i) => sum + i.meal.totalCalories, 0))} kcal</span>}
-                                </h3>
-                                
-                                {items.length === 0 ? (
-                                    <div className="text-center py-6 border-2 border-dashed border-slate-100 rounded-lg text-slate-400 text-sm">
-                                        Drag from Favorites to Add
-                                    </div>
-                                ) : (
-                                    <div className="space-y-2">
-                                        {items.map(item => (
-                                            <div key={item.id} className="bg-white border border-slate-200 shadow-sm rounded-lg p-3 flex justify-between items-center group hover:border-emerald-300 transition-colors">
-                                                <div className="flex items-center gap-3">
-                                                    {item.meal.hasImage && item.meal.imageUrl ? (
-                                                        <div className="w-10 h-10 bg-slate-200 rounded-md bg-cover bg-center" style={{backgroundImage: `url(${item.meal.imageUrl})`}}></div>
-                                                    ) : item.meal.hasImage ? (
-                                                        <div className="w-10 h-10 bg-slate-100 border border-slate-200 rounded-md flex items-center justify-center text-slate-400">
-                                                            <div className="transform scale-75"><CameraIcon /></div>
-                                                        </div>
-                                                    ) : null}
-                                                    <div>
-                                                        <p className="font-bold text-slate-800 text-sm">{item.meal.mealName}</p>
-                                                        <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
-                                                            <span className="font-medium text-emerald-600">{Math.round(item.meal.totalCalories)} kcal</span>
-                                                            {item.metadata?.portion && item.metadata.portion !== 1 && <span className="bg-slate-100 px-1 rounded">{item.metadata.portion}x</span>}
-                                                            {item.metadata?.context && <span className="text-slate-400">• {item.metadata.context}</span>}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <button onClick={() => onRemoveFromPlan(item.id)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    &times;
-                                                </button>
+                {/* Day Tabs (Only show if plans exist) */}
+                {plans.length > 0 && (
+                    <>
+                        <div className="flex overflow-x-auto border-b border-slate-200 bg-white no-scrollbar">
+                            {DAYS.map(day => (
+                                <button
+                                    key={day}
+                                    onClick={() => setSelectedDay(day)}
+                                    className={`flex-shrink-0 px-6 py-3 text-sm font-bold border-b-2 transition-colors ${
+                                        selectedDay === day 
+                                        ? 'border-emerald-500 text-emerald-700 bg-emerald-50/50' 
+                                        : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                                    }`}
+                                >
+                                    {day.substring(0, 3)}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Slots Board */}
+                        <div className="p-4 space-y-4 bg-slate-50/30 flex-grow overflow-y-auto">
+                            {SLOTS.map(slot => {
+                                const items = getItemsForSlot(slot);
+                                const isOver = dragOverSlot === slot;
+                                return (
+                                    <div 
+                                        key={slot} 
+                                        className={`bg-white border rounded-xl p-4 transition-all ${
+                                            isOver 
+                                            ? 'border-emerald-400 ring-2 ring-emerald-200 bg-emerald-50' 
+                                            : 'border-slate-200'
+                                        }`}
+                                        onDragOver={(e) => handleDragOver(e, slot)}
+                                        onDragLeave={handleDragLeave}
+                                        onDrop={(e) => handleDrop(e, slot)}
+                                    >
+                                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex justify-between">
+                                            {slot}
+                                            {items.length > 0 && <span className="text-slate-300">{Math.round(items.reduce((sum, i) => sum + i.meal.totalCalories, 0))} kcal</span>}
+                                        </h3>
+                                        
+                                        {items.length === 0 ? (
+                                            <div className="text-center py-6 border-2 border-dashed border-slate-100 rounded-lg text-slate-400 text-sm">
+                                                Drag from Favorites to Add
                                             </div>
-                                        ))}
+                                        ) : (
+                                            <div className="space-y-2">
+                                                {items.map(item => (
+                                                    <div key={item.id} className="bg-white border border-slate-200 shadow-sm rounded-lg p-3 flex justify-between items-center group hover:border-emerald-300 transition-colors">
+                                                        <div className="flex items-center gap-3">
+                                                            {item.meal.hasImage && item.meal.imageUrl ? (
+                                                                <div className="w-10 h-10 bg-slate-200 rounded-md bg-cover bg-center" style={{backgroundImage: `url(${item.meal.imageUrl})`}}></div>
+                                                            ) : item.meal.hasImage ? (
+                                                                <div className="w-10 h-10 bg-slate-100 border border-slate-200 rounded-md flex items-center justify-center text-slate-400">
+                                                                    <div className="transform scale-75"><CameraIcon /></div>
+                                                                </div>
+                                                            ) : null}
+                                                            <div>
+                                                                <p className="font-bold text-slate-800 text-sm">{item.meal.mealName}</p>
+                                                                <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                                                                    <span className="font-medium text-emerald-600">{Math.round(item.meal.totalCalories)} kcal</span>
+                                                                    {item.metadata?.portion && item.metadata.portion !== 1 && <span className="bg-slate-100 px-1 rounded">{item.metadata.portion}x</span>}
+                                                                    {item.metadata?.context && <span className="text-slate-400">• {item.metadata.context}</span>}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <button onClick={() => onRemoveFromPlan(item.id)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            &times;
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
-                                )}
-                            </div>
-                        );
-                    })}
-                </div>
+                                );
+                            })}
+                        </div>
+                    </>
+                )}
             </div>
 
             {/* Favorites Drawer (Right Side) */}

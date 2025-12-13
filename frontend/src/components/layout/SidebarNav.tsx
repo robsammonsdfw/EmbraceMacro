@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { HomeIcon, BookOpenIcon, UserCircleIcon, BeakerIcon, ClipboardListIcon, TrophyIcon, Squares2X2Icon, ClipboardCheckIcon, HeartIcon } from '../icons';
+import { HomeIcon, BookOpenIcon, UserCircleIcon, BeakerIcon, ClipboardListIcon, TrophyIcon, Squares2X2Icon, ClipboardCheckIcon, HeartIcon, PlusIcon } from '../icons';
 
 interface SidebarNavProps {
     activeView: string;
@@ -48,13 +49,24 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
                     isActive={activeView === 'home'} 
                     onClick={() => onNavigate('home')} 
                 />
+                
+                {/* Primary Feature: Meal Planner */}
+                <NavItem 
+                    id="plan" 
+                    label="Meal Planner" 
+                    icon={<PlusIcon />} 
+                    isActive={activeView === 'plan'} 
+                    onClick={() => onNavigate('plan')} 
+                />
+
                 <NavItem 
                     id="meals" 
-                    label="Meals & Plan" 
+                    label="My Meals" 
                     icon={<BookOpenIcon />} 
-                    isActive={activeView === 'meals' || activeView === 'plan' || activeView === 'history'} 
+                    isActive={activeView === 'meals' || activeView === 'history'} 
                     onClick={() => onNavigate('meals')} 
                 />
+                
                 <NavItem 
                     id="grocery" 
                     label="Grocery List" 
