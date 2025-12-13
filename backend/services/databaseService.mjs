@@ -1069,11 +1069,11 @@ export const findMatches = async (userId, type) => {
                 }
             }
 
-            if (traitCount === 0) return { ...candidate, compatibilityScore: 50 }; // Default neutral
+            if (traitCount === 0) return { .../** @type {any} */(candidate), compatibilityScore: 50 }; // Default neutral
 
             const avgDiff = totalDiff / traitCount;
             const score = Math.max(0, Math.min(100, (1 - avgDiff) * 100));
-            return { ...candidate, compatibilityScore: Math.round(score) };
+            return { .../** @type {any} */(candidate), compatibilityScore: Math.round(score) };
         });
 
         // Sort by score

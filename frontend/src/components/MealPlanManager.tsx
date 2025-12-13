@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import type { MealPlan, SavedMeal, NutritionInfo } from '../types';
 import { PlusIcon, UserCircleIcon, GlobeAltIcon, StarIcon, CameraIcon } from './icons';
@@ -11,17 +10,19 @@ interface MealPlanManagerProps {
     onCreatePlan: (name: string) => void;
     onAddToPlan: (meal: SavedMeal | NutritionInfo) => void; // Trigger modal
     onRemoveFromPlan: (itemId: number) => void;
+    onQuickAdd: (planId: number, meal: SavedMeal, day: string, slot: string) => void;
 }
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const SLOTS = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 
 export const MealPlanManager: React.FC<MealPlanManagerProps> = ({ 
-    plans, activePlanId, savedMeals, onPlanChange, onCreatePlan, onAddToPlan, onRemoveFromPlan 
+    plans, activePlanId, savedMeals, onPlanChange, onCreatePlan, onAddToPlan, onRemoveFromPlan, onQuickAdd 
 }) => {
     const [viewMode, setViewMode] = useState<'plan' | 'discover'>('plan');
-    const [selectedDay, setSelectedDay] = useState<string>(DAYS[0]);
+    const [selectedDay, setSelectedDay] = useState<string>(DAYS[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1]);
     const [isDrawerOpen, setIsDrawerOpen] = useState(true);
+    const [dragOverSlot, setDragOverSlot] = useState<string | null>(null);
 
     const activePlan = plans.find(p => p.id === activePlanId);
 
@@ -33,6 +34,35 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
             const itemSlot = item.metadata?.slot || 'Lunch';
             return itemDay === selectedDay && itemSlot === slot;
         });
+    };
+
+    // Drag & Drop Handlers
+    const handleDragStart = (e: React.DragEvent, meal: SavedMeal) => {
+        e.dataTransfer.setData('mealId', meal.id.toString());
+        e.dataTransfer.effectAllowed = 'copy';
+        // Add a ghost image or styling here if desired
+    };
+
+    const handleDragOver = (e: React.DragEvent, slot: string) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        setDragOverSlot(slot);
+    };
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        setDragOverSlot(null);
+    };
+
+    const handleDrop = (e: React.DragEvent, slot: string) => {
+        e.preventDefault();
+        setDragOverSlot(null);
+        const mealId = parseInt(e.dataTransfer.getData('mealId'));
+        const meal = savedMeals.find(m => m.id === mealId);
+        
+        if (meal && activePlanId) {
+            onQuickAdd(activePlanId, meal, selectedDay, slot);
+        }
     };
 
     // --- Discover View ---
@@ -101,19 +131,22 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <select
-                            value={activePlanId ?? ''}
-                            onChange={(e) => onPlanChange(Number(e.target.value))}
-                            className="p-2 border border-slate-300 rounded-lg text-sm min-w-[150px]"
-                        >
-                            {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                            {plans.length === 0 && <option>No plans</option>}
-                        </select>
+                        {plans.length > 0 && (
+                            <select
+                                value={activePlanId ?? ''}
+                                onChange={(e) => onPlanChange(Number(e.target.value))}
+                                className="p-2 border border-slate-300 rounded-lg text-sm min-w-[150px]"
+                            >
+                                {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                            </select>
+                        )}
                         <button 
                             onClick={() => { const name = prompt("New Plan Name:"); if(name) onCreatePlan(name); }}
-                            className="bg-slate-200 p-2 rounded-lg hover:bg-slate-300"
+                            className="bg-emerald-500 text-white font-bold p-2 px-3 rounded-lg hover:bg-emerald-600 flex items-center space-x-1"
+                            title="Create New Plan"
                         >
                             <PlusIcon />
+                            <span className="text-xs">New Plan</span>
                         </button>
                     </div>
                 </div>
@@ -139,13 +172,27 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                 <div className="p-4 space-y-4 bg-slate-50/30 flex-grow overflow-y-auto">
                     {SLOTS.map(slot => {
                         const items = getItemsForSlot(slot);
+                        const isOver = dragOverSlot === slot;
                         return (
-                            <div key={slot} className="bg-white border border-slate-200 rounded-xl p-4">
-                                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">{slot}</h3>
+                            <div 
+                                key={slot} 
+                                className={`bg-white border rounded-xl p-4 transition-all ${
+                                    isOver 
+                                    ? 'border-emerald-400 ring-2 ring-emerald-200 bg-emerald-50' 
+                                    : 'border-slate-200'
+                                }`}
+                                onDragOver={(e) => handleDragOver(e, slot)}
+                                onDragLeave={handleDragLeave}
+                                onDrop={(e) => handleDrop(e, slot)}
+                            >
+                                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex justify-between">
+                                    {slot}
+                                    {items.length > 0 && <span className="text-slate-300">{Math.round(items.reduce((sum, i) => sum + i.meal.totalCalories, 0))} kcal</span>}
+                                </h3>
                                 
                                 {items.length === 0 ? (
                                     <div className="text-center py-6 border-2 border-dashed border-slate-100 rounded-lg text-slate-400 text-sm">
-                                        Drag from Favorites or Click Add
+                                        Drag from Favorites to Add
                                     </div>
                                 ) : (
                                     <div className="space-y-2">
@@ -192,11 +239,17 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                 
                 {isDrawerOpen && (
                     <div className="flex-grow overflow-y-auto p-4 space-y-3">
+                        <p className="text-xs text-slate-400 text-center mb-2 uppercase tracking-wide">Drag to plan</p>
                         {savedMeals.length === 0 && (
-                            <p className="text-sm text-slate-500 text-center py-10">No favorites yet.</p>
+                            <p className="text-sm text-slate-500 text-center py-10">No favorites yet. Save meals to drag them here!</p>
                         )}
                         {savedMeals.map(meal => (
-                            <div key={meal.id} className="bg-white border border-slate-200 rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer group relative">
+                            <div 
+                                key={meal.id} 
+                                draggable
+                                onDragStart={(e) => handleDragStart(e, meal)}
+                                className="bg-white border border-slate-200 rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing group relative"
+                            >
                                 <div className="flex justify-between items-start">
                                     <div>
                                         <h4 className="font-bold text-slate-800 text-sm">{meal.mealName}</h4>
@@ -211,7 +264,7 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                                     </div>
                                 </div>
                                 
-                                {/* Hover Action Overlay */}
+                                {/* Hover Action Overlay (Mobile fall back or manual add) */}
                                 <div className="absolute inset-0 bg-white/90 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                                     <button 
                                         onClick={() => onAddToPlan(meal)}

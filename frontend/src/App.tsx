@@ -269,6 +269,15 @@ const App: React.FC = () => {
     }
   };
 
+  const handleQuickAdd = async (planId: number, meal: SavedMeal, day: string, slot: string) => {
+      try {
+          const newItem = await apiService.addMealToPlan(planId, meal.id, { day, slot, portion: 1, context: 'Home' });
+          setMealPlans(plans => plans.map(p => p.id === planId ? { ...p, items: [...p.items, newItem] } : p));
+      } catch (err) {
+          setError("Failed to add meal to plan.");
+      }
+  };
+
   const handleRemoveFromPlan = useCallback(async (planItemId: number) => {
       if (!activePlan) return;
       const originalItems = activePlan.items;
@@ -370,6 +379,7 @@ const App: React.FC = () => {
                 onCreatePlan={handleCreateMealPlan}
                 onAddToPlan={handleInitiateAddToPlan}
                 onRemoveFromPlan={handleRemoveFromPlan}
+                onQuickAdd={handleQuickAdd}
             />
         );
         case 'meals': return <MealLibrary meals={savedMeals} onAdd={handleInitiateAddToPlan} onDelete={handleDeleteMeal} />;
