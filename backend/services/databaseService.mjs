@@ -1023,6 +1023,7 @@ export const findMatches = async (userId, type) => {
         `, [userId]);
 
         // 3. Match Logic (In-Memory for demo simplicity)
+        /** @type {Record<number, {userId: number, email: string, traits: Record<string, number>, score: number}>} */
         const userTraitsMap = {};
         traitsRes.rows.forEach(row => {
             if (!userTraitsMap[row.user_id]) {
@@ -1031,7 +1032,7 @@ export const findMatches = async (userId, type) => {
             userTraitsMap[row.user_id].traits[row.trait_key] = row.value;
         });
 
-        const matches = Object.values(userTraitsMap).map((candidate: any) => {
+        const matches = Object.values(userTraitsMap).map((/** @type {any} */ candidate) => {
             let totalDiff = 0;
             let traitCount = 0;
 
