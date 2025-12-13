@@ -1,5 +1,3 @@
-
-
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import * as apiService from './services/apiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
@@ -33,6 +31,7 @@ import { CoachMatch } from './components/matching/CoachMatch';
 type ActiveView = 'home' | 'plan' | 'meals' | 'history' | 'suggestions' | 'grocery' | 'rewards' | 'body' | 'labs' | 'orders' | 'assessments' | 'blueprint';
 type MealDataType = NutritionInfo | SavedMeal | MealLogEntry;
 type AppMode = 'hub' | 'meals';
+type CaptureMode = 'meal' | 'barcode' | 'pantry' | 'restaurant';
 
 const App: React.FC = () => {
   const { isAuthenticated, isLoading: isAuthLoading, logout, user } = useAuth();
@@ -41,6 +40,7 @@ const App: React.FC = () => {
   const [appMode, setAppMode] = useState<AppMode>('hub');
   const [activeView, setActiveView] = useState<ActiveView>('home');
   const [isCaptureOpen, setIsCaptureOpen] = useState(false);
+  const [captureInitialMode, setCaptureInitialMode] = useState<CaptureMode>('meal');
 
   // App Data State
   const [image, setImage] = useState<string | null>(null);
@@ -116,6 +116,11 @@ const App: React.FC = () => {
   const handleLogout = () => {
       setAppMode('hub');
       logout();
+  };
+
+  const handleCaptureClick = (mode: CaptureMode) => {
+      setCaptureInitialMode(mode);
+      setIsCaptureOpen(true);
   };
 
   const handleCaptureResult = useCallback(async (
@@ -346,9 +351,14 @@ const App: React.FC = () => {
             <CommandCenter 
                 dailyCalories={dailyStats.calories}
                 dailyProtein={dailyStats.protein}
-                rewardsBalance={0} // Populated by component itself now
+                rewardsBalance={0}
                 userName={user?.firstName || 'User'}
                 onScanClick={handleBodyScanClick}
+                onCameraClick={() => handleCaptureClick('meal')}
+                onBarcodeClick={() => handleCaptureClick('barcode')}
+                onPantryChefClick={() => handleCaptureClick('pantry')}
+                onRestaurantClick={() => handleCaptureClick('restaurant')}
+                onUploadClick={() => handleCaptureClick('meal')}
             />
         );
         case 'plan': return (
@@ -413,6 +423,7 @@ const App: React.FC = () => {
                 lastMeal={mealLog.length > 0 ? mealLog[0] : undefined}
                 onRepeatMeal={handleRepeatMeal}
                 onBodyScanClick={handleBodyScanClick}
+                initialMode={captureInitialMode}
             />
         )}
         
@@ -424,26 +435,27 @@ const App: React.FC = () => {
             />
         )}
 
-        {/* Mobile Navigation (Hidden on Desktop by CSS, visible on mobile) */}
+        {/* Mobile Navigation */}
         <div className="md:hidden fixed bottom-0 left-0 right-0 z-40">
              <Navbar 
                 activeView={activeView} 
                 onNavigate={handleNavigation} 
                 onLogout={handleLogout} 
                 onBackToHub={() => setAppMode('hub')}
-                onCaptureClick={() => setIsCaptureOpen(true)}
+                onCaptureClick={() => handleCaptureClick('meal')}
             />
         </div>
 
-        {/* Desktop Header Actions (Right side of top bar if needed, handled by Layout usually but customized here) */}
+        {/* Desktop Header Actions: Removed Hero as CommandCenter now has quick actions, 
+            but keeping logic if needed later or for specific views */}
         {!hasAnalysisContent && activeView === 'plan' && (
              <div className="md:hidden mb-6">
                  <Hero 
-                    onCameraClick={() => setIsCaptureOpen(true)} 
-                    onUploadClick={() => setIsCaptureOpen(true)} 
-                    onBarcodeClick={() => setIsCaptureOpen(true)} 
-                    onPantryChefClick={() => setIsCaptureOpen(true)}
-                    onGetRecipeClick={() => setIsCaptureOpen(true)}
+                    onCameraClick={() => handleCaptureClick('meal')} 
+                    onUploadClick={() => handleCaptureClick('meal')} 
+                    onBarcodeClick={() => handleCaptureClick('barcode')} 
+                    onPantryChefClick={() => handleCaptureClick('pantry')}
+                    onGetRecipeClick={() => handleCaptureClick('restaurant')}
                  />
              </div>
         )}

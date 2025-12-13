@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { XIcon, CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, UserCircleIcon, PlusIcon, SearchIcon, TagIcon, PhotoIcon } from './icons';
 import { BarcodeScanner } from './BarcodeScanner';
@@ -10,6 +9,7 @@ interface CaptureFlowProps {
   lastMeal?: MealLogEntry;
   onRepeatMeal: (meal: MealLogEntry) => void;
   onBodyScanClick: () => void;
+  initialMode?: 'meal' | 'barcode' | 'pantry' | 'restaurant';
 }
 
 type CaptureMode = 'barcode' | 'meal' | 'pantry' | 'restaurant';
@@ -19,13 +19,14 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
   onCapture, 
   lastMeal, 
   onRepeatMeal,
-  onBodyScanClick
+  onBodyScanClick,
+  initialMode = 'meal'
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
-  const [mode, setMode] = useState<CaptureMode>('meal');
+  const [mode, setMode] = useState<CaptureMode>(initialMode);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [detectedLabel, setDetectedLabel] = useState<string | null>(null);

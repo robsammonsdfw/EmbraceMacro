@@ -150,8 +150,14 @@ const ensureAssessmentTables = async (client) => {
             preferences JSONB DEFAULT '{}', -- Keyed by trait_key
             updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         );
-        
-        -- Creating a dummy assessment if needed (handled in getAssessments)
+
+        CREATE TABLE IF NOT EXISTS user_assessments (
+            id SERIAL PRIMARY KEY,
+            user_id INT REFERENCES users(id),
+            assessment_id VARCHAR(50),
+            responses JSONB,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
     `);
 };
 
@@ -940,6 +946,15 @@ export const getAssessments = async () => {
 export const submitAssessment = async (userId, assessmentId, responses) => {
     const client = await pool.connect();
     try {
+        await ensureAssessmentTables(client); // Ensure tables exist on submit
+
+        // Save raw responses
+        const saveResponseQuery = `
+            INSERT INTO user_assessments (user_id, assessment_id, responses)
+            VALUES ($1, $2, $3);
+        `;
+        await client.query(saveResponseQuery, [userId, assessmentId, responses]);
+
         // Simple logic: Calculate a trait based on responses
         let traitKey = '';
         let traitValue = 0;
@@ -981,6 +996,7 @@ export const submitAssessment = async (userId, assessmentId, responses) => {
 export const getPartnerBlueprint = async (userId) => {
     const client = await pool.connect();
     try {
+        await ensureAssessmentTables(client); // Ensure tables
         const res = await client.query('SELECT preferences FROM partner_blueprints WHERE user_id = $1', [userId]);
         if (res.rows.length === 0) return { preferences: {} };
         return { preferences: res.rows[0].preferences };
@@ -992,6 +1008,7 @@ export const getPartnerBlueprint = async (userId) => {
 export const savePartnerBlueprint = async (userId, preferences) => {
     const client = await pool.connect();
     try {
+        await ensureAssessmentTables(client); // Ensure tables
         const query = `
             INSERT INTO partner_blueprints (user_id, preferences)
             VALUES ($1, $2)
@@ -1009,6 +1026,8 @@ export const savePartnerBlueprint = async (userId, preferences) => {
 export const findMatches = async (userId, type) => {
     const client = await pool.connect();
     try {
+        await ensureAssessmentTables(client); // Ensure tables
+
         // 1. Get current user's blueprint
         const bpRes = await client.query('SELECT preferences FROM partner_blueprints WHERE user_id = $1', [userId]);
         const preferences = bpRes.rows[0]?.preferences || {};
@@ -1032,7 +1051,9 @@ export const findMatches = async (userId, type) => {
             userTraitsMap[row.user_id].traits[row.trait_key] = row.value;
         });
 
-        const matches = Object.values(userTraitsMap).map((/** @type {any} */ candidate) => {
+        const matches = Object.values(userTraitsMap).map((entry) => {
+            /** @type {{userId: number, email: string, traits: Record<string, number>, score: number}} */
+            const candidate = entry;
             let totalDiff = 0;
             let traitCount = 0;
 
