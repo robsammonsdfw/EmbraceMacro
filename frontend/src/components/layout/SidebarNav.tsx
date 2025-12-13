@@ -1,6 +1,7 @@
 
+
 import React from 'react';
-import { HomeIcon, BookOpenIcon, UserCircleIcon, BeakerIcon, ClipboardListIcon, TrophyIcon, Squares2X2Icon } from '../icons';
+import { HomeIcon, BookOpenIcon, UserCircleIcon, BeakerIcon, ClipboardListIcon, TrophyIcon, Squares2X2Icon, ClipboardCheckIcon, HeartIcon } from '../icons';
 
 interface SidebarNavProps {
     activeView: string;
@@ -62,6 +63,20 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
                     icon={<UserCircleIcon />} 
                     isActive={activeView === 'body'} 
                     onClick={() => onNavigate('body')} 
+                />
+                <NavItem 
+                    id="assessments" 
+                    label="Assessments" 
+                    icon={<ClipboardCheckIcon />} 
+                    isActive={activeView === 'assessments'} 
+                    onClick={() => onNavigate('assessments')} 
+                />
+                <NavItem 
+                    id="blueprint" 
+                    label="Blueprint & Match" 
+                    icon={<HeartIcon />} 
+                    isActive={activeView === 'blueprint'} 
+                    onClick={() => onNavigate('blueprint')} 
                 />
                 <NavItem 
                     id="labs" 

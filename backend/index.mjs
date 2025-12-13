@@ -1,3 +1,5 @@
+
+
 import { GoogleGenAI } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import https from 'https';
@@ -35,7 +37,12 @@ import {
     getUserEntitlements,
     grantEntitlement,
     recordPurchase,
-    updateUserShopifyToken
+    updateUserShopifyToken,
+    getAssessments,
+    submitAssessment,
+    getPartnerBlueprint,
+    savePartnerBlueprint,
+    findMatches
 } from './services/databaseService.mjs';
 
 // --- MAIN HANDLER (ROUTER) ---
@@ -127,7 +134,8 @@ export const handler = async (event) => {
     const resources = [
         'body-scans', 'sleep-records', 'entitlements', 
         'meal-log', 'saved-meals', 'meal-plans', 'grocery-lists', 'grocery-list', 
-        'analyze-image', 'analyze-image-recipes', 'get-meal-suggestions', 'rewards'
+        'analyze-image', 'analyze-image-recipes', 'get-meal-suggestions', 'rewards',
+        'assessments', 'blueprint', 'matches'
     ];
 
     let resource = pathParts.find(part => resources.includes(part));
@@ -171,6 +179,16 @@ export const handler = async (event) => {
         if (resource === 'rewards') {
             return await handleRewardsRequest(event, headers, method);
         }
+        // Sprint 7 Routes
+        if (resource === 'assessments') {
+            return await handleAssessmentsRequest(event, headers, method, routedPathParts);
+        }
+        if (resource === 'blueprint') {
+            return await handleBlueprintRequest(event, headers, method);
+        }
+        if (resource === 'matches') {
+            return await handleMatchesRequest(event, headers, method);
+        }
     } catch (error) {
         console.error(`[ROUTER CATCH] Error in resource ${resource}:`, error);
         return { statusCode: 500, headers, body: JSON.stringify({ error: 'An unexpected internal server error occurred.', details: error.message }) };
@@ -178,6 +196,47 @@ export const handler = async (event) => {
 
     return { statusCode: 404, headers, body: JSON.stringify({ error: `Not Found: ${path}` }) };
 };
+
+// --- HANDLER FOR ASSESSMENTS (Sprint 7.1) ---
+async function handleAssessmentsRequest(event, headers, method, pathParts) {
+    const userId = event.user.userId;
+    if (method === 'GET' && pathParts.length === 1) {
+        const assessments = await getAssessments();
+        return { statusCode: 200, headers, body: JSON.stringify(assessments) };
+    }
+    if (method === 'POST' && pathParts.length === 3 && pathParts[2] === 'submit') {
+        const assessmentId = pathParts[1];
+        const { responses } = JSON.parse(event.body);
+        const result = await submitAssessment(userId, assessmentId, responses);
+        return { statusCode: 200, headers, body: JSON.stringify(result) };
+    }
+    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
+}
+
+// --- HANDLER FOR BLUEPRINT & MATCHING (Sprint 7.2) ---
+async function handleBlueprintRequest(event, headers, method) {
+    const userId = event.user.userId;
+    if (method === 'GET') {
+        const bp = await getPartnerBlueprint(userId);
+        return { statusCode: 200, headers, body: JSON.stringify(bp) };
+    }
+    if (method === 'POST') {
+        const { preferences } = JSON.parse(event.body);
+        const bp = await savePartnerBlueprint(userId, preferences);
+        return { statusCode: 200, headers, body: JSON.stringify(bp) };
+    }
+    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
+}
+
+async function handleMatchesRequest(event, headers, method) {
+    const userId = event.user.userId;
+    const type = event.queryStringParameters?.type || 'partner';
+    if (method === 'GET') {
+        const matches = await findMatches(userId, type);
+        return { statusCode: 200, headers, body: JSON.stringify(matches) };
+    }
+    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
+}
 
 // --- HANDLER FOR BODY SCANS ---
 async function handleBodyScansRequest(event, headers, method, pathParts) {
@@ -213,7 +272,7 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
 
         // Get Customer Details
         /** @type {any} */
-        const customerDataResponse = /** @type {any} */ (await callShopifyStorefrontAPI(customerQuery, { token: accessToken }));
+        const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, { token: accessToken });
         const customer = customerDataResponse?.customer;
 
         if (!customer) throw new Error("Could not retrieve customer details from Shopify.");

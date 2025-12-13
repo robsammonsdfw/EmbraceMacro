@@ -1,5 +1,6 @@
 
-import type { NutritionInfo, Recipe, SavedMeal, MealLogEntry, MealPlan, MealPlanItem, GroceryList, GroceryItem, RewardsSummary, BodyScan, MealPlanItemMetadata, Order, LabResult } from '../types';
+
+import type { NutritionInfo, Recipe, SavedMeal, MealLogEntry, MealPlan, MealPlanItem, GroceryList, GroceryItem, RewardsSummary, BodyScan, MealPlanItemMetadata, Order, LabResult, Assessment, MatchProfile, PartnerBlueprint } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
 const AUTH_TOKEN_KEY = 'embracehealth-api-token';
@@ -298,4 +299,28 @@ export const getOrders = (): Promise<Order[]> => {
 
 export const getLabs = (): Promise<LabResult[]> => {
     return callApi('/labs', 'GET');
+};
+
+// --- Sprint 7.1: Assessment Engine ---
+
+export const getAssessments = (): Promise<Assessment[]> => {
+    return callApi('/assessments', 'GET');
+};
+
+export const submitAssessment = (assessmentId: string, responses: Record<string, any>): Promise<{ success: boolean }> => {
+    return callApi(`/assessments/${assessmentId}/submit`, 'POST', { responses });
+};
+
+// --- Sprint 7.2: Matching & Blueprint ---
+
+export const getPartnerBlueprint = (): Promise<PartnerBlueprint> => {
+    return callApi('/blueprint', 'GET');
+};
+
+export const savePartnerBlueprint = (preferences: Record<string, any>): Promise<PartnerBlueprint> => {
+    return callApi('/blueprint', 'POST', { preferences });
+};
+
+export const getMatches = (type: 'partner' | 'coach'): Promise<MatchProfile[]> => {
+    return callApi(`/matches?type=${type}`, 'GET');
 };

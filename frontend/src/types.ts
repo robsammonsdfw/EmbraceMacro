@@ -156,3 +156,44 @@ export interface LabResult {
   status: string; // e.g. "Ordered", "Processing", "Results Ready"
   orderNumber: number;
 }
+
+// --- Sprint 7.1: Assessment Engine ---
+export interface Question {
+    id: string;
+    text: string;
+    type: 'scale' | 'choice' | 'boolean';
+    options?: { label: string; value: any }[];
+    min?: number;
+    max?: number;
+}
+
+export interface Assessment {
+    id: string;
+    title: string;
+    description: string;
+    questions: Question[];
+}
+
+export interface UserTrait {
+    trait: string;
+    value: number; // 0.0 to 1.0
+    updatedAt: string;
+}
+
+// --- Sprint 7.2: Matching & Blueprint ---
+export interface BlueprintPreference {
+    target: number; // 0.0 to 1.0 (Desired trait value)
+    importance: number; // 0.0 to 1.0 (Weight)
+    isDealbreaker: boolean;
+}
+
+export interface PartnerBlueprint {
+    preferences: Record<string, BlueprintPreference>;
+}
+
+export interface MatchProfile {
+    userId: number;
+    email: string; // Or pseudonym
+    compatibilityScore: number; // 0-100%
+    traits: Record<string, number>;
+}

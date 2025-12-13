@@ -1,4 +1,5 @@
 
+
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import * as apiService from './services/apiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
@@ -25,8 +26,11 @@ import { AppLayout } from './components/layout/AppLayout';
 import { CommandCenter } from './components/dashboard/CommandCenter';
 import { OrdersCard } from './components/dashboard/OrdersCard';
 import { LabsCard } from './components/dashboard/LabsCard';
+import { AssessmentHub } from './components/tests/AssessmentHub';
+import { PartnerBlueprint } from './components/matching/PartnerBlueprint';
+import { CoachMatch } from './components/matching/CoachMatch';
 
-type ActiveView = 'home' | 'plan' | 'meals' | 'history' | 'suggestions' | 'grocery' | 'rewards' | 'body' | 'labs' | 'orders';
+type ActiveView = 'home' | 'plan' | 'meals' | 'history' | 'suggestions' | 'grocery' | 'rewards' | 'body' | 'labs' | 'orders' | 'assessments' | 'blueprint';
 type MealDataType = NutritionInfo | SavedMeal | MealLogEntry;
 type AppMode = 'hub' | 'meals';
 
@@ -367,6 +371,13 @@ const App: React.FC = () => {
                                   />;
         case 'grocery': return <GroceryList mealPlans={mealPlans} />;
         case 'rewards': return <RewardsDashboard />;
+        case 'assessments': return <AssessmentHub />;
+        case 'blueprint': return (
+            <div className="space-y-8">
+                <PartnerBlueprint />
+                <CoachMatch />
+            </div>
+        );
         case 'orders': return (
             <div className="space-y-4">
                 <h2 className="text-2xl font-bold text-slate-800">Your Orders</h2>

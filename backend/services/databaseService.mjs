@@ -1,4 +1,5 @@
 
+
 import pg from 'pg';
 
 const { Pool } = pg;
@@ -63,6 +64,8 @@ export const findOrCreateUserByEmail = async (email, shopifyId = null) => {
         
         // Ensure rewards tables exist
         await ensureRewardsTables(client);
+        // Ensure assessment tables exist (Sprint 7)
+        await ensureAssessmentTables(client);
         
         // Ensure rewards balance entry exists for this user
         await client.query(`
@@ -127,6 +130,28 @@ const ensureRewardsTables = async (client) => {
             created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
             metadata JSONB DEFAULT '{}'
         );
+    `);
+};
+
+// --- Sprint 7: Assessment & Matching Schema ---
+
+const ensureAssessmentTables = async (client) => {
+    await client.query(`
+        CREATE TABLE IF NOT EXISTS user_traits (
+            user_id INT REFERENCES users(id),
+            trait_key VARCHAR(50),
+            value FLOAT, -- Normalized 0-1
+            updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, trait_key)
+        );
+
+        CREATE TABLE IF NOT EXISTS partner_blueprints (
+            user_id INT PRIMARY KEY REFERENCES users(id),
+            preferences JSONB DEFAULT '{}', -- Keyed by trait_key
+            updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+        
+        -- Creating a dummy assessment if needed (handled in getAssessments)
     `);
 };
 
@@ -880,6 +905,159 @@ export const getBodyScans = async (userId) => {
     } catch (err) {
         console.error('Database error in getBodyScans:', err);
         throw new Error('Could not retrieve scans.');
+    } finally {
+        client.release();
+    }
+};
+
+// --- Sprint 7: Assessment & Matching Logic ---
+
+export const getAssessments = async () => {
+    // Hardcoded assessments for this sprint
+    return [
+        {
+            id: 'sleep_habits',
+            title: 'Sleep Habits',
+            description: 'Understand your sleep patterns to improve recovery.',
+            questions: [
+                { id: 'q1', text: 'How often do you snore?', type: 'choice', options: [{ label: 'Never', value: 0 }, { label: 'Sometimes', value: 0.5 }, { label: 'Often', value: 1 }] },
+                { id: 'q2', text: 'How rested do you feel upon waking?', type: 'scale', min: 1, max: 10 },
+                { id: 'q3', text: 'Do you use a sleep tracker?', type: 'boolean' }
+            ]
+        },
+        {
+            id: 'training_style',
+            title: 'Training Style',
+            description: 'Find partners who match your workout intensity.',
+            questions: [
+                { id: 'q1', text: 'Preferred workout time?', type: 'choice', options: [{ label: 'Morning', value: 1 }, { label: 'Evening', value: 2 }] },
+                { id: 'q2', text: 'Intensity level preference?', type: 'scale', min: 1, max: 10 }
+            ]
+        }
+    ];
+};
+
+export const submitAssessment = async (userId, assessmentId, responses) => {
+    const client = await pool.connect();
+    try {
+        // Simple logic: Calculate a trait based on responses
+        let traitKey = '';
+        let traitValue = 0;
+
+        if (assessmentId === 'sleep_habits') {
+            traitKey = 'sleep_quality';
+            // Mock calc: higher rested score (q2) = higher quality. q1 snore lowers it.
+            const q2 = responses['q2'] || 5;
+            const q1 = responses['q1'] || 0;
+            traitValue = (q2 / 10) - (q1 * 0.2); 
+            if (traitValue < 0) traitValue = 0;
+            if (traitValue > 1) traitValue = 1;
+        } else if (assessmentId === 'training_style') {
+            traitKey = 'intensity_preference';
+            const q2 = responses['q2'] || 5;
+            traitValue = q2 / 10;
+        }
+
+        if (traitKey) {
+            const query = `
+                INSERT INTO user_traits (user_id, trait_key, value)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (user_id, trait_key) 
+                DO UPDATE SET value = $3, updated_at = CURRENT_TIMESTAMP;
+            `;
+            await client.query(query, [userId, traitKey, traitValue]);
+        }
+        
+        await awardPoints(userId, 'assessment.completed', 50);
+        return { success: true };
+    } catch (err) {
+        console.error('Error submitting assessment:', err);
+        throw new Error('Failed to submit assessment.');
+    } finally {
+        client.release();
+    }
+};
+
+export const getPartnerBlueprint = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query('SELECT preferences FROM partner_blueprints WHERE user_id = $1', [userId]);
+        if (res.rows.length === 0) return { preferences: {} };
+        return { preferences: res.rows[0].preferences };
+    } finally {
+        client.release();
+    }
+};
+
+export const savePartnerBlueprint = async (userId, preferences) => {
+    const client = await pool.connect();
+    try {
+        const query = `
+            INSERT INTO partner_blueprints (user_id, preferences)
+            VALUES ($1, $2)
+            ON CONFLICT (user_id)
+            DO UPDATE SET preferences = $2, updated_at = CURRENT_TIMESTAMP
+            RETURNING preferences;
+        `;
+        const res = await client.query(query, [userId, preferences]);
+        return { preferences: res.rows[0].preferences };
+    } finally {
+        client.release();
+    }
+};
+
+export const findMatches = async (userId, type) => {
+    const client = await pool.connect();
+    try {
+        // 1. Get current user's blueprint
+        const bpRes = await client.query('SELECT preferences FROM partner_blueprints WHERE user_id = $1', [userId]);
+        const preferences = bpRes.rows[0]?.preferences || {};
+
+        // 2. Get other users' traits
+        // Note: For a real app, we'd filter strictly. For this demo, we fetch all users with traits.
+        const traitsRes = await client.query(`
+            SELECT t.user_id, u.email, t.trait_key, t.value 
+            FROM user_traits t
+            JOIN users u ON t.user_id = u.id
+            WHERE t.user_id != $1
+        `, [userId]);
+
+        // 3. Match Logic (In-Memory for demo simplicity)
+        const userTraitsMap = {};
+        traitsRes.rows.forEach(row => {
+            if (!userTraitsMap[row.user_id]) {
+                userTraitsMap[row.user_id] = { userId: row.user_id, email: row.email, traits: {}, score: 0 };
+            }
+            userTraitsMap[row.user_id].traits[row.trait_key] = row.value;
+        });
+
+        const matches = Object.values(userTraitsMap).map((candidate: any) => {
+            let totalDiff = 0;
+            let traitCount = 0;
+
+            // Loop through preferences
+            for (const [key, pref] of Object.entries(preferences)) {
+                // @ts-ignore
+                if (candidate.traits[key] !== undefined) {
+                    // @ts-ignore
+                    const diff = Math.abs(candidate.traits[key] - pref.target);
+                    // @ts-ignore
+                    totalDiff += diff * (pref.importance || 1);
+                    traitCount++;
+                }
+            }
+
+            if (traitCount === 0) return { ...candidate, compatibilityScore: 50 }; // Default neutral
+
+            const avgDiff = totalDiff / traitCount;
+            const score = Math.max(0, Math.min(100, (1 - avgDiff) * 100));
+            return { ...candidate, compatibilityScore: Math.round(score) };
+        });
+
+        // Sort by score
+        // @ts-ignore
+        return matches.sort((a, b) => b.compatibilityScore - a.compatibilityScore);
+
     } finally {
         client.release();
     }
