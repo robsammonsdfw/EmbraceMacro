@@ -244,14 +244,13 @@ const App: React.FC = () => {
   const handleConfirmAddToPlan = async (planId: number, metadata: MealPlanItemMetadata) => {
     if (!mealToAdd) return;
     
-    const addItem = async (force: boolean = false) => {
+    // Simplified logic: Just add, backend handles allowing duplicates now.
+    const addItem = async () => {
         let newItem;
         if ('id' in mealToAdd && 'createdAt' in mealToAdd) { // MealLogEntry
-            // MealLogEntry doesn't support force yet in this implementation as it creates new, but SavedMeal does.
-            // For now only addMealToPlan handles duplicates explicitly.
             newItem = await apiService.addMealFromHistoryToPlan(planId, mealToAdd, metadata);
         } else if ('id' in mealToAdd) { // SavedMeal
-            newItem = await apiService.addMealToPlan(planId, (mealToAdd as SavedMeal).id, metadata, force);
+            newItem = await apiService.addMealToPlan(planId, (mealToAdd as SavedMeal).id, metadata);
         } else { // NutritionInfo
             newItem = await apiService.addMealFromHistoryToPlan(planId, mealToAdd, metadata);
         }
@@ -259,7 +258,7 @@ const App: React.FC = () => {
     };
 
     try {
-        const newItem = await addItem(false);
+        const newItem = await addItem();
         if (newItem) {
             setMealPlans(plans => plans.map(p => p.id === planId ? { ...p, items: [...p.items, newItem] } : p));
         }
@@ -267,20 +266,7 @@ const App: React.FC = () => {
              await apiService.addGroceryItem(activePlanId || 0, mealToAdd.mealName); 
         }
     } catch(err: any) {
-        if (err.status === 409 || err.message.includes('already in the selected plan')) {
-            if (window.confirm("This meal is already in your plan. Do you want to add it again?")) {
-                try {
-                    const newItem = await addItem(true);
-                    if (newItem) {
-                        setMealPlans(plans => plans.map(p => p.id === planId ? { ...p, items: [...p.items, newItem] } : p));
-                    }
-                } catch (retryErr) {
-                    setError("Failed to add duplicate meal.");
-                }
-            }
-        } else {
-            setError("Failed to add meal to plan.");
-        }
+        setError("Failed to add meal to plan.");
     } finally {
         setIsAddToPlanModalOpen(false);
         setMealToAdd(null);
@@ -288,26 +274,16 @@ const App: React.FC = () => {
   };
 
   const handleQuickAdd = async (planId: number, meal: SavedMeal, day: string, slot: string) => {
-      const addItem = async (force: boolean) => {
-          return await apiService.addMealToPlan(planId, meal.id, { day, slot, portion: 1, context: 'Home' }, force);
+      // Simplified logic: Just add, backend handles allowing duplicates now.
+      const addItem = async () => {
+          return await apiService.addMealToPlan(planId, meal.id, { day, slot, portion: 1, context: 'Home' });
       };
 
       try {
-          const newItem = await addItem(false);
+          const newItem = await addItem();
           setMealPlans(plans => plans.map(p => p.id === planId ? { ...p, items: [...p.items, newItem] } : p));
       } catch (err: any) {
-          if (err.status === 409 || err.message.includes('already in the selected plan')) {
-              if (window.confirm("This meal is already in your plan. Do you want to add it again?")) {
-                  try {
-                      const newItem = await addItem(true);
-                      setMealPlans(plans => plans.map(p => p.id === planId ? { ...p, items: [...p.items, newItem] } : p));
-                  } catch (retryErr) {
-                      setError("Failed to add duplicate meal.");
-                  }
-              }
-          } else {
-              setError("Failed to add meal to plan.");
-          }
+          setError("Failed to add meal to plan.");
       }
   };
 

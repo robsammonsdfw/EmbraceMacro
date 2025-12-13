@@ -245,8 +245,7 @@ async function handleCustomerLogin(event, headers, jwtSecret) {
             `;
             const variables = { input: { email, password } };
             try {
-                /** @type {any} */
-                const shopifyData = await callShopifyStorefrontAPI(mutation, variables);
+                const shopifyData = /** @type {any} */ (await callShopifyStorefrontAPI(mutation, variables));
                 const { customerAccessToken, customerUserErrors } = shopifyData.customerAccessTokenCreate;
                 if (customerUserErrors && customerUserErrors.length > 0) {
                     throw new Error(customerUserErrors[0].message);
@@ -439,9 +438,9 @@ async function handleMealPlansRequest(event, headers, method, pathParts) {
     }
     if (method === 'POST' && pathParts.length === 3 && pathParts[2] === 'items') {
         const planId = parseInt(pathParts[1], 10);
-        const { savedMealId, mealData, metadata, force } = JSON.parse(event.body);
+        const { savedMealId, mealData, metadata } = JSON.parse(event.body);
         if (savedMealId) {
-            const newItem = await addMealToPlanItem(userId, planId, savedMealId, metadata, force);
+            const newItem = await addMealToPlanItem(userId, planId, savedMealId, metadata);
             return { statusCode: 201, headers, body: JSON.stringify(newItem) };
         } else if (mealData) {
             const newItem = await addMealAndLinkToPlan(userId, mealData, planId, metadata);

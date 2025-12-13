@@ -156,23 +156,35 @@ const ensureTables = async (client) => {
         );
     `);
 
-    // Migration: Relax constraints on meal_plan_items to allow duplicates if desired
+    // Migration: Aggressively remove ANY unique constraints on meal_plan_items
+    // to allow duplicate meals (e.g. leftovers, same meal every day)
     try {
         await client.query(`
             DO $$ 
+            DECLARE r RECORD;
             BEGIN 
-                -- Drop the unique constraint if it exists (standard naming convention)
-                IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'meal_plan_items_meal_plan_id_saved_meal_id_key') THEN 
-                    ALTER TABLE meal_plan_items DROP CONSTRAINT meal_plan_items_meal_plan_id_saved_meal_id_key; 
-                END IF;
-                -- Also check for unique index
-                IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'meal_plan_items_meal_plan_id_saved_meal_id_key') THEN
-                    DROP INDEX meal_plan_items_meal_plan_id_saved_meal_id_key;
-                END IF;
+                -- Drop named unique constraints
+                FOR r IN (
+                    SELECT conname 
+                    FROM pg_constraint 
+                    WHERE conrelid = 'meal_plan_items'::regclass AND contype = 'u'
+                ) LOOP 
+                    EXECUTE 'ALTER TABLE meal_plan_items DROP CONSTRAINT ' || quote_ident(r.conname); 
+                END LOOP;
+
+                -- Drop unique indexes (sometimes created without a constraint wrapper)
+                FOR r IN (
+                    SELECT indexname 
+                    FROM pg_indexes 
+                    WHERE tablename = 'meal_plan_items' 
+                    AND indexdef LIKE '%UNIQUE%'
+                ) LOOP 
+                    EXECUTE 'DROP INDEX ' || quote_ident(r.indexname); 
+                END LOOP;
             END $$;
         `);
     } catch (e) {
-        console.warn("Soft migration for meal_plan_items failed (safe to ignore if constraint doesnt exist):", e.message);
+        console.warn("Soft migration for meal_plan_items failed (safe to ignore if table doesn't exist):", e.message);
     }
 };
 
@@ -510,7 +522,7 @@ export const deleteMealPlan = async (userId, planId) => {
 };
 
 
-export const addMealToPlanItem = async (userId, planId, savedMealId, metadata = {}, force = false) => {
+export const addMealToPlanItem = async (userId, planId, savedMealId, metadata = {}) => {
     const client = await pool.connect();
     try {
         // Verify ownership
@@ -523,22 +535,7 @@ export const addMealToPlanItem = async (userId, planId, savedMealId, metadata = 
             throw new Error("Authorization error: Cannot add meal to a plan you don't own, or meal/plan does not exist.");
         }
 
-        // DUPLICATE CHECK logic (since we dropped the strict constraint, we check manually)
-        // If force is false, we check for duplicates.
-        if (!force) {
-            const dupeCheck = await client.query(
-                `SELECT id FROM meal_plan_items WHERE meal_plan_id = $1 AND saved_meal_id = $2`, 
-                [planId, savedMealId]
-            );
-            if (dupeCheck.rows.length > 0) {
-                // Throw a custom error object that the handler can interpret as 409
-                const error = new Error('This meal is already in the selected plan.');
-                // @ts-ignore
-                error.status = 409; 
-                throw error;
-            }
-        }
-
+        // NO DUPLICATE CHECK: We explicitly allow multiple of the same meal in a plan.
         const insertQuery = `
             INSERT INTO meal_plan_items (user_id, meal_plan_id, saved_meal_id, metadata)
             VALUES ($1, $2, $3, $4)
@@ -568,12 +565,6 @@ export const addMealToPlanItem = async (userId, planId, savedMealId, metadata = 
         };
 
     } catch (err) {
-        if (err.status === 409 || err.code === '23505') { 
-            const error = new Error('This meal is already in the selected plan.');
-            // @ts-ignore
-            error.status = 409;
-            throw error;
-        }
         console.error('Database error in addMealToPlanItem:', err);
         throw err;
     } finally {
@@ -587,8 +578,8 @@ export const addMealAndLinkToPlan = async (userId, mealData, planId, metadata = 
     try {
         await client.query('BEGIN');
         const newMeal = await saveMeal(userId, mealData);
-        // Force is true for new meals because they are by definition unique ID at this point
-        const newPlanItem = await addMealToPlanItem(userId, planId, newMeal.id, metadata, true);
+        // Add item without duplicate restriction
+        const newPlanItem = await addMealToPlanItem(userId, planId, newMeal.id, metadata);
         await client.query('COMMIT');
         return newPlanItem;
     } catch (err) {
@@ -1084,19 +1075,18 @@ export const findMatches = async (userId, type) => {
         });
 
         const matches = Object.values(userTraitsMap).map((candidate) => {
-            /** @type {any} */
-            const c = candidate;
+            const c = /** @type {any} */ (candidate);
 
             let totalDiff = 0;
             let traitCount = 0;
 
             // Loop through preferences
             for (const [key, value] of Object.entries(preferences)) {
-                /** @type {any} */
-                const pref = value;
+                const pref = /** @type {any} */ (value);
 
-                if (c.traits[key] !== undefined) {
-                    const diff = Math.abs(c.traits[key] - pref.target);
+                if (c.traits && c.traits[key] !== undefined) {
+                    const target = typeof pref.target === 'number' ? pref.target : 0;
+                    const diff = Math.abs(c.traits[key] - target);
                     totalDiff += diff * (pref.importance || 1);
                     traitCount++;
                 }

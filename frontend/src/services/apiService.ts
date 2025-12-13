@@ -233,8 +233,8 @@ export const deleteMealPlan = (planId: number): Promise<null> => {
     return callApi(`/meal-plans/${planId}`, 'DELETE');
 };
 
-export const addMealToPlan = (planId: number, savedMealId: number, metadata?: MealPlanItemMetadata, force = false): Promise<MealPlanItem> => {
-    return callApi(`/meal-plans/${planId}/items`, 'POST', { savedMealId, metadata, force });
+export const addMealToPlan = (planId: number, savedMealId: number, metadata?: MealPlanItemMetadata): Promise<MealPlanItem> => {
+    return callApi(`/meal-plans/${planId}/items`, 'POST', { savedMealId, metadata });
 };
 
 export const addMealFromHistoryToPlan = (planId: number, mealData: NutritionInfo, metadata?: MealPlanItemMetadata): Promise<MealPlanItem> => {
