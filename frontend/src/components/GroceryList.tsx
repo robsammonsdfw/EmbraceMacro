@@ -1,9 +1,8 @@
 
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { GroceryItem, GroceryList as GroceryListType, MealPlan } from '../types';
 import * as apiService from '../services/apiService';
-import { ClipboardListIcon, TrashIcon, PlusIcon, StarIcon, BeakerIcon } from './icons';
+import { ClipboardListIcon, TrashIcon, PlusIcon, StarIcon, BeakerIcon, CameraIcon, MenuIcon } from './icons';
 
 interface GroceryListProps {
   mealPlans: MealPlan[];
@@ -24,6 +23,10 @@ export const GroceryList: React.FC<GroceryListProps> = ({ mealPlans }) => {
   const [selectedPlansForImport, setSelectedPlansForImport] = useState<Set<number>>(new Set());
 
   const [newItemName, setNewItemName] = useState('');
+  const [showClearMenu, setShowClearMenu] = useState(false);
+  const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Initial Load
   useEffect(() => {
@@ -91,7 +94,6 @@ export const GroceryList: React.FC<GroceryListProps> = ({ mealPlans }) => {
       if (!activeListId || selectedPlansForImport.size === 0) return;
 
       try {
-          // New API call to merge ingredients
           const updatedItems = await apiService.importIngredientsFromPlans(activeListId, Array.from(selectedPlansForImport));
           setCurrentItems(updatedItems);
           
@@ -105,9 +107,7 @@ export const GroceryList: React.FC<GroceryListProps> = ({ mealPlans }) => {
   const handleSetActive = async (id: number) => {
       try {
           await apiService.setActiveGroceryList(id);
-          // Update local state
           setLists(prev => prev.map(l => ({ ...l, is_active: l.id === id })));
-          // Actually switch view if different
           if (activeListId !== id) setActiveListId(id);
       } catch (err) {
           console.error("Failed to set active", err);
@@ -129,8 +129,8 @@ export const GroceryList: React.FC<GroceryListProps> = ({ mealPlans }) => {
       }
   };
 
-  const handleAddItem = async (e: React.FormEvent) => {
-      e.preventDefault();
+  const handleAddItem = async (e?: React.FormEvent) => {
+      if (e) e.preventDefault();
       if (!newItemName.trim() || !activeListId) return;
       try {
           const newItem = await apiService.addGroceryItem(activeListId, newItemName);
@@ -142,7 +142,6 @@ export const GroceryList: React.FC<GroceryListProps> = ({ mealPlans }) => {
   };
 
   const handleToggleItem = async (itemId: number, checked: boolean) => {
-      // Optimistic update
       setCurrentItems(prev => prev.map(i => i.id === itemId ? { ...i, checked } : i));
       try {
           await apiService.updateGroceryItem(itemId, checked);
@@ -152,7 +151,6 @@ export const GroceryList: React.FC<GroceryListProps> = ({ mealPlans }) => {
   };
   
   const handleDeleteItem = async (itemId: number) => {
-      // Optimistic update
       const oldItems = [...currentItems];
       setCurrentItems(prev => prev.filter(i => i.id !== itemId));
       try {
@@ -160,6 +158,62 @@ export const GroceryList: React.FC<GroceryListProps> = ({ mealPlans }) => {
       } catch (err) {
           setCurrentItems(oldItems);
       }
+  };
+
+  const handleClearList = async (type: 'all' | 'checked') => {
+      if (!activeListId) return;
+      if (!window.confirm(`Are you sure you want to clear ${type === 'all' ? 'ALL' : 'checked'} items?`)) return;
+
+      try {
+          await apiService.clearGroceryListItems(activeListId, type);
+          if (type === 'all') {
+              setCurrentItems([]);
+          } else {
+              setCurrentItems(prev => prev.filter(i => !i.checked));
+          }
+          setShowClearMenu(false);
+      } catch (err) {
+          alert("Failed to clear items.");
+      }
+  };
+
+  const handleCameraClick = () => {
+      fileInputRef.current?.click();
+  };
+
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file || !activeListId) return;
+
+      setIsAnalyzingImage(true);
+      
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+          try {
+              const base64String = (reader.result as string).split(',')[1];
+              const result = await apiService.identifyGroceryItems(base64String, file.type);
+              
+              if (result && result.items && result.items.length > 0) {
+                  // Add each item to the list
+                  const newItems: GroceryItem[] = [];
+                  for (const itemName of result.items) {
+                      const added = await apiService.addGroceryItem(activeListId, itemName);
+                      newItems.push(added);
+                  }
+                  setCurrentItems(prev => [...prev, ...newItems]);
+              } else {
+                  alert("No items could be identified from the image.");
+              }
+          } catch (err) {
+              console.error(err);
+              alert("Failed to identify items from image.");
+          } finally {
+              setIsAnalyzingImage(false);
+              // Reset input
+              if (fileInputRef.current) fileInputRef.current.value = '';
+          }
+      };
+      reader.readAsDataURL(file);
   };
 
   if (isLoading && lists.length === 0) return <div className="p-8 text-center text-slate-500">Loading your lists...</div>;
@@ -251,19 +305,47 @@ export const GroceryList: React.FC<GroceryListProps> = ({ mealPlans }) => {
       <div className="w-full md:w-2/3">
           {currentList ? (
               <>
-                  <div className="flex justify-between items-end mb-4 pb-2 border-b border-slate-100">
+                  <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-100 relative">
                       <div>
                           <h2 className="text-2xl font-bold text-slate-800">{currentList.name}</h2>
                           <p className="text-sm text-slate-500">
                               {currentList.is_active ? 'Currently Active List' : 'Inactive List'} • {currentItems.length} Items
                           </p>
                       </div>
-                      <button 
-                        onClick={() => setIsImporting(!isImporting)}
-                        className="text-emerald-600 text-sm font-bold flex items-center gap-1 hover:bg-emerald-50 px-3 py-1 rounded-lg transition"
-                      >
-                         <BeakerIcon /> <span>Import from Plan</span>
-                      </button>
+                      
+                      <div className="flex gap-2">
+                          <button 
+                            onClick={() => setIsImporting(!isImporting)}
+                            className="text-emerald-600 text-sm font-bold flex items-center gap-1 hover:bg-emerald-50 px-3 py-1 rounded-lg transition"
+                          >
+                             <BeakerIcon /> <span>Import</span>
+                          </button>
+                          
+                          <div className="relative">
+                              <button 
+                                onClick={() => setShowClearMenu(!showClearMenu)}
+                                className="text-slate-400 hover:text-slate-600 p-2 rounded-lg hover:bg-slate-100"
+                              >
+                                  <MenuIcon />
+                              </button>
+                              {showClearMenu && (
+                                  <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-200 z-10 overflow-hidden animate-fade-in">
+                                      <button 
+                                        onClick={() => handleClearList('checked')}
+                                        className="w-full text-left px-4 py-3 text-sm text-slate-600 hover:bg-slate-50 hover:text-emerald-600 border-b border-slate-100"
+                                      >
+                                          Clear Checked Items
+                                      </button>
+                                      <button 
+                                        onClick={() => handleClearList('all')}
+                                        className="w-full text-left px-4 py-3 text-sm text-red-500 hover:bg-red-50 font-bold"
+                                      >
+                                          Clear Entire List
+                                      </button>
+                                  </div>
+                              )}
+                          </div>
+                      </div>
                   </div>
 
                   {/* Import Modal Area (Inline) */}
@@ -303,13 +385,36 @@ export const GroceryList: React.FC<GroceryListProps> = ({ mealPlans }) => {
                       </div>
                   )}
 
-                  {/* Quick Add Form */}
-                  <form onSubmit={handleAddItem} className="mb-4 flex gap-2">
+                  {/* Smart Add Bar */}
+                  <form onSubmit={handleAddItem} className="mb-4 flex gap-2 relative">
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        capture="environment" 
+                        ref={fileInputRef} 
+                        onChange={handleImageChange} 
+                        className="hidden" 
+                      />
+                      
+                      <button 
+                        type="button" 
+                        onClick={handleCameraClick}
+                        disabled={isAnalyzingImage}
+                        className="bg-indigo-500 text-white p-2 rounded-lg hover:bg-indigo-600 disabled:opacity-50 flex-shrink-0 w-12 flex items-center justify-center"
+                        title="Add from Image"
+                      >
+                          {isAnalyzingImage ? (
+                              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          ) : (
+                              <CameraIcon />
+                          )}
+                      </button>
+
                       <input 
                         type="text" 
                         value={newItemName}
                         onChange={e => setNewItemName(e.target.value)}
-                        placeholder="Add an item..."
+                        placeholder="Add item..."
                         className="flex-grow p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 focus:outline-none"
                       />
                       <button type="submit" disabled={!newItemName.trim()} className="bg-slate-800 text-white px-4 py-2 rounded-lg hover:bg-slate-900 disabled:opacity-50">
@@ -344,7 +449,7 @@ export const GroceryList: React.FC<GroceryListProps> = ({ mealPlans }) => {
                         </li>
                     ))}
                     {currentItems.length === 0 && (
-                        <li className="text-center text-slate-400 py-8 italic">List is empty. Add items or import from a meal plan.</li>
+                        <li className="text-center text-slate-400 py-8 italic">List is empty. Add items, import from plan, or snap a photo.</li>
                     )}
                   </ul>
               </>

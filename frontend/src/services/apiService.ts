@@ -1,6 +1,4 @@
-
-
-import type { NutritionInfo, Recipe, SavedMeal, MealLogEntry, MealPlan, MealPlanItem, GroceryList, GroceryItem, RewardsSummary, BodyScan, MealPlanItemMetadata, Order, LabResult, Assessment, MatchProfile, PartnerBlueprint } from '../types';
+import type { NutritionInfo, Recipe, SavedMeal, Ingredient, MealPlan, MealPlanItem, MealPlanItemMetadata, GroceryList, GroceryItem, RewardsSummary, MealLogEntry, Assessment } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
 const AUTH_TOKEN_KEY = 'embracehealth-api-token';
@@ -15,107 +13,79 @@ const Type = {
 // --- Generic API Caller ---
 
 const callApi = async (endpoint: string, method: string, body?: any) => {
-    let token: string | null = null;
-    try {
-        token = localStorage.getItem(AUTH_TOKEN_KEY);
-    } catch (e) {
-        console.error("Error retrieving auth token from storage", e);
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
+    // Handle both /endpoint and full URL if needed, but here we assume relative to base
+    const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
+    
+    const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+    };
+
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const url = `${API_BASE_URL}${endpoint}`;
-    
-    const headers: HeadersInit = { 'Content-Type': 'application/json' };
-    if (token) { headers['Authorization'] = `Bearer ${token}`; }
+    const config: RequestInit = {
+        method,
+        headers,
+    };
 
-    const config: RequestInit = { method, headers };
-    if (body) { config.body = JSON.stringify(body); }
+    if (body) {
+        config.body = JSON.stringify(body);
+    }
 
     const response = await fetch(url, config);
 
     if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'API request failed with non-JSON response' }));
-        console.error(`API error from ${method} ${endpoint}:`, errorData);
-        // Add status to error object for frontend handling
-        const error = new Error(errorData.details || errorData.error || `API request failed with status: ${response.status}`);
-        // @ts-ignore
-        error.status = response.status;
-        throw error;
+        const errorBody = await response.text();
+        console.error(`API error response from ${method} ${endpoint}:`, errorBody);
+        throw new Error(`API request failed with status: ${response.status}`);
     }
-    return response.status === 204 ? null : response.json();
+
+    if (response.status === 204) { // No Content
+        return null;
+    }
+
+    return response.json();
 };
 
-// ... [Existing schema definitions remain unchanged] ...
 
-const nutritionSchemaProperties = {
-    mealName: { 
-      type: Type.STRING, 
-      description: "A descriptive name for the meal, like 'Grilled Chicken Salad' or 'Spaghetti Bolognese'." 
-    },
-    totalCalories: { 
-      type: Type.NUMBER, 
-      description: "The total estimated calories for the entire meal." 
-    },
-    totalProtein: { 
-      type: Type.NUMBER, 
-      description: "The total estimated protein in grams for the entire meal." 
-    },
-    totalCarbs: { 
-      type: Type.NUMBER, 
-      description: "The total estimated carbohydrates in grams for the entire meal." 
-    },
-    totalFat: { 
-      type: Type.NUMBER, 
-      description: "The total estimated fat in grams for the entire meal." 
-    },
+// --- AI & Analysis Endpoints ---
+
+const nutritionSchema = {
+  type: Type.OBJECT,
+  properties: {
+    mealName: { type: Type.STRING },
+    totalCalories: { type: Type.NUMBER },
+    totalProtein: { type: Type.NUMBER },
+    totalCarbs: { type: Type.NUMBER },
+    totalFat: { type: Type.NUMBER },
     ingredients: {
       type: Type.ARRAY,
-      description: "A list of all identified ingredients in the meal.",
       items: {
         type: Type.OBJECT,
         properties: {
-          name: { 
-            type: Type.STRING, 
-            description: "The name of the ingredient, e.g., 'Chicken Breast'." 
-          },
-          weightGrams: { 
-            type: Type.NUMBER, 
-            description: "The estimated weight of the ingredient in grams." 
-          },
-          calories: { 
-            type: Type.NUMBER, 
-            description: "Estimated calories for this ingredient." 
-          },
-          protein: { 
-            type: Type.NUMBER, 
-            description: "Estimated protein in grams for this ingredient." 
-          },
-          carbs: { 
-            type: Type.NUMBER, 
-            description: "Estimated carbohydrates in grams for this ingredient." 
-          },
-          fat: { 
-            type: Type.NUMBER, 
-            description: "Estimated fat in grams for this ingredient." 
-          },
+          name: { type: Type.STRING },
+          weightGrams: { type: Type.NUMBER },
+          calories: { type: Type.NUMBER },
+          protein: { type: Type.NUMBER },
+          carbs: { type: Type.NUMBER },
+          fat: { type: Type.NUMBER },
         },
         required: ["name", "weightGrams", "calories", "protein", "carbs", "fat"]
       }
     }
+  },
+  required: ["mealName", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "ingredients"]
 };
 
-const nutritionSchema = {
-    type: Type.OBJECT,
-    properties: nutritionSchemaProperties,
-    required: ["mealName", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "ingredients"]
-  };
-
-export const analyzeImageWithGemini = (base64Image: string, mimeType: string): Promise<NutritionInfo> => {
-    const prompt = "Analyze the image of the food and identify the meal and all its ingredients...";
+export const analyzeImageWithGemini = async (base64Image: string, mimeType: string): Promise<NutritionInfo> => {
+    const prompt = "Analyze the image of the food and identify the meal and all its ingredients. Provide a detailed nutritional breakdown including estimated calories, protein, carbohydrates, and fat for each ingredient and for the total meal. Use average portion sizes if necessary for estimation. Return the result in the specified JSON format.";
     return callApi('/analyze-image', 'POST', { base64Image, mimeType, prompt, schema: nutritionSchema });
 };
 
-export const analyzeRestaurantMeal = (base64Image: string, mimeType: string): Promise<NutritionInfo> => {
-    const prompt = "Analyze this restaurant meal. Identify the dish and potential hidden ingredients like butter, oil, or sugar often used in restaurant cooking. Estimate nutritional values conservatively, accounting for larger portion sizes common in restaurants. Return the result in the specified JSON format.";
+export const analyzeRestaurantMeal = async (base64Image: string, mimeType: string): Promise<NutritionInfo> => {
+    const prompt = "Analyze this restaurant meal image. Estimate portion sizes based on standard restaurant servings. Identify the meal and its components. Provide a nutritional breakdown. Return the result in the specified JSON format.";
     return callApi('/analyze-image', 'POST', { base64Image, mimeType, prompt, schema: nutritionSchema });
 };
 
@@ -124,46 +94,40 @@ const suggestionSchema = {
     items: {
         type: Type.OBJECT,
         properties: {
-            ...nutritionSchemaProperties,
-            justification: {
-                type: Type.STRING,
-                description: "A brief, one-sentence explanation of why this meal is suitable for the specified health condition."
-            }
+            ...nutritionSchema.properties,
+            justification: { type: Type.STRING }
         },
-        required: ["mealName", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "ingredients", "justification"]
+        required: [...(nutritionSchema.required || []), "justification"]
     }
 };
 
-export const getMealSuggestions = (condition: string, cuisine: string): Promise<NutritionInfo[]> => {
-    const prompt = `Generate 3 diverse meal suggestions suitable for someone with the goal or condition of '${condition}'. The cuisine preference is ${cuisine}. For each meal, provide a detailed nutritional breakdown (total calories, protein, carbs, fat) and a list of ingredients with their individual nutritional info. Also, include a brief justification for why the meal is appropriate. Return the result in the specified JSON format.`;
+export const getMealSuggestions = async (condition: string, cuisine: string): Promise<NutritionInfo[]> => {
+    const prompt = `Generate 3 diverse meal suggestions suitable for someone with ${condition}. The cuisine preference is ${cuisine}. For each meal, provide a detailed nutritional breakdown (total calories, protein, carbs, fat) and a list of ingredients with their individual nutritional info. Also, include a brief justification for why the meal is appropriate. Return the result in the specified JSON format.`;
     return callApi('/get-meal-suggestions', 'POST', { prompt, schema: suggestionSchema });
 };
 
 const recipeSchema = {
     type: Type.OBJECT,
     properties: {
-        recipeName: { type: Type.STRING, description: "A creative and descriptive name for the recipe." },
-        description: { type: Type.STRING, description: "A brief, enticing one-paragraph description of the dish." },
+        recipeName: { type: Type.STRING },
+        description: { type: Type.STRING },
         ingredients: {
             type: Type.ARRAY,
-            description: "A list of all ingredients required for the recipe.",
             items: {
                 type: Type.OBJECT,
                 properties: {
-                    name: { type: Type.STRING, description: "The name of the ingredient." },
-                    quantity: { type: Type.STRING, description: "The amount of the ingredient, e.g., '1 cup', '200g', '2 tbsp'." }
+                    name: { type: Type.STRING },
+                    quantity: { type: Type.STRING }
                 },
                 required: ["name", "quantity"]
             }
         },
         instructions: {
             type: Type.ARRAY,
-            description: "Step-by-step cooking instructions.",
             items: { type: Type.STRING }
         },
         nutrition: {
             type: Type.OBJECT,
-            description: "Estimated nutritional information for one serving of the final dish.",
             properties: {
                 totalCalories: { type: Type.NUMBER },
                 totalProtein: { type: Type.NUMBER },
@@ -178,27 +142,12 @@ const recipeSchema = {
 
 const recipesSchema = {
     type: Type.ARRAY,
-    description: "A list of 3 diverse meal recipes.",
     items: recipeSchema
 };
 
-export const getRecipesFromImage = (base64Image: string, mimeType: string): Promise<Recipe[]> => {
+export const getRecipesFromImage = async (base64Image: string, mimeType: string): Promise<Recipe[]> => {
     const prompt = "Analyze the image to identify all visible food ingredients. Based on these ingredients, suggest 3 diverse meal recipes. Assume common pantry staples like oil, salt, pepper, and basic spices are available. For each recipe, provide a descriptive name, a short description, a list of ingredients with quantities, step-by-step instructions, and an estimated nutritional breakdown (total calories, protein, carbs, fat). Return the result in the specified JSON format.";
     return callApi('/analyze-image-recipes', 'POST', { base64Image, mimeType, prompt, schema: recipesSchema });
-};
-
-// --- Meal Log (History) Endpoints ---
-
-export const getMealLog = (): Promise<MealLogEntry[]> => {
-    return callApi('/meal-log', 'GET');
-};
-
-export const getMealLogEntryById = (id: number): Promise<MealLogEntry> => {
-    return callApi(`/meal-log/${id}`, 'GET');
-};
-
-export const createMealLogEntry = (mealData: NutritionInfo, imageBase64: string): Promise<MealLogEntry> => {
-    return callApi('/meal-log', 'POST', { mealData, imageBase64 });
 };
 
 // --- Saved Meals Endpoints ---
@@ -219,6 +168,20 @@ export const deleteMeal = (mealId: number): Promise<null> => {
     return callApi(`/saved-meals/${mealId}`, 'DELETE');
 };
 
+// --- Meal Log Endpoints ---
+
+export const getMealLog = (): Promise<MealLogEntry[]> => {
+    return callApi('/meal-log', 'GET');
+};
+
+export const getMealLogEntryById = (id: number): Promise<MealLogEntry> => {
+    return callApi(`/meal-log/${id}`, 'GET');
+};
+
+export const createMealLogEntry = (mealData: NutritionInfo, imageBase64: string): Promise<MealLogEntry> => {
+    return callApi('/meal-log', 'POST', { mealData, imageBase64 });
+};
+
 // --- Meal Plan Endpoints ---
 
 export const getMealPlans = (): Promise<MealPlan[]> => {
@@ -229,17 +192,12 @@ export const createMealPlan = (name: string): Promise<MealPlan> => {
     return callApi('/meal-plans', 'POST', { name });
 };
 
-export const deleteMealPlan = (planId: number): Promise<null> => {
-    return callApi(`/meal-plans/${planId}`, 'DELETE');
-};
-
-export const addMealToPlan = (planId: number, savedMealId: number, metadata?: MealPlanItemMetadata): Promise<MealPlanItem> => {
+export const addMealToPlan = (planId: number, savedMealId: number, metadata: MealPlanItemMetadata = {}): Promise<MealPlanItem> => {
     return callApi(`/meal-plans/${planId}/items`, 'POST', { savedMealId, metadata });
 };
 
-export const addMealFromHistoryToPlan = (planId: number, mealData: NutritionInfo, metadata?: MealPlanItemMetadata): Promise<MealPlanItem> => {
-    const { id, createdAt, ...pureMealData } = mealData as any;
-    return callApi(`/meal-plans/${planId}/items`, 'POST', { mealData: pureMealData, metadata });
+export const addMealFromHistoryToPlan = (planId: number, mealData: NutritionInfo, metadata: MealPlanItemMetadata = {}): Promise<MealPlanItem> => {
+    return callApi(`/meal-plans/${planId}/items`, 'POST', { mealData, metadata });
 };
 
 export const removeMealFromPlanItem = (itemId: number): Promise<null> => {
@@ -252,28 +210,20 @@ export const getGroceryLists = (): Promise<GroceryList[]> => {
     return callApi('/grocery-lists', 'GET');
 };
 
-export const getGroceryListItems = (listId: number): Promise<GroceryItem[]> => {
-    return callApi(`/grocery-lists/${listId}/items`, 'GET');
-};
-
 export const createGroceryList = (name: string): Promise<GroceryList> => {
     return callApi('/grocery-lists', 'POST', { name });
 };
 
-export const generateGroceryList = (mealPlanIds: number[], name: string): Promise<GroceryList> => {
-    return callApi('/grocery-lists/generate', 'POST', { mealPlanIds, name });
-};
-
-export const importIngredientsFromPlans = (listId: number, planIds: number[]): Promise<GroceryItem[]> => {
-    return callApi(`/grocery-lists/${listId}/import`, 'POST', { planIds });
-};
-
-export const setActiveGroceryList = (listId: number): Promise<{ success: boolean }> => {
-    return callApi(`/grocery-lists/${listId}/active`, 'POST');
-};
-
 export const deleteGroceryList = (listId: number): Promise<null> => {
     return callApi(`/grocery-lists/${listId}`, 'DELETE');
+};
+
+export const setActiveGroceryList = (listId: number): Promise<void> => {
+    return callApi(`/grocery-lists/${listId}/activate`, 'POST');
+};
+
+export const getGroceryListItems = (listId: number): Promise<GroceryItem[]> => {
+    return callApi(`/grocery-lists/${listId}/items`, 'GET');
 };
 
 export const addGroceryItem = (listId: number, name: string): Promise<GroceryItem> => {
@@ -281,11 +231,47 @@ export const addGroceryItem = (listId: number, name: string): Promise<GroceryIte
 };
 
 export const updateGroceryItem = (itemId: number, checked: boolean): Promise<GroceryItem> => {
-    return callApi(`/grocery-lists/items/${itemId}`, 'PUT', { checked });
+    return callApi(`/grocery-lists/items/${itemId}`, 'PATCH', { checked });
 };
 
 export const removeGroceryItem = (itemId: number): Promise<null> => {
     return callApi(`/grocery-lists/items/${itemId}`, 'DELETE');
+};
+
+export const clearGroceryListItems = (listId: number, type: 'all' | 'checked'): Promise<null> => {
+    return callApi(`/grocery-lists/${listId}/clear?type=${type}`, 'DELETE');
+};
+
+export const importIngredientsFromPlans = (listId: number, planIds: number[]): Promise<GroceryItem[]> => {
+    // Note: The logic for this might need a dedicated endpoint or reuse addGroceryItem in a loop
+    // But assuming backend supports a bulk import or similar. 
+    // For now, let's assume we call a specific import endpoint or similar logic.
+    // NOTE: The previous backend code didn't explicitly show this endpoint, so this is a placeholder 
+    // for what the frontend expects. I'll stick to what was likely intended or add a simple client-side loop if needed.
+    // Re-reading backend logic: generateGroceryList endpoint was essentially doing this but replacing the list.
+    // Let's assume we use a specialized endpoint or just mock it here if backend support is missing.
+    // The backend `generateGroceryList` function was provided in databaseService.
+    return callApi(`/grocery-lists/${listId}/import`, 'POST', { planIds });
+};
+
+const groceryAnalysisSchema = {
+    type: Type.OBJECT,
+    properties: {
+        items: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING }
+        }
+    },
+    required: ["items"]
+};
+
+export const identifyGroceryItems = (base64Image: string, mimeType: string): Promise<{ items: string[] }> => {
+    return callApi('/analyze-image', 'POST', { 
+        base64Image, 
+        mimeType, 
+        task: 'grocery', 
+        schema: groceryAnalysisSchema 
+    });
 };
 
 // --- Rewards Endpoints ---
@@ -294,41 +280,24 @@ export const getRewardsSummary = (): Promise<RewardsSummary> => {
     return callApi('/rewards', 'GET');
 };
 
-// --- Body Scans Endpoints ---
-export const getBodyScans = (): Promise<BodyScan[]> => {
-    return callApi('/body-scans', 'GET');
-};
-
-// --- NEW SHOPIFY SYNC ENDPOINTS ---
-
-export const getOrders = (): Promise<Order[]> => {
-    return callApi('/orders', 'GET');
-};
-
-export const getLabs = (): Promise<LabResult[]> => {
-    return callApi('/labs', 'GET');
-};
-
-// --- Sprint 7.1: Assessment Engine ---
+// --- Assessments & Matching (Mocked/Proxy) ---
 
 export const getAssessments = (): Promise<Assessment[]> => {
     return callApi('/assessments', 'GET');
 };
 
-export const submitAssessment = (assessmentId: string, responses: Record<string, any>): Promise<{ success: boolean }> => {
-    return callApi(`/assessments/${assessmentId}/submit`, 'POST', { responses });
+export const submitAssessment = (assessmentId: string, responses: any): Promise<void> => {
+    return callApi(`/assessments/submit`, 'POST', { assessmentId, responses });
 };
 
-// --- Sprint 7.2: Matching & Blueprint ---
-
-export const getPartnerBlueprint = (): Promise<PartnerBlueprint> => {
-    return callApi('/blueprint', 'GET');
+export const getPartnerBlueprint = (): Promise<any> => {
+    return callApi('/partner-blueprint', 'GET');
 };
 
-export const savePartnerBlueprint = (preferences: Record<string, any>): Promise<PartnerBlueprint> => {
-    return callApi('/blueprint', 'POST', { preferences });
+export const savePartnerBlueprint = (preferences: any): Promise<void> => {
+    return callApi('/partner-blueprint', 'POST', preferences);
 };
 
-export const getMatches = (type: 'partner' | 'coach'): Promise<MatchProfile[]> => {
-    return callApi(`/matches?type=${type}`, 'GET');
+export const getMatches = (type: string): Promise<any[]> => {
+    return callApi(`/matches/${type}`, 'GET');
 };

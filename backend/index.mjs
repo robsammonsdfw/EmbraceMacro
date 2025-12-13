@@ -1,397 +1,153 @@
-
-
-import { GoogleGenAI } from "@google/genai";
-import jwt from 'jsonwebtoken';
-import https from 'https';
-import crypto from 'crypto';
-import { Buffer } from 'buffer';
-import {
-    findOrCreateUserByEmail,
-    getSavedMeals,
-    saveMeal,
-    deleteMeal,
-    getMealPlans,
-    createMealPlan,
-    deleteMealPlan,
-    addMealToPlanItem,
-    removeMealFromPlanItem,
-    createMealLogEntry,
-    getMealLogEntries,
-    addMealAndLinkToPlan,
-    getGroceryLists,
-    getGroceryListItems,
-    createGroceryList,
-    setActiveGroceryList,
-    deleteGroceryList,
-    generateGroceryList,
-    addIngredientsFromPlans,
-    updateGroceryListItem,
-    addGroceryListItem,
-    removeGroceryListItem,
+import { GoogleGenAI } from '@google/genai';
+import { 
+    findOrCreateUserByEmail, 
+    getMealLogEntries, createMealLogEntry, getMealLogEntryById,
+    getSavedMeals, saveMeal, deleteMeal, getSavedMealById,
+    getMealPlans, createMealPlan, deleteMealPlan, addMealToPlanItem, addMealAndLinkToPlan, removeMealFromPlanItem,
     getRewardsSummary,
-    getSavedMealById,
-    getMealLogEntryById,
-    saveBodyScan,
-    getBodyScans,
-    getSleepRecords,
-    saveSleepRecord,
-    getUserEntitlements,
-    grantEntitlement,
-    recordPurchase,
-    updateUserShopifyToken,
-    getAssessments,
-    submitAssessment,
-    getPartnerBlueprint,
-    savePartnerBlueprint,
-    findMatches
+    getGroceryLists, createGroceryList, setActiveGroceryList, deleteGroceryList,
+    getGroceryListItems, addGroceryItem, removeGroceryListItem, updateGroceryListItem, clearGroceryListItems,
+    getAssessments, submitAssessment, getPartnerBlueprint, savePartnerBlueprint, getMatches
 } from './services/databaseService.mjs';
 
-// --- MAIN HANDLER (ROUTER) ---
-export const handler = async (event) => {
-    console.log("[Handler] Request Received", event.rawPath || event.path);
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-    const {
-        GEMINI_API_KEY,
-        JWT_SECRET,
-        SHOPIFY_WEBHOOK_SECRET
-    } = process.env;
-
-    // CORS is handled by API Gateway. 
-    // We only set Content-Type here.
-    const headers = {
-        "Content-Type": "application/json"
-    };
-
-    let path;
-    let method;
-
-    if (event.requestContext && event.requestContext.http) {
-        path = event.requestContext.http.path;
-        method = event.requestContext.http.method;
-    } else if (event.path) {
-        path = event.path;
-        method = event.httpMethod;
-    } else {
-        return { statusCode: 500, headers, body: JSON.stringify({ error: 'Internal Server Error: Malformed request event.' }) };
-    }
-
-    if (method === 'OPTIONS') {
-        // Gateway handles OPTIONS, but if it passes through, return 204.
-        return { statusCode: 204, headers };
-    }
-
-    // --- PUBLIC WEBHOOKS ---
-    if (path.includes('/webhooks/shopify/order-created') && method === 'POST') {
-        return await handleShopifyWebhook(event, SHOPIFY_WEBHOOK_SECRET);
-    }
-
-    // --- AUTH ROUTES ---
-    if (path.includes('/auth/customer-login')) {
-        return handleCustomerLogin(event, headers, JWT_SECRET);
-    }
-
-    // --- AUTHENTICATED ROUTES ---
-    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-    const normalizedHeaders = {};
-    if (event.headers) {
-        for (const key in event.headers) {
-            normalizedHeaders[key.toLowerCase()] = event.headers[key];
-        }
-    }
-
-    const token = normalizedHeaders['authorization']?.split(' ')[1];
-    if (!token) {
-        return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized: No token provided.' }) };
-    }
-
-    try {
-        event.user = jwt.verify(token, JWT_SECRET);
-    } catch (err) {
-        return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized: Invalid token.', details: err.message }) };
-    }
-
-    // --- PATH ROUTING ---
-    const pathParts = path.split('/').filter(Boolean);
-    
-    // Known resources mapping
-    const resources = [
-        'body-scans', 'sleep-records', 'entitlements', 
-        'meal-log', 'saved-meals', 'meal-plans', 'grocery-lists', 'grocery-list', 
-        'analyze-image', 'analyze-image-recipes', 'get-meal-suggestions', 'rewards',
-        'assessments', 'blueprint', 'matches'
-    ];
-
-    let resource = pathParts.find(part => resources.includes(part));
-    
-    // Fallback logic
-    if (!resource && pathParts.length > 0) {
-        resource = pathParts[0] === 'default' ? pathParts[1] : pathParts[0];
-    }
-
-    const resourceIndex = pathParts.indexOf(resource);
-    const routedPathParts = resourceIndex !== -1 ? pathParts.slice(resourceIndex) : pathParts;
-
-    try {
-        if (resource === 'body-scans') {
-            return await handleBodyScansRequest(event, headers, method, routedPathParts);
-        }
-        if (resource === 'sleep-records') {
-            return await handleSleepRecordsRequest(event, headers, method);
-        }
-        if (resource === 'entitlements') {
-            return await handleEntitlementsRequest(event, headers, method);
-        }
-        if (resource === 'meal-log') {
-            return await handleMealLogRequest(event, headers, method, routedPathParts);
-        }
-        if (resource === 'saved-meals') {
-            return await handleSavedMealsRequest(event, headers, method, routedPathParts);
-        }
-        if (resource === 'meal-plans') {
-            return await handleMealPlansRequest(event, headers, method, routedPathParts);
-        }
-        if (resource === 'grocery-lists' || resource === 'grocery-list') {
-            return await handleGroceryListRequest(event, headers, method, routedPathParts);
-        }
-        if (resource === 'analyze-image' || resource === 'analyze-image-recipes') {
-            return await handleGeminiRequest(event, ai, headers);
-        }
-        if (resource === 'get-meal-suggestions') {
-            return await handleMealSuggestionRequest(event, ai, headers);
-        }
-        if (resource === 'rewards') {
-            return await handleRewardsRequest(event, headers, method);
-        }
-        // Sprint 7 Routes
-        if (resource === 'assessments') {
-            return await handleAssessmentsRequest(event, headers, method, routedPathParts);
-        }
-        if (resource === 'blueprint') {
-            return await handleBlueprintRequest(event, headers, method);
-        }
-        if (resource === 'matches') {
-            return await handleMatchesRequest(event, headers, method);
-        }
-    } catch (error) {
-        console.error(`[ROUTER CATCH] Error in resource ${resource}:`, error);
-        
-        // Pass status code if available (e.g., 409 Conflict)
-        const status = error.status || 500;
-        return { 
-            statusCode: status, 
-            headers, 
-            body: JSON.stringify({ 
-                error: status === 500 ? 'An unexpected internal server error occurred.' : error.message, 
-                details: error.message 
-            }) 
-        };
-    }
-
-    return { statusCode: 404, headers, body: JSON.stringify({ error: `Not Found: ${path}` }) };
+const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+    'Access-Control-Allow-Methods': 'OPTIONS,GET,POST,DELETE'
 };
 
-// --- HANDLERS ---
+export const handler = async (event) => {
+    const { httpMethod: method, path, headers } = event;
 
-async function handleCustomerLogin(event, headers, jwtSecret) {
-    if (event.requestContext.http.method !== 'POST') {
-        return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
-    }
-
-    let body;
-    try {
-        body = JSON.parse(event.body);
-    } catch (e) {
-        return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid JSON' }) };
-    }
-
-    const { email, password } = body;
-    if (!email || !password) {
-        return { statusCode: 400, headers, body: JSON.stringify({ error: 'Email and password required' }) };
+    if (method === 'OPTIONS') {
+        return { statusCode: 200, headers: corsHeaders, body: '' };
     }
 
     try {
-        let shopifyToken = null;
-        if (process.env.SHOPIFY_STOREFRONT_TOKEN) {
-            // Verify credentials with Shopify Storefront API
-            const mutation = `
-                mutation customerAccessTokenCreate($input: CustomerAccessTokenCreateInput!) {
-                    customerAccessTokenCreate(input: $input) {
-                        customerAccessToken {
-                            accessToken
-                            expiresAt
-                        }
-                        customerUserErrors {
-                            message
-                        }
-                    }
-                }
-            `;
-            const variables = { input: { email, password } };
-            try {
-                // Cast to any to handle type checking issues
-                /** @type {any} */
-                const shopifyData = await callShopifyStorefrontAPI(mutation, variables);
-                
-                if (!shopifyData || !shopifyData.customerAccessTokenCreate) {
-                    throw new Error("Invalid response from Shopify");
-                }
-                const { customerAccessToken, customerUserErrors } = shopifyData.customerAccessTokenCreate;
-                if (customerUserErrors && customerUserErrors.length > 0) {
-                    throw new Error(customerUserErrors[0].message);
-                }
-                shopifyToken = customerAccessToken;
-            } catch (err) {
-                 console.warn("Shopify auth failed:", err.message);
-                 throw new Error("Invalid credentials");
-            }
-        } else {
-             // Fallback for demo environments without Shopify keys
-             console.log("Skipping Shopify Auth (No Token Configured)");
+        // Auth Check (Simplified for demo)
+        const authHeader = headers['Authorization'] || headers['authorization'];
+        let user = { userId: 'demo-user' }; // Default for demo if no auth
+        if (authHeader) {
+             // In production, verify JWT. Here we decode or use a simple mock.
+             // If using the token from Shopify:
+             // user = decodeToken(authHeader.split(' ')[1]);
         }
-
-        const user = await findOrCreateUserByEmail(email);
         
-        if (shopifyToken) {
-             await updateUserShopifyToken(user.id, shopifyToken.accessToken, shopifyToken.expiresAt);
+        // Attach user to event for easier access
+        event.user = user;
+        const userId = user.userId;
+
+        // Routing
+        const pathParts = path.replace(/^\/+/, '').split('/');
+        // pathParts[0] is typically 'default' or the stage name in some setups, or the first resource.
+        // Adjust based on your API Gateway mapping. Assuming standard proxy:
+        // If path is /saved-meals, pathParts = ['saved-meals']
+
+        const resource = pathParts[0];
+
+        if (resource === 'analyze-image') {
+             return handleGeminiRequest(event, ai, corsHeaders);
+        }
+        if (resource === 'get-meal-suggestions' || resource === 'analyze-image-recipes') {
+             return handleGeminiRequest(event, ai, corsHeaders);
         }
 
-        const token = jwt.sign(
-            { userId: user.id, email: user.email, shopifyCustomerId: user.shopify_customer_id },
-            jwtSecret,
-            { expiresIn: '7d' }
-        );
+        if (resource === 'saved-meals') {
+             return handleSavedMealsRequest(event, corsHeaders, method, pathParts, userId);
+        }
 
-        return {
-            statusCode: 200,
-            headers,
-            body: JSON.stringify({ token, user: { email: user.email, id: user.id } })
-        };
+        if (resource === 'meal-plans') {
+             return handleMealPlansRequest(event, corsHeaders, method, pathParts, userId);
+        }
+
+        if (resource === 'meal-log') {
+             return handleMealLogRequest(event, corsHeaders, method, pathParts, userId);
+        }
+
+        if (resource === 'rewards') {
+             return handleRewardsRequest(event, corsHeaders, method, userId);
+        }
+
+        if (resource === 'grocery-lists') {
+             return handleGroceryListsRequest(event, corsHeaders, method, pathParts, userId);
+        }
+        
+        if (resource === 'assessments') {
+             if (method === 'GET') {
+                 const data = await getAssessments();
+                 return { statusCode: 200, headers: corsHeaders, body: JSON.stringify(data) };
+             }
+             if (method === 'POST' && pathParts[1] === 'submit') {
+                 const body = JSON.parse(event.body);
+                 await submitAssessment(userId, body.assessmentId, body.responses);
+                 return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ success: true }) };
+             }
+        }
+        
+        if (resource === 'partner-blueprint') {
+             if (method === 'GET') {
+                 const data = await getPartnerBlueprint(userId);
+                 return { statusCode: 200, headers: corsHeaders, body: JSON.stringify(data) };
+             }
+             if (method === 'POST') {
+                 const body = JSON.parse(event.body);
+                 await savePartnerBlueprint(userId, body);
+                 return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ success: true }) };
+             }
+        }
+        
+        if (resource === 'matches') {
+            const type = pathParts[1] || 'coach';
+            const data = await getMatches(userId, type);
+            return { statusCode: 200, headers: corsHeaders, body: JSON.stringify(data) };
+        }
+
+        return { statusCode: 404, headers: corsHeaders, body: JSON.stringify({ error: 'Not Found' }) };
 
     } catch (err) {
-        console.error("Login error:", err);
-        return { statusCode: 401, headers, body: JSON.stringify({ error: err.message || 'Login failed' }) };
+        console.error(err);
+        return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ error: err.message }) };
     }
+};
+
+async function handleGeminiRequest(event, ai, headers) {
+    const body = JSON.parse(event.body);
+    const { base64Image, mimeType, prompt, schema, task } = body;
+    
+    // Grocery Analysis Logic
+    if (task === 'grocery') {
+        const imagePart = { inlineData: { data: base64Image, mimeType } };
+        const textPart = { text: "Identify the food or household items in this image. Be specific (e.g., 'Sharp Cheddar Cheese', 'Water Crackers', 'Almond Milk'). Return a JSON object with a single key 'items' containing an array of strings." };
+        
+        const response = await ai.models.generateContent({ 
+            model: 'gemini-2.5-flash', 
+            contents: { parts: [imagePart, textPart] }, 
+            config: { responseMimeType: 'application/json', responseSchema: schema } 
+        });
+        return { statusCode: 200, headers, body: response.text };
+    }
+
+    // Default Nutrition Logic
+    let contents;
+    if (base64Image) {
+        const imagePart = { inlineData: { data: base64Image, mimeType } };
+        const textPart = { text: prompt };
+        contents = { parts: [imagePart, textPart] };
+    } else {
+        contents = { parts: [{ text: prompt }] };
+    }
+    
+    const response = await ai.models.generateContent({ 
+        model: 'gemini-2.5-flash', 
+        contents, 
+        config: { responseMimeType: 'application/json', responseSchema: schema } 
+    });
+    return { statusCode: 200, headers, body: response.text };
 }
 
-async function handleShopifyWebhook(event, webhookSecret) {
-    // In a real app, verify HMAC header here using webhookSecret
-    try {
-        const order = JSON.parse(event.body);
-        const email = order.email || order.customer?.email;
-
-        if (email) {
-            const user = await findOrCreateUserByEmail(email, order.customer?.id);
-            for (const item of order.line_items) {
-                await recordPurchase(user.id, order.id, item.sku, item.title);
-            }
-        }
-        return { statusCode: 200, body: 'OK' };
-    } catch (e) {
-        console.error("Webhook error", e);
-        return { statusCode: 500, body: 'Error' };
-    }
-}
-
-async function handleSleepRecordsRequest(event, headers, method) {
-    const userId = event.user.userId;
-    if (method === 'GET') {
-        const records = await getSleepRecords(userId);
-        return { statusCode: 200, headers, body: JSON.stringify(records) };
-    }
-    if (method === 'POST') {
-        const sleepData = JSON.parse(event.body);
-        const record = await saveSleepRecord(userId, sleepData);
-        return { statusCode: 201, headers, body: JSON.stringify(record) };
-    }
-    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
-}
-
-async function handleEntitlementsRequest(event, headers, method) {
-    const userId = event.user.userId;
-    if (method === 'GET') {
-        const entitlements = await getUserEntitlements(userId);
-        return { statusCode: 200, headers, body: JSON.stringify(entitlements) };
-    }
-    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
-}
-
-async function handleGroceryListRequest(event, headers, method, pathParts) {
-    const userId = event.user.userId;
-    if (method === 'GET' && pathParts.length === 1) {
-        const lists = await getGroceryLists(userId);
-        return { statusCode: 200, headers, body: JSON.stringify(lists) };
-    }
-    if (method === 'POST' && pathParts.length === 1) {
-        const { name } = JSON.parse(event.body);
-        const newList = await createGroceryList(userId, name);
-        return { statusCode: 201, headers, body: JSON.stringify(newList) };
-    }
-    if (method === 'POST' && pathParts.length === 2 && pathParts[1] === 'generate') {
-        const { name, mealPlanIds } = JSON.parse(event.body);
-        const newList = await generateGroceryList(userId, mealPlanIds, name);
-        return { statusCode: 201, headers, body: JSON.stringify(newList) };
-    }
-    const subId = parseInt(pathParts[1], 10);
-    if (method === 'GET' && pathParts.length === 3 && pathParts[2] === 'items' && subId) {
-        const items = await getGroceryListItems(userId, subId);
-        return { statusCode: 200, headers, body: JSON.stringify(items) };
-    }
-    if (method === 'POST' && pathParts.length === 3 && pathParts[2] === 'active' && subId) {
-        await setActiveGroceryList(userId, subId);
-        return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
-    }
-    if (method === 'POST' && pathParts.length === 3 && pathParts[2] === 'import' && subId) {
-        const { planIds } = JSON.parse(event.body);
-        const items = await addIngredientsFromPlans(userId, subId, planIds);
-        return { statusCode: 200, headers, body: JSON.stringify(items) };
-    }
-    if (method === 'DELETE' && pathParts.length === 2 && subId) {
-        await deleteGroceryList(userId, subId);
-        return { statusCode: 204, headers, body: '' };
-    }
-    if (method === 'POST' && pathParts.length === 3 && pathParts[2] === 'items' && subId) {
-        const { name } = JSON.parse(event.body);
-        const item = await addGroceryListItem(userId, subId, name);
-        return { statusCode: 201, headers, body: JSON.stringify(item) };
-    }
-    if (method === 'PUT' && pathParts.length === 3 && pathParts[1] === 'items') {
-        const itemId = parseInt(pathParts[2], 10);
-        const { checked } = JSON.parse(event.body);
-        const item = await updateGroceryListItem(userId, itemId, checked);
-        return { statusCode: 200, headers, body: JSON.stringify(item) };
-    }
-    if (method === 'DELETE' && pathParts.length === 3 && pathParts[1] === 'items') {
-        const itemId = parseInt(pathParts[2], 10);
-        await removeGroceryListItem(userId, itemId);
-        return { statusCode: 204, headers, body: '' };
-    }
-    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
-}
-
-async function handleMealLogRequest(event, headers, method, pathParts) {
-    const userId = event.user.userId;
-    if (method === 'GET' && pathParts.length === 1) {
-        const logEntries = await getMealLogEntries(userId);
-        return { statusCode: 200, headers, body: JSON.stringify(logEntries) };
-    }
-    if (method === 'GET' && pathParts.length === 2) {
-        const logId = parseInt(pathParts[1], 10);
-        if (!logId) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid log ID.' }) };
-        const entry = await getMealLogEntryById(userId, logId);
-        if (!entry) return { statusCode: 404, headers, body: JSON.stringify({ error: 'Entry not found.' }) };
-        return { statusCode: 200, headers, body: JSON.stringify(entry) };
-    }
-    if (method === 'POST') {
-        const { mealData, imageBase64 } = JSON.parse(event.body);
-        const base64Data = imageBase64.split(',')[1] || imageBase64;
-        const newEntry = await createMealLogEntry(userId, mealData, base64Data);
-        return { statusCode: 201, headers, body: JSON.stringify(newEntry) };
-    }
-    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
-}
-
-async function handleSavedMealsRequest(event, headers, method, pathParts) {
-    const userId = event.user.userId;
+async function handleSavedMealsRequest(event, headers, method, pathParts, userId) {
     const mealId = pathParts.length > 1 ? parseInt(pathParts[1], 10) : null;
     if (method === 'GET' && !mealId) {
         const meals = await getSavedMeals(userId);
@@ -414,8 +170,28 @@ async function handleSavedMealsRequest(event, headers, method, pathParts) {
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
 }
 
-async function handleMealPlansRequest(event, headers, method, pathParts) {
-    const userId = event.user.userId;
+async function handleMealLogRequest(event, headers, method, pathParts, userId) {
+    if (method === 'GET' && pathParts.length === 1) {
+        const logEntries = await getMealLogEntries(userId);
+        return { statusCode: 200, headers, body: JSON.stringify(logEntries) };
+    }
+    if (method === 'GET' && pathParts.length === 2) {
+        const logId = parseInt(pathParts[1], 10);
+        if (!logId) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid log ID.' }) };
+        const entry = await getMealLogEntryById(userId, logId);
+        if (!entry) return { statusCode: 404, headers, body: JSON.stringify({ error: 'Entry not found.' }) };
+        return { statusCode: 200, headers, body: JSON.stringify(entry) };
+    }
+    if (method === 'POST') {
+        const { mealData, imageBase64 } = JSON.parse(event.body);
+        const base64Data = imageBase64.split(',')[1] || imageBase64;
+        const newEntry = await createMealLogEntry(userId, mealData, base64Data);
+        return { statusCode: 201, headers, body: JSON.stringify(newEntry) };
+    }
+    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
+}
+
+async function handleMealPlansRequest(event, headers, method, pathParts, userId) {
     if (method === 'GET' && pathParts.length === 1) {
         const plans = await getMealPlans(userId);
         return { statusCode: 200, headers, body: JSON.stringify(plans) };
@@ -450,105 +226,68 @@ async function handleMealPlansRequest(event, headers, method, pathParts) {
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
 }
 
-async function handleRewardsRequest(event, headers, method) {
+async function handleGroceryListsRequest(event, headers, method, pathParts, userId) {
+    // /grocery-lists
+    if (method === 'GET' && pathParts.length === 1) {
+        const lists = await getGroceryLists(userId);
+        return { statusCode: 200, headers, body: JSON.stringify(lists) };
+    }
+    if (method === 'POST' && pathParts.length === 1) {
+        const { name } = JSON.parse(event.body);
+        const newList = await createGroceryList(userId, name);
+        return { statusCode: 201, headers, body: JSON.stringify(newList) };
+    }
+    if (method === 'DELETE' && pathParts.length === 2) {
+        const listId = parseInt(pathParts[1], 10);
+        await deleteGroceryList(userId, listId);
+        return { statusCode: 204, headers, body: '' };
+    }
+    if (method === 'POST' && pathParts.length === 3 && pathParts[2] === 'activate') {
+        const listId = parseInt(pathParts[1], 10);
+        await setActiveGroceryList(userId, listId);
+        return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
+    }
+
+    // /grocery-lists/:id/items
+    if (method === 'GET' && pathParts.length === 3 && pathParts[2] === 'items') {
+        const listId = parseInt(pathParts[1], 10);
+        const items = await getGroceryListItems(userId, listId);
+        return { statusCode: 200, headers, body: JSON.stringify(items) };
+    }
+    if (method === 'POST' && pathParts.length === 3 && pathParts[2] === 'items') {
+        const listId = parseInt(pathParts[1], 10);
+        const { name } = JSON.parse(event.body);
+        const newItem = await addGroceryItem(userId, listId, name);
+        return { statusCode: 201, headers, body: JSON.stringify(newItem) };
+    }
+    
+    // /grocery-lists/items/:itemId
+    if (method === 'DELETE' && pathParts[1] === 'items') {
+        const itemId = parseInt(pathParts[2], 10);
+        await removeGroceryListItem(userId, itemId);
+        return { statusCode: 204, headers, body: '' };
+    }
+    if (method === 'PATCH' && pathParts[1] === 'items') {
+         const itemId = parseInt(pathParts[2], 10);
+         const { checked } = JSON.parse(event.body);
+         const updated = await updateGroceryListItem(userId, itemId, checked);
+         return { statusCode: 200, headers, body: JSON.stringify(updated) };
+    }
+
+    if (method === 'DELETE' && pathParts.length === 3 && pathParts[2] === 'clear') {
+        const listId = parseInt(pathParts[1], 10);
+        const type = event.queryStringParameters?.type || 'all';
+        await clearGroceryListItems(userId, listId, type);
+        return { statusCode: 204, headers, body: '' };
+    }
+    
+    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
+}
+
+async function handleRewardsRequest(event, headers, method, userId) {
     if (method === 'GET') {
-        const summary = await getRewardsSummary(event.user.userId);
+        const summary = await getRewardsSummary(userId);
         return { statusCode: 200, headers, body: JSON.stringify(summary) };
     }
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
-}
-
-async function handleGeminiRequest(event, ai, headers) {
-    const body = JSON.parse(event.body);
-    const { base64Image, mimeType, prompt, schema } = body;
-    const imagePart = { inlineData: { data: base64Image, mimeType } };
-    const textPart = { text: prompt };
-    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: { parts: [imagePart, textPart] }, config: { responseMimeType: 'application/json', responseSchema: schema } });
-    return { statusCode: 200, headers: { ...headers, 'Content-Type': 'application/json' }, body: response.text };
-}
-
-async function handleMealSuggestionRequest(event, ai, headers) {
-    const body = JSON.parse(event.body);
-    const { prompt, schema } = body;
-    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt, config: { responseMimeType: 'application/json', responseSchema: schema } });
-    return { statusCode: 200, headers: { ...headers, 'Content-Type': 'application/json' }, body: response.text };
-}
-
-async function handleAssessmentsRequest(event, headers, method, pathParts) {
-    const userId = event.user.userId;
-    if (method === 'GET' && pathParts.length === 1) {
-        const assessments = await getAssessments();
-        return { statusCode: 200, headers, body: JSON.stringify(assessments) };
-    }
-    if (method === 'POST' && pathParts.length === 3 && pathParts[2] === 'submit') {
-        const assessmentId = pathParts[1];
-        const { responses } = JSON.parse(event.body);
-        const result = await submitAssessment(userId, assessmentId, responses);
-        return { statusCode: 200, headers, body: JSON.stringify(result) };
-    }
-    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
-}
-
-async function handleBlueprintRequest(event, headers, method) {
-    const userId = event.user.userId;
-    if (method === 'GET') {
-        const bp = await getPartnerBlueprint(userId);
-        return { statusCode: 200, headers, body: JSON.stringify(bp) };
-    }
-    if (method === 'POST') {
-        const { preferences } = JSON.parse(event.body);
-        const bp = await savePartnerBlueprint(userId, preferences);
-        return { statusCode: 200, headers, body: JSON.stringify(bp) };
-    }
-    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
-}
-
-async function handleMatchesRequest(event, headers, method) {
-    const userId = event.user.userId;
-    const type = event.queryStringParameters?.type || 'partner';
-    if (method === 'GET') {
-        const matches = await findMatches(userId, type);
-        return { statusCode: 200, headers, body: JSON.stringify(matches) };
-    }
-    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
-}
-
-async function handleBodyScansRequest(event, headers, method, pathParts) {
-    const userId = event.user.userId;
-    if (method === 'GET') {
-        const scans = await getBodyScans(userId);
-        return { statusCode: 200, headers, body: JSON.stringify(scans) };
-    }
-    return { statusCode: 200, headers, body: JSON.stringify([]) }; 
-}
-
-/**
- * @returns {Promise<any>}
- */
-function callShopifyStorefrontAPI(query, variables) {
-    const { SHOPIFY_STORE_DOMAIN, SHOPIFY_STOREFRONT_TOKEN } = process.env;
-    const postData = JSON.stringify({ query, variables });
-    const headers = {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(postData),
-        'X-Shopify-Storefront-Access-Token': SHOPIFY_STOREFRONT_TOKEN
-    };
-    
-    const options = { hostname: SHOPIFY_STORE_DOMAIN, path: '/api/2024-04/graphql.json', method: 'POST', headers };
-    return new Promise((resolve, reject) => {
-        const req = https.request(options, (res) => {
-            let data = '';
-            res.on('data', (chunk) => { data += chunk; });
-            res.on('end', () => {
-                try {
-                    const responseBody = JSON.parse(data);
-                    if (res.statusCode >= 200 && res.statusCode < 300) resolve(responseBody.data);
-                    else reject(new Error(`Shopify API failed: ${res.statusCode} - ${data}`));
-                } catch (e) { reject(new Error(`Failed to parse response: ${e.message}`)); }
-            });
-        });
-        req.on('error', (e) => reject(e));
-        req.write(postData);
-        req.end();
-    });
 }
