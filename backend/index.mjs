@@ -20,31 +20,68 @@ const corsHeaders = {
 };
 
 export const handler = async (event) => {
-    const { httpMethod: method, path, headers } = event;
-
+    // 1. Handle CORS Preflight (OPTIONS)
+    // Support both API Gateway V1 (httpMethod) and V2 (requestContext.http.method)
+    const method = event.httpMethod || (event.requestContext && event.requestContext.http ? event.requestContext.http.method : null);
+    
     if (method === 'OPTIONS') {
         return { statusCode: 200, headers: corsHeaders, body: '' };
     }
 
     try {
-        // Auth Check (Simplified for demo)
-        const authHeader = headers['Authorization'] || headers['authorization'];
-        let user = { userId: 1 }; // Default demo user if no auth provided/mocked
-        
-        if (authHeader) {
-             // In production, verify JWT. Here we assume the token is the user ID for simplicity if numeric, or decode it.
-             // For this specific codebase which uses a hardcoded token in frontend, we'll stick to a default user or simple decode if implemented.
-             // Assuming the token is just a placeholder string in this context or we rely on the DB function to handle it.
-             // We'll use a fixed user ID 1 for all operations in this "demo" backend environment unless `findOrCreateUserByEmail` was called via auth flow.
-             // NOTE: Real implementation needs valid JWT verification.
+        // 2. Extract Path Robustly
+        // V1 uses event.path, V2 uses event.rawPath
+        const rawPath = event.path || event.rawPath || '';
+        if (!rawPath) {
+            console.error("No path found in event:", JSON.stringify(event));
+            return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Invalid request: No path found.' }) };
         }
+
+        // 3. Extract Headers Case-Insensitively
+        const headers = event.headers || {};
+        const authHeader = headers['Authorization'] || headers['authorization'];
         
+        // 4. Auth Stub (Simplified for demo)
+        let user = { userId: 1 }; 
+        if (authHeader) {
+            // In a real app, verify JWT here.
+        }
         event.user = user;
         const userId = user.userId;
 
-        // Routing
-        const pathParts = path.replace(/^\/+/, '').split('/');
-        const resource = pathParts[0];
+        // 5. Routing Logic
+        // Remove leading slash and split
+        const cleanPath = rawPath.replace(/^\/+/, '');
+        const pathParts = cleanPath.split('/');
+
+        // Identify the resource. We check if the first part is a known resource, 
+        // or if the second part is (in case of stage name prefix like 'default/rewards')
+        const knownResources = new Set([
+            'analyze-image', 'get-meal-suggestions', 'analyze-image-recipes',
+            'saved-meals', 'meal-plans', 'meal-log', 'rewards', 'grocery-lists',
+            'assessments', 'partner-blueprint', 'matches'
+        ]);
+
+        let resource = null;
+        let resourceIndex = -1;
+
+        // Find which part of the path matches a known resource
+        for (let i = 0; i < pathParts.length; i++) {
+            if (knownResources.has(pathParts[i])) {
+                resource = pathParts[i];
+                resourceIndex = i;
+                break;
+            }
+        }
+
+        if (!resource) {
+            console.warn(`Route not found for path: ${rawPath}`);
+            return { statusCode: 404, headers: corsHeaders, body: JSON.stringify({ error: 'Not Found', path: rawPath }) };
+        }
+
+        // Adjust pathParts to start relative to the resource
+        // e.g. /default/grocery-lists/1/items -> resource='grocery-lists', relativeParts=['grocery-lists', '1', 'items']
+        const relativeParts = pathParts.slice(resourceIndex);
 
         if (resource === 'analyze-image') {
              return handleGeminiRequest(event, ai, corsHeaders);
@@ -54,15 +91,15 @@ export const handler = async (event) => {
         }
 
         if (resource === 'saved-meals') {
-             return handleSavedMealsRequest(event, corsHeaders, method, pathParts, userId);
+             return handleSavedMealsRequest(event, corsHeaders, method, relativeParts, userId);
         }
 
         if (resource === 'meal-plans') {
-             return handleMealPlansRequest(event, corsHeaders, method, pathParts, userId);
+             return handleMealPlansRequest(event, corsHeaders, method, relativeParts, userId);
         }
 
         if (resource === 'meal-log') {
-             return handleMealLogRequest(event, corsHeaders, method, pathParts, userId);
+             return handleMealLogRequest(event, corsHeaders, method, relativeParts, userId);
         }
 
         if (resource === 'rewards') {
@@ -70,7 +107,7 @@ export const handler = async (event) => {
         }
 
         if (resource === 'grocery-lists') {
-             return handleGroceryListsRequest(event, corsHeaders, method, pathParts, userId);
+             return handleGroceryListsRequest(event, corsHeaders, method, relativeParts, userId);
         }
         
         if (resource === 'assessments') {
@@ -78,7 +115,7 @@ export const handler = async (event) => {
                  const data = await getAssessments();
                  return { statusCode: 200, headers: corsHeaders, body: JSON.stringify(data) };
              }
-             if (method === 'POST' && pathParts[1] === 'submit') {
+             if (method === 'POST' && relativeParts[1] === 'submit') {
                  const body = JSON.parse(event.body);
                  await submitAssessment(userId, body.assessmentId, body.responses);
                  return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ success: true }) };
@@ -98,7 +135,7 @@ export const handler = async (event) => {
         }
         
         if (resource === 'matches') {
-            const type = pathParts[1] || 'coach';
+            const type = relativeParts[1] || 'coach';
             const data = await getMatches(userId, type);
             return { statusCode: 200, headers: corsHeaders, body: JSON.stringify(data) };
         }
@@ -106,7 +143,7 @@ export const handler = async (event) => {
         return { statusCode: 404, headers: corsHeaders, body: JSON.stringify({ error: 'Not Found' }) };
 
     } catch (err) {
-        console.error(err);
+        console.error("Global Handler Error:", err);
         return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ error: err.message }) };
     }
 };
@@ -158,7 +195,9 @@ async function handleGeminiRequest(event, ai, headers) {
 }
 
 async function handleSavedMealsRequest(event, headers, method, pathParts, userId) {
+    // pathParts is relative: ['saved-meals', '123']
     const mealId = pathParts.length > 1 ? parseInt(pathParts[1], 10) : null;
+    
     if (method === 'GET' && !mealId) {
         const meals = await getSavedMeals(userId);
         return { statusCode: 200, headers, body: JSON.stringify(meals) };
@@ -181,6 +220,7 @@ async function handleSavedMealsRequest(event, headers, method, pathParts, userId
 }
 
 async function handleMealLogRequest(event, headers, method, pathParts, userId) {
+    // pathParts: ['meal-log'] or ['meal-log', '123']
     if (method === 'GET' && pathParts.length === 1) {
         const logEntries = await getMealLogEntries(userId);
         return { statusCode: 200, headers, body: JSON.stringify(logEntries) };
@@ -194,7 +234,7 @@ async function handleMealLogRequest(event, headers, method, pathParts, userId) {
     }
     if (method === 'POST') {
         const { mealData, imageBase64 } = JSON.parse(event.body);
-        const base64Data = imageBase64.split(',')[1] || imageBase64;
+        const base64Data = imageBase64 && imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64;
         const newEntry = await createMealLogEntry(userId, mealData, base64Data);
         return { statusCode: 201, headers, body: JSON.stringify(newEntry) };
     }
@@ -202,6 +242,12 @@ async function handleMealLogRequest(event, headers, method, pathParts, userId) {
 }
 
 async function handleMealPlansRequest(event, headers, method, pathParts, userId) {
+    // pathParts examples:
+    // ['meal-plans']
+    // ['meal-plans', '123']
+    // ['meal-plans', '123', 'items']
+    // ['meal-plans', 'items', '456']
+    
     if (method === 'GET' && pathParts.length === 1) {
         const plans = await getMealPlans(userId);
         return { statusCode: 200, headers, body: JSON.stringify(plans) };
@@ -237,7 +283,8 @@ async function handleMealPlansRequest(event, headers, method, pathParts, userId)
 }
 
 async function handleGroceryListsRequest(event, headers, method, pathParts, userId) {
-    // /grocery-lists
+    // pathParts relative to resource 'grocery-lists'
+    // ['grocery-lists']
     if (method === 'GET' && pathParts.length === 1) {
         const lists = await getGroceryLists(userId);
         return { statusCode: 200, headers, body: JSON.stringify(lists) };
@@ -247,18 +294,20 @@ async function handleGroceryListsRequest(event, headers, method, pathParts, user
         const newList = await createGroceryList(userId, name);
         return { statusCode: 201, headers, body: JSON.stringify(newList) };
     }
+    // ['grocery-lists', '123']
     if (method === 'DELETE' && pathParts.length === 2) {
         const listId = parseInt(pathParts[1], 10);
         await deleteGroceryList(userId, listId);
         return { statusCode: 204, headers, body: '' };
     }
+    // ['grocery-lists', '123', 'activate']
     if (method === 'POST' && pathParts.length === 3 && pathParts[2] === 'activate') {
         const listId = parseInt(pathParts[1], 10);
         await setActiveGroceryList(userId, listId);
         return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
     }
 
-    // /grocery-lists/:id/import
+    // ['grocery-lists', '123', 'import']
     if (method === 'POST' && pathParts.length === 3 && pathParts[2] === 'import') {
         const listId = parseInt(pathParts[1], 10);
         const { planIds } = JSON.parse(event.body);
@@ -266,7 +315,7 @@ async function handleGroceryListsRequest(event, headers, method, pathParts, user
         return { statusCode: 200, headers, body: JSON.stringify(items) };
     }
 
-    // /grocery-lists/:id/items
+    // ['grocery-lists', '123', 'items']
     if (method === 'GET' && pathParts.length === 3 && pathParts[2] === 'items') {
         const listId = parseInt(pathParts[1], 10);
         const items = await getGroceryListItems(userId, listId);
@@ -279,7 +328,7 @@ async function handleGroceryListsRequest(event, headers, method, pathParts, user
         return { statusCode: 201, headers, body: JSON.stringify(newItem) };
     }
     
-    // /grocery-lists/items/:itemId
+    // ['grocery-lists', 'items', '456']
     if (method === 'DELETE' && pathParts[1] === 'items') {
         const itemId = parseInt(pathParts[2], 10);
         await removeGroceryListItem(userId, itemId);
@@ -292,7 +341,7 @@ async function handleGroceryListsRequest(event, headers, method, pathParts, user
          return { statusCode: 200, headers, body: JSON.stringify(updated) };
     }
 
-    // /grocery-lists/:id/clear
+    // ['grocery-lists', '123', 'clear']
     if (method === 'DELETE' && pathParts.length === 3 && pathParts[2] === 'clear') {
         const listId = parseInt(pathParts[1], 10);
         const type = event.queryStringParameters?.type || 'all';
