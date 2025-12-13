@@ -1,4 +1,5 @@
-import type { NutritionInfo, Recipe, SavedMeal, Ingredient, MealPlan, MealPlanItem, MealPlanItemMetadata, GroceryList, GroceryItem, RewardsSummary, MealLogEntry, Assessment } from '../types';
+
+import type { NutritionInfo, Recipe, SavedMeal, MealPlan, MealPlanItem, MealPlanItemMetadata, GroceryList, GroceryItem, RewardsSummary, MealLogEntry, Assessment } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
 const AUTH_TOKEN_KEY = 'embracehealth-api-token';
@@ -150,6 +151,26 @@ export const getRecipesFromImage = async (base64Image: string, mimeType: string)
     return callApi('/analyze-image-recipes', 'POST', { base64Image, mimeType, prompt, schema: recipesSchema });
 };
 
+const groceryAnalysisSchema = {
+    type: Type.OBJECT,
+    properties: {
+        items: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING }
+        }
+    },
+    required: ["items"]
+};
+
+export const identifyGroceryItems = (base64Image: string, mimeType: string): Promise<{ items: string[] }> => {
+    return callApi('/analyze-image', 'POST', { 
+        base64Image, 
+        mimeType, 
+        task: 'grocery', 
+        schema: groceryAnalysisSchema 
+    });
+};
+
 // --- Saved Meals Endpoints ---
 
 export const getSavedMeals = (): Promise<SavedMeal[]> => {
@@ -243,35 +264,7 @@ export const clearGroceryListItems = (listId: number, type: 'all' | 'checked'): 
 };
 
 export const importIngredientsFromPlans = (listId: number, planIds: number[]): Promise<GroceryItem[]> => {
-    // Note: The logic for this might need a dedicated endpoint or reuse addGroceryItem in a loop
-    // But assuming backend supports a bulk import or similar. 
-    // For now, let's assume we call a specific import endpoint or similar logic.
-    // NOTE: The previous backend code didn't explicitly show this endpoint, so this is a placeholder 
-    // for what the frontend expects. I'll stick to what was likely intended or add a simple client-side loop if needed.
-    // Re-reading backend logic: generateGroceryList endpoint was essentially doing this but replacing the list.
-    // Let's assume we use a specialized endpoint or just mock it here if backend support is missing.
-    // The backend `generateGroceryList` function was provided in databaseService.
     return callApi(`/grocery-lists/${listId}/import`, 'POST', { planIds });
-};
-
-const groceryAnalysisSchema = {
-    type: Type.OBJECT,
-    properties: {
-        items: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING }
-        }
-    },
-    required: ["items"]
-};
-
-export const identifyGroceryItems = (base64Image: string, mimeType: string): Promise<{ items: string[] }> => {
-    return callApi('/analyze-image', 'POST', { 
-        base64Image, 
-        mimeType, 
-        task: 'grocery', 
-        schema: groceryAnalysisSchema 
-    });
 };
 
 // --- Rewards Endpoints ---

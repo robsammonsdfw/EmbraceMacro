@@ -1,3 +1,4 @@
+
 import pg from 'pg';
 
 const { Pool } = pg;
@@ -51,7 +52,7 @@ export const findOrCreateUserByEmail = async (email) => {
             throw new Error("Failed to find or create user after insert operation.");
         }
         
-        // Ensure rewards tables exist (Simplified migration strategy for this demo)
+        // Ensure tables exist
         await ensureRewardsTables(client);
         
         // Ensure rewards balance entry exists for this user
@@ -72,9 +73,10 @@ export const findOrCreateUserByEmail = async (email) => {
 };
 
 const ensureRewardsTables = async (client) => {
+    // Basic tables needed for the app to function if they don't exist
     await client.query(`
         CREATE TABLE IF NOT EXISTS rewards_balances (
-            user_id VARCHAR(255) PRIMARY KEY,
+            user_id INT PRIMARY KEY,
             points_total INT DEFAULT 0,
             points_available INT DEFAULT 0,
             tier VARCHAR(50) DEFAULT 'Bronze',
@@ -82,11 +84,26 @@ const ensureRewardsTables = async (client) => {
         );
         CREATE TABLE IF NOT EXISTS rewards_ledger (
             entry_id SERIAL PRIMARY KEY,
-            user_id VARCHAR(255) NOT NULL,
+            user_id INT NOT NULL,
             event_type VARCHAR(100) NOT NULL,
             points_delta INT NOT NULL,
             created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
             metadata JSONB DEFAULT '{}'
+        );
+        CREATE TABLE IF NOT EXISTS grocery_lists (
+            id SERIAL PRIMARY KEY,
+            user_id INT,
+            name VARCHAR(255) NOT NULL,
+            is_active BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS grocery_list_items (
+            id SERIAL PRIMARY KEY,
+            list_id INT REFERENCES grocery_lists(id) ON DELETE CASCADE,
+            user_id INT,
+            name VARCHAR(255) NOT NULL,
+            checked BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         );
     `);
 };
@@ -115,15 +132,17 @@ export const awardPoints = async (userId, eventType, points, metadata = {}) => {
         `, [userId, points]);
         
         // 3. Recalculate Tier
-        const newTotal = updateRes.rows[0].points_total;
-        let newTier = 'Bronze';
-        if (newTotal >= 5000) newTier = 'Platinum';
-        else if (newTotal >= 1000) newTier = 'Gold';
-        else if (newTotal >= 200) newTier = 'Silver';
+        if (updateRes.rows.length > 0) {
+            const newTotal = updateRes.rows[0].points_total;
+            let newTier = 'Bronze';
+            if (newTotal >= 5000) newTier = 'Platinum';
+            else if (newTotal >= 1000) newTier = 'Gold';
+            else if (newTotal >= 200) newTier = 'Silver';
 
-        await client.query(`
-            UPDATE rewards_balances SET tier = $2 WHERE user_id = $1
-        `, [userId, newTier]);
+            await client.query(`
+                UPDATE rewards_balances SET tier = $2 WHERE user_id = $1
+            `, [userId, newTier]);
+        }
 
         await client.query('COMMIT');
     } catch (err) {
@@ -164,6 +183,7 @@ export const getRewardsSummary = async (userId) => {
     }
 };
 
+
 // --- Meal Log (History) Persistence ---
 
 export const createMealLogEntry = async (userId, mealData, imageBase64) => {
@@ -194,11 +214,12 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
     }
 };
 
+
 export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
     try {
         const query = `
-            SELECT id, meal_data, image_base64, created_at 
+            SELECT id, meal_data, (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image, created_at 
             FROM meal_log_entries
             WHERE user_id = $1 
             ORDER BY created_at DESC;
@@ -209,7 +230,8 @@ export const getMealLogEntries = async (userId) => {
             return {
                 id: row.id,
                 ...mealData,
-                imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
+                hasImage: row.has_image,
+                imageUrl: null,
                 createdAt: row.created_at,
             };
         });
@@ -471,6 +493,7 @@ export const removeMealFromPlanItem = async (userId, planItemId) => {
 export const getGroceryLists = async (userId) => {
     const client = await pool.connect();
     try {
+        await ensureRewardsTables(client);
         const query = `
             SELECT id, name, is_active, created_at 
             FROM grocery_lists 
@@ -487,6 +510,7 @@ export const getGroceryLists = async (userId) => {
 export const createGroceryList = async (userId, name) => {
     const client = await pool.connect();
     try {
+        await ensureRewardsTables(client);
         await client.query(`UPDATE grocery_lists SET is_active = false WHERE user_id = $1`, [userId]);
         const query = `INSERT INTO grocery_lists (user_id, name, is_active) VALUES ($1, $2, true) RETURNING *;`;
         const res = await client.query(query, [userId, name]);
@@ -512,6 +536,7 @@ export const setActiveGroceryList = async (userId, listId) => {
         await client.query(`UPDATE grocery_lists SET is_active = false WHERE user_id = $1`, [userId]);
         await client.query(`UPDATE grocery_lists SET is_active = true WHERE id = $1 AND user_id = $2`, [listId, userId]);
         await client.query('COMMIT');
+        return { success: true };
     } catch (e) {
         await client.query('ROLLBACK');
         throw e;
@@ -526,7 +551,7 @@ export const getGroceryListItems = async (userId, listId) => {
         const query = `
             SELECT id, name, checked FROM grocery_list_items 
             WHERE list_id = $1 AND user_id = $2 
-            ORDER BY name ASC;
+            ORDER BY checked ASC, name ASC;
         `;
         const res = await client.query(query, [listId, userId]);
         return res.rows;
@@ -591,6 +616,50 @@ export const clearGroceryListItems = async (userId, listId, type) => {
     }
 };
 
+export const addIngredientsFromPlans = async (userId, listId, planIds) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        
+        if (planIds.length > 0) {
+             const mealQuery = `
+                SELECT sm.meal_data
+                FROM saved_meals sm
+                JOIN meal_plan_items mpi ON sm.id = mpi.saved_meal_id
+                WHERE mpi.user_id = $1 AND mpi.meal_plan_id = ANY($2::int[]);
+            `;
+            const mealRes = await client.query(mealQuery, [userId, planIds]);
+            const allIngredients = mealRes.rows.flatMap(row => row.meal_data?.ingredients || []);
+            const uniqueNames = [...new Set(allIngredients.map(ing => ing.name))].sort();
+
+            if (uniqueNames.length > 0) {
+                 const insertQuery = `
+                    INSERT INTO grocery_list_items (list_id, user_id, name)
+                    SELECT $1, $2, unnest($3::text[]);
+                `;
+                await client.query(insertQuery, [listId, userId, uniqueNames]);
+            }
+        }
+        await client.query('COMMIT');
+        
+        const itemsRes = await client.query(`
+            SELECT id, name, checked FROM grocery_list_items 
+            WHERE user_id = $1 AND list_id = $2
+            ORDER BY checked ASC, name ASC;
+        `, [userId, listId]);
+        
+        return itemsRes.rows;
+
+    } catch (e) {
+        await client.query('ROLLBACK');
+        throw e;
+    } finally {
+        client.release();
+    }
+};
+
+// --- Sleep Records (New) ---
+
 export const saveSleepRecord = async (userId, sleepData) => {
     const client = await pool.connect();
     try {
@@ -652,41 +721,131 @@ export const getSleepRecords = async (userId) => {
     }
 };
 
-// --- Mock Implementations for Tests/Blueprint/Matching ---
-// Since we don't have DB tables for these in the prompt's provided history, we'll return mock data or persist to a simple JSON store if we were using one.
-// For now, we will just simulate them in memory or assume the DB calls would be similar if tables existed.
-// To avoid "missing export" errors, I will export functions that return mock data or TODO errors if the DB logic isn't there.
+// --- User Entitlements (New) ---
 
+export const getUserEntitlements = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const query = `
+            SELECT id, source, external_product_id, status, starts_at, expires_at 
+            FROM user_entitlements 
+            WHERE user_id = $1 AND status = 'active'
+            ORDER BY starts_at DESC;
+        `;
+        const res = await client.query(query, [userId]);
+        return res.rows.map(row => ({
+            id: row.id,
+            source: row.source,
+            externalProductId: row.external_product_id,
+            status: row.status,
+            startsAt: row.starts_at,
+            expiresAt: row.expires_at
+        }));
+    } catch (err) {
+        console.error('Database error in getUserEntitlements:', err);
+        throw new Error('Could not retrieve entitlements.');
+    } finally {
+        client.release();
+    }
+};
+
+export const grantEntitlement = async (userId, entitlementData) => {
+    const client = await pool.connect();
+    try {
+        const query = `
+            INSERT INTO user_entitlements (user_id, source, external_product_id, status, expires_at)
+            VALUES ($1, $2, $3, 'active', $4)
+            RETURNING id, source, external_product_id, status, starts_at, expires_at;
+        `;
+        const res = await client.query(query, [
+            userId, 
+            entitlementData.source, 
+            entitlementData.externalProductId,
+            entitlementData.expiresAt || null
+        ]);
+        
+        const row = res.rows[0];
+        return {
+            id: row.id,
+            source: row.source,
+            externalProductId: row.external_product_id,
+            status: row.status,
+            startsAt: row.starts_at,
+            expiresAt: row.expires_at
+        };
+    } catch (err) {
+        console.error('Database error in grantEntitlement:', err);
+        throw new Error('Could not grant entitlement.');
+    } finally {
+        client.release();
+    }
+};
+
+// --- Body Scans (Existing) ---
+export const saveBodyScan = async (userId, scanData) => {
+    const client = await pool.connect();
+    try {
+        const query = `INSERT INTO body_scans (user_id, scan_data) VALUES ($1, $2) RETURNING id, scan_data, created_at;`;
+        const res = await client.query(query, [userId, scanData]);
+        
+        await awardPoints(userId, 'body_scan.completed', 100);
+
+        return res.rows[0];
+    } catch (err) {
+        console.error('Database error in saveBodyScan:', err);
+        throw new Error('Could not save scan.');
+    } finally {
+        client.release();
+    }
+};
+
+export const getBodyScans = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const query = `SELECT id, scan_data, created_at FROM body_scans WHERE user_id = $1 ORDER BY created_at DESC;`;
+        const res = await client.query(query, [userId]);
+        return res.rows;
+    } catch (err) {
+        console.error('Database error in getBodyScans:', err);
+        throw new Error('Could not retrieve scans.');
+    } finally {
+        client.release();
+    }
+};
+
+// --- Assessment & Matches ---
 export const getAssessments = async () => {
-    // Return mock data
     return [
         {
-            id: 'a1',
-            title: 'Metabolic Health Assessment',
-            description: 'Understand your metabolic baseline.',
+            id: 'sleep_habits',
+            title: 'Sleep Habits',
+            description: 'Understand your sleep patterns.',
             questions: [
-                { id: 'q1', text: 'How many hours do you sleep?', type: 'scale', min: 0, max: 12 },
-                { id: 'q2', text: 'Do you feel tired after meals?', type: 'boolean' }
+                { id: 'q1', text: 'How often do you snore?', type: 'choice', options: [{ label: 'Never', value: 0 }, { label: 'Sometimes', value: 0.5 }, { label: 'Often', value: 1 }] },
+                { id: 'q2', text: 'How rested do you feel upon waking?', type: 'scale', min: 1, max: 10 },
+                { id: 'q3', text: 'Do you use a sleep tracker?', type: 'boolean' }
             ]
         },
         {
-            id: 'a2',
-            title: 'Fitness Personality',
-            description: 'Find your workout style.',
+            id: 'training_style',
+            title: 'Training Style',
+            description: 'Find partners who match your workout intensity.',
             questions: [
-                { id: 'q3', text: 'Preferred workout time?', type: 'choice', options: [{label: 'Morning', value: 'morning'}, {label: 'Evening', value: 'evening'}] }
+                { id: 'q1', text: 'Preferred workout time?', type: 'choice', options: [{ label: 'Morning', value: 1 }, { label: 'Evening', value: 2 }] },
+                { id: 'q2', text: 'Intensity level preference?', type: 'scale', min: 1, max: 10 }
             ]
         }
     ];
 };
 
 export const submitAssessment = async (userId, assessmentId, responses) => {
-    await awardPoints(userId, 'assessment.completed', 50, { assessmentId });
+    // In a real app, save to DB
+    await awardPoints(userId, 'assessment.completed', 50);
     return { success: true };
 };
 
 export const getPartnerBlueprint = async (userId) => {
-    return { preferences: {} }; // Mock empty
+    return { preferences: {} };
 };
 
 export const savePartnerBlueprint = async (userId, preferences) => {
@@ -695,7 +854,7 @@ export const savePartnerBlueprint = async (userId, preferences) => {
 
 export const getMatches = async (userId, type) => {
     return [
-        { userId: 'coach1', email: 'mike@coach.com', compatibilityScore: 95, traits: {} },
-        { userId: 'coach2', email: 'sarah@coach.com', compatibilityScore: 88, traits: {} }
+        { userId: 101, email: 'coach.mike@embrace.ai', compatibilityScore: 95, traits: {} },
+        { userId: 102, email: 'coach.sarah@embrace.ai', compatibilityScore: 88, traits: {} }
     ];
 };

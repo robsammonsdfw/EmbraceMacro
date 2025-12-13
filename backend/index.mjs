@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from '@google/genai';
 import { 
     findOrCreateUserByEmail, 
@@ -6,7 +7,7 @@ import {
     getMealPlans, createMealPlan, deleteMealPlan, addMealToPlanItem, addMealAndLinkToPlan, removeMealFromPlanItem,
     getRewardsSummary,
     getGroceryLists, createGroceryList, setActiveGroceryList, deleteGroceryList,
-    getGroceryListItems, addGroceryItem, removeGroceryListItem, updateGroceryListItem, clearGroceryListItems,
+    getGroceryListItems, addGroceryItem, removeGroceryListItem, updateGroceryListItem, clearGroceryListItems, addIngredientsFromPlans,
     getAssessments, submitAssessment, getPartnerBlueprint, savePartnerBlueprint, getMatches
 } from './services/databaseService.mjs';
 
@@ -15,7 +16,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type,Authorization',
-    'Access-Control-Allow-Methods': 'OPTIONS,GET,POST,DELETE'
+    'Access-Control-Allow-Methods': 'OPTIONS,GET,POST,DELETE,PUT,PATCH'
 };
 
 export const handler = async (event) => {
@@ -28,23 +29,21 @@ export const handler = async (event) => {
     try {
         // Auth Check (Simplified for demo)
         const authHeader = headers['Authorization'] || headers['authorization'];
-        let user = { userId: 'demo-user' }; // Default for demo if no auth
+        let user = { userId: 1 }; // Default demo user if no auth provided/mocked
+        
         if (authHeader) {
-             // In production, verify JWT. Here we decode or use a simple mock.
-             // If using the token from Shopify:
-             // user = decodeToken(authHeader.split(' ')[1]);
+             // In production, verify JWT. Here we assume the token is the user ID for simplicity if numeric, or decode it.
+             // For this specific codebase which uses a hardcoded token in frontend, we'll stick to a default user or simple decode if implemented.
+             // Assuming the token is just a placeholder string in this context or we rely on the DB function to handle it.
+             // We'll use a fixed user ID 1 for all operations in this "demo" backend environment unless `findOrCreateUserByEmail` was called via auth flow.
+             // NOTE: Real implementation needs valid JWT verification.
         }
         
-        // Attach user to event for easier access
         event.user = user;
         const userId = user.userId;
 
         // Routing
         const pathParts = path.replace(/^\/+/, '').split('/');
-        // pathParts[0] is typically 'default' or the stage name in some setups, or the first resource.
-        // Adjust based on your API Gateway mapping. Assuming standard proxy:
-        // If path is /saved-meals, pathParts = ['saved-meals']
-
         const resource = pathParts[0];
 
         if (resource === 'analyze-image') {
@@ -121,10 +120,21 @@ async function handleGeminiRequest(event, ai, headers) {
         const imagePart = { inlineData: { data: base64Image, mimeType } };
         const textPart = { text: "Identify the food or household items in this image. Be specific (e.g., 'Sharp Cheddar Cheese', 'Water Crackers', 'Almond Milk'). Return a JSON object with a single key 'items' containing an array of strings." };
         
+        const grocerySchema = {
+            type: 'OBJECT',
+            properties: {
+                items: {
+                    type: 'ARRAY',
+                    items: { type: 'STRING' }
+                }
+            },
+            required: ['items']
+        };
+
         const response = await ai.models.generateContent({ 
             model: 'gemini-2.5-flash', 
             contents: { parts: [imagePart, textPart] }, 
-            config: { responseMimeType: 'application/json', responseSchema: schema } 
+            config: { responseMimeType: 'application/json', responseSchema: grocerySchema } 
         });
         return { statusCode: 200, headers, body: response.text };
     }
@@ -248,6 +258,14 @@ async function handleGroceryListsRequest(event, headers, method, pathParts, user
         return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
     }
 
+    // /grocery-lists/:id/import
+    if (method === 'POST' && pathParts.length === 3 && pathParts[2] === 'import') {
+        const listId = parseInt(pathParts[1], 10);
+        const { planIds } = JSON.parse(event.body);
+        const items = await addIngredientsFromPlans(userId, listId, planIds);
+        return { statusCode: 200, headers, body: JSON.stringify(items) };
+    }
+
     // /grocery-lists/:id/items
     if (method === 'GET' && pathParts.length === 3 && pathParts[2] === 'items') {
         const listId = parseInt(pathParts[1], 10);
@@ -274,6 +292,7 @@ async function handleGroceryListsRequest(event, headers, method, pathParts, user
          return { statusCode: 200, headers, body: JSON.stringify(updated) };
     }
 
+    // /grocery-lists/:id/clear
     if (method === 'DELETE' && pathParts.length === 3 && pathParts[2] === 'clear') {
         const listId = parseInt(pathParts[1], 10);
         const type = event.queryStringParameters?.type || 'all';
