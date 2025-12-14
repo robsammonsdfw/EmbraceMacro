@@ -37,6 +37,9 @@ const processMealDataForClient = (mealData) => {
 export const findOrCreateUserByEmail = async (email) => {
     const client = await pool.connect();
     try {
+        // Ensure tables exist before trying to do anything
+        await ensureTables(client);
+
         const insertQuery = `
             INSERT INTO users (email) 
             VALUES ($1) 
@@ -52,15 +55,14 @@ export const findOrCreateUserByEmail = async (email) => {
             throw new Error("Failed to find or create user after insert operation.");
         }
         
-        // Ensure tables exist
-        await ensureTables(client);
-        
+        const userId = res.rows[0].id;
+
         // Ensure rewards balance entry exists for this user
         await client.query(`
             INSERT INTO rewards_balances (user_id, points_total, points_available, tier)
             VALUES ($1, 0, 0, 'Bronze')
             ON CONFLICT (user_id) DO NOTHING;
-        `, [res.rows[0].id]);
+        `, [userId]);
 
         return res.rows[0];
 
@@ -73,43 +75,146 @@ export const findOrCreateUserByEmail = async (email) => {
 };
 
 const ensureTables = async (client) => {
-    // Rewards Tables
-    await client.query(`
-        CREATE TABLE IF NOT EXISTS rewards_balances (
-            user_id INT PRIMARY KEY,
-            points_total INT DEFAULT 0,
-            points_available INT DEFAULT 0,
-            tier VARCHAR(50) DEFAULT 'Bronze',
-            updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE TABLE IF NOT EXISTS rewards_ledger (
-            entry_id SERIAL PRIMARY KEY,
-            user_id INT NOT NULL,
-            event_type VARCHAR(100) NOT NULL,
-            points_delta INT NOT NULL,
-            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-            metadata JSONB DEFAULT '{}'
-        );
-    `);
+    await client.query('BEGIN');
+    try {
+        // 1. Users
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                email VARCHAR(255) UNIQUE NOT NULL,
+                shopify_customer_id VARCHAR(255),
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
 
-    // Grocery Tables
-    await client.query(`
-        CREATE TABLE IF NOT EXISTS grocery_lists (
-            id SERIAL PRIMARY KEY,
-            user_id INT,
-            name VARCHAR(255) NOT NULL,
-            is_active BOOLEAN DEFAULT FALSE,
-            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE TABLE IF NOT EXISTS grocery_list_items (
-            id SERIAL PRIMARY KEY,
-            list_id INT REFERENCES grocery_lists(id) ON DELETE CASCADE,
-            user_id INT,
-            name VARCHAR(255) NOT NULL,
-            checked BOOLEAN DEFAULT FALSE,
-            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-        );
-    `);
+        // 2. Saved Meals
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS saved_meals (
+                id SERIAL PRIMARY KEY,
+                user_id INT NOT NULL,
+                meal_data JSONB NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        // 3. Meal Log
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS meal_log_entries (
+                id SERIAL PRIMARY KEY,
+                user_id INT NOT NULL,
+                meal_data JSONB NOT NULL,
+                image_base64 TEXT,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        // 4. Meal Plans
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS meal_plans (
+                id SERIAL PRIMARY KEY,
+                user_id INT NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, name)
+            );
+        `);
+
+        // 5. Meal Plan Items
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS meal_plan_items (
+                id SERIAL PRIMARY KEY,
+                user_id INT NOT NULL,
+                meal_plan_id INT REFERENCES meal_plans(id) ON DELETE CASCADE,
+                saved_meal_id INT REFERENCES saved_meals(id) ON DELETE CASCADE,
+                metadata JSONB DEFAULT '{}',
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        // 6. Grocery Lists
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS grocery_lists (
+                id SERIAL PRIMARY KEY,
+                user_id INT,
+                name VARCHAR(255) NOT NULL,
+                is_active BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        // 7. Grocery List Items
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS grocery_list_items (
+                id SERIAL PRIMARY KEY,
+                list_id INT REFERENCES grocery_lists(id) ON DELETE CASCADE,
+                user_id INT,
+                name VARCHAR(255) NOT NULL,
+                checked BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        // 8. Rewards
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS rewards_balances (
+                user_id INT PRIMARY KEY,
+                points_total INT DEFAULT 0,
+                points_available INT DEFAULT 0,
+                tier VARCHAR(50) DEFAULT 'Bronze',
+                updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS rewards_ledger (
+                entry_id SERIAL PRIMARY KEY,
+                user_id INT NOT NULL,
+                event_type VARCHAR(100) NOT NULL,
+                points_delta INT NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                metadata JSONB DEFAULT '{}'
+            );
+        `);
+
+        // 9. Sleep Records
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS sleep_records (
+                id SERIAL PRIMARY KEY,
+                user_id INT NOT NULL,
+                duration_minutes INT NOT NULL,
+                quality_score INT,
+                start_time TIMESTAMPTZ,
+                end_time TIMESTAMPTZ,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        // 10. Body Scans
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS body_scans (
+                id SERIAL PRIMARY KEY,
+                user_id INT NOT NULL,
+                scan_data JSONB NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        // 11. User Entitlements
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS user_entitlements (
+                id SERIAL PRIMARY KEY,
+                user_id INT NOT NULL,
+                source VARCHAR(50) NOT NULL,
+                external_product_id VARCHAR(255),
+                status VARCHAR(50) DEFAULT 'active',
+                starts_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMPTZ
+            );
+        `);
+
+        await client.query('COMMIT');
+    } catch (e) {
+        await client.query('ROLLBACK');
+        console.error("Failed to ensure tables exist", e);
+        throw e;
+    }
 };
 
 // --- Rewards Logic ---
