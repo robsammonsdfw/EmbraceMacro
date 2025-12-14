@@ -23,7 +23,8 @@ const processMealDataForSave = (mealData) => {
 };
 
 /**
- * Helper function to prepare meal data for the client.
+ * Helper function to prepare meal data for the client (Single Item View).
+ * Returns the full image data.
  */
 const processMealDataForClient = (mealData) => {
     const dataForClient = { ...mealData };
@@ -32,6 +33,27 @@ const processMealDataForClient = (mealData) => {
         delete dataForClient.imageBase64;
     }
     return dataForClient;
+};
+
+/**
+ * Helper function to prepare meal data for lists (Dashboard, Plans, History).
+ * STRIPS the image data to prevent AWS Lambda 413 Payload Too Large errors.
+ */
+const processMealDataForList = (mealData) => {
+    const data = { ...mealData };
+    
+    // Determine if an image exists
+    const hasImage = !!data.imageBase64 || (data.imageUrl && data.imageUrl.startsWith('data:'));
+    
+    // Remove heavy fields
+    delete data.imageBase64;
+    
+    // If imageUrl is a heavy data URI, remove it. Keep it if it's a remote URL (e.g. OpenFoodFacts).
+    if (data.imageUrl && data.imageUrl.startsWith('data:')) {
+        delete data.imageUrl;
+    }
+
+    return { ...data, hasImage };
 };
 
 export const findOrCreateUserByEmail = async (email) => {
@@ -309,6 +331,8 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
         await awardPoints(userId, 'meal_photo.logged', 50, { meal_log_id: row.id });
 
         const mealDataFromDb = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
+        
+        // Return full object including image for the immediate response
         return { 
             id: row.id,
             ...mealDataFromDb,
@@ -336,11 +360,15 @@ export const getMealLogEntries = async (userId) => {
         const res = await client.query(query, [userId]);
         return res.rows.map(row => {
             const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
+            
+            // Optimization: Ensure no rogue base64 data inside meal_data leaks out
+            const cleanMealData = processMealDataForList(mealData);
+
             return {
                 id: row.id,
-                ...mealData,
+                ...cleanMealData,
                 hasImage: row.has_image,
-                imageUrl: null,
+                imageUrl: null, // Optimization: Do not return full image in list
                 createdAt: row.created_at,
             };
         });
@@ -360,6 +388,8 @@ export const getMealLogEntryById = async (userId, logId) => {
         if (res.rows.length === 0) return null;
         const row = res.rows[0];
         const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
+        
+        // Return FULL data including image
         return {
             id: row.id,
             ...mealData,
@@ -384,7 +414,8 @@ export const getSavedMeals = async (userId) => {
         const res = await client.query(query, [userId]);
         return res.rows.map(row => {
             const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
-            return { id: row.id, ...processMealDataForClient(mealData) };
+            // Optimization: Use list processor to strip images
+            return { id: row.id, ...processMealDataForList(mealData) };
         });
     } catch (err) {
         console.error('Database error in getSavedMeals:', err);
@@ -402,6 +433,7 @@ export const getSavedMealById = async (userId, mealId) => {
         if (res.rows.length === 0) return null;
         const row = res.rows[0];
         const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
+        // Return FULL data
         return { id: row.id, ...processMealDataForClient(mealData) };
     } finally {
         client.release();
@@ -424,6 +456,7 @@ export const saveMeal = async (userId, mealData) => {
         
         const mealDataFromDb = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
 
+        // Return client formatted data (can include image for immediate feedback)
         return { id: row.id, ...processMealDataForClient(mealDataFromDb) };
     } catch (err) {
         console.error('Database error in saveMeal:', err);
@@ -479,7 +512,8 @@ export const getMealPlans = async (userId) => {
                     metadata: row.metadata || {},
                     meal: {
                         id: row.meal_id,
-                        ...processMealDataForClient(mealData)
+                        // Optimization: Use list processor to strip images from items in the plan
+                        ...processMealDataForList(mealData)
                     }
                 });
             }
@@ -557,7 +591,8 @@ export const addMealToPlanItem = async (userId, planId, savedMealId, metadata = 
         return {
             id: row.id,
             metadata: row.metadata || {},
-            meal: { id: row.meal_id, ...processMealDataForClient(mealData) }
+            // Optimization: Stripped for the add response, though context usually has it already
+            meal: { id: row.meal_id, ...processMealDataForList(mealData) }
         };
 
     } catch (err) {
