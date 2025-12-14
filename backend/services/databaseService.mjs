@@ -53,7 +53,7 @@ export const findOrCreateUserByEmail = async (email) => {
         }
         
         // Ensure tables exist
-        await ensureRewardsTables(client);
+        await ensureTables(client);
         
         // Ensure rewards balance entry exists for this user
         await client.query(`
@@ -72,8 +72,8 @@ export const findOrCreateUserByEmail = async (email) => {
     }
 };
 
-const ensureRewardsTables = async (client) => {
-    // Basic tables needed for the app to function if they don't exist
+const ensureTables = async (client) => {
+    // Rewards Tables
     await client.query(`
         CREATE TABLE IF NOT EXISTS rewards_balances (
             user_id INT PRIMARY KEY,
@@ -90,6 +90,10 @@ const ensureRewardsTables = async (client) => {
             created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
             metadata JSONB DEFAULT '{}'
         );
+    `);
+
+    // Grocery Tables
+    await client.query(`
         CREATE TABLE IF NOT EXISTS grocery_lists (
             id SERIAL PRIMARY KEY,
             user_id INT,
@@ -493,7 +497,6 @@ export const removeMealFromPlanItem = async (userId, planItemId) => {
 export const getGroceryLists = async (userId) => {
     const client = await pool.connect();
     try {
-        await ensureRewardsTables(client);
         const query = `
             SELECT id, name, is_active, created_at 
             FROM grocery_lists 
@@ -510,7 +513,7 @@ export const getGroceryLists = async (userId) => {
 export const createGroceryList = async (userId, name) => {
     const client = await pool.connect();
     try {
-        await ensureRewardsTables(client);
+        // Deactivate others
         await client.query(`UPDATE grocery_lists SET is_active = false WHERE user_id = $1`, [userId]);
         const query = `INSERT INTO grocery_lists (user_id, name, is_active) VALUES ($1, $2, true) RETURNING *;`;
         const res = await client.query(query, [userId, name]);
