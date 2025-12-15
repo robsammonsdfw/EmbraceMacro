@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import type { SavedMeal } from '../types';
 import { PlusIcon, TrashIcon, BookOpenIcon, CameraIcon, CameraOffIcon } from './icons';

@@ -23,14 +23,35 @@ const processMealDataForSave = (mealData) => {
 };
 
 /**
- * Helper function to prepare meal data for the client.
+ * Helper function to prepare meal data for the client (Single Item View).
+ * Returns the full image.
  */
 const processMealDataForClient = (mealData) => {
     const dataForClient = { ...mealData };
     if (dataForClient.imageBase64) {
         dataForClient.imageUrl = `data:image/jpeg;base64,${dataForClient.imageBase64}`;
         delete dataForClient.imageBase64;
+        dataForClient.hasImage = true;
+    } else {
+        dataForClient.hasImage = false;
     }
+    return dataForClient;
+};
+
+/**
+ * Helper function for Lists.
+ * STRIPS the image data to prevent 6MB Lambda payload limit errors.
+ */
+const processMealDataForList = (mealData) => {
+    const dataForClient = { ...mealData };
+    // Check if image exists before deleting
+    const hasImage = !!dataForClient.imageBase64;
+    
+    // CRITICAL: Remove the heavy base64 string
+    delete dataForClient.imageBase64;
+    delete dataForClient.imageUrl; // Ensure no lingering url
+    
+    dataForClient.hasImage = hasImage;
     return dataForClient;
 };
 
@@ -93,11 +114,20 @@ export const getRewardsSummary = async (userId) => {
 export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
     try {
-        const res = await client.query(`SELECT id, meal_data, image_base64, created_at FROM meal_log_entries WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
+        // Optimization: Don't select image_base64 in the list view
+        const res = await client.query(`
+            SELECT id, meal_data, created_at, 
+            (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image 
+            FROM meal_log_entries 
+            WHERE user_id = $1 
+            ORDER BY created_at DESC
+        `, [userId]);
+        
         return res.rows.map(row => ({
             id: row.id,
             ...(row.meal_data || {}),
-            imageUrl: row.image_base64 ? `data:image/jpeg;base64,${row.image_base64}` : null,
+            hasImage: row.has_image,
+            imageUrl: null, // Don't send image data in list
             createdAt: row.created_at
         }));
     } finally {
@@ -115,6 +145,7 @@ export const getMealLogEntryById = async (userId, logId) => {
             id: row.id,
             ...(row.meal_data || {}),
             imageUrl: row.image_base64 ? `data:image/jpeg;base64,${row.image_base64}` : null,
+            hasImage: !!row.image_base64,
             createdAt: row.created_at
         };
     } finally {
@@ -132,6 +163,7 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
             id: row.id,
             ...(row.meal_data || {}),
             imageUrl: row.image_base64 ? `data:image/jpeg;base64,${row.image_base64}` : null,
+            hasImage: !!row.image_base64,
             createdAt: row.created_at
         };
     } finally {
@@ -143,8 +175,22 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
 export const getSavedMeals = async (userId) => {
     const client = await pool.connect();
     try {
-        const res = await client.query(`SELECT id, meal_data FROM saved_meals WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
-        return res.rows.map(row => ({ id: row.id, ...processMealDataForClient(row.meal_data || {}) }));
+        // Optimization: Exclude imageBase64 from JSONB using Postgres '-' operator if possible, 
+        // or just select and process in node carefully. 
+        // Note: 'meal_data - "imageBase64"' works in Postgres if the key exists.
+        const res = await client.query(`
+            SELECT id, meal_data - 'imageBase64' as meal_data, 
+            (meal_data ? 'imageBase64') as has_image 
+            FROM saved_meals 
+            WHERE user_id = $1 
+            ORDER BY created_at DESC
+        `, [userId]);
+        
+        return res.rows.map(row => ({ 
+            id: row.id, 
+            ...processMealDataForList(row.meal_data || {}),
+            hasImage: row.has_image // Ensure boolean from DB is used
+        }));
     } finally {
         client.release();
     }
@@ -186,8 +232,11 @@ export const deleteMeal = async (userId, mealId) => {
 export const getMealPlans = async (userId) => {
     const client = await pool.connect();
     try {
+        // Optimization: Strip imageBase64 from saved_meals join
         const query = `
-            SELECT p.id as plan_id, p.name as plan_name, i.id as item_id, i.metadata, sm.id as meal_id, sm.meal_data
+            SELECT p.id as plan_id, p.name as plan_name, i.id as item_id, i.metadata, 
+                   sm.id as meal_id, sm.meal_data - 'imageBase64' as meal_data,
+                   (sm.meal_data ? 'imageBase64') as has_image
             FROM meal_plans p
             LEFT JOIN meal_plan_items i ON p.id = i.meal_plan_id
             LEFT JOIN saved_meals sm ON i.saved_meal_id = sm.id
@@ -198,10 +247,16 @@ export const getMealPlans = async (userId) => {
         res.rows.forEach(row => {
             if (!plans.has(row.plan_id)) plans.set(row.plan_id, { id: row.plan_id, name: row.plan_name, items: [] });
             if (row.item_id) {
+                const lightweightMealData = processMealDataForList(row.meal_data || {});
+                lightweightMealData.hasImage = row.has_image;
+                
                 plans.get(row.plan_id).items.push({
                     id: row.item_id,
                     metadata: row.metadata || {},
-                    meal: { id: row.meal_id, ...processMealDataForClient(row.meal_data || {}) }
+                    meal: { 
+                        id: row.meal_id, 
+                        ...lightweightMealData
+                    }
                 });
             }
         });
@@ -233,14 +288,10 @@ export const deleteMealPlan = async (userId, planId) => {
 export const addMealToPlanItem = async (userId, planId, savedMealId, metadata = {}) => {
     const client = await pool.connect();
     try {
-        const insertQuery = `
-            INSERT INTO meal_plan_items (user_id, meal_plan_id, saved_meal_id, metadata)
-            VALUES ($1, $2, $3, $4)
-            RETURNING id;
-        `;
-        const res = await client.query(insertQuery, [userId, planId, savedMealId, metadata]);
+        const res = await client.query(`INSERT INTO meal_plan_items (user_id, meal_plan_id, saved_meal_id, metadata) VALUES ($1, $2, $3, $4) RETURNING id`, [userId, planId, savedMealId, metadata]);
         const newItemId = res.rows[0].id;
         
+        // Return full data for the single added item so UI can display it immediately
         const row = await client.query(`
             SELECT i.id, i.metadata, m.id as meal_id, m.meal_data 
             FROM meal_plan_items i 
@@ -248,6 +299,7 @@ export const addMealToPlanItem = async (userId, planId, savedMealId, metadata = 
             WHERE i.id = $1
         `, [newItemId]);
         
+        // For single item addition, it's okay to return the image as it's just one item
         return { 
             id: row.rows[0].id, 
             metadata: row.rows[0].metadata || {}, 
