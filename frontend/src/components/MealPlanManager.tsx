@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useMemo } from 'react';
 import type { MealPlan, SavedMeal, NutritionInfo } from '../types';
 import { PlusIcon, UserCircleIcon, GlobeAltIcon, StarIcon, CameraIcon, BeakerIcon } from './icons';
@@ -119,34 +117,40 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
     };
 
     const handleMedicalGenerate = async (diseases: DiseaseTemplate[], cuisine: string, duration: 'day' | 'week') => {
-        if (!activePlanId) {
-            alert("Please create or select a plan first.");
-            return;
-        }
-        
         setIsGenerating(true);
         setActiveMedicalConditions(diseases);
 
         try {
+            // 1. Automatically create a new plan
+            const planName = `Medical Plan - ${new Date().toLocaleDateString()} (${Math.floor(Math.random() * 1000)})`;
+            const newPlan = await apiService.createMealPlan(planName);
+            
+            // Update local state via parent callback (this relies on parent refetching or updating state, 
+            // but we can assume we'll trigger a reload after to be safe since we don't have the setPlans prop here directly)
+            // Ideally we'd set the active plan ID immediately.
+            
+            // 2. Generate the meals
             const generatedMeals = await apiService.generateMedicalPlan(diseases, cuisine, duration);
             
-            // Iterate and add meals to the plan
-            // Note: In a real app, use a batch endpoint. Here we loop for minimal backend changes.
+            // 3. Add meals to the new plan
             for (const meal of generatedMeals) {
-                // Ensure the meal has the necessary NutritionInfo properties
+                // Ensure ingredients have default values if missing from simplified AI response
+                const sanitizedIngredients = (meal.ingredients || []).map(ing => ({
+                    ...ing,
+                    calories: ing.calories || 0,
+                    protein: ing.protein || 0,
+                    carbs: ing.carbs || 0,
+                    fat: ing.fat || 0,
+                    weightGrams: ing.weightGrams || 100 // Default weight
+                }));
+
                 const nutritionInfo: NutritionInfo = {
-                    mealName: meal.mealName,
-                    totalCalories: meal.totalCalories,
-                    totalProtein: meal.totalProtein,
-                    totalCarbs: meal.totalCarbs,
-                    totalFat: meal.totalFat,
-                    ingredients: meal.ingredients || [],
-                    justification: meal.justification,
+                    ...meal,
+                    ingredients: sanitizedIngredients,
                     source: 'medical-ai'
                 };
 
-                // Use the backend's helper to add and link
-                await apiService.addMealFromHistoryToPlan(activePlanId, nutritionInfo, {
+                await apiService.addMealFromHistoryToPlan(newPlan.id, nutritionInfo, {
                     day: meal.suggestedDay,
                     slot: meal.suggestedSlot,
                     portion: 1,
@@ -155,17 +159,16 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                 });
             }
             
-            // Ideally we reload plans here to refresh the view, but we'll rely on the parent or next render cycle
-            // Or force a quick timeout reload if available props allowed it. 
-            // For now, close modal. The parent App.tsx doesn't automatically refetch, 
-            // so the UI might lag until next interaction without a refresh callback.
-            // But since onQuickAdd updates local state in App.tsx, we are technically missing that here.
-            // We will assume the user manually refreshes or navigates for now, or minimal complexity accepts this limitation.
-            window.location.reload(); // Hard refresh to show new items (simplest solution given constraints)
+            // Force a reload to show the new plan populated (simplest way to sync state in this architecture)
+            window.location.reload();
 
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            alert("Failed to generate plan. Please try again.");
+            if (error.message && error.message.includes('503')) {
+                alert("The AI service is busy or timed out. Please try generating a 1-Day plan instead of a whole week, or try again in a moment.");
+            } else {
+                alert("Failed to generate plan. Please try again.");
+            }
         } finally {
             setIsGenerating(false);
             setIsMedicalModalOpen(false);

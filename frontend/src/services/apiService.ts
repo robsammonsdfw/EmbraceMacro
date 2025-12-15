@@ -1,6 +1,7 @@
 
 
 
+
 import type { NutritionInfo, Recipe, SavedMeal, MealPlan, MealPlanItem, MealPlanItemMetadata, GroceryList, GroceryItem, RewardsSummary, MealLogEntry, Assessment, GeneratedMedicalMeal } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
@@ -109,17 +110,36 @@ export const getMealSuggestions = async (condition: string, cuisine: string): Pr
     return callApi('/get-meal-suggestions', 'POST', { prompt, schema: suggestionSchema });
 };
 
+// Simplified Schema for Medical Plan to prevent 503 Timeout
 const medicalPlanSchema = {
     type: Type.ARRAY,
     items: {
         type: Type.OBJECT,
         properties: {
-            ...nutritionSchema.properties,
+            // Simplified Nutrition Properties
+            mealName: { type: Type.STRING },
+            totalCalories: { type: Type.NUMBER },
+            totalProtein: { type: Type.NUMBER },
+            totalCarbs: { type: Type.NUMBER },
+            totalFat: { type: Type.NUMBER },
+            ingredients: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  name: { type: Type.STRING },
+                  weightGrams: { type: Type.NUMBER }
+                  // REMOVED detailed macros per ingredient to reduce generation time
+                },
+                required: ["name", "weightGrams"]
+              }
+            },
+            // Scheduling Metadata
             suggestedDay: { type: Type.STRING, description: "e.g. Monday, Tuesday" },
             suggestedSlot: { type: Type.STRING, description: "e.g. Breakfast, Lunch, Dinner, Snack" },
             justification: { type: Type.STRING }
         },
-        required: [...(nutritionSchema.required || []), "suggestedDay", "suggestedSlot"]
+        required: ["mealName", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "ingredients", "suggestedDay", "suggestedSlot"]
     }
 };
 

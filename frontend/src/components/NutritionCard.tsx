@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { NutritionInfo } from '../types';
 import { ArchiveIcon } from './icons';
@@ -29,20 +30,29 @@ export const NutritionCard: React.FC<NutritionCardProps> = ({ data, onSaveToHist
 
         <h3 className="text-lg font-semibold text-slate-700 mb-3">Ingredients Breakdown</h3>
         <ul className="space-y-2 mb-4">
-          {data.ingredients.map((item, index) => (
-            <li key={index} className="flex justify-between items-center bg-slate-50 p-3 rounded-md">
-              <div>
-                <p className="font-semibold text-slate-800">{item.name}</p>
-                <p className="text-sm text-slate-500">{Math.round(item.weightGrams)}g</p>
-              </div>
-              <div className="text-right">
-                <p className="font-medium text-slate-700">{Math.round(item.calories)} kcal</p>
-                <p className="text-xs text-slate-500">
-                  P:{Math.round(item.protein)}g C:{Math.round(item.carbs)}g F:{Math.round(item.fat)}g
-                </p>
-              </div>
-            </li>
-          ))}
+          {data.ingredients.map((item, index) => {
+            const hasMacros = item.calories > 0 || item.protein > 0;
+            return (
+                <li key={index} className="flex justify-between items-center bg-slate-50 p-3 rounded-md">
+                  <div>
+                    <p className="font-semibold text-slate-800">{item.name}</p>
+                    <p className="text-sm text-slate-500">{Math.round(item.weightGrams)}g</p>
+                  </div>
+                  <div className="text-right">
+                    {hasMacros ? (
+                        <>
+                            <p className="font-medium text-slate-700">{Math.round(item.calories)} kcal</p>
+                            <p className="text-xs text-slate-500">
+                              P:{Math.round(item.protein)}g C:{Math.round(item.carbs)}g F:{Math.round(item.fat)}g
+                            </p>
+                        </>
+                    ) : (
+                        <p className="text-xs text-slate-400 italic">Details unavailable</p>
+                    )}
+                  </div>
+                </li>
+            );
+          })}
         </ul>
       </div>
       
