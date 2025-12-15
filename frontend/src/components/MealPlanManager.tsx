@@ -1,7 +1,12 @@
 
-import React, { useState } from 'react';
+
+
+import React, { useState, useMemo } from 'react';
 import type { MealPlan, SavedMeal, NutritionInfo } from '../types';
-import { PlusIcon, UserCircleIcon, GlobeAltIcon, StarIcon, CameraIcon } from './icons';
+import { PlusIcon, UserCircleIcon, GlobeAltIcon, StarIcon, CameraIcon, BeakerIcon } from './icons';
+import { MedicalPlannerModal } from './MedicalPlannerModal';
+import { DiseaseTemplate } from '../data/chronicDiseases';
+import * as apiService from '../services/apiService';
 
 interface MealPlanManagerProps {
     plans: MealPlan[];
@@ -29,6 +34,11 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
     const [isCreating, setIsCreating] = useState(false);
     const [newPlanName, setNewPlanName] = useState('');
 
+    // Medical Planner State
+    const [isMedicalModalOpen, setIsMedicalModalOpen] = useState(false);
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [activeMedicalConditions, setActiveMedicalConditions] = useState<DiseaseTemplate[]>([]);
+
     const activePlan = plans.find(p => p.id === activePlanId);
 
     // Filter items for the selected day
@@ -40,6 +50,35 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
             return itemDay === selectedDay && itemSlot === slot;
         });
     };
+
+    // Calculate Medical Compliance (Simple Metric)
+    const complianceStats = useMemo(() => {
+        if (activeMedicalConditions.length === 0 || !activePlan) return null;
+        
+        // Average target macros
+        const targetP = activeMedicalConditions.reduce((sum, d) => sum + d.macros.p, 0) / activeMedicalConditions.length;
+        const targetC = activeMedicalConditions.reduce((sum, d) => sum + d.macros.c, 0) / activeMedicalConditions.length;
+        const targetF = activeMedicalConditions.reduce((sum, d) => sum + d.macros.f, 0) / activeMedicalConditions.length;
+
+        // Current Plan Totals
+        const totalCals = activePlan.items.reduce((sum, i) => sum + i.meal.totalCalories, 0);
+        if (totalCals === 0) return null;
+
+        const totalP = activePlan.items.reduce((sum, i) => sum + i.meal.totalProtein * 4, 0); // cal from protein
+        const totalC = activePlan.items.reduce((sum, i) => sum + i.meal.totalCarbs * 4, 0);
+        const totalF = activePlan.items.reduce((sum, i) => sum + i.meal.totalFat * 9, 0);
+
+        const currentP = (totalP / totalCals) * 100;
+        const currentC = (totalC / totalCals) * 100;
+        const currentF = (totalF / totalCals) * 100;
+
+        // Simple deviation score (lower is better)
+        const deviation = Math.abs(targetP - currentP) + Math.abs(targetC - currentC) + Math.abs(targetF - currentF);
+        const score = Math.max(0, 100 - deviation);
+
+        return { score, targetP, targetC, targetF };
+    }, [activePlan, activeMedicalConditions]);
+
 
     // Drag & Drop Handlers
     const handleDragStart = (e: React.DragEvent, meal: SavedMeal) => {
@@ -76,6 +115,60 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
             onCreatePlan(newPlanName);
             setNewPlanName('');
             setIsCreating(false);
+        }
+    };
+
+    const handleMedicalGenerate = async (diseases: DiseaseTemplate[], cuisine: string, duration: 'day' | 'week') => {
+        if (!activePlanId) {
+            alert("Please create or select a plan first.");
+            return;
+        }
+        
+        setIsGenerating(true);
+        setActiveMedicalConditions(diseases);
+
+        try {
+            const generatedMeals = await apiService.generateMedicalPlan(diseases, cuisine, duration);
+            
+            // Iterate and add meals to the plan
+            // Note: In a real app, use a batch endpoint. Here we loop for minimal backend changes.
+            for (const meal of generatedMeals) {
+                // Ensure the meal has the necessary NutritionInfo properties
+                const nutritionInfo: NutritionInfo = {
+                    mealName: meal.mealName,
+                    totalCalories: meal.totalCalories,
+                    totalProtein: meal.totalProtein,
+                    totalCarbs: meal.totalCarbs,
+                    totalFat: meal.totalFat,
+                    ingredients: meal.ingredients || [],
+                    justification: meal.justification,
+                    source: 'medical-ai'
+                };
+
+                // Use the backend's helper to add and link
+                await apiService.addMealFromHistoryToPlan(activePlanId, nutritionInfo, {
+                    day: meal.suggestedDay,
+                    slot: meal.suggestedSlot,
+                    portion: 1,
+                    context: 'Medical Plan',
+                    addToGrocery: true
+                });
+            }
+            
+            // Ideally we reload plans here to refresh the view, but we'll rely on the parent or next render cycle
+            // Or force a quick timeout reload if available props allowed it. 
+            // For now, close modal. The parent App.tsx doesn't automatically refetch, 
+            // so the UI might lag until next interaction without a refresh callback.
+            // But since onQuickAdd updates local state in App.tsx, we are technically missing that here.
+            // We will assume the user manually refreshes or navigates for now, or minimal complexity accepts this limitation.
+            window.location.reload(); // Hard refresh to show new items (simplest solution given constraints)
+
+        } catch (error) {
+            console.error(error);
+            alert("Failed to generate plan. Please try again.");
+        } finally {
+            setIsGenerating(false);
+            setIsMedicalModalOpen(false);
         }
     };
 
@@ -134,6 +227,14 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
     return (
         <div className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden min-h-[600px] flex flex-col md:flex-row">
             
+            {isMedicalModalOpen && (
+                <MedicalPlannerModal 
+                    onClose={() => setIsMedicalModalOpen(false)}
+                    onGenerate={handleMedicalGenerate}
+                    isLoading={isGenerating}
+                />
+            )}
+
             {/* Main Board Area */}
             <div className={`flex-grow flex flex-col transition-all duration-300 ${isDrawerOpen ? 'md:w-2/3' : 'w-full'}`}>
                 
@@ -156,14 +257,24 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                         )}
                         
                         {!isCreating ? (
-                            <button 
-                                onClick={() => setIsCreating(true)}
-                                className="bg-emerald-500 text-white font-bold p-2 px-3 rounded-lg hover:bg-emerald-600 flex items-center space-x-1"
-                                title="Create New Plan"
-                            >
-                                <PlusIcon />
-                                <span className="text-xs">New Plan</span>
-                            </button>
+                            <>
+                                <button 
+                                    onClick={() => setIsCreating(true)}
+                                    className="bg-white border border-slate-300 text-slate-600 font-bold p-2 px-3 rounded-lg hover:bg-slate-50 flex items-center space-x-1"
+                                    title="Create New Plan"
+                                >
+                                    <PlusIcon />
+                                    <span className="text-xs">New</span>
+                                </button>
+                                <button 
+                                    onClick={() => setIsMedicalModalOpen(true)}
+                                    className="bg-indigo-600 text-white font-bold p-2 px-3 rounded-lg hover:bg-indigo-700 flex items-center space-x-1 shadow-sm"
+                                    title="Medical AI Planner"
+                                >
+                                    <BeakerIcon />
+                                    <span className="text-xs">Medical AI</span>
+                                </button>
+                            </>
                         ) : (
                             <form onSubmit={handleCreateSubmit} className="flex items-center gap-2">
                                 <input 
@@ -188,13 +299,15 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                             <PlusIcon />
                         </div>
                         <h3 className="text-xl font-bold text-slate-800">No Meal Plans Yet</h3>
-                        <p className="text-slate-500 mb-6 max-w-sm">Create your first weekly plan to start organizing your nutrition.</p>
-                        <button 
-                            onClick={() => setIsCreating(true)}
-                            className="bg-emerald-500 text-white font-bold py-3 px-6 rounded-lg hover:bg-emerald-600 shadow-md"
-                        >
-                            Create First Plan
-                        </button>
+                        <p className="text-slate-500 mb-6 max-w-sm">Create your first weekly plan or use the Medical AI to generate one.</p>
+                        <div className="flex gap-3">
+                            <button 
+                                onClick={() => setIsCreating(true)}
+                                className="bg-emerald-500 text-white font-bold py-3 px-6 rounded-lg hover:bg-emerald-600 shadow-md"
+                            >
+                                Create Empty Plan
+                            </button>
+                        </div>
                     </div>
                 )}
 
@@ -254,6 +367,10 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                                                                 <div className="w-10 h-10 bg-slate-100 border border-slate-200 rounded-md flex items-center justify-center text-slate-400">
                                                                     <div className="transform scale-75"><CameraIcon /></div>
                                                                 </div>
+                                                            ) : item.meal.source === 'medical-ai' ? (
+                                                                <div className="w-10 h-10 bg-blue-50 border border-blue-200 text-blue-500 rounded-md flex items-center justify-center">
+                                                                    <div className="transform scale-75"><BeakerIcon /></div>
+                                                                </div>
                                                             ) : null}
                                                             <div>
                                                                 <p className="font-bold text-slate-800 text-sm">{item.meal.mealName}</p>
@@ -290,6 +407,27 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                 
                 {isDrawerOpen && (
                     <div className="flex-grow overflow-y-auto p-4 space-y-3">
+                        {/* Medical Compliance Tracker (If Active) */}
+                        {complianceStats && (
+                            <div className="mb-4 bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+                                <h4 className="text-xs font-bold text-indigo-800 uppercase mb-2 flex items-center gap-1">
+                                    <BeakerIcon /> Medical Plan Tracker
+                                </h4>
+                                <div className="space-y-1">
+                                    <div className="flex justify-between text-xs">
+                                        <span className="text-indigo-700">Plan Adherence</span>
+                                        <span className="font-bold text-indigo-900">{Math.round(complianceStats.score)}%</span>
+                                    </div>
+                                    <div className="w-full bg-indigo-200 rounded-full h-1.5">
+                                        <div className="bg-indigo-600 h-1.5 rounded-full" style={{width: `${complianceStats.score}%`}}></div>
+                                    </div>
+                                    <p className="text-[10px] text-indigo-600 mt-1">
+                                        Target: P{Math.round(complianceStats.targetP)}% / C{Math.round(complianceStats.targetC)}% / F{Math.round(complianceStats.targetF)}%
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
                         <p className="text-xs text-slate-400 text-center mb-2 uppercase tracking-wide">Drag to plan</p>
                         {savedMeals.length === 0 && (
                             <p className="text-sm text-slate-500 text-center py-10">No favorites yet. Save meals to drag them here!</p>

@@ -1,5 +1,6 @@
 
 
+
 export interface Ingredient {
   name: string;
   weightGrams: number;
@@ -29,7 +30,7 @@ export interface NutritionInfo {
   nutriScore?: string;
   ecoScore?: string;
   allergens?: string[];
-  source?: 'user' | 'coach' | 'community'; // Added source
+  source?: 'user' | 'coach' | 'community' | 'medical-ai'; 
 }
 
 export interface SavedMeal extends NutritionInfo {
@@ -196,4 +197,9 @@ export interface MatchProfile {
     email: string; // Or pseudonym
     compatibilityScore: number; // 0-100%
     traits: Record<string, number>;
+}
+
+export interface GeneratedMedicalMeal extends NutritionInfo {
+    suggestedDay: string;
+    suggestedSlot: string;
 }

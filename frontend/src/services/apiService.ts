@@ -1,5 +1,7 @@
 
-import type { NutritionInfo, Recipe, SavedMeal, MealPlan, MealPlanItem, MealPlanItemMetadata, GroceryList, GroceryItem, RewardsSummary, MealLogEntry, Assessment } from '../types';
+
+
+import type { NutritionInfo, Recipe, SavedMeal, MealPlan, MealPlanItem, MealPlanItemMetadata, GroceryList, GroceryItem, RewardsSummary, MealLogEntry, Assessment, GeneratedMedicalMeal } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
 const AUTH_TOKEN_KEY = 'embracehealth-api-token';
@@ -105,6 +107,24 @@ const suggestionSchema = {
 export const getMealSuggestions = async (condition: string, cuisine: string): Promise<NutritionInfo[]> => {
     const prompt = `Generate 3 diverse meal suggestions suitable for someone with ${condition}. The cuisine preference is ${cuisine}. For each meal, provide a detailed nutritional breakdown (total calories, protein, carbs, fat) and a list of ingredients with their individual nutritional info. Also, include a brief justification for why the meal is appropriate. Return the result in the specified JSON format.`;
     return callApi('/get-meal-suggestions', 'POST', { prompt, schema: suggestionSchema });
+};
+
+const medicalPlanSchema = {
+    type: Type.ARRAY,
+    items: {
+        type: Type.OBJECT,
+        properties: {
+            ...nutritionSchema.properties,
+            suggestedDay: { type: Type.STRING, description: "e.g. Monday, Tuesday" },
+            suggestedSlot: { type: Type.STRING, description: "e.g. Breakfast, Lunch, Dinner, Snack" },
+            justification: { type: Type.STRING }
+        },
+        required: [...(nutritionSchema.required || []), "suggestedDay", "suggestedSlot"]
+    }
+};
+
+export const generateMedicalPlan = async (diseases: any[], cuisine: string, duration: 'day' | 'week'): Promise<GeneratedMedicalMeal[]> => {
+    return callApi('/generate-medical-plan', 'POST', { diseases, cuisine, duration, schema: medicalPlanSchema });
 };
 
 const recipeSchema = {

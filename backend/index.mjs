@@ -1,4 +1,6 @@
 
+
+
 import { GoogleGenAI } from '@google/genai';
 import { 
     findOrCreateUserByEmail, 
@@ -57,7 +59,7 @@ export const handler = async (event) => {
         // Identify the resource. We check if the first part is a known resource, 
         // or if the second part is (in case of stage name prefix like 'default/rewards')
         const knownResources = new Set([
-            'analyze-image', 'get-meal-suggestions', 'analyze-image-recipes',
+            'analyze-image', 'get-meal-suggestions', 'analyze-image-recipes', 'generate-medical-plan',
             'saved-meals', 'meal-plans', 'meal-log', 'rewards', 'grocery-lists',
             'assessments', 'partner-blueprint', 'matches'
         ]);
@@ -88,6 +90,10 @@ export const handler = async (event) => {
         }
         if (resource === 'get-meal-suggestions' || resource === 'analyze-image-recipes') {
              return handleGeminiRequest(event, ai, corsHeaders);
+        }
+        
+        if (resource === 'generate-medical-plan') {
+            return handleMedicalPlanRequest(event, ai, corsHeaders);
         }
 
         if (resource === 'saved-meals') {
@@ -192,6 +198,40 @@ async function handleGeminiRequest(event, ai, headers) {
         config: { responseMimeType: 'application/json', responseSchema: schema } 
     });
     return { statusCode: 200, headers, body: response.text };
+}
+
+async function handleMedicalPlanRequest(event, ai, headers) {
+    const body = JSON.parse(event.body);
+    const { diseases, cuisine, duration, schema } = body;
+
+    const diseaseDetails = diseases.map(d => `${d.name} (Macros: P${d.macros.p}%/C${d.macros.c}%/F${d.macros.f}%. Focus: ${d.focus})`).join('; ');
+    const daysToGenerate = duration === 'week' ? 7 : 1;
+    const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const targetDays = duration === 'week' ? daysOfWeek : [daysOfWeek[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1]];
+
+    const prompt = `
+        You are a clinical dietitian expert in chronic disease management. 
+        Create a ${duration === 'week' ? '7-day' : '1-day'} meal plan (Breakfast, Lunch, Dinner, Snack for each day) for a patient with the following conditions: ${diseaseDetails}.
+        
+        Consolidate the dietary requirements of all listed diseases. If conflicts exist (e.g. one says high fat, one says low fat), prioritize the most restrictive safety constraint or find a clinical middle ground.
+        
+        Cuisine Type: ${cuisine}.
+        
+        Return a JSON array of meals. Each meal object must strictly follow the schema provided, including 'suggestedDay' (from ${targetDays.join(', ')}) and 'suggestedSlot' (Breakfast, Lunch, Dinner, Snack).
+        Ensure macronutrients for each meal align generally with the consolidated needs.
+    `;
+
+    try {
+        const response = await ai.models.generateContent({ 
+            model: 'gemini-2.5-flash', 
+            contents: { parts: [{ text: prompt }] }, 
+            config: { responseMimeType: 'application/json', responseSchema: schema } 
+        });
+        return { statusCode: 200, headers, body: response.text };
+    } catch (e) {
+        console.error("Gemini Medical Plan Error", e);
+        return { statusCode: 500, headers, body: JSON.stringify({error: "Failed to generate plan"})};
+    }
 }
 
 async function handleSavedMealsRequest(event, headers, method, pathParts, userId) {
