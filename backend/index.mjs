@@ -1,6 +1,4 @@
 
-
-
 import { GoogleGenAI } from '@google/genai';
 import { 
     findOrCreateUserByEmail, 
@@ -23,7 +21,6 @@ const corsHeaders = {
 
 export const handler = async (event) => {
     // 1. Handle CORS Preflight (OPTIONS)
-    // Support both API Gateway V1 (httpMethod) and V2 (requestContext.http.method)
     const method = event.httpMethod || (event.requestContext && event.requestContext.http ? event.requestContext.http.method : null);
     
     if (method === 'OPTIONS') {
@@ -31,33 +28,24 @@ export const handler = async (event) => {
     }
 
     try {
+        console.log("Incoming Event:", JSON.stringify({ path: event.path, httpMethod: method }));
+
         // 2. Extract Path Robustly
-        // V1 uses event.path, V2 uses event.rawPath
         const rawPath = event.path || event.rawPath || '';
         if (!rawPath) {
-            console.error("No path found in event:", JSON.stringify(event));
             return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Invalid request: No path found.' }) };
         }
 
-        // 3. Extract Headers Case-Insensitively
-        const headers = event.headers || {};
-        const authHeader = headers['Authorization'] || headers['authorization'];
-        
-        // 4. Auth Stub (Simplified for demo)
-        let user = { userId: 1 }; 
-        if (authHeader) {
-            // In a real app, verify JWT here.
-        }
-        event.user = user;
+        // 3. Auth Stub (Simplified for demo)
+        // In production, validate JWT here
+        const user = { userId: 1 }; 
         const userId = user.userId;
 
-        // 5. Routing Logic
-        // Remove leading slash and split
+        // 4. Routing Logic
         const cleanPath = rawPath.replace(/^\/+/, '');
         const pathParts = cleanPath.split('/');
 
-        // Identify the resource. We check if the first part is a known resource, 
-        // or if the second part is (in case of stage name prefix like 'default/rewards')
+        // Determine Resource
         const knownResources = new Set([
             'analyze-image', 'get-meal-suggestions', 'analyze-image-recipes', 'generate-medical-plan',
             'saved-meals', 'meal-plans', 'meal-log', 'rewards', 'grocery-lists',
@@ -67,7 +55,6 @@ export const handler = async (event) => {
         let resource = null;
         let resourceIndex = -1;
 
-        // Find which part of the path matches a known resource
         for (let i = 0; i < pathParts.length; i++) {
             if (knownResources.has(pathParts[i])) {
                 resource = pathParts[i];
@@ -77,43 +64,39 @@ export const handler = async (event) => {
         }
 
         if (!resource) {
-            console.warn(`Route not found for path: ${rawPath}`);
             return { statusCode: 404, headers: corsHeaders, body: JSON.stringify({ error: 'Not Found', path: rawPath }) };
         }
 
-        // Adjust pathParts to start relative to the resource
-        // e.g. /default/grocery-lists/1/items -> resource='grocery-lists', relativeParts=['grocery-lists', '1', 'items']
         const relativeParts = pathParts.slice(resourceIndex);
 
-        if (resource === 'analyze-image') {
-             return handleGeminiRequest(event, ai, corsHeaders);
-        }
-        if (resource === 'get-meal-suggestions' || resource === 'analyze-image-recipes') {
-             return handleGeminiRequest(event, ai, corsHeaders);
-        }
-        
+        // --- Route Handlers ---
+
         if (resource === 'generate-medical-plan') {
-            return handleMedicalPlanRequest(event, ai, corsHeaders);
+            return await handleMedicalPlanRequest(event, ai, corsHeaders);
+        }
+
+        if (resource === 'analyze-image' || resource === 'get-meal-suggestions' || resource === 'analyze-image-recipes') {
+             return await handleGeminiRequest(event, ai, corsHeaders);
         }
 
         if (resource === 'saved-meals') {
-             return handleSavedMealsRequest(event, corsHeaders, method, relativeParts, userId);
+             return await handleSavedMealsRequest(event, corsHeaders, method, relativeParts, userId);
         }
 
         if (resource === 'meal-plans') {
-             return handleMealPlansRequest(event, corsHeaders, method, relativeParts, userId);
+             return await handleMealPlansRequest(event, corsHeaders, method, relativeParts, userId);
         }
 
         if (resource === 'meal-log') {
-             return handleMealLogRequest(event, corsHeaders, method, relativeParts, userId);
+             return await handleMealLogRequest(event, corsHeaders, method, relativeParts, userId);
         }
 
         if (resource === 'rewards') {
-             return handleRewardsRequest(event, corsHeaders, method, userId);
+             return await handleRewardsRequest(event, corsHeaders, method, userId);
         }
 
         if (resource === 'grocery-lists') {
-             return handleGroceryListsRequest(event, corsHeaders, method, relativeParts, userId);
+             return await handleGroceryListsRequest(event, corsHeaders, method, relativeParts, userId);
         }
         
         if (resource === 'assessments') {
@@ -155,87 +138,88 @@ export const handler = async (event) => {
 };
 
 async function handleGeminiRequest(event, ai, headers) {
-    const body = JSON.parse(event.body);
-    const { base64Image, mimeType, prompt, schema, task } = body;
-    
-    // Grocery Analysis Logic
-    if (task === 'grocery') {
-        const imagePart = { inlineData: { data: base64Image, mimeType } };
-        const textPart = { text: "Identify the food or household items in this image. Be specific (e.g., 'Sharp Cheddar Cheese', 'Water Crackers', 'Almond Milk'). Return a JSON object with a single key 'items' containing an array of strings." };
+    try {
+        const body = JSON.parse(event.body);
+        const { base64Image, mimeType, prompt, schema, task } = body;
         
-        const grocerySchema = {
-            type: 'OBJECT',
-            properties: {
-                items: {
-                    type: 'ARRAY',
-                    items: { type: 'STRING' }
-                }
-            },
-            required: ['items']
-        };
+        // Grocery Analysis Logic
+        if (task === 'grocery') {
+            const imagePart = { inlineData: { data: base64Image, mimeType } };
+            const textPart = { text: "Identify the food or household items. Return specific item names in JSON under 'items'." };
+            
+            const grocerySchema = {
+                type: 'OBJECT',
+                properties: { items: { type: 'ARRAY', items: { type: 'STRING' } } },
+                required: ['items']
+            };
 
+            const response = await ai.models.generateContent({ 
+                model: 'gemini-2.5-flash', 
+                contents: { parts: [imagePart, textPart] }, 
+                config: { responseMimeType: 'application/json', responseSchema: grocerySchema } 
+            });
+            return { statusCode: 200, headers, body: response.text };
+        }
+
+        // Default Nutrition Logic
+        let contents;
+        if (base64Image) {
+            const imagePart = { inlineData: { data: base64Image, mimeType } };
+            const textPart = { text: prompt };
+            contents = { parts: [imagePart, textPart] };
+        } else {
+            contents = { parts: [{ text: prompt }] };
+        }
+        
         const response = await ai.models.generateContent({ 
             model: 'gemini-2.5-flash', 
-            contents: { parts: [imagePart, textPart] }, 
-            config: { responseMimeType: 'application/json', responseSchema: grocerySchema } 
+            contents, 
+            config: { responseMimeType: 'application/json', responseSchema: schema } 
         });
         return { statusCode: 200, headers, body: response.text };
+    } catch (e) {
+        console.error("Gemini General Error:", e);
+        return { statusCode: 500, headers, body: JSON.stringify({ error: "AI Generation Failed" }) };
     }
-
-    // Default Nutrition Logic
-    let contents;
-    if (base64Image) {
-        const imagePart = { inlineData: { data: base64Image, mimeType } };
-        const textPart = { text: prompt };
-        contents = { parts: [imagePart, textPart] };
-    } else {
-        contents = { parts: [{ text: prompt }] };
-    }
-    
-    const response = await ai.models.generateContent({ 
-        model: 'gemini-2.5-flash', 
-        contents, 
-        config: { responseMimeType: 'application/json', responseSchema: schema } 
-    });
-    return { statusCode: 200, headers, body: response.text };
 }
 
 async function handleMedicalPlanRequest(event, ai, headers) {
-    const body = JSON.parse(event.body);
-    const { diseases, cuisine, duration, schema } = body;
-
-    const diseaseDetails = diseases.map(d => `${d.name} (Macros: P${d.macros.p}%/C${d.macros.c}%/F${d.macros.f}%. Focus: ${d.focus})`).join('; ');
-    const daysToGenerate = duration === 'week' ? 7 : 1;
-    const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    const targetDays = duration === 'week' ? daysOfWeek : [daysOfWeek[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1]];
-
-    const prompt = `
-        You are a clinical dietitian expert in chronic disease management. 
-        Create a ${duration === 'week' ? '7-day' : '1-day'} meal plan (Breakfast, Lunch, Dinner, Snack for each day) for a patient with the following conditions: ${diseaseDetails}.
-        
-        Consolidate the dietary requirements of all listed diseases. If conflicts exist (e.g. one says high fat, one says low fat), prioritize the most restrictive safety constraint or find a clinical middle ground.
-        
-        Cuisine Type: ${cuisine}.
-        
-        Return a JSON array of meals. Each meal object must strictly follow the schema provided, including 'suggestedDay' (from ${targetDays.join(', ')}) and 'suggestedSlot' (Breakfast, Lunch, Dinner, Snack).
-        Ensure macronutrients for each meal align generally with the consolidated needs.
-    `;
-
     try {
+        const body = JSON.parse(event.body);
+        const { diseases, cuisine, duration, schema } = body;
+
+        console.log(`Generating Medical Plan: ${duration}, Cuisine: ${cuisine}, Conditions: ${diseases.length}`);
+
+        const diseaseDetails = diseases.map(d => `${d.name} (Target: P${d.macros.p}% C${d.macros.c}% F${d.macros.f}%. Avoid: ${d.focus})`).join('; ');
+        const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        const targetDays = duration === 'week' ? 'Monday to Sunday' : 'Today only';
+
+        const prompt = `
+            Act as a Clinical Dietitian. Create a ${duration === 'week' ? '7-day' : '1-day'} meal plan.
+            Patient Conditions: ${diseaseDetails}.
+            Cuisine: ${cuisine}.
+            Constraint: Consolidate conflicting rules by prioritizing safety (e.g. low sodium) then balancing macros.
+            Output: JSON array of meals.
+            Each meal MUST have: 'suggestedDay' (${targetDays}), 'suggestedSlot' (Breakfast, Lunch, Dinner, Snack), 'mealName', 'totalCalories', 'totalProtein', 'totalCarbs', 'totalFat', 'ingredients' (list with name, weightGrams, calories, protein, carbs, fat).
+        `;
+
         const response = await ai.models.generateContent({ 
             model: 'gemini-2.5-flash', 
             contents: { parts: [{ text: prompt }] }, 
             config: { responseMimeType: 'application/json', responseSchema: schema } 
         });
+
+        console.log("Medical Plan Generated successfully");
         return { statusCode: 200, headers, body: response.text };
+
     } catch (e) {
-        console.error("Gemini Medical Plan Error", e);
-        return { statusCode: 500, headers, body: JSON.stringify({error: "Failed to generate plan"})};
+        console.error("Gemini Medical Plan Error:", e);
+        // Return 500 so client knows to retry or show error, but with CORS headers
+        return { statusCode: 500, headers, body: JSON.stringify({ error: "Medical Plan Generation Failed", details: e.message }) };
     }
 }
 
 async function handleSavedMealsRequest(event, headers, method, pathParts, userId) {
-    // pathParts is relative: ['saved-meals', '123']
     const mealId = pathParts.length > 1 ? parseInt(pathParts[1], 10) : null;
     
     if (method === 'GET' && !mealId) {
@@ -260,7 +244,6 @@ async function handleSavedMealsRequest(event, headers, method, pathParts, userId
 }
 
 async function handleMealLogRequest(event, headers, method, pathParts, userId) {
-    // pathParts: ['meal-log'] or ['meal-log', '123']
     if (method === 'GET' && pathParts.length === 1) {
         const logEntries = await getMealLogEntries(userId);
         return { statusCode: 200, headers, body: JSON.stringify(logEntries) };
@@ -282,12 +265,6 @@ async function handleMealLogRequest(event, headers, method, pathParts, userId) {
 }
 
 async function handleMealPlansRequest(event, headers, method, pathParts, userId) {
-    // pathParts examples:
-    // ['meal-plans']
-    // ['meal-plans', '123']
-    // ['meal-plans', '123', 'items']
-    // ['meal-plans', 'items', '456']
-    
     if (method === 'GET' && pathParts.length === 1) {
         const plans = await getMealPlans(userId);
         return { statusCode: 200, headers, body: JSON.stringify(plans) };
@@ -305,14 +282,20 @@ async function handleMealPlansRequest(event, headers, method, pathParts, userId)
     if (method === 'POST' && pathParts.length === 3 && pathParts[2] === 'items') {
         const planId = parseInt(pathParts[1], 10);
         const { savedMealId, mealData, metadata } = JSON.parse(event.body);
-        if (savedMealId) {
-            const newItem = await addMealToPlanItem(userId, planId, savedMealId, metadata);
-            return { statusCode: 201, headers, body: JSON.stringify(newItem) };
-        } else if (mealData) {
-            const newItem = await addMealAndLinkToPlan(userId, mealData, planId, metadata);
-            return { statusCode: 201, headers, body: JSON.stringify(newItem) };
+        
+        try {
+            if (savedMealId) {
+                const newItem = await addMealToPlanItem(userId, planId, savedMealId, metadata);
+                return { statusCode: 201, headers, body: JSON.stringify(newItem) };
+            } else if (mealData) {
+                const newItem = await addMealAndLinkToPlan(userId, mealData, planId, metadata);
+                return { statusCode: 201, headers, body: JSON.stringify(newItem) };
+            }
+            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Either savedMealId or mealData is required.' }) };
+        } catch (e) {
+            console.error("Error adding meal to plan:", e);
+            return { statusCode: 500, headers, body: JSON.stringify({ error: e.message }) };
         }
-        return { statusCode: 400, headers, body: JSON.stringify({ error: 'Either savedMealId or mealData is required.' }) };
     }
     if (method === 'DELETE' && pathParts.length === 3 && pathParts[1] === 'items') {
         const itemId = parseInt(pathParts[2], 10);
@@ -323,8 +306,6 @@ async function handleMealPlansRequest(event, headers, method, pathParts, userId)
 }
 
 async function handleGroceryListsRequest(event, headers, method, pathParts, userId) {
-    // pathParts relative to resource 'grocery-lists'
-    // ['grocery-lists']
     if (method === 'GET' && pathParts.length === 1) {
         const lists = await getGroceryLists(userId);
         return { statusCode: 200, headers, body: JSON.stringify(lists) };
@@ -334,28 +315,22 @@ async function handleGroceryListsRequest(event, headers, method, pathParts, user
         const newList = await createGroceryList(userId, name);
         return { statusCode: 201, headers, body: JSON.stringify(newList) };
     }
-    // ['grocery-lists', '123']
     if (method === 'DELETE' && pathParts.length === 2) {
         const listId = parseInt(pathParts[1], 10);
         await deleteGroceryList(userId, listId);
         return { statusCode: 204, headers, body: '' };
     }
-    // ['grocery-lists', '123', 'activate']
     if (method === 'POST' && pathParts.length === 3 && pathParts[2] === 'activate') {
         const listId = parseInt(pathParts[1], 10);
         await setActiveGroceryList(userId, listId);
         return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
     }
-
-    // ['grocery-lists', '123', 'import']
     if (method === 'POST' && pathParts.length === 3 && pathParts[2] === 'import') {
         const listId = parseInt(pathParts[1], 10);
         const { planIds } = JSON.parse(event.body);
         const items = await addIngredientsFromPlans(userId, listId, planIds);
         return { statusCode: 200, headers, body: JSON.stringify(items) };
     }
-
-    // ['grocery-lists', '123', 'items']
     if (method === 'GET' && pathParts.length === 3 && pathParts[2] === 'items') {
         const listId = parseInt(pathParts[1], 10);
         const items = await getGroceryListItems(userId, listId);
@@ -367,8 +342,6 @@ async function handleGroceryListsRequest(event, headers, method, pathParts, user
         const newItem = await addGroceryItem(userId, listId, name);
         return { statusCode: 201, headers, body: JSON.stringify(newItem) };
     }
-    
-    // ['grocery-lists', 'items', '456']
     if (method === 'DELETE' && pathParts[1] === 'items') {
         const itemId = parseInt(pathParts[2], 10);
         await removeGroceryListItem(userId, itemId);
@@ -380,15 +353,12 @@ async function handleGroceryListsRequest(event, headers, method, pathParts, user
          const updated = await updateGroceryListItem(userId, itemId, checked);
          return { statusCode: 200, headers, body: JSON.stringify(updated) };
     }
-
-    // ['grocery-lists', '123', 'clear']
     if (method === 'DELETE' && pathParts.length === 3 && pathParts[2] === 'clear') {
         const listId = parseInt(pathParts[1], 10);
         const type = event.queryStringParameters?.type || 'all';
         await clearGroceryListItems(userId, listId, type);
         return { statusCode: 204, headers, body: '' };
     }
-    
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
 }
 

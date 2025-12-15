@@ -1,3 +1,4 @@
+
 import pg from 'pg';
 
 const { Pool } = pg;
@@ -7,7 +8,9 @@ const pool = new Pool({
     }
 });
 
-// Helper Functions
+/**
+ * Helper function to prepare meal data for database insertion.
+ */
 const processMealDataForSave = (mealData) => {
     const dataForDb = { ...mealData };
     if (dataForDb.imageUrl && dataForDb.imageUrl.startsWith('data:image')) {
@@ -19,6 +22,9 @@ const processMealDataForSave = (mealData) => {
     return dataForDb;
 };
 
+/**
+ * Helper function to prepare meal data for the client.
+ */
 const processMealDataForClient = (mealData) => {
     const dataForClient = { ...mealData };
     if (dataForClient.imageBase64) {
@@ -28,13 +34,20 @@ const processMealDataForClient = (mealData) => {
     return dataForClient;
 };
 
-// User
+
 export const findOrCreateUserByEmail = async (email) => {
     const client = await pool.connect();
     try {
-        const insertQuery = `INSERT INTO users (email) VALUES ($1) ON CONFLICT (email) DO NOTHING;`;
+        const insertQuery = `
+            INSERT INTO users (email) 
+            VALUES ($1) 
+            ON CONFLICT (email) 
+            DO NOTHING;
+        `;
         await client.query(insertQuery, [email]);
-        const res = await client.query(`SELECT id, email FROM users WHERE email = $1;`, [email]);
+
+        const selectQuery = `SELECT id, email FROM users WHERE email = $1;`;
+        const res = await client.query(selectQuery, [email]);
         
         // Ensure rewards tables
         await client.query(`
@@ -42,6 +55,7 @@ export const findOrCreateUserByEmail = async (email) => {
             CREATE TABLE IF NOT EXISTS rewards_ledger (entry_id SERIAL PRIMARY KEY, user_id VARCHAR(255) NOT NULL, event_type VARCHAR(100) NOT NULL, points_delta INT NOT NULL, created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, metadata JSONB DEFAULT '{}');
         `);
         await client.query(`INSERT INTO rewards_balances (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING;`, [res.rows[0].id]);
+
         return res.rows[0];
     } finally {
         client.release();
@@ -219,10 +233,26 @@ export const deleteMealPlan = async (userId, planId) => {
 export const addMealToPlanItem = async (userId, planId, savedMealId, metadata = {}) => {
     const client = await pool.connect();
     try {
-        const res = await client.query(`INSERT INTO meal_plan_items (user_id, meal_plan_id, saved_meal_id, metadata) VALUES ($1, $2, $3, $4) RETURNING id`, [userId, planId, savedMealId, metadata]);
+        const insertQuery = `
+            INSERT INTO meal_plan_items (user_id, meal_plan_id, saved_meal_id, metadata)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id;
+        `;
+        const res = await client.query(insertQuery, [userId, planId, savedMealId, metadata]);
         const newItemId = res.rows[0].id;
-        const row = await client.query(`SELECT i.id, i.metadata, m.id as meal_id, m.meal_data FROM meal_plan_items i JOIN saved_meals m ON i.saved_meal_id = m.id WHERE i.id = $1`, [newItemId]);
-        return { id: row.rows[0].id, metadata: row.rows[0].metadata || {}, meal: { id: row.rows[0].meal_id, ...processMealDataForClient(row.rows[0].meal_data || {}) } };
+        
+        const row = await client.query(`
+            SELECT i.id, i.metadata, m.id as meal_id, m.meal_data 
+            FROM meal_plan_items i 
+            JOIN saved_meals m ON i.saved_meal_id = m.id 
+            WHERE i.id = $1
+        `, [newItemId]);
+        
+        return { 
+            id: row.rows[0].id, 
+            metadata: row.rows[0].metadata || {}, 
+            meal: { id: row.rows[0].meal_id, ...processMealDataForClient(row.rows[0].meal_data || {}) } 
+        };
     } finally {
         client.release();
     }
