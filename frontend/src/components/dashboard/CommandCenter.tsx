@@ -27,7 +27,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
     onCameraClick, onBarcodeClick, onPantryChefClick, onRestaurantClick, onUploadClick
 }) => {
     
-    // Mocking Activity Score / Peloities based on available data or defaults
+    // Mocking Activity Score based on available data or defaults
     const activityScore = 75; 
     // Mocking Steps based on cal burn ratio approximation for display (since not passed in props)
     const dailySteps = Math.floor(dailyCalories * 2.5) || 1200; 
@@ -46,7 +46,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
             <ActivityRow 
                 steps={dailySteps} 
                 calories={dailyCalories} 
-                peloities={activityScore} 
+                heartPoints={activityScore} 
             />
 
             {/* 2.3 Social Feed */}

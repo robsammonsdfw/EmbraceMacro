@@ -5,7 +5,7 @@ import { FireIcon, FootprintsIcon, HeartIcon } from '../icons';
 interface ActivityRowProps {
     steps: number;
     calories: number;
-    peloities: number;
+    heartPoints: number;
 }
 
 const ActivityWidget: React.FC<{ 
@@ -24,7 +24,7 @@ const ActivityWidget: React.FC<{
     </div>
 );
 
-export const ActivityRow: React.FC<ActivityRowProps> = ({ steps, calories, peloities }) => {
+export const ActivityRow: React.FC<ActivityRowProps> = ({ steps, calories, heartPoints }) => {
     return (
         <div className="flex gap-4 w-full">
             <ActivityWidget 
@@ -42,8 +42,8 @@ export const ActivityRow: React.FC<ActivityRowProps> = ({ steps, calories, peloi
                 iconColor="text-orange-500"
             />
             <ActivityWidget 
-                label="Peloities" 
-                value={peloities.toString()} 
+                label="Heart Pts" 
+                value={heartPoints.toString()} 
                 icon={<HeartIcon />} 
                 iconBg="bg-rose-50"
                 iconColor="text-rose-500"
