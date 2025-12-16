@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { HomeIcon, PlusIcon, BookOpenIcon, ClockIcon, ClipboardListIcon, Squares2X2Icon, TrophyIcon, CameraIcon, UserGroupIcon, UserCircleIcon, MenuIcon } from './icons';
+import { HomeIcon, PlusIcon, BookOpenIcon, ClipboardListIcon, Squares2X2Icon, TrophyIcon, CameraIcon, UserGroupIcon, UserCircleIcon, MenuIcon } from './icons';
 import * as apiService from '../services/apiService';
 
 interface NavbarProps {

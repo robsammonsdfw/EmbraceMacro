@@ -1,9 +1,8 @@
 
 import React, { useState } from 'react';
 import type { MealPlan, SavedMeal, NutritionInfo } from '../types';
-import { PlusIcon, UserCircleIcon, GlobeAltIcon, StarIcon, CameraIcon, BeakerIcon, BookOpenIcon, UploadIcon } from './icons';
+import { BeakerIcon, UploadIcon } from './icons';
 import { MedicalPlannerModal } from './MedicalPlannerModal';
-import * as apiService from '../services/apiService';
 
 interface MealPlanManagerProps {
     plans: MealPlan[];
@@ -19,7 +18,7 @@ interface MealPlanManagerProps {
 const FIXED_SLOTS = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 
 export const MealPlanManager: React.FC<MealPlanManagerProps> = ({ 
-    plans, activePlanId, savedMeals, onPlanChange, onCreatePlan, onAddToPlan, onRemoveFromPlan
+    plans, activePlanId, onAddToPlan, onRemoveFromPlan
 }) => {
     const [activeTab, setActiveTab] = useState<'planning' | 'community'>('planning');
     const [isMedicalModalOpen, setIsMedicalModalOpen] = useState(false);

@@ -2,7 +2,7 @@
 import React from 'react';
 import { TodayStrip } from './TodayStrip';
 import { DigitalTwinPanel } from './DigitalTwinPanel';
-import { CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, UploadIcon, TrophyIcon, ChatIcon, ThumbUpIcon } from '../icons';
+import { CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, TrophyIcon, ChatIcon, ThumbUpIcon } from '../icons';
 
 interface CommandCenterProps {
     dailyCalories: number;
@@ -34,8 +34,8 @@ const SocialFeedItem: React.FC<{ name: string; action: string; time: string; col
 );
 
 export const CommandCenter: React.FC<CommandCenterProps> = ({ 
-    dailyCalories, dailyProtein, rewardsBalance, userName, onScanClick,
-    onCameraClick, onBarcodeClick, onPantryChefClick, onRestaurantClick, onUploadClick
+    dailyCalories, dailyProtein, rewardsBalance, onScanClick,
+    onCameraClick, onBarcodeClick, onPantryChefClick, onRestaurantClick
 }) => {
     return (
         <div className="space-y-6 animate-fade-in pb-10">

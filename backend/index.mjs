@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import https from 'https';
@@ -257,8 +256,10 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
 
         // Get Customer Details (ID) using the new token
         const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
-        // Access customer property
-        const customer = (/** @type {any} */ (customerDataResponse))?.customer;
+        
+        // Access customer property safely with any cast
+        const customerData = /** @type {any} */ (customerDataResponse);
+        const customer = customerData?.customer;
 
         // Sync User in Postgres
         const user = await findOrCreateUserByEmail(email, customer?.id ? String(customer.id) : null);

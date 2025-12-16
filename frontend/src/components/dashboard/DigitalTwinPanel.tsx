@@ -13,7 +13,7 @@ interface DigitalTwinPanelProps {
 }
 
 export const DigitalTwinPanel: React.FC<DigitalTwinPanelProps> = ({ 
-    calories, miniMode
+    miniMode
 }) => {
     const [sliderValue, setSliderValue] = useState(50); // 50% split for before/after
 
