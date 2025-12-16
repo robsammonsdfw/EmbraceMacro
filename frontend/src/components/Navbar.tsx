@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { HomeIcon, PlusIcon, BookOpenIcon, ClockIcon, ClipboardListIcon, Squares2X2Icon, TrophyIcon, CameraIcon, UserGroupIcon, UserCircleIcon } from './icons';
+import { HomeIcon, PlusIcon, BookOpenIcon, ClockIcon, ClipboardListIcon, Squares2X2Icon, TrophyIcon, CameraIcon, UserGroupIcon, UserCircleIcon, MenuIcon } from './icons';
 import * as apiService from '../services/apiService';
 
 interface NavbarProps {
@@ -9,6 +9,7 @@ interface NavbarProps {
   onLogout: () => void;
   onBackToHub: () => void;
   onCaptureClick: () => void;
+  onOpenMenu: () => void;
 }
 
 const NavLink: React.FC<{ 
@@ -30,7 +31,7 @@ const NavLink: React.FC<{
     </button>
 );
 
-export const Navbar: React.FC<NavbarProps> = ({ activeView, onNavigate, onLogout, onBackToHub, onCaptureClick }) => {
+export const Navbar: React.FC<NavbarProps> = ({ activeView, onNavigate, onLogout, onBackToHub, onCaptureClick, onOpenMenu }) => {
     const [points, setPoints] = useState<number>(0);
 
     useEffect(() => {
@@ -111,7 +112,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeView, onNavigate, onLogout
                 </div>
             </nav>
 
-            {/* Phase 1: Minimal Mobile Bottom Navigation */}
+            {/* Mobile Bottom Navigation - Updated layout including Plan and Menu */}
             <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.05)] pb-safe z-40 flex justify-around items-center h-20 px-2">
                 <button 
                     onClick={() => handleNav('home')} 
@@ -122,11 +123,11 @@ export const Navbar: React.FC<NavbarProps> = ({ activeView, onNavigate, onLogout
                 </button>
                 
                 <button 
-                    onClick={() => handleNav('meals')} 
-                    className={`p-2 flex flex-col items-center gap-1 flex-1 ${activeView === 'meals' ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}
+                    onClick={() => handleNav('plan')} 
+                    className={`p-2 flex flex-col items-center gap-1 flex-1 ${activeView === 'plan' ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}
                 >
-                    <BookOpenIcon />
-                    <span className="text-[10px] font-bold">Meals</span>
+                    <PlusIcon />
+                    <span className="text-[10px] font-bold">Plan</span>
                 </button>
                 
                 {/* Central Action Button */}
@@ -134,23 +135,24 @@ export const Navbar: React.FC<NavbarProps> = ({ activeView, onNavigate, onLogout
                     onClick={onCaptureClick}
                     className="relative -top-6 bg-emerald-500 text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center border-4 border-white transform active:scale-95 transition-all"
                 >
-                    <PlusIcon />
+                    <CameraIcon />
                 </button>
 
                 <button 
-                    onClick={() => handleNav('history')} 
-                    className={`p-2 flex flex-col items-center gap-1 flex-1 ${activeView === 'history' ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}
+                    onClick={() => handleNav('meals')} 
+                    className={`p-2 flex flex-col items-center gap-1 flex-1 ${activeView === 'meals' ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}
                 >
-                    <UserGroupIcon />
-                    <span className="text-[10px] font-bold">Friends</span>
+                    <BookOpenIcon />
+                    <span className="text-[10px] font-bold">Meals</span>
                 </button>
                 
+                {/* Mobile Menu Button - Opens Full Sidebar */}
                 <button 
-                    onClick={() => handleNav('body')} 
-                    className={`p-2 flex flex-col items-center gap-1 flex-1 ${activeView === 'body' ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}
+                    onClick={onOpenMenu} 
+                    className={`p-2 flex flex-col items-center gap-1 flex-1 text-slate-400 hover:text-slate-600`}
                 >
-                    <UserCircleIcon />
-                    <span className="text-[10px] font-bold">Profile</span>
+                    <MenuIcon />
+                    <span className="text-[10px] font-bold">Menu</span>
                 </button>
             </div>
         </>

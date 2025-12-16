@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { SidebarNav } from './SidebarNav';
 import { MenuIcon, XIcon } from '../icons';
 
@@ -9,10 +9,19 @@ interface AppLayoutProps {
     onNavigate: (view: string) => void;
     onLogout: () => void;
     rightPanel?: React.ReactNode;
+    mobileMenuOpen: boolean;
+    setMobileMenuOpen: (open: boolean) => void;
 }
 
-export const AppLayout: React.FC<AppLayoutProps> = ({ children, activeView, onNavigate, onLogout, rightPanel }) => {
-    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+export const AppLayout: React.FC<AppLayoutProps> = ({ 
+    children, 
+    activeView, 
+    onNavigate, 
+    onLogout, 
+    rightPanel,
+    mobileMenuOpen,
+    setMobileMenuOpen
+}) => {
 
     const handleMobileNavigate = (view: string) => {
         onNavigate(view);

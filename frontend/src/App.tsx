@@ -43,6 +43,7 @@ const App: React.FC = () => {
   const [activeView, setActiveView] = useState<ActiveView>('home');
   const [isCaptureOpen, setIsCaptureOpen] = useState(false);
   const [captureInitialMode, setCaptureInitialMode] = useState<CaptureMode>('meal');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // App Data State
   const [image, setImage] = useState<string | null>(null);
@@ -482,6 +483,8 @@ const App: React.FC = () => {
         onNavigate={handleNavigation} 
         onLogout={handleLogout}
         rightPanel={RightPanelContent}
+        mobileMenuOpen={mobileMenuOpen}
+        setMobileMenuOpen={setMobileMenuOpen}
     >
         <InstallPrompt />
         
@@ -512,6 +515,7 @@ const App: React.FC = () => {
                 onLogout={handleLogout} 
                 onBackToHub={() => setAppMode('hub')}
                 onCaptureClick={() => handleCaptureClick('meal')}
+                onOpenMenu={() => setMobileMenuOpen(true)}
             />
         </div>
 
