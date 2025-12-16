@@ -32,7 +32,7 @@ const NavItem: React.FC<{
 
 export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, onLogout }) => {
     return (
-        <div className="h-full flex flex-col bg-white border-r border-slate-200 w-64 fixed left-0 top-0 bottom-0 z-30">
+        <div className="h-full flex flex-col bg-white">
             {/* Logo Area */}
             <div className="p-6">
                 <h1 className="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500">
