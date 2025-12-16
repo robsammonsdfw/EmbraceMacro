@@ -1,4 +1,6 @@
 
+
+
 import pg from 'pg';
 
 const { Pool } = pg;
@@ -44,13 +46,9 @@ const processMealDataForClient = (mealData) => {
  */
 const processMealDataForList = (mealData) => {
     const dataForClient = { ...mealData };
-    // Check if image exists before deleting
     const hasImage = !!dataForClient.imageBase64;
-    
-    // CRITICAL: Remove the heavy base64 string
     delete dataForClient.imageBase64;
-    delete dataForClient.imageUrl; // Ensure no lingering url
-    
+    delete dataForClient.imageUrl;
     dataForClient.hasImage = hasImage;
     return dataForClient;
 };
@@ -70,16 +68,146 @@ export const findOrCreateUserByEmail = async (email) => {
         const selectQuery = `SELECT id, email FROM users WHERE email = $1;`;
         const res = await client.query(selectQuery, [email]);
         
-        // Ensure rewards tables
+        // Ensure standard tables exist
+        await ensureRewardsTables(client);
+        
+        // Ensure Medical Intelligence tables exist and are seeded
+        await ensureMedicalSchema(client);
+        
+        // Ensure rewards balance entry exists for this user
         await client.query(`
-            CREATE TABLE IF NOT EXISTS rewards_balances (user_id VARCHAR(255) PRIMARY KEY, points_total INT DEFAULT 0, points_available INT DEFAULT 0, tier VARCHAR(50) DEFAULT 'Bronze', updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP);
-            CREATE TABLE IF NOT EXISTS rewards_ledger (entry_id SERIAL PRIMARY KEY, user_id VARCHAR(255) NOT NULL, event_type VARCHAR(100) NOT NULL, points_delta INT NOT NULL, created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, metadata JSONB DEFAULT '{}');
-        `);
-        await client.query(`INSERT INTO rewards_balances (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING;`, [res.rows[0].id]);
+            INSERT INTO rewards_balances (user_id, points_total, points_available, tier)
+            VALUES ($1, 0, 0, 'Bronze')
+            ON CONFLICT (user_id) DO NOTHING;
+        `, [res.rows[0].id]);
 
         return res.rows[0];
     } finally {
         client.release();
+    }
+};
+
+const ensureRewardsTables = async (client) => {
+    await client.query(`
+        CREATE TABLE IF NOT EXISTS rewards_balances (
+            user_id VARCHAR(255) PRIMARY KEY,
+            points_total INT DEFAULT 0,
+            points_available INT DEFAULT 0,
+            tier VARCHAR(50) DEFAULT 'Bronze',
+            updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS rewards_ledger (
+            entry_id SERIAL PRIMARY KEY,
+            user_id VARCHAR(255) NOT NULL,
+            event_type VARCHAR(100) NOT NULL,
+            points_delta INT NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            metadata JSONB DEFAULT '{}'
+        );
+    `);
+};
+
+// --- Medical Intelligence Schema (New) ---
+const ensureMedicalSchema = async (client) => {
+    // 1. Dietary Profiles (The Solutions)
+    await client.query(`
+        CREATE TABLE IF NOT EXISTS dietary_profiles (
+            id VARCHAR(50) PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            description TEXT,
+            macros JSONB,
+            focus TEXT
+        );
+    `);
+
+    // 2. Medical Kits (The Products)
+    await client.query(`
+        CREATE TABLE IF NOT EXISTS medical_kits (
+            id VARCHAR(50) PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            category VARCHAR(50)
+        );
+    `);
+
+    // 3. Kit Mappings (The Intelligence/Logic)
+    await client.query(`
+        CREATE TABLE IF NOT EXISTS kit_mappings (
+            kit_id VARCHAR(50) REFERENCES medical_kits(id),
+            profile_id VARCHAR(50) REFERENCES dietary_profiles(id),
+            option_index INT, -- 1, 2, 3, 4 corresponding to spreadsheet columns
+            label VARCHAR(100), -- Optional Override Label e.g. "Primary Recommendation"
+            PRIMARY KEY (kit_id, profile_id)
+        );
+    `);
+
+    // --- SEED DATA (Based on Spreadsheet) ---
+    
+    // Seed Profiles (Sample subset from screenshot)
+    const profiles = [
+        ['ams_diabetes', 'AMS Diabetes', 'Glycemic control focus', '{"p":35, "c":25, "f":25}', 'High fiber, lean protein'],
+        ['ams_high_cholesterol', 'AMS High Cholesterol', 'Heart health focus', '{"p":40, "c":30, "f":30}', 'Low saturated fat'],
+        ['ams_diabetes_cholesterol', 'AMS Diabetes & High Cholesterol', 'Dual management', '{"p":40, "c":30, "f":30}', 'Balance of both'],
+        ['ams_hypertension', 'AMS Hypertension', 'BP management', '{"p":50, "c":25, "f":25}', 'Low sodium'],
+        ['ams_diabetes_hypertension', 'AMS Diabetes & Hypertension', 'Dual management', '{"p":50, "c":25, "f":25}', 'Low sodium, low GI'],
+        ['stable_blood_sugar', 'Stable Blood Sugar', 'Maintenance', '{"p":30, "c":40, "f":30}', 'Balanced'],
+        ['ams_ckd', 'AMS Chronic Kidney Disease', 'Kidney support', '{"p":15, "c":60, "f":25}', 'Low protein, phosphorus'],
+        ['ams_cirrhosis', 'AMS Cirrhosis', 'Liver support', '{"p":20, "c":50, "f":30}', 'Easy digest'],
+        ['ams_anti_inflamm', 'AMS Anti-Inflammatory', 'Systemic relief', '{"p":30, "c":40, "f":30}', 'Omega-3s'],
+        ['healthy_aging', 'Healthy Aging', 'Longevity', '{"p":30, "c":40, "f":30}', 'Mediterranean style']
+    ];
+
+    for (const p of profiles) {
+        await client.query(`
+            INSERT INTO dietary_profiles (id, name, description, macros, focus)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (id) DO NOTHING;
+        `, p);
+    }
+
+    // Seed Kits
+    const kits = [
+        ['kit_diabetes_heart', 'Diabetes & Heart Health', 'General'],
+        ['kit_kidney_liver', 'Advanced Kidney & Liver Panel', 'General'],
+        ['kit_fatigue', 'Fatigue Panel', 'General'],
+        ['kit_mens_hormone', "Essential Men's Hormone Panel", "Men's"],
+        ['kit_longevity_male', "Longevity Panel (Male)", "Men's"]
+    ];
+
+    for (const k of kits) {
+        await client.query(`
+            INSERT INTO medical_kits (id, name, category)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (id) DO NOTHING;
+        `, k);
+    }
+
+    // Seed Mappings (The spreadsheet logic)
+    const mappings = [
+        // Diabetes & Heart Health
+        ['kit_diabetes_heart', 'ams_diabetes', 1, 'Primary Option'],
+        ['kit_diabetes_heart', 'ams_diabetes_cholesterol', 2, 'For High Cholesterol'],
+        ['kit_diabetes_heart', 'ams_diabetes_hypertension', 3, 'For Hypertension'],
+        ['kit_diabetes_heart', 'stable_blood_sugar', 4, 'Maintenance'],
+        
+        // Kidney & Liver
+        ['kit_kidney_liver', 'ams_ckd', 1, 'Primary Option'],
+        ['kit_kidney_liver', 'ams_cirrhosis', 2, 'Liver Focus'],
+        
+        // Men's Hormone
+        ['kit_mens_hormone', 'healthy_aging', 1, 'Hormone Balance'],
+        
+        // Male Longevity
+        ['kit_longevity_male', 'healthy_aging', 1, 'Primary Option'],
+        ['kit_longevity_male', 'ams_high_cholesterol', 2, 'Heart Healthy'],
+        ['kit_longevity_male', 'ams_anti_inflamm', 3, 'Anti-Inflammatory']
+    ];
+
+    for (const m of mappings) {
+        await client.query(`
+            INSERT INTO kit_mappings (kit_id, profile_id, option_index, label)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (kit_id, profile_id) DO NOTHING;
+        `, m);
     }
 };
 
@@ -175,9 +303,6 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
 export const getSavedMeals = async (userId) => {
     const client = await pool.connect();
     try {
-        // Optimization: Exclude imageBase64 from JSONB using Postgres '-' operator if possible, 
-        // or just select and process in node carefully. 
-        // Note: 'meal_data - "imageBase64"' works in Postgres if the key exists.
         const res = await client.query(`
             SELECT id, meal_data - 'imageBase64' as meal_data, 
             (meal_data ? 'imageBase64') as has_image 
@@ -346,6 +471,15 @@ export const createGroceryList = async (userId, name) => {
     }
 };
 
+export const deleteGroceryList = async (userId, listId) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`DELETE FROM grocery_lists WHERE id = $1 AND user_id = $2`, [listId, userId]);
+    } finally {
+        client.release();
+    }
+};
+
 export const setActiveGroceryList = async (userId, listId) => {
     const client = await pool.connect();
     try {
@@ -354,15 +488,6 @@ export const setActiveGroceryList = async (userId, listId) => {
         await client.query(`UPDATE grocery_lists SET is_active = TRUE WHERE id = $1 AND user_id = $2`, [listId, userId]);
         await client.query('COMMIT');
     } catch (e) { await client.query('ROLLBACK'); throw e; } finally { client.release(); }
-};
-
-export const deleteGroceryList = async (userId, listId) => {
-    const client = await pool.connect();
-    try {
-        await client.query(`DELETE FROM grocery_lists WHERE id = $1 AND user_id = $2`, [listId, userId]);
-    } finally {
-        client.release();
-    }
 };
 
 export const getGroceryListItems = async (userId, listId) => {
@@ -385,20 +510,20 @@ export const addGroceryItem = async (userId, listId, name) => {
     }
 };
 
-export const removeGroceryListItem = async (userId, itemId) => {
-    const client = await pool.connect();
-    try {
-        await client.query(`DELETE FROM grocery_list_items WHERE id = $1`, [itemId]);
-    } finally {
-        client.release();
-    }
-};
-
 export const updateGroceryListItem = async (userId, itemId, checked) => {
     const client = await pool.connect();
     try {
         const res = await client.query(`UPDATE grocery_list_items SET checked = $1 WHERE id = $2 RETURNING id, name, checked`, [checked, itemId]);
         return res.rows[0];
+    } finally {
+        client.release();
+    }
+};
+
+export const removeGroceryListItem = async (userId, itemId) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`DELETE FROM grocery_list_items WHERE id = $1`, [itemId]);
     } finally {
         client.release();
     }

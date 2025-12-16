@@ -1,6 +1,8 @@
 
 
 
+
+
 export interface Ingredient {
   name: string;
   weightGrams: number;
@@ -202,4 +204,26 @@ export interface MatchProfile {
 export interface GeneratedMedicalMeal extends NutritionInfo {
     suggestedDay: string;
     suggestedSlot: string;
+}
+
+// --- Sprint 7.3: Medical Kit Intelligence ---
+export interface MedicalKit {
+    id: string;
+    name: string;
+    category: string;
+}
+
+export interface DietaryProfile {
+    id: string;
+    name: string;
+    description?: string;
+    macros?: { p: number; c: number; f: number };
+    focus?: string;
+}
+
+export interface KitRecommendation {
+    kitId: string;
+    optionIndex: number; // 1, 2, 3, 4
+    profile: DietaryProfile;
+    label?: string; // "Primary Recommendation", "Alternative", etc.
 }
