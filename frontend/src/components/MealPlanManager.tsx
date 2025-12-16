@@ -125,10 +125,6 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
             const planName = `Medical Plan - ${new Date().toLocaleDateString()} (${Math.floor(Math.random() * 1000)})`;
             const newPlan = await apiService.createMealPlan(planName);
             
-            // Update local state via parent callback (this relies on parent refetching or updating state, 
-            // but we can assume we'll trigger a reload after to be safe since we don't have the setPlans prop here directly)
-            // Ideally we'd set the active plan ID immediately.
-            
             // 2. Generate the meals
             const generatedMeals = await apiService.generateMedicalPlan(diseases, cuisine, duration);
             
@@ -164,8 +160,12 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
 
         } catch (error: any) {
             console.error(error);
-            if (error.message && error.message.includes('503')) {
-                alert("The AI service is busy or timed out. Please try generating a 1-Day plan instead of a whole week, or try again in a moment.");
+            if (error.message && (error.message.includes('503') || error.message.includes('504'))) {
+                if (duration === 'week') {
+                    alert("The AI service timed out generating a full week. Please try generating a 1-Day plan instead, as it is much faster.");
+                } else {
+                    alert("The AI service is currently busy. Please try again in a moment.");
+                }
             } else {
                 alert("Failed to generate plan. Please try again.");
             }
