@@ -1,3 +1,4 @@
+
 import pg from 'pg';
 
 const { Pool } = pg;
@@ -51,19 +52,23 @@ const processMealDataForList = (mealData) => {
 };
 
 
-export const findOrCreateUserByEmail = async (email) => {
+export const findOrCreateUserByEmail = async (email, shopifyCustomerId = null) => {
     const client = await pool.connect();
     try {
         const insertQuery = `
-            INSERT INTO users (email) 
-            VALUES ($1) 
+            INSERT INTO users (email, shopify_customer_id) 
+            VALUES ($1, $2) 
             ON CONFLICT (email) 
-            DO NOTHING;
+            DO UPDATE SET shopify_customer_id = COALESCE(users.shopify_customer_id, EXCLUDED.shopify_customer_id);
         `;
-        await client.query(insertQuery, [email]);
+        await client.query(insertQuery, [email, shopifyCustomerId]);
 
-        const selectQuery = `SELECT id, email FROM users WHERE email = $1;`;
+        const selectQuery = `SELECT id, email, shopify_customer_id FROM users WHERE email = $1;`;
         const res = await client.query(selectQuery, [email]);
+        
+        if (res.rows.length === 0) {
+             throw new Error("Failed to find or create user.");
+        }
         
         // Ensure standard tables exist
         await ensureRewardsTables(client);

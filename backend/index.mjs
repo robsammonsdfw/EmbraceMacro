@@ -51,10 +51,8 @@ export const handler = async (event) => {
 
     const {
         GEMINI_API_KEY,
-        SHOPIFY_STOREFRONT_TOKEN, // Keep for legacy refs
+        SHOPIFY_STOREFRONT_TOKEN, 
         SHOPIFY_STORE_DOMAIN,
-        SHOPIFY_CLIENT_ID,     // Added for OAuth
-        SHOPIFY_CLIENT_SECRET, // Added for OAuth
         JWT_SECRET,
         FRONTEND_URL,
         PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGPORT,
@@ -103,7 +101,7 @@ export const handler = async (event) => {
         return { statusCode: 500, headers, body: JSON.stringify({ error: 'Internal Server Error: Malformed request event.' }) };
     }
 
-    // Handle Stage prefix removal (e.g. /default/auth/shopify -> /auth/shopify)
+    // Handle Stage prefix removal
     const stage = event.requestContext?.stage;
     if (stage && stage !== '$default') {
         const stagePrefix = `/${stage}`;
@@ -116,106 +114,9 @@ export const handler = async (event) => {
         return { statusCode: 204, headers };
     }
 
-    // --- SHOPIFY OAUTH ROUTES (RESTORED) ---
-    
-    // 1. Start OAuth Flow
-    if (path === '/auth/shopify') {
-        // Use provided query shop or fallback to env var
-        const shop = event.queryStringParameters?.shop || SHOPIFY_STORE_DOMAIN;
-        if (!shop) {
-            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing shop parameter and no default configured.' }) };
-        }
-
-        const scopes = 'read_orders,read_customers';
-        // Construct callback URL. We assume the current API Gateway domain + /auth/callback
-        // Hardcoding the path suffix based on current structure
-        const callbackPath = '/default/auth/callback'; 
-        const domain = event.requestContext.domainName || 'xmpbc16u1f.execute-api.us-west-1.amazonaws.com';
-        const redirectUri = `https://${domain}${callbackPath}`;
-        
-        const nonce = Date.now().toString(); // Simple nonce
-        
-        const installUrl = `https://${shop}/admin/oauth/authorize?client_id=${SHOPIFY_CLIENT_ID}&scope=${scopes}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${nonce}`;
-        
-        return {
-            statusCode: 302,
-            headers: {
-                ...headers,
-                Location: installUrl
-            },
-            body: ''
-        };
-    }
-
-    // 2. Handle Callback
-    if (path === '/auth/callback') {
-        const { code, shop, state } = event.queryStringParameters || {};
-        
-        if (!code || !shop) {
-            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing code or shop parameter.' }) };
-        }
-
-        try {
-            // Exchange code for access token
-            const tokenResponse = await fetch(`https://${shop}/admin/oauth/access_token`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    client_id: SHOPIFY_CLIENT_ID,
-                    client_secret: SHOPIFY_CLIENT_SECRET,
-                    code
-                })
-            });
-
-            if (!tokenResponse.ok) {
-                const txt = await tokenResponse.text();
-                console.error("Shopify Token Exchange Failed:", txt);
-                return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to exchange token with Shopify.' }) };
-            }
-
-            const tokenData = await tokenResponse.json();
-            const accessToken = tokenData.access_token;
-
-            // Fetch Shop Details to identify user
-            const shopResponse = await fetch(`https://${shop}/admin/api/2024-04/shop.json`, {
-                headers: {
-                    'X-Shopify-Access-Token': accessToken
-                }
-            });
-
-            if (!shopResponse.ok) {
-                return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to fetch shop details.' }) };
-            }
-
-            const shopData = await shopResponse.json();
-            const email = shopData.shop.email; 
-
-            // Find or Create user in our DB
-            const user = await findOrCreateUserByEmail(email);
-
-            // Generate App Token
-            const token = jwt.sign(
-                { userId: user.id, email: user.email },
-                JWT_SECRET,
-                { expiresIn: '30d' }
-            );
-
-            // Redirect back to Frontend
-            const redirectUrl = `${FRONTEND_URL}?token=${token}`;
-            
-            return {
-                statusCode: 302,
-                headers: {
-                    ...headers,
-                    Location: redirectUrl
-                },
-                body: ''
-            };
-
-        } catch (err) {
-            console.error("OAuth Callback Error:", err);
-            return { statusCode: 500, headers, body: JSON.stringify({ error: "Authentication failed", details: err.message }) };
-        }
+    // --- AUTH ROUTES ---
+    if (path === '/auth/customer-login') {
+        return handleCustomerLogin(event, headers, JWT_SECRET);
     }
 
     // --- AUTHENTICATED ROUTES ---
@@ -299,7 +200,83 @@ export const handler = async (event) => {
     };
 };
 
-// ... (Rest of handlers remain largely same, re-adding ones required by router)
+async function handleCustomerLogin(event, headers, JWT_SECRET) {
+    const mutation = `mutation customerAccessTokenCreate($input: CustomerAccessTokenCreateInput!) { customerAccessTokenCreate(input: $input) { customerAccessToken { accessToken expiresAt } customerUserErrors { code field message } } }`;
+    const customerQuery = `query { customer { id email firstName lastName } }`;
+
+    try {
+        let { email, password } = JSON.parse(event.body);
+        if (!email || !password) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Email/password required.' }) };
+
+        email = email.toLowerCase().trim();
+
+        const variables = { input: { email, password } };
+        const shopifyResponse = /** @type {any} */ (await callShopifyStorefrontAPI(mutation, variables));
+        if (!shopifyResponse) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Login failed: Invalid response from store.' }) };
+        
+        const data = shopifyResponse['customerAccessTokenCreate'];
+        if (!data || data.customerUserErrors.length > 0) {
+            return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid credentials.', details: data?.customerUserErrors[0]?.message }) };
+        }
+
+        const accessToken = data.customerAccessToken.accessToken;
+
+        // Get Customer Details (ID) using the new token
+        const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
+        const customer = (/** @type {any} */ (customerDataResponse))?.customer;
+
+        // Sync User in Postgres
+        const user = await findOrCreateUserByEmail(email, customer?.id ? String(customer.id) : null);
+
+        const sessionToken = jwt.sign({ 
+            userId: user.id, 
+            email: user.email,
+            firstName: customer?.firstName
+        }, JWT_SECRET, { expiresIn: '7d' });
+        
+        return { statusCode: 200, headers, body: JSON.stringify({ token: sessionToken }) };
+    } catch (error) {
+        console.error('[CRITICAL] LOGIN_HANDLER_CRASH:', error);
+        return { statusCode: 500, headers, body: JSON.stringify({ error: 'Login failed.', details: error.message }) };
+    }
+}
+
+/**
+ * @returns {Promise<any>}
+ */
+function callShopifyStorefrontAPI(query, variables, customerAccessToken = null) {
+    const { SHOPIFY_STORE_DOMAIN, SHOPIFY_STOREFRONT_TOKEN } = process.env;
+    const postData = JSON.stringify({ query, variables });
+    const headers = {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData),
+        'X-Shopify-Storefront-Access-Token': SHOPIFY_STOREFRONT_TOKEN
+    };
+
+    if (customerAccessToken) {
+        headers['X-Shopify-Customer-Access-Token'] = customerAccessToken;
+    }
+
+    const options = { hostname: SHOPIFY_STORE_DOMAIN, path: '/api/2024-04/graphql.json', method: 'POST', headers };
+    return new Promise((resolve, reject) => {
+        const req = https.request(options, (res) => {
+            let data = '';
+            res.on('data', (chunk) => { data += chunk; });
+            res.on('end', () => {
+                try {
+                    const responseBody = JSON.parse(data);
+                    if (res.statusCode >= 200 && res.statusCode < 300) resolve(responseBody.data);
+                    else reject(new Error(`Shopify API failed: ${res.statusCode}`));
+                } catch (e) { reject(new Error(`Failed to parse response: ${e.message}`)); }
+            });
+        });
+        req.on('error', (e) => reject(e));
+        req.write(postData);
+        req.end();
+    });
+}
+
+// ... Rest of the handlers remain consistent ...
 
 async function handleDashboardRequest(event, headers, method, pathParts) {
     const subResource = pathParts[1];
@@ -316,14 +293,10 @@ async function handleDashboardRequest(event, headers, method, pathParts) {
 
 async function handleBodyScansRequest(event, headers, method, pathParts) {
     const userId = event.user.userId;
-    // ... (Keep existing Body Scan logic) ...
-    // Simplified for brevity in this patch, assuming databaseService handles logic
     if (method === 'GET') {
         const scans = await getBodyScans(userId);
         return { statusCode: 200, headers, body: JSON.stringify(scans) };
     }
-    // Note: Full Prism logic was in previous version, ensure it is preserved or re-added if overwritten.
-    // For this specific fix (Auth), I am focusing on restoring the Auth flow.
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
 }
 
@@ -406,7 +379,6 @@ async function handleGroceryListRequest(event, headers, method, pathParts) {
         const items = await getGroceryListItems(userId, listId);
         return { statusCode: 200, headers, body: JSON.stringify(items) };
     }
-    // ... Add other grocery routes as needed (activate, clear, etc.) matching databaseService capabilities
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
 }
 
