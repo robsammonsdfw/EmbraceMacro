@@ -12,7 +12,6 @@ import { CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, UploadIcon } from '
 
 interface CommandCenterProps {
     dailyCalories: number;
-    dailyProtein: number;
     rewardsBalance: number;
     userName: string;
     onScanClick: () => void;
@@ -24,7 +23,7 @@ interface CommandCenterProps {
 }
 
 export const CommandCenter: React.FC<CommandCenterProps> = ({ 
-    dailyCalories, dailyProtein, rewardsBalance, userName, onScanClick,
+    dailyCalories, rewardsBalance, userName, onScanClick,
     onCameraClick, onBarcodeClick, onPantryChefClick, onRestaurantClick, onUploadClick
 }) => {
     
@@ -63,7 +62,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                 />
 
                 {/* Bottom Right: Condensed Quick Actions Grid to fit 2.4 constraint */}
-                <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 grid grid-cols-2 gap-2">
+                <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 grid grid-cols-3 gap-2">
                     <button onClick={onCameraClick} className="flex flex-col items-center justify-center bg-emerald-50 hover:bg-emerald-100 rounded-xl p-2 transition-colors">
                         <div className="text-emerald-600 scale-75"><CameraIcon /></div>
                         <span className="text-[10px] font-bold text-emerald-700">Meal</span>
@@ -79,6 +78,10 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                     <button onClick={onRestaurantClick} className="flex flex-col items-center justify-center bg-indigo-50 hover:bg-indigo-100 rounded-xl p-2 transition-colors">
                         <div className="text-indigo-600 scale-75"><UtensilsIcon /></div>
                         <span className="text-[10px] font-bold text-indigo-700">Dine</span>
+                    </button>
+                    <button onClick={onUploadClick} className="flex flex-col items-center justify-center bg-slate-50 hover:bg-slate-100 rounded-xl p-2 transition-colors">
+                        <div className="text-slate-600 scale-75"><UploadIcon /></div>
+                        <span className="text-[10px] font-bold text-slate-700">Upload</span>
                     </button>
                 </div>
             </div>

@@ -1,5 +1,4 @@
 
-
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import * as apiService from './services/apiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
@@ -383,7 +382,6 @@ const App: React.FC = () => {
         case 'home': return (
             <CommandCenter 
                 dailyCalories={dailyStats.calories}
-                dailyProtein={dailyStats.protein}
                 rewardsBalance={0}
                 userName={user?.firstName || 'User'}
                 onScanClick={handleBodyScanClick}
