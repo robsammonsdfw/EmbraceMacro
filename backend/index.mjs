@@ -245,7 +245,7 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         email = email.toLowerCase().trim();
 
         const variables = { input: { email, password } };
-        const shopifyResponse = /** @type {any} */ (await callShopifyStorefrontAPI(mutation, variables));
+        const shopifyResponse = await callShopifyStorefrontAPI(mutation, variables);
         if (!shopifyResponse) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Login failed: Invalid response from store.' }) };
         
         const data = shopifyResponse['customerAccessTokenCreate'];
@@ -256,7 +256,8 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         const accessToken = data.customerAccessToken.accessToken;
 
         // Get Customer Details (ID) using the new token
-        const customerDataResponse = /** @type {any} */ (await callShopifyStorefrontAPI(customerQuery, {}, accessToken));
+        /** @type {any} */
+        const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
         const customer = customerDataResponse?.customer;
 
         // Sync User in Postgres

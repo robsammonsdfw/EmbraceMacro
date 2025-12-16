@@ -79,6 +79,7 @@ export const findOrCreateUserByEmail = async (email, shopifyCustomerId = null) =
         `;
         await client.query(insertQuery, [email, shopifyCustomerId]);
 
+        // Explicit cast in select as well
         const selectQuery = `SELECT id, email, shopify_customer_id FROM users WHERE email = $1::varchar;`;
         const res = await client.query(selectQuery, [email]);
         
@@ -86,18 +87,25 @@ export const findOrCreateUserByEmail = async (email, shopifyCustomerId = null) =
              throw new Error("Failed to find or create user.");
         }
         
+        const userId = res.rows[0].id;
+
         // Ensure standard tables exist
         await ensureRewardsTables(client);
         
         // Ensure Medical Intelligence tables exist and are seeded
-        await ensureMedicalSchema(client, res.rows[0].id); // Pass userID to seed entitlement
+        // Wrapped in try/catch so login doesn't fail if this auxiliary step fails
+        try {
+            await ensureMedicalSchema(client, userId); 
+        } catch (e) {
+            console.error("Warning: Medical schema init failed, skipping for now.", e);
+        }
         
         // Ensure rewards balance entry exists for this user
         await client.query(`
             INSERT INTO rewards_balances (user_id, points_total, points_available, tier)
             VALUES ($1, 0, 0, 'Bronze')
             ON CONFLICT (user_id) DO NOTHING;
-        `, [res.rows[0].id]);
+        `, [userId]);
 
         return res.rows[0];
     } finally {
