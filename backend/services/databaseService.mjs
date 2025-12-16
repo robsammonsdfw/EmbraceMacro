@@ -55,15 +55,31 @@ const processMealDataForList = (mealData) => {
 export const findOrCreateUserByEmail = async (email, shopifyCustomerId = null) => {
     const client = await pool.connect();
     try {
+        // Ensure Users Table Exists (Basic Schema)
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                id VARCHAR(255) PRIMARY KEY DEFAULT gen_random_uuid(),
+                email VARCHAR(255) UNIQUE NOT NULL
+            );
+        `);
+
+        // Ensure shopify_customer_id column exists
+        try {
+            await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS shopify_customer_id VARCHAR(255)`);
+        } catch (e) {
+            // Ignore error if column exists or on older PG versions
+        }
+
+        // Use explicit casting ($1::varchar) to prevent "inconsistent types deduced" error (42P08)
         const insertQuery = `
             INSERT INTO users (email, shopify_customer_id) 
-            VALUES ($1, $2) 
+            VALUES ($1::varchar, $2::varchar) 
             ON CONFLICT (email) 
             DO UPDATE SET shopify_customer_id = COALESCE(users.shopify_customer_id, EXCLUDED.shopify_customer_id);
         `;
         await client.query(insertQuery, [email, shopifyCustomerId]);
 
-        const selectQuery = `SELECT id, email, shopify_customer_id FROM users WHERE email = $1;`;
+        const selectQuery = `SELECT id, email, shopify_customer_id FROM users WHERE email = $1::varchar;`;
         const res = await client.query(selectQuery, [email]);
         
         if (res.rows.length === 0) {
@@ -179,9 +195,10 @@ const ensureMedicalSchema = async (client, userId) => {
     ];
 
     for (const p of profiles) {
+        // Cast the JSON parameter to ::jsonb to ensure type safety
         await client.query(`
             INSERT INTO dietary_profiles (id, name, description, macros, focus)
-            VALUES ($1, $2, $3, $4, $5)
+            VALUES ($1, $2, $3, $4::jsonb, $5)
             ON CONFLICT (id) DO NOTHING;
         `, p);
     }
@@ -723,56 +740,4 @@ export const getAssessments = async () => {
             title: 'Dietary Preferences', 
             description: 'Help us customize your meal suggestions.', 
             questions: [
-                { id: 'q1', text: 'Do you follow any specific diet?', type: 'choice', options: [{ label: 'Vegan', value: 'vegan' }, { label: 'Keto', value: 'keto' }, { label: 'None', value: 'none' }] }
-            ] 
-        },
-        { 
-            id: 'health_goals', 
-            title: 'Health Goals', 
-            description: 'Set your targets.', 
-            questions: [
-                { id: 'q1', text: 'What is your primary goal?', type: 'choice', options: [{ label: 'Weight Loss', value: 'weight_loss' }, { label: 'Muscle Gain', value: 'muscle_gain' }] }
-            ] 
-        }
-    ];
-};
-
-export const submitAssessment = async (userId, assessmentId, responses) => {
-    const client = await pool.connect();
-    try {
-        await client.query(`CREATE TABLE IF NOT EXISTS user_assessments (user_id VARCHAR(255), assessment_id VARCHAR(50), responses JSONB, PRIMARY KEY(user_id, assessment_id))`);
-        await client.query(`INSERT INTO user_assessments (user_id, assessment_id, responses) VALUES ($1, $2, $3) ON CONFLICT (user_id, assessment_id) DO UPDATE SET responses = $3`, [userId, assessmentId, responses]);
-        await awardPoints(userId, 'assessment.completed', 50, { assessmentId });
-    } finally {
-        client.release();
-    }
-};
-
-export const getPartnerBlueprint = async (userId) => {
-    const client = await pool.connect();
-    try {
-        await client.query(`CREATE TABLE IF NOT EXISTS partner_blueprints (user_id VARCHAR(255) PRIMARY KEY, preferences JSONB)`);
-        const res = await client.query(`SELECT preferences FROM partner_blueprints WHERE user_id = $1`, [userId]);
-        return res.rows[0] || {};
-    } finally {
-        client.release();
-    }
-};
-
-export const savePartnerBlueprint = async (userId, preferences) => {
-    const client = await pool.connect();
-    try {
-        await client.query(`CREATE TABLE IF NOT EXISTS partner_blueprints (user_id VARCHAR(255) PRIMARY KEY, preferences JSONB)`);
-        await client.query(`INSERT INTO partner_blueprints (user_id, preferences) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET preferences = $2`, [userId, preferences]);
-    } finally {
-        client.release();
-    }
-};
-
-export const getMatches = async (userId, type) => {
-    // Return mock matches
-    return [
-        { userId: 'coach_1', email: 'coach.mike@example.com', compatibilityScore: 95 },
-        { userId: 'coach_2', email: 'coach.sarah@example.com', compatibilityScore: 88 }
-    ];
-};
+                {
