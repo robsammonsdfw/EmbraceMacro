@@ -39,9 +39,10 @@ export const handler = async (event) => {
     }
 
     try {
-        console.log("Incoming Event:", JSON.stringify({ path: event.path, httpMethod: method }));
+        console.log("Incoming Event:", JSON.stringify({ path: event.path, rawPath: event.rawPath, httpMethod: method }));
 
         // 2. Extract Path Robustly
+        // Handles both /default/auth/shopify and /auth/shopify cases
         const rawPath = event.path || event.rawPath || '';
         if (!rawPath) {
             return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Invalid request: No path found.' }) };
@@ -50,7 +51,6 @@ export const handler = async (event) => {
         // 3. Auth Stub (Simplified for demo)
         let userId = '1'; // Default for demo if not logged in
         
-        // Basic Token Extraction (Middleware-ish)
         const authHeader = event.headers?.Authorization || event.headers?.authorization;
         if (authHeader && authHeader.startsWith('Bearer ')) {
             try {
@@ -61,7 +61,6 @@ export const handler = async (event) => {
                 }
             } catch (e) {
                 console.warn("Invalid Token:", e.message);
-                // Allow proceeding as guest/demo user 1, or handle 401 depending on route logic
             }
         }
 
@@ -89,6 +88,7 @@ export const handler = async (event) => {
         }
 
         if (!resource) {
+            console.error(`Resource not found for path: ${rawPath}`);
             return { statusCode: 404, headers: corsHeaders, body: JSON.stringify({ error: 'Not Found', path: rawPath }) };
         }
 
@@ -180,8 +180,8 @@ async function handleAuthRequest(event, headers, method, pathParts) {
         }
         
         const redirectUri = `${BACKEND_URL}/auth/callback`;
-        // In production, use a secure nonce
-        const nonce = '123456789'; 
+        // Use timestamp as nonce for simplicity in this context, use secure random in strict prod
+        const nonce = Date.now().toString(); 
         
         const installUrl = `https://${shop}/admin/oauth/authorize?client_id=${SHOPIFY_CLIENT_ID}&scope=${SCOPES}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${nonce}`;
         
@@ -204,19 +204,43 @@ async function handleAuthRequest(event, headers, method, pathParts) {
         }
 
         try {
-            // Note: In a real implementation, you MUST exchange the `code` for an `access_token`
-            // using a POST request to https://{shop}/admin/oauth/access_token.
-            // For this demo environment where I don't have the secret keys at runtime, 
-            // I will simulate the user login based on the shop.
-            
-            // SIMULATED LOGIC START (Replace with real token exchange)
-            // const accessToken = await exchangeCodeForToken(shop, code);
-            // const shopifyUser = await fetchShopifyUser(shop, accessToken);
-            const simulatedEmail = `user@${shop}`; 
-            // SIMULATED LOGIC END
+            // Exchange code for access token
+            const tokenResponse = await fetch(`https://${shop}/admin/oauth/access_token`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    client_id: SHOPIFY_CLIENT_ID,
+                    client_secret: SHOPIFY_CLIENT_SECRET,
+                    code
+                })
+            });
+
+            if (!tokenResponse.ok) {
+                const errorText = await tokenResponse.text();
+                console.error("Shopify Token Exchange Failed:", errorText);
+                return { statusCode: 500, headers, body: JSON.stringify({ error: "Failed to exchange token with Shopify" }) };
+            }
+
+            const tokenData = await tokenResponse.json();
+            const accessToken = tokenData.access_token;
+
+            // Fetch Shop Details to identify user/email
+            const shopResponse = await fetch(`https://${shop}/admin/api/2024-01/shop.json`, {
+                headers: {
+                    'X-Shopify-Access-Token': accessToken
+                }
+            });
+
+            if (!shopResponse.ok) {
+                console.error("Shopify Shop Info Failed");
+                return { statusCode: 500, headers, body: JSON.stringify({ error: "Failed to fetch shop details" }) };
+            }
+
+            const shopData = await shopResponse.json();
+            const email = shopData.shop.email; // Use shop email as unique identifier for this user
 
             // Find or Create user in our DB
-            const user = await findOrCreateUserByEmail(simulatedEmail);
+            const user = await findOrCreateUserByEmail(email);
 
             // Generate App Token
             const token = jwt.sign(
@@ -239,7 +263,7 @@ async function handleAuthRequest(event, headers, method, pathParts) {
 
         } catch (err) {
             console.error("OAuth Callback Error:", err);
-            return { statusCode: 500, headers, body: JSON.stringify({ error: "Authentication failed" }) };
+            return { statusCode: 500, headers, body: JSON.stringify({ error: "Authentication failed", details: err.message }) };
         }
     }
 
@@ -259,7 +283,7 @@ async function handleAuthRequest(event, headers, method, pathParts) {
         }
     }
 
-    return { statusCode: 404, headers, body: JSON.stringify({ error: 'Auth route not found' }) };
+    return { statusCode: 404, headers, body: JSON.stringify({ error: 'Auth route not found', path: pathParts.join('/') }) };
 }
 
 async function handleGeminiRequest(event, ai, headers) {
