@@ -1,13 +1,14 @@
 
 import React from 'react';
 
-// This matches the API_BASE_URL used in other services
-const API_BASE_URL = 'https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default';
-const SHOPIFY_AUTH_URL = `${API_BASE_URL}/auth/shopify`;
+// This is the backend endpoint that will start the Shopify OAuth process.
+// You will need to create this in your API Gateway and Lambda function.
+const SHOPIFY_AUTH_URL = 'https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default/auth/shopify';
 
 export const Login: React.FC = () => {
     const handleLogin = () => {
-        // Redirect to the backend to initiate the Shopify OAuth flow
+        // The backend now knows which Shopify store to use via environment variables.
+        // We just need to redirect to the auth endpoint.
         window.location.href = SHOPIFY_AUTH_URL;
     };
 
@@ -16,7 +17,7 @@ export const Login: React.FC = () => {
             <div className="max-w-md w-full text-center p-8 bg-white rounded-xl shadow-lg border border-slate-200">
                 <header className="mb-8">
                     <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500">
-                        EmbraceHealth AI
+                        EmbraceHealth Meals
                     </h1>
                     <p className="text-slate-600 mt-2 text-lg">Your intelligent meal and grocery planner.</p>
                 </header>
