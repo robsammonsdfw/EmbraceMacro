@@ -256,9 +256,10 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         const accessToken = data.customerAccessToken.accessToken;
 
         // Get Customer Details (ID) using the new token
+        /** @type {any} */
         const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
-        // Cast to any to access customer property if type inference fails
-        const customer = (/** @type {any} */ (customerDataResponse))?.customer;
+        // Access customer property
+        const customer = customerDataResponse?.customer;
 
         // Sync User in Postgres
         const user = await findOrCreateUserByEmail(email, customer?.id ? String(customer.id) : null);
