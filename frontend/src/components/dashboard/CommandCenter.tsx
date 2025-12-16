@@ -1,9 +1,14 @@
 
-
 import React from 'react';
-import { TodayStrip } from './TodayStrip';
-import { DigitalTwinPanel } from './DigitalTwinPanel';
+import { RewardsBanner } from './RewardsBanner';
+import { ActivityRow } from './ActivityRow';
+import { SocialFeed } from './SocialFeed';
+import { MiniBodyCard } from './MiniBodyCard';
 import { CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, UploadIcon } from '../icons';
+
+// Note: DigitalTwinPanel and TodayStrip imports removed/unused in this specific refactor
+// import { TodayStrip } from './TodayStrip'; 
+// import { DigitalTwinPanel } from './DigitalTwinPanel';
 
 interface CommandCenterProps {
     dailyCalories: number;
@@ -22,77 +27,59 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
     dailyCalories, dailyProtein, rewardsBalance, userName, onScanClick,
     onCameraClick, onBarcodeClick, onPantryChefClick, onRestaurantClick, onUploadClick
 }) => {
+    
+    // Mocking Activity Score / Peloities based on available data or defaults
+    const activityScore = 75; 
+    // Mocking Steps based on cal burn ratio approximation for display (since not passed in props)
+    const dailySteps = Math.floor(dailyCalories * 2.5) || 1200; 
+
     return (
-        <div className="space-y-10 animate-fade-in pb-20">
-            <header className="mb-10">
-                <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">Command Center</h2>
-                <p className="text-slate-500 font-medium">Welcome back, {userName}. Let's hit your goals.</p>
+        <div className="space-y-6 animate-fade-in pb-24">
+            <header className="mb-2">
+                <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">Hi, {userName}</h2>
+                <p className="text-slate-500 text-sm font-medium">Your daily health snapshot.</p>
             </header>
 
-            {/* Main Split Layout */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+            {/* 2.1 Rewards Banner */}
+            <RewardsBanner points={rewardsBalance} />
+
+            {/* 2.2 Activity Row */}
+            <ActivityRow 
+                steps={dailySteps} 
+                calories={dailyCalories} 
+                peloities={activityScore} 
+            />
+
+            {/* 2.3 Social Feed */}
+            <SocialFeed />
+
+            {/* Bottom Grid: 2.4 Mini Body Card (Left) & Quick Actions (Right) */}
+            <div className="grid grid-cols-2 gap-4">
                 
-                {/* Left Column: Digital Twin (Visual Centerpiece) */}
-                <div className="lg:h-[600px] flex flex-col">
-                    <DigitalTwinPanel 
-                        calories={dailyCalories}
-                        calorieGoal={2000}
-                        protein={dailyProtein}
-                        proteinGoal={150}
-                        activityScore={75}
-                        onScanClick={onScanClick}
-                    />
-                </div>
+                {/* Bottom Left: Body Twin */}
+                <MiniBodyCard 
+                    onClick={onScanClick} 
+                    progress={activityScore} 
+                />
 
-                {/* Right Column: Data & Actions */}
-                <div className="flex flex-col gap-10">
-                    <TodayStrip 
-                        calories={Math.round(dailyCalories)}
-                        calorieGoal={2000}
-                        activityScore={75}
-                        rewardsBalance={rewardsBalance}
-                    />
-
-                    {/* Quick Actions */}
-                    <section className="bg-white rounded-2xl p-8 shadow-sm border border-slate-200">
-                        <h3 className="font-bold text-slate-900 mb-6 text-sm uppercase tracking-wide">Quick Actions</h3>
-                        <div className="grid grid-cols-3 gap-6">
-                            <button onClick={onCameraClick} className="flex flex-col items-center gap-3 p-4 bg-slate-50 rounded-xl hover:bg-emerald-50 hover:border-emerald-200 border border-transparent transition-all group">
-                                <div className="w-14 h-14 rounded-full bg-white text-emerald-600 flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
-                                    <CameraIcon />
-                                </div>
-                                <span className="text-xs font-bold text-slate-600">Snap Meal</span>
-                            </button>
-
-                            <button onClick={onBarcodeClick} className="flex flex-col items-center gap-3 p-4 bg-slate-50 rounded-xl hover:bg-blue-50 hover:border-blue-200 border border-transparent transition-all group">
-                                <div className="w-14 h-14 rounded-full bg-white text-blue-600 flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
-                                    <BarcodeIcon />
-                                </div>
-                                <span className="text-xs font-bold text-slate-600">Scan Item</span>
-                            </button>
-
-                            <button onClick={onPantryChefClick} className="flex flex-col items-center gap-3 p-4 bg-slate-50 rounded-xl hover:bg-amber-50 hover:border-amber-200 border border-transparent transition-all group">
-                                <div className="w-14 h-14 rounded-full bg-white text-amber-600 flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
-                                    <ChefHatIcon />
-                                </div>
-                                <span className="text-xs font-bold text-slate-600">Pantry Chef</span>
-                            </button>
-
-                            <button onClick={onRestaurantClick} className="flex flex-col items-center gap-3 p-4 bg-slate-50 rounded-xl hover:bg-indigo-50 hover:border-indigo-200 border border-transparent transition-all group">
-                                <div className="w-14 h-14 rounded-full bg-white text-indigo-600 flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
-                                    <UtensilsIcon />
-                                </div>
-                                <span className="text-xs font-bold text-slate-600">Restaurant</span>
-                            </button>
-                            
-                            <button onClick={onUploadClick} className="flex flex-col items-center gap-3 p-4 bg-slate-50 rounded-xl hover:bg-slate-100 hover:border-slate-300 border border-transparent transition-all group">
-                                <div className="w-14 h-14 rounded-full bg-white text-slate-600 flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
-                                    <UploadIcon />
-                                </div>
-                                <span className="text-xs font-bold text-slate-600">Upload</span>
-                            </button>
-                        </div>
-                    </section>
+                {/* Bottom Right: Condensed Quick Actions Grid to fit 2.4 constraint */}
+                <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 grid grid-cols-2 gap-2">
+                    <button onClick={onCameraClick} className="flex flex-col items-center justify-center bg-emerald-50 hover:bg-emerald-100 rounded-xl p-2 transition-colors">
+                        <div className="text-emerald-600 scale-75"><CameraIcon /></div>
+                        <span className="text-[10px] font-bold text-emerald-700">Meal</span>
+                    </button>
+                    <button onClick={onBarcodeClick} className="flex flex-col items-center justify-center bg-blue-50 hover:bg-blue-100 rounded-xl p-2 transition-colors">
+                        <div className="text-blue-600 scale-75"><BarcodeIcon /></div>
+                        <span className="text-[10px] font-bold text-blue-700">Scan</span>
+                    </button>
+                    <button onClick={onPantryChefClick} className="flex flex-col items-center justify-center bg-amber-50 hover:bg-amber-100 rounded-xl p-2 transition-colors">
+                        <div className="text-amber-600 scale-75"><ChefHatIcon /></div>
+                        <span className="text-[10px] font-bold text-amber-700">Pantry</span>
+                    </button>
+                    <button onClick={onRestaurantClick} className="flex flex-col items-center justify-center bg-indigo-50 hover:bg-indigo-100 rounded-xl p-2 transition-colors">
+                        <div className="text-indigo-600 scale-75"><UtensilsIcon /></div>
+                        <span className="text-[10px] font-bold text-indigo-700">Dine</span>
+                    </button>
                 </div>
             </div>
         </div>
