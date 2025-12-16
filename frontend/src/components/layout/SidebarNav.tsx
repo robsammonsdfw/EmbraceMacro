@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { HomeIcon, BookOpenIcon, UserCircleIcon, BeakerIcon, ClipboardListIcon, TrophyIcon, Squares2X2Icon, ClipboardCheckIcon, HeartIcon, PlusIcon } from '../icons';
 
@@ -35,7 +36,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
         <div className="h-full flex flex-col bg-white border-r border-slate-200 w-64 fixed left-0 top-0 bottom-0 z-30">
             {/* Logo Area */}
             <div className="p-6">
-                <h1 className="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500">
+                <h1 className="text-2xl font-extrabold text-slate-900">
                     Embrace
                 </h1>
             </div>

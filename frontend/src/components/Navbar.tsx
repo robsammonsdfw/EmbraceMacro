@@ -1,6 +1,7 @@
 
+
 import React, { useState, useEffect } from 'react';
-import { HomeIcon, PlusIcon, BookOpenIcon, ClockIcon, ClipboardListIcon, Squares2X2Icon, TrophyIcon, CameraIcon } from './icons';
+import { HomeIcon, PlusIcon, BookOpenIcon, ClockIcon, ClipboardListIcon, Squares2X2Icon, TrophyIcon, CameraIcon, UserGroupIcon, ChatIcon, UserCircleIcon } from './icons';
 import * as apiService from '../services/apiService';
 
 interface NavbarProps {
@@ -56,11 +57,12 @@ export const Navbar: React.FC<NavbarProps> = ({ activeView, onNavigate, onLogout
     
     return (
         <>
+            {/* Desktop Navbar - Kept largely intact but accessible via sidebar usually */}
             <nav className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm hidden md:block">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between h-16">
                         <div className="flex items-center cursor-pointer" onClick={() => handleNav('home')}>
-                            <span className="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500">
+                            <span className="text-2xl font-extrabold text-slate-900">
                                 EmbraceHealth
                             </span>
                         </div>
@@ -117,46 +119,53 @@ export const Navbar: React.FC<NavbarProps> = ({ activeView, onNavigate, onLogout
                 </div>
             </nav>
 
-            {/* Mobile Bottom Navigation with Super Button */}
-            <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 pb-safe z-40 flex justify-around items-end shadow-[0_-5px_15px_rgba(0,0,0,0.05)]">
+            {/* Redesigned Mobile Bottom Navigation */}
+            {/* Minimal white, no visible borders, subtle shadow */}
+            <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white pb-safe z-40 flex justify-around items-center h-20 shadow-[0_-5px_20px_rgba(0,0,0,0.03)] border-t-0">
+                {/* 1. Home */}
                 <button 
                     onClick={() => handleNav('home')} 
-                    className={`p-3 flex flex-col items-center gap-1 flex-1 ${activeView === 'home' ? 'text-emerald-600' : 'text-slate-400'}`}
+                    className={`flex flex-col items-center gap-1 ${activeView === 'home' ? 'text-slate-900' : 'text-slate-400'}`}
                 >
                     <HomeIcon />
                     <span className="text-[10px] font-bold">Home</span>
                 </button>
+
+                {/* 2. Friends */}
                 <button 
-                    onClick={() => handleNav('plan')} 
-                    className={`p-3 flex flex-col items-center gap-1 flex-1 ${activeView === 'plan' ? 'text-emerald-600' : 'text-slate-400'}`}
+                    onClick={() => handleNav('friends')} 
+                    className={`flex flex-col items-center gap-1 ${activeView === 'friends' ? 'text-slate-900' : 'text-slate-400'}`}
                 >
-                    <PlusIcon />
-                    <span className="text-[10px] font-bold">Plan</span>
+                    <UserGroupIcon />
+                    <span className="text-[10px] font-bold">Friends</span>
                 </button>
                 
-                {/* Center Super Button */}
-                <div className="relative -top-6">
-                    <button 
-                        onClick={onCaptureClick}
-                        className="bg-emerald-500 text-white w-16 h-16 rounded-full shadow-xl flex items-center justify-center border-4 border-slate-50 transform active:scale-95 transition-all"
-                    >
-                        <CameraIcon />
-                    </button>
-                </div>
-
+                {/* 3. Center - Capture/Prespe (Replaced visually with Plus, preserves functionality) */}
                 <button 
-                    onClick={() => handleNav('history')} 
-                    className={`p-3 flex flex-col items-center gap-1 flex-1 ${activeView === 'history' ? 'text-emerald-600' : 'text-slate-400'}`}
+                    onClick={onCaptureClick}
+                    className="mb-8 transform active:scale-95 transition-all"
                 >
-                    <ClockIcon />
-                    <span className="text-[10px] font-bold">History</span>
+                    <div className="bg-slate-900 text-white rounded-full p-4 shadow-xl shadow-slate-200 border-4 border-white">
+                        <PlusIcon className="w-6 h-6" />
+                    </div>
                 </button>
+
+                {/* 4. Social */}
                 <button 
-                    onClick={() => handleNav('rewards')} 
-                    className={`p-3 flex flex-col items-center gap-1 flex-1 ${activeView === 'rewards' ? 'text-emerald-600' : 'text-slate-400'}`}
+                    onClick={() => handleNav('social')} 
+                    className={`flex flex-col items-center gap-1 ${activeView === 'social' ? 'text-slate-900' : 'text-slate-400'}`}
                 >
-                    <TrophyIcon />
-                    <span className="text-[10px] font-bold">Wallet</span>
+                    <ChatIcon />
+                    <span className="text-[10px] font-bold">Social</span>
+                </button>
+
+                {/* 5. Profile */}
+                <button 
+                    onClick={() => handleNav('profile')} 
+                    className={`flex flex-col items-center gap-1 ${activeView === 'profile' ? 'text-slate-900' : 'text-slate-400'}`}
+                >
+                    <UserCircleIcon />
+                    <span className="text-[10px] font-bold">Profile</span>
                 </button>
             </div>
         </>
