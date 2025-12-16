@@ -1,5 +1,4 @@
 
-
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import * as apiService from './services/apiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
@@ -9,7 +8,7 @@ import { NutritionCard } from './components/NutritionCard';
 import { Loader } from './components/Loader';
 import { ErrorAlert } from './components/ErrorAlert';
 import { MealLibrary } from './components/MealLibrary';
-import { Navbar } from './components/Navbar'; // Mobile Bottom Nav
+import { Navbar } from './components/Navbar'; 
 import { MealHistory } from './components/MealHistory';
 import { MealSuggester } from './components/MealSuggester';
 import { RecipeCard } from './components/RecipeCard';
@@ -25,10 +24,11 @@ import { Hero } from './components/Hero';
 import { AppLayout } from './components/layout/AppLayout';
 import { CommandCenter } from './components/dashboard/CommandCenter';
 import { OrdersCard } from './components/dashboard/OrdersCard';
-import { LabsCard } from './components/dashboard/LabsCard';
 import { AssessmentHub } from './components/tests/AssessmentHub';
 import { PartnerBlueprint } from './components/matching/PartnerBlueprint';
 import { CoachMatch } from './components/matching/CoachMatch';
+import { InstallPrompt } from './components/InstallPrompt';
+import { UserGroupIcon, TrophyIcon, UserCircleIcon } from './components/icons';
 
 type ActiveView = 'home' | 'plan' | 'meals' | 'history' | 'suggestions' | 'grocery' | 'rewards' | 'body' | 'labs' | 'orders' | 'assessments' | 'blueprint';
 type MealDataType = NutritionInfo | SavedMeal | MealLogEntry;
@@ -90,7 +90,6 @@ const App: React.FC = () => {
           setMealLog(log);
         } catch (err) {
           console.error(err);
-          // Don't block UI on error, just log it.
         } finally {
           setIsDataLoading(false);
         }
@@ -246,7 +245,6 @@ const App: React.FC = () => {
   const handleConfirmAddToPlan = async (planId: number, metadata: MealPlanItemMetadata) => {
     if (!mealToAdd) return;
     
-    // Simplified logic: Just add, backend handles allowing duplicates now.
     const addItem = async () => {
         let newItem;
         if ('id' in mealToAdd && 'createdAt' in mealToAdd) { // MealLogEntry
@@ -265,9 +263,7 @@ const App: React.FC = () => {
             setMealPlans(plans => plans.map(p => p.id === planId ? { ...p, items: [...p.items, newItem] } : p));
         }
         
-        // Handle adding to grocery list if requested
         if (metadata.addToGrocery) {
-            // First, fetch lists to find active one or create one
             const lists = await apiService.getGroceryLists();
             let activeListId = lists.find(l => l.is_active)?.id;
             
@@ -293,7 +289,6 @@ const App: React.FC = () => {
   };
 
   const handleQuickAdd = async (planId: number, meal: SavedMeal, day: string, slot: string) => {
-      // Simplified logic: Just add, backend handles allowing duplicates now.
       const addItem = async () => {
           return await apiService.addMealToPlan(planId, meal.id, { day, slot, portion: 1, context: 'Home' });
       };
@@ -432,28 +427,64 @@ const App: React.FC = () => {
                 <OrdersCard />
             </div>
         );
-        case 'labs': return (
+        case 'labs': return ( // Keeping explicit routing just in case
             <div className="space-y-4">
                 <h2 className="text-2xl font-bold text-slate-800">Lab Results</h2>
-                <LabsCard />
+                <div className="p-4 bg-white rounded-xl shadow-sm border border-slate-200">
+                    <p className="text-slate-500">Connect a provider to view lab results.</p>
+                </div>
             </div>
         );
         default: return null;
     }
   };
 
+  const RightPanelContent = (
+      <>
+          <div className="bg-gradient-to-r from-violet-500 to-indigo-500 rounded-xl p-4 text-white shadow-sm mb-4">
+              <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-bold uppercase opacity-80">Health Wallet</span>
+                  <TrophyIcon />
+              </div>
+              <p className="text-3xl font-extrabold">1,250</p>
+              <p className="text-xs opacity-70">Points Available</p>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+              <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2 text-sm uppercase tracking-wide">
+                  <UserGroupIcon /> Care Team
+              </h3>
+              <ul className="space-y-3">
+                  <li className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-500"><UserCircleIcon /></div>
+                      <div>
+                          <p className="text-sm font-bold text-slate-800">Dr. Smith</p>
+                          <p className="text-xs text-slate-500">Primary Care</p>
+                      </div>
+                  </li>
+                  <li className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-500"><UserCircleIcon /></div>
+                      <div>
+                          <p className="text-sm font-bold text-slate-800">Coach Sarah</p>
+                          <p className="text-xs text-slate-500">Nutritionist</p>
+                      </div>
+                  </li>
+              </ul>
+          </div>
+
+          <OrdersCard />
+      </>
+  );
+
   return (
     <AppLayout 
         activeView={activeView} 
         onNavigate={handleNavigation} 
         onLogout={handleLogout}
-        rightPanel={
-            <>
-                <OrdersCard />
-                <LabsCard />
-            </>
-        }
+        rightPanel={RightPanelContent}
     >
+        <InstallPrompt />
+        
         {isCaptureOpen && (
             <CaptureFlow 
                 onClose={() => setIsCaptureOpen(false)}
@@ -484,8 +515,7 @@ const App: React.FC = () => {
             />
         </div>
 
-        {/* Desktop Header Actions: Removed Hero as CommandCenter now has quick actions, 
-            but keeping logic if needed later or for specific views */}
+        {/* Desktop Header Actions: Only show in Plan view if no analysis open */}
         {!hasAnalysisContent && activeView === 'plan' && (
              <div className="md:hidden mb-6">
                  <Hero 

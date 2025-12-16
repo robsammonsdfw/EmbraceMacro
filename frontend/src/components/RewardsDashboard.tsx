@@ -1,7 +1,96 @@
+
 import React, { useEffect, useState } from 'react';
 import type { RewardsSummary } from '../types';
 import * as apiService from '../services/apiService';
-import { StarIcon, TrophyIcon, UserCircleIcon } from './icons';
+import { StarIcon, TrophyIcon, UserCircleIcon, ActivityIcon } from './icons';
+
+// Simple SVG Line Chart Component
+const RewardsChart: React.FC<{ history: any[] }> = ({ history }) => {
+    // Process history into points over time (cumulative)
+    // Reverse because history is usually Descending
+    const dataPoints = [...history].reverse().reduce((acc, curr) => {
+        const lastTotal = acc.length > 0 ? acc[acc.length - 1].total : 0;
+        acc.push({ 
+            date: new Date(curr.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }), 
+            total: lastTotal + curr.points_delta 
+        });
+        return acc;
+    }, [] as { date: string, total: number }[]);
+
+    // If no data, return empty state
+    if (dataPoints.length < 2) return (
+        <div className="h-48 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-center text-slate-400 text-sm">
+            Not enough data for chart
+        </div>
+    );
+
+    // Dimensions
+    const height = 200;
+    const width = 600; 
+    const padding = 20;
+
+    const maxVal = Math.max(...dataPoints.map(d => d.total)) * 1.1;
+    const minVal = 0;
+
+    const getX = (index: number) => (index / (dataPoints.length - 1)) * (width - padding * 2) + padding;
+    const getY = (val: number) => height - padding - ((val - minVal) / (maxVal - minVal)) * (height - padding * 2);
+
+    const pathD = dataPoints.map((d, i) => 
+        `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(d.total)}`
+    ).join(' ');
+
+    const areaD = `${pathD} L ${width - padding} ${height - padding} L ${padding} ${height - padding} Z`;
+
+    return (
+        <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200 mb-6">
+            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                <ActivityIcon /> Earnings Growth
+            </h3>
+            <div className="relative w-full h-48 overflow-hidden">
+                <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full preserve-3d">
+                    {/* Gradient Defs */}
+                    <defs>
+                        <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#10b981" stopOpacity="0.2" />
+                            <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+                        </linearGradient>
+                    </defs>
+
+                    {/* Grid Lines */}
+                    {[0, 0.25, 0.5, 0.75, 1].map(p => (
+                        <line 
+                            key={p} 
+                            x1={padding} y1={getY(maxVal * p)} 
+                            x2={width - padding} y2={getY(maxVal * p)} 
+                            stroke="#f1f5f9" strokeWidth="1" 
+                        />
+                    ))}
+
+                    {/* Area Fill */}
+                    <path d={areaD} fill="url(#chartGradient)" />
+
+                    {/* Line */}
+                    <path d={pathD} fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+
+                    {/* Points */}
+                    {dataPoints.map((d, i) => (
+                        <circle 
+                            key={i} 
+                            cx={getX(i)} cy={getY(d.total)} r="4" 
+                            fill="white" stroke="#10b981" strokeWidth="2" 
+                        />
+                    ))}
+                </svg>
+                
+                {/* Labels */}
+                <div className="flex justify-between px-2 text-xs text-slate-400 mt-2">
+                    <span>{dataPoints[0].date}</span>
+                    <span>{dataPoints[dataPoints.length - 1].date}</span>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export const RewardsDashboard: React.FC = () => {
     const [rewardsData, setRewardsData] = useState<RewardsSummary | null>(null);
@@ -71,6 +160,9 @@ export const RewardsDashboard: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Analytics Chart */}
+            <RewardsChart history={history} />
 
             {/* Invite & Earn Card */}
             <div className="bg-gradient-to-br from-pink-500 to-rose-500 rounded-xl shadow-md p-1 relative overflow-hidden group cursor-pointer hover:shadow-lg transition-all">
