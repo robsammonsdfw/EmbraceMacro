@@ -1,5 +1,4 @@
 
-
 import React, { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 
@@ -49,7 +48,7 @@ export const Login: React.FC = () => {
         <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
             <div className="max-w-md w-full p-8 bg-white rounded-xl shadow-lg border border-slate-200">
                 <header className="mb-8 text-center">
-                    <h1 className="text-4xl md:text-5xl font-extrabold text-slate-900">
+                    <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500">
                         EmbraceHealth
                         <span className="block text-2xl text-slate-700 mt-1 font-bold">AI</span>
                     </h1>

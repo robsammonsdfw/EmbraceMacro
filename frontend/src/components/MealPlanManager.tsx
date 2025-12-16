@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import type { MealPlan, SavedMeal, NutritionInfo, MealPlanItem } from '../types';
-import { PlusIcon, UserCircleIcon, GlobeAltIcon, StarIcon, CameraIcon, BeakerIcon, ShareIcon, XIcon } from './icons';
+import type { MealPlan, SavedMeal, NutritionInfo } from '../types';
+import { PlusIcon, UserCircleIcon, GlobeAltIcon, StarIcon, CameraIcon, BeakerIcon } from './icons';
 import { MedicalPlannerModal } from './MedicalPlannerModal';
 import { DiseaseTemplate } from '../data/chronicDiseases';
 import * as apiService from '../services/apiService';
@@ -20,71 +20,13 @@ interface MealPlanManagerProps {
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const SLOTS = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 
-const MealSlotCard: React.FC<{
-    slotLabel: string;
-    items: MealPlanItem[];
-    onLogIt: () => void;
-    onRemove: (id: number) => void;
-    onDragOver: (e: React.DragEvent) => void;
-    onDrop: (e: React.DragEvent) => void;
-}> = ({ slotLabel, items, onLogIt, onRemove, onDragOver, onDrop }) => {
-    return (
-        <div 
-            className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 mb-4 flex flex-col"
-            onDragOver={onDragOver}
-            onDrop={onDrop}
-            onDragLeave={(e) => e.preventDefault()}
-        >
-            <div className="flex justify-between items-center mb-3">
-                <h3 className="font-bold text-slate-800 text-lg">{slotLabel}</h3>
-                <button className="text-slate-400 hover:text-slate-600 transition-colors">
-                    <ShareIcon />
-                </button>
-            </div>
-
-            <div className="flex-grow flex flex-col items-center justify-center py-6 border-2 border-dashed border-slate-100 rounded-xl mb-4 min-h-[120px]">
-                {items.length === 0 ? (
-                    <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center text-slate-300">
-                        <XIcon />
-                    </div>
-                ) : (
-                    <div className="w-full space-y-2 px-2">
-                        {items.map(item => (
-                            <div key={item.id} className="flex items-center justify-between bg-slate-50 p-2 rounded-lg w-full">
-                                <div className="flex items-center gap-2">
-                                    {item.meal.hasImage && item.meal.imageUrl ? (
-                                        <div className="w-8 h-8 bg-slate-200 rounded-md bg-cover bg-center" style={{backgroundImage: `url(${item.meal.imageUrl})`}}></div>
-                                    ) : (
-                                        <div className="w-8 h-8 bg-slate-200 rounded-md flex items-center justify-center text-slate-400 text-xs"><CameraIcon /></div>
-                                    )}
-                                    <div className="flex flex-col text-left">
-                                        <span className="text-xs font-bold text-slate-700 truncate max-w-[150px]">{item.meal.mealName}</span>
-                                        <span className="text-[10px] text-slate-500">{Math.round(item.meal.totalCalories)} kcal</span>
-                                    </div>
-                                </div>
-                                <button onClick={() => onRemove(item.id)} className="text-slate-300 hover:text-red-500">&times;</button>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
-
-            <button 
-                onClick={onLogIt}
-                className="w-full bg-slate-900 text-white font-bold py-2 rounded-full hover:bg-slate-800 transition-colors shadow-sm"
-            >
-                Log It
-            </button>
-        </div>
-    );
-};
-
 export const MealPlanManager: React.FC<MealPlanManagerProps> = ({ 
     plans, activePlanId, savedMeals, onPlanChange, onCreatePlan, onAddToPlan, onRemoveFromPlan, onQuickAdd 
 }) => {
-    const [viewMode, setViewMode] = useState<'plan' | 'community'>('plan');
+    const [viewMode, setViewMode] = useState<'plan' | 'discover'>('plan');
     const [selectedDay, setSelectedDay] = useState<string>(DAYS[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1]);
     const [isDrawerOpen, setIsDrawerOpen] = useState(true);
+    const [dragOverSlot, setDragOverSlot] = useState<string | null>(null);
     
     // Creation State
     const [isCreating, setIsCreating] = useState(false);
@@ -149,15 +91,23 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
     const handleDragStart = (e: React.DragEvent, meal: SavedMeal) => {
         e.dataTransfer.setData('mealId', meal.id.toString());
         e.dataTransfer.effectAllowed = 'copy';
+        // Add a ghost image or styling here if desired
     };
 
-    const handleDragOver = (e: React.DragEvent) => {
+    const handleDragOver = (e: React.DragEvent, slot: string) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'copy';
+        setDragOverSlot(slot);
+    };
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        setDragOverSlot(null);
     };
 
     const handleDrop = (e: React.DragEvent, slot: string) => {
         e.preventDefault();
+        setDragOverSlot(null);
         const mealId = parseInt(e.dataTransfer.getData('mealId'));
         const meal = savedMeals.find(m => m.id === mealId);
         
@@ -244,67 +194,47 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
         }
     };
 
-    const handleLogItClick = (slot: string) => {
-        if (!activePlanId) {
-            setIsCreating(true);
-            return;
-        }
-        // Open the general add modal (via the main onAddToPlan handler usually used for adding from history)
-        // Since we don't have a specific item, we can trigger a capture or library view.
-        // For now, we'll open the medical planner as a placeholder for "Advanced Logging" or alert
-        // In a real flow, this would likely open a "What did you eat?" search/camera modal.
-        // Reusing onAddToPlan with a dummy "New Meal" to trigger the flow is one option, 
-        // but let's just use the medical modal or alert for this prototype phase if no direct scan flow is wired here.
-        // BETTER: Just alert for now as per "Empty State" focus.
-        alert(`Open logging for ${slot} in ${activePlan?.name || 'New Plan'}`);
-    };
-
-    // --- Community Recipes View ---
-    if (viewMode === 'community') {
+    // --- Discover View ---
+    if (viewMode === 'discover') {
         return (
             <div className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden min-h-[600px] flex flex-col">
-                <div className="flex border-b border-slate-200 bg-white">
-                     <button 
-                        onClick={() => setViewMode('plan')} 
-                        className="flex-1 py-4 text-center font-bold text-slate-400 hover:text-slate-600 border-b-2 border-transparent transition-colors"
-                    >
-                        Meal Planning
-                    </button>
-                     <button 
-                        className="flex-1 py-4 text-center font-bold text-emerald-600 border-b-2 border-emerald-500 bg-emerald-50/10"
-                    >
-                        Community Recipes
-                    </button>
+                <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-center space-x-6">
+                     <button onClick={() => setViewMode('plan')} className="text-slate-500 font-bold hover:text-emerald-600 transition-colors">My Plan</button>
+                     <button className="text-emerald-600 font-bold border-b-2 border-emerald-500">Discover</button>
                 </div>
-                <div className="p-6 md:p-8 text-center flex-grow bg-slate-50/50">
-                     <div className="max-w-5xl mx-auto">
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="p-8 text-center flex-grow">
+                     <div className="max-w-4xl mx-auto">
+                        <h2 className="text-2xl font-bold text-slate-800 mb-6">Global Kitchen & Community</h2>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {/* Mock Community Cards */}
                             {[1, 2, 3, 4, 5, 6].map((i) => (
-                                <div key={i} className="bg-white border border-slate-200 rounded-2xl overflow-hidden hover:shadow-lg transition-shadow group relative cursor-pointer">
-                                    <div className="aspect-square bg-slate-200 relative overflow-hidden">
-                                        <img 
-                                            src={`https://source.unsplash.com/random/400x400?food,meal&sig=${i}`} 
-                                            alt={`Community Meal ${i}`}
-                                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                                            onError={(e) => { (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxIDEiPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9IiNlN2U1ZTQiLz48L3N2Zz4=' }}
-                                        />
-                                        <div className="absolute top-2 right-2 bg-black/50 backdrop-blur-md px-2 py-1 rounded-full text-[10px] font-bold text-white flex items-center gap-1">
-                                            <GlobeAltIcon /> @Chef{i}
+                                <div key={i} className="bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-lg transition-shadow">
+                                    <div className="h-40 bg-slate-200 relative">
+                                        <div className="absolute top-2 right-2 bg-white/90 px-2 py-1 rounded text-xs font-bold text-slate-600 flex items-center gap-1">
+                                            <GlobeAltIcon /> Community
                                         </div>
                                     </div>
-                                    <div className="p-3 text-left">
-                                        <h3 className="font-bold text-slate-800 text-sm truncate">Artisan Bowl {i}</h3>
-                                        <p className="text-[10px] text-slate-500 mb-2">450 kcal • High Protein</p>
-                                        <button 
-                                            className="w-full bg-slate-100 hover:bg-emerald-500 hover:text-white text-slate-600 font-bold py-2 rounded-lg text-xs transition-colors"
-                                            onClick={() => onAddToPlan({ 
-                                                mealName: `Community Meal ${i}`, 
-                                                totalCalories: 450, totalProtein: 20, totalCarbs: 50, totalFat: 15, ingredients: [], source: 'community' 
-                                            })}
-                                        >
-                                            Add to Plan
-                                        </button>
+                                    <div className="p-4 text-left">
+                                        <h3 className="font-bold text-slate-800">Spicy Tofu Bowl {i}</h3>
+                                        <p className="text-xs text-slate-500 mb-3">by @ChefMike • 450 kcal</p>
+                                        <div className="flex gap-2">
+                                             <button 
+                                                className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 rounded text-xs"
+                                                onClick={() => alert("Added to your Saved Meals (Mock)")}
+                                             >
+                                                Fork
+                                             </button>
+                                             <button 
+                                                className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 rounded text-xs"
+                                                onClick={() => onAddToPlan({ 
+                                                    mealName: `Community Meal ${i}`, 
+                                                    totalCalories: 450, totalProtein: 20, totalCarbs: 50, totalFat: 15, ingredients: [], source: 'community' 
+                                                })}
+                                             >
+                                                Add
+                                             </button>
+                                        </div>
                                     </div>
                                 </div>
                             ))}
@@ -315,7 +245,7 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
         );
     }
 
-    // --- Meal Planning View (Slots) ---
+    // --- My Plan View ---
     return (
         <div className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden min-h-[600px] flex flex-col md:flex-row">
             
@@ -333,47 +263,19 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
             {/* Main Board Area */}
             <div className={`flex-grow flex flex-col transition-all duration-300 ${isDrawerOpen ? 'md:w-2/3' : 'w-full'}`}>
                 
-                {/* Tab Navigation */}
-                <div className="flex border-b border-slate-200 bg-white">
-                     <button 
-                        className="flex-1 py-4 text-center font-bold text-emerald-600 border-b-2 border-emerald-500 bg-emerald-50/10"
-                    >
-                        Meal Planning
-                    </button>
-                     <button 
-                        onClick={() => setViewMode('community')} 
-                        className="flex-1 py-4 text-center font-bold text-slate-400 hover:text-slate-600 border-b-2 border-transparent transition-colors"
-                    >
-                        Community Recipes
-                    </button>
-                </div>
-
-                {/* Sub-Header: Day & Plan Selector */}
+                {/* Header: Toggle & Plan Selector */}
                 <div className="p-4 border-b border-slate-200 bg-slate-50 flex flex-col sm:flex-row justify-between items-center gap-4">
-                    {/* Day Selector */}
-                    <div className="flex overflow-x-auto no-scrollbar gap-2 max-w-full">
-                        {DAYS.map(day => (
-                            <button
-                                key={day}
-                                onClick={() => setSelectedDay(day)}
-                                className={`px-3 py-1.5 text-xs font-bold rounded-full transition-colors whitespace-nowrap ${
-                                    selectedDay === day 
-                                    ? 'bg-slate-900 text-white shadow-md' 
-                                    : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-100'
-                                }`}
-                            >
-                                {day.substring(0, 3)}
-                            </button>
-                        ))}
+                    <div className="flex space-x-6">
+                        <button className="text-emerald-600 font-bold border-b-2 border-emerald-500">My Plan</button>
+                        <button onClick={() => setViewMode('discover')} className="text-slate-500 font-bold hover:text-emerald-600 transition-colors">Discover</button>
                     </div>
 
-                    {/* Plan Actions */}
                     <div className="flex items-center gap-2">
                         {plans.length > 0 && (
                             <select
                                 value={activePlanId ?? ''}
                                 onChange={(e) => onPlanChange(Number(e.target.value))}
-                                className="p-1.5 border border-slate-300 rounded-lg text-xs bg-white min-w-[120px]"
+                                className="p-2 border border-slate-300 rounded-lg text-sm min-w-[150px]"
                             >
                                 {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                             </select>
@@ -383,17 +285,22 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                             <>
                                 <button 
                                     onClick={() => setIsCreating(true)}
-                                    className="bg-white border border-slate-300 text-slate-600 p-1.5 rounded-lg hover:bg-slate-50"
+                                    className="bg-white border border-slate-300 text-slate-600 font-bold p-2 px-3 rounded-lg hover:bg-slate-50 flex items-center space-x-1"
                                     title="Create New Plan"
                                 >
                                     <PlusIcon />
+                                    <span className="text-xs">New</span>
                                 </button>
                                 <button 
                                     onClick={() => setIsMedicalModalOpen(true)}
-                                    className="bg-indigo-600 text-white font-bold px-3 py-1.5 rounded-lg hover:bg-indigo-700 flex items-center space-x-1 shadow-sm text-xs"
+                                    className="bg-indigo-600 text-white font-bold p-2 px-3 rounded-lg hover:bg-indigo-700 flex items-center space-x-1 shadow-sm relative overflow-hidden"
+                                    title="Medical AI Planner"
                                 >
-                                    <BeakerIcon />
-                                    <span>AI Plan</span>
+                                    <div className="absolute inset-0 bg-white/20 animate-[pulse_2s_infinite]"></div>
+                                    <div className="flex items-center space-x-1 relative z-10">
+                                        <BeakerIcon />
+                                        <span className="text-xs">Medical AI</span>
+                                    </div>
                                 </button>
                             </>
                         ) : (
@@ -402,12 +309,12 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                                     type="text" 
                                     autoFocus
                                     placeholder="Name..." 
-                                    className="p-1.5 border border-slate-300 rounded-lg text-xs w-24"
+                                    className="p-2 border border-slate-300 rounded-lg text-sm w-32"
                                     value={newPlanName}
                                     onChange={e => setNewPlanName(e.target.value)}
                                 />
-                                <button type="submit" className="text-emerald-600 font-bold text-xs">Save</button>
-                                <button type="button" onClick={() => setIsCreating(false)} className="text-slate-400 font-bold text-lg leading-none">&times;</button>
+                                <button type="submit" className="text-emerald-600 font-bold text-sm">Save</button>
+                                <button type="button" onClick={() => setIsCreating(false)} className="text-slate-400 font-bold text-lg">&times;</button>
                             </form>
                         )}
                     </div>
@@ -432,21 +339,88 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                     </div>
                 )}
 
-                {/* Fixed Slots Board */}
+                {/* Day Tabs (Only show if plans exist) */}
                 {plans.length > 0 && (
-                    <div className="p-4 md:p-6 space-y-2 bg-slate-50/30 flex-grow overflow-y-auto">
-                        {SLOTS.map(slot => (
-                            <MealSlotCard
-                                key={slot}
-                                slotLabel={slot}
-                                items={getItemsForSlot(slot)}
-                                onLogIt={() => handleLogItClick(slot)}
-                                onRemove={onRemoveFromPlan}
-                                onDragOver={(e) => handleDragOver(e)}
-                                onDrop={(e) => handleDrop(e, slot)}
-                            />
-                        ))}
-                    </div>
+                    <>
+                        <div className="flex overflow-x-auto border-b border-slate-200 bg-white no-scrollbar">
+                            {DAYS.map(day => (
+                                <button
+                                    key={day}
+                                    onClick={() => setSelectedDay(day)}
+                                    className={`flex-shrink-0 px-6 py-3 text-sm font-bold border-b-2 transition-colors ${
+                                        selectedDay === day 
+                                        ? 'border-emerald-500 text-emerald-700 bg-emerald-50/50' 
+                                        : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                                    }`}
+                                >
+                                    {day.substring(0, 3)}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Slots Board */}
+                        <div className="p-4 space-y-4 bg-slate-50/30 flex-grow overflow-y-auto">
+                            {SLOTS.map(slot => {
+                                const items = getItemsForSlot(slot);
+                                const isOver = dragOverSlot === slot;
+                                return (
+                                    <div 
+                                        key={slot} 
+                                        className={`bg-white border rounded-xl p-4 transition-all ${
+                                            isOver 
+                                            ? 'border-emerald-400 ring-2 ring-emerald-200 bg-emerald-50' 
+                                            : 'border-slate-200'
+                                        }`}
+                                        onDragOver={(e) => handleDragOver(e, slot)}
+                                        onDragLeave={handleDragLeave}
+                                        onDrop={(e) => handleDrop(e, slot)}
+                                    >
+                                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex justify-between">
+                                            {slot}
+                                            {items.length > 0 && <span className="text-slate-300">{Math.round(items.reduce((sum, i) => sum + i.meal.totalCalories, 0))} kcal</span>}
+                                        </h3>
+                                        
+                                        {items.length === 0 ? (
+                                            <div className="text-center py-6 border-2 border-dashed border-slate-100 rounded-lg text-slate-400 text-sm">
+                                                Drag from Favorites to Add
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-2">
+                                                {items.map(item => (
+                                                    <div key={item.id} className="bg-white border border-slate-200 shadow-sm rounded-lg p-3 flex justify-between items-center group hover:border-emerald-300 transition-colors">
+                                                        <div className="flex items-center gap-3">
+                                                            {item.meal.hasImage && item.meal.imageUrl ? (
+                                                                <div className="w-10 h-10 bg-slate-200 rounded-md bg-cover bg-center" style={{backgroundImage: `url(${item.meal.imageUrl})`}}></div>
+                                                            ) : item.meal.hasImage ? (
+                                                                <div className="w-10 h-10 bg-slate-100 border border-slate-200 rounded-md flex items-center justify-center text-slate-400">
+                                                                    <div className="transform scale-75"><CameraIcon /></div>
+                                                                </div>
+                                                            ) : item.meal.source === 'medical-ai' ? (
+                                                                <div className="w-10 h-10 bg-blue-50 border border-blue-200 text-blue-500 rounded-md flex items-center justify-center">
+                                                                    <div className="transform scale-75"><BeakerIcon /></div>
+                                                                </div>
+                                                            ) : null}
+                                                            <div>
+                                                                <p className="font-bold text-slate-800 text-sm">{item.meal.mealName}</p>
+                                                                <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                                                                    <span className="font-medium text-emerald-600">{Math.round(item.meal.totalCalories)} kcal</span>
+                                                                    {item.metadata?.portion && item.metadata.portion !== 1 && <span className="bg-slate-100 px-1 rounded">{item.metadata.portion}x</span>}
+                                                                    {item.metadata?.context && <span className="text-slate-400">• {item.metadata.context}</span>}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <button onClick={() => onRemoveFromPlan(item.id)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            &times;
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </>
                 )}
             </div>
 
