@@ -108,7 +108,6 @@ export const findOrCreateUserByEmail = async (email, shopifyCustomerId = null) =
 export const getUserByShopifyId = async (shopifyId) => {
     const client = await pool.connect();
     try {
-        // Assuming there is a shopify_customer_id column or similar logic
         const res = await client.query(`SELECT id, email FROM users WHERE shopify_customer_id = $1`, [shopifyId]);
         return res.rows[0];
     } finally {
@@ -180,7 +179,6 @@ const ensureMedicalSchema = async (client, userId) => {
 
     // --- SEED DATA (Based on Spreadsheet) ---
     
-    // Seed Profiles (Sample subset from screenshot)
     const profiles = [
         ['ams_diabetes', 'AMS Diabetes', 'Glycemic control focus', '{"p":35, "c":25, "f":40}', 'High fiber, lean protein'],
         ['ams_high_cholesterol', 'AMS High Cholesterol', 'Heart health focus', '{"p":30, "c":40, "f":30}', 'Low saturated fat'],
@@ -203,7 +201,6 @@ const ensureMedicalSchema = async (client, userId) => {
         `, p);
     }
 
-    // Seed Kits
     const kits = [
         ['kit_diabetes_heart', 'Diabetes & Heart Health', 'General'],
         ['kit_kidney_liver', 'Advanced Kidney & Liver Panel', 'General'],
@@ -220,22 +217,17 @@ const ensureMedicalSchema = async (client, userId) => {
         `, k);
     }
 
-    // Seed Mappings (The spreadsheet logic)
     const mappings = [
-        // Diabetes & Heart Health
         ['kit_diabetes_heart', 'ams_diabetes', 1, 'Diabetes Only'],
         ['kit_diabetes_heart', 'ams_diabetes_cholesterol', 2, 'Diabetes + High Cholesterol'],
         ['kit_diabetes_heart', 'ams_diabetes_hypertension', 3, 'Diabetes + Hypertension'],
         ['kit_diabetes_heart', 'stable_blood_sugar', 4, 'Stable Blood Sugar (Preventative)'],
         
-        // Kidney & Liver
         ['kit_kidney_liver', 'ams_ckd', 1, 'Kidney Focus'],
         ['kit_kidney_liver', 'ams_cirrhosis', 2, 'Liver Focus'],
         
-        // Men's Hormone
         ['kit_mens_hormone', 'healthy_aging', 1, 'Hormone Balance'],
         
-        // Male Longevity
         ['kit_longevity_male', 'healthy_aging', 1, 'Standard Longevity'],
         ['kit_longevity_male', 'ams_high_cholesterol', 2, 'Heart Healthy Focus'],
         ['kit_longevity_male', 'ams_anti_inflamm', 3, 'Anti-Inflammatory Focus']
@@ -733,11 +725,62 @@ export const getSWOTInsights = async () => ({ strengths: ['AI'], weaknesses: ['M
 
 // Assessments & Matches (Stubbed/Basic impl)
 export const getAssessments = async () => {
-    // Return mock assessments for now
     return [
         { 
             id: 'diet_pref', 
             title: 'Dietary Preferences', 
             description: 'Help us customize your meal suggestions.', 
             questions: [
-                {
+                { id: 'q1', text: 'Do you follow any specific diet?', type: 'choice', options: [{ label: 'Vegan', value: 'vegan' }, { label: 'Keto', value: 'keto' }, { label: 'None', value: 'none' }] }
+            ] 
+        },
+        { 
+            id: 'health_goals', 
+            title: 'Health Goals', 
+            description: 'Set your targets.', 
+            questions: [
+                { id: 'q1', text: 'What is your primary goal?', type: 'choice', options: [{ label: 'Weight Loss', value: 'weight_loss' }, { label: 'Muscle Gain', value: 'muscle_gain' }] }
+            ] 
+        }
+    ];
+};
+
+export const submitAssessment = async (userId, assessmentId, responses) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`CREATE TABLE IF NOT EXISTS user_assessments (user_id VARCHAR(255), assessment_id VARCHAR(50), responses JSONB, PRIMARY KEY(user_id, assessment_id))`);
+        await client.query(`INSERT INTO user_assessments (user_id, assessment_id, responses) VALUES ($1, $2, $3) ON CONFLICT (user_id, assessment_id) DO UPDATE SET responses = $3`, [userId, assessmentId, responses]);
+        await awardPoints(userId, 'assessment.completed', 50, { assessmentId });
+    } finally {
+        client.release();
+    }
+};
+
+export const getPartnerBlueprint = async (userId) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`CREATE TABLE IF NOT EXISTS partner_blueprints (user_id VARCHAR(255) PRIMARY KEY, preferences JSONB)`);
+        const res = await client.query(`SELECT preferences FROM partner_blueprints WHERE user_id = $1`, [userId]);
+        return res.rows[0] || {};
+    } finally {
+        client.release();
+    }
+};
+
+export const savePartnerBlueprint = async (userId, preferences) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`CREATE TABLE IF NOT EXISTS partner_blueprints (user_id VARCHAR(255) PRIMARY KEY, preferences JSONB)`);
+        await client.query(`INSERT INTO partner_blueprints (user_id, preferences) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET preferences = $2`, [userId, preferences]);
+    } finally {
+        client.release();
+    }
+};
+
+export const getMatches = async (userId, type) => {
+    // Return mock matches
+    return [
+        { userId: 'coach_1', email: 'coach.mike@example.com', compatibilityScore: 95 },
+        { userId: 'coach_2', email: 'coach.sarah@example.com', compatibilityScore: 88 }
+    ];
+};

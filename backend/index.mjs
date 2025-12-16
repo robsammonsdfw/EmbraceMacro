@@ -38,7 +38,12 @@ import {
     getDashboardPulse,
     getCompetitors,
     getSWOTInsights,
-    getKitRecommendationsForUser
+    getKitRecommendationsForUser,
+    getAssessments,
+    submitAssessment,
+    getPartnerBlueprint,
+    savePartnerBlueprint,
+    getMatches
 } from './services/databaseService.mjs';
 import { Buffer } from 'buffer';
 
@@ -85,7 +90,7 @@ export const handler = async (event) => {
     const headers = {
         "Access-Control-Allow-Origin": accessControlAllowOrigin,
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        "Access-Control-Allow-Methods": "OPTIONS,POST,GET,DELETE,PUT"
+        "Access-Control-Allow-Methods": "OPTIONS,POST,GET,DELETE,PUT,PATCH"
     };
 
     let path;
@@ -111,7 +116,7 @@ export const handler = async (event) => {
     }
 
     if (method === 'OPTIONS') {
-        return { statusCode: 204, headers };
+        return { statusCode: 200, headers };
     }
 
     // --- AUTH ROUTES ---
@@ -188,6 +193,35 @@ export const handler = async (event) => {
             const data = await getKitRecommendationsForUser(event.user.userId);
             return { statusCode: 200, headers, body: JSON.stringify(data) };
         }
+        // --- New Handlers for Assessments & Blueprint ---
+        if (resource === 'assessments') {
+            if (method === 'GET') {
+                const data = await getAssessments();
+                return { statusCode: 200, headers, body: JSON.stringify(data) };
+            }
+            if (method === 'POST' && pathParts[1] === 'submit') {
+                const { assessmentId, responses } = JSON.parse(event.body);
+                await submitAssessment(event.user.userId, assessmentId, responses);
+                return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
+            }
+        }
+        if (resource === 'partner-blueprint') {
+            if (method === 'GET') {
+                const data = await getPartnerBlueprint(event.user.userId);
+                return { statusCode: 200, headers, body: JSON.stringify(data) };
+            }
+            if (method === 'POST') {
+                const preferences = JSON.parse(event.body);
+                await savePartnerBlueprint(event.user.userId, preferences);
+                return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
+            }
+        }
+        if (resource === 'matches') {
+            const type = pathParts[1] || 'all';
+            const data = await getMatches(event.user.userId, type);
+            return { statusCode: 200, headers, body: JSON.stringify(data) };
+        }
+
     } catch (error) {
         console.error(`[ROUTER CATCH] Unhandled error for ${method} ${path}:`, error);
         return { statusCode: 500, headers, body: JSON.stringify({ error: 'An unexpected internal server error occurred.' }) };
