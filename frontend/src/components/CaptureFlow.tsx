@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { XIcon, CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, UserCircleIcon, SearchIcon, TagIcon, PhotoIcon, UserGroupIcon, PlusIcon } from './icons';
+import { XIcon, CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, UserCircleIcon, SearchIcon, TagIcon, PhotoIcon, UserGroupIcon, PlusIcon, MapPinIcon } from './icons';
 import { BarcodeScanner } from './BarcodeScanner';
 import type { MealLogEntry } from '../types';
 
@@ -306,7 +306,7 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
                     <div className="h-32 bg-slate-100 rounded-xl mb-4 flex items-center justify-center border border-slate-200">
                         {/* Placeholder for Map */}
                         <div className="text-slate-400 flex flex-col items-center">
-                            <UtensilsIcon />
+                            <MapPinIcon />
                             <span className="text-xs font-bold mt-1">Sweetgreen, Downtown</span>
                         </div>
                     </div>

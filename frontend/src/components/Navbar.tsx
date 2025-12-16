@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { HomeIcon, PlusIcon, BookOpenIcon, ClockIcon, ClipboardListIcon, Squares2X2Icon, TrophyIcon, CameraIcon } from './icons';
+import { HomeIcon, PlusIcon, BookOpenIcon, ClockIcon, ClipboardListIcon, Squares2X2Icon, TrophyIcon, CameraIcon, UserGroupIcon, UserCircleIcon } from './icons';
 import * as apiService from '../services/apiService';
 
 interface NavbarProps {
@@ -33,7 +33,6 @@ const NavLink: React.FC<{
 export const Navbar: React.FC<NavbarProps> = ({ activeView, onNavigate, onLogout, onBackToHub, onCaptureClick }) => {
     const [points, setPoints] = useState<number>(0);
 
-    // Fetch basic rewards data for the wallet pill
     useEffect(() => {
         const fetchWallet = async () => {
             try {
@@ -50,29 +49,24 @@ export const Navbar: React.FC<NavbarProps> = ({ activeView, onNavigate, onLogout
         onNavigate(view);
     };
 
-    const handleBackToHub = () => {
-        onBackToHub();
-    };
-    
     return (
         <>
             <nav className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm hidden md:block">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between h-16">
                         <div className="flex items-center cursor-pointer" onClick={() => handleNav('home')}>
-                            <span className="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500">
+                            <span className="text-2xl font-extrabold text-slate-900">
                                 EmbraceHealth
                             </span>
                         </div>
 
                         {/* Desktop Menu */}
                         <div className="hidden md:flex items-center space-x-2 lg:space-x-4">
-                            <NavLink active={false} onClick={handleBackToHub} icon={<Squares2X2Icon />}>Main Menu</NavLink>
+                            <NavLink active={false} onClick={onBackToHub} icon={<Squares2X2Icon />}>Main Menu</NavLink>
                             <div className="h-6 w-px bg-slate-200 mx-1"></div>
                             <NavLink active={activeView === 'home'} onClick={() => handleNav('home')} icon={<HomeIcon />}>Home</NavLink>
                             <NavLink active={activeView === 'plan'} onClick={() => handleNav('plan')} icon={<PlusIcon />}>Plan</NavLink>
                             <NavLink active={activeView === 'meals'} onClick={() => handleNav('meals')} icon={<BookOpenIcon />}>Meals</NavLink>
-                            <NavLink active={activeView === 'history'} onClick={() => handleNav('history')} icon={<ClockIcon />}>History</NavLink>
                             <NavLink active={activeView === 'grocery'} onClick={() => handleNav('grocery')} icon={<ClipboardListIcon />}>List</NavLink>
                             
                             <button 
@@ -117,46 +111,46 @@ export const Navbar: React.FC<NavbarProps> = ({ activeView, onNavigate, onLogout
                 </div>
             </nav>
 
-            {/* Mobile Bottom Navigation with Super Button */}
-            <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 pb-safe z-40 flex justify-around items-end shadow-[0_-5px_15px_rgba(0,0,0,0.05)]">
+            {/* Phase 1: Minimal Mobile Bottom Navigation */}
+            <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.05)] pb-safe z-40 flex justify-around items-center h-20 px-2">
                 <button 
                     onClick={() => handleNav('home')} 
-                    className={`p-3 flex flex-col items-center gap-1 flex-1 ${activeView === 'home' ? 'text-emerald-600' : 'text-slate-400'}`}
+                    className={`p-2 flex flex-col items-center gap-1 flex-1 ${activeView === 'home' ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}
                 >
                     <HomeIcon />
                     <span className="text-[10px] font-bold">Home</span>
                 </button>
+                
                 <button 
-                    onClick={() => handleNav('plan')} 
-                    className={`p-3 flex flex-col items-center gap-1 flex-1 ${activeView === 'plan' ? 'text-emerald-600' : 'text-slate-400'}`}
+                    onClick={() => handleNav('meals')} 
+                    className={`p-2 flex flex-col items-center gap-1 flex-1 ${activeView === 'meals' ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}
                 >
-                    <PlusIcon />
-                    <span className="text-[10px] font-bold">Plan</span>
+                    <BookOpenIcon />
+                    <span className="text-[10px] font-bold">Meals</span>
                 </button>
                 
-                {/* Center Super Button */}
-                <div className="relative -top-6">
-                    <button 
-                        onClick={onCaptureClick}
-                        className="bg-emerald-500 text-white w-16 h-16 rounded-full shadow-xl flex items-center justify-center border-4 border-slate-50 transform active:scale-95 transition-all"
-                    >
-                        <CameraIcon />
-                    </button>
-                </div>
+                {/* Central Action Button */}
+                <button 
+                    onClick={onCaptureClick}
+                    className="relative -top-6 bg-emerald-500 text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center border-4 border-white transform active:scale-95 transition-all"
+                >
+                    <PlusIcon />
+                </button>
 
                 <button 
                     onClick={() => handleNav('history')} 
-                    className={`p-3 flex flex-col items-center gap-1 flex-1 ${activeView === 'history' ? 'text-emerald-600' : 'text-slate-400'}`}
+                    className={`p-2 flex flex-col items-center gap-1 flex-1 ${activeView === 'history' ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}
                 >
-                    <ClockIcon />
-                    <span className="text-[10px] font-bold">History</span>
+                    <UserGroupIcon />
+                    <span className="text-[10px] font-bold">Friends</span>
                 </button>
+                
                 <button 
-                    onClick={() => handleNav('rewards')} 
-                    className={`p-3 flex flex-col items-center gap-1 flex-1 ${activeView === 'rewards' ? 'text-emerald-600' : 'text-slate-400'}`}
+                    onClick={() => handleNav('body')} 
+                    className={`p-2 flex flex-col items-center gap-1 flex-1 ${activeView === 'body' ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}
                 >
-                    <TrophyIcon />
-                    <span className="text-[10px] font-bold">Wallet</span>
+                    <UserCircleIcon />
+                    <span className="text-[10px] font-bold">Profile</span>
                 </button>
             </div>
         </>

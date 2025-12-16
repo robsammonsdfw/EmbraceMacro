@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { FireIcon, ActivityIcon, TrophyIcon, StarIcon } from '../icons';
+import { FireIcon, ActivityIcon, HeartIcon } from '../icons';
 
 interface TodayStripProps {
     calories: number;
@@ -16,20 +16,20 @@ const StatCard: React.FC<{
     icon: React.ReactNode;
     colors: string;
 }> = ({ label, value, subValue, icon, colors }) => (
-    <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-3 overflow-hidden transition-all hover:shadow-md">
-        <div className={`p-2.5 rounded-xl flex-shrink-0 ${colors}`}>
+    <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center justify-center gap-2 transition-all hover:shadow-md h-32">
+        <div className={`p-3 rounded-full ${colors}`}>
             {icon}
         </div>
-        <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest truncate leading-tight mb-0.5">
+        <div className="text-center">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-tight mb-1">
                 {label}
             </p>
-            <div className="flex items-baseline gap-1 truncate">
-                <span className="text-lg font-bold text-slate-800 leading-none truncate">
+            <div className="flex flex-col items-center leading-tight">
+                <span className="text-xl font-extrabold text-slate-800">
                     {value}
                 </span>
                 {subValue && (
-                    <span className="text-xs text-slate-400 font-medium truncate">
+                    <span className="text-xs text-slate-400 font-medium">
                         {subValue}
                     </span>
                 )}
@@ -38,43 +38,31 @@ const StatCard: React.FC<{
     </div>
 );
 
-export const TodayStrip: React.FC<TodayStripProps> = ({ calories, calorieGoal, activityScore, rewardsBalance }) => {
+export const TodayStrip: React.FC<TodayStripProps> = ({ calories, calorieGoal, activityScore }) => {
     return (
-        // Grid Logic:
-        // Default (Mobile): 2 columns
-        // SM (Tablet): 4 columns (Full width)
-        // LG (Desktop Split): Back to 2 columns (Half width container)
-        // XL (Wide Desktop): Back to 4 columns if space allows, or keep 2 for consistency
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-2 gap-3 mb-6">
+        <div className="grid grid-cols-3 gap-4 mb-6">
             <StatCard 
-                label="Calories"
-                value={calories}
-                subValue={`/ ${calorieGoal}`}
-                icon={<FireIcon />}
-                colors="bg-emerald-100 text-emerald-600"
+                label="Steps"
+                value="8,432"
+                subValue="Goal: 10k"
+                icon={<ActivityIcon />}
+                colors="bg-blue-50 text-blue-600"
             />
             
             <StatCard 
-                label="Movement"
+                label="Calories"
+                value={Math.round(calories)}
+                subValue={`/ ${calorieGoal}`}
+                icon={<FireIcon />}
+                colors="bg-emerald-50 text-emerald-600"
+            />
+
+            <StatCard 
+                label="Peloities"
                 value={activityScore}
-                subValue="Score"
-                icon={<ActivityIcon />}
-                colors="bg-amber-100 text-amber-600"
-            />
-
-            <StatCard 
-                label="Adherence"
-                value="85%"
-                subValue="High"
-                icon={<StarIcon />}
-                colors="bg-indigo-100 text-indigo-600"
-            />
-
-            <StatCard 
-                label="Rewards"
-                value={rewardsBalance.toLocaleString()}
-                icon={<TrophyIcon />}
-                colors="bg-purple-100 text-purple-600"
+                subValue="Heart Pts"
+                icon={<HeartIcon />}
+                colors="bg-rose-50 text-rose-600"
             />
         </div>
     );
