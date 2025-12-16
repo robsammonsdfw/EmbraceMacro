@@ -1,4 +1,6 @@
 
+
+
 import { GoogleGenAI } from '@google/genai';
 import { 
     findOrCreateUserByEmail, 
@@ -8,7 +10,8 @@ import {
     getRewardsSummary,
     getGroceryLists, createGroceryList, setActiveGroceryList, deleteGroceryList,
     getGroceryListItems, addGroceryItem, removeGroceryListItem, updateGroceryListItem, clearGroceryListItems, addIngredientsFromPlans,
-    getAssessments, submitAssessment, getPartnerBlueprint, savePartnerBlueprint, getMatches
+    getAssessments, submitAssessment, getPartnerBlueprint, savePartnerBlueprint, getMatches,
+    getKitRecommendationsForUser
 } from './services/databaseService.mjs';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -49,7 +52,7 @@ export const handler = async (event) => {
         const knownResources = new Set([
             'analyze-image', 'get-meal-suggestions', 'analyze-image-recipes', 'generate-medical-plan',
             'saved-meals', 'meal-plans', 'meal-log', 'rewards', 'grocery-lists',
-            'assessments', 'partner-blueprint', 'matches'
+            'assessments', 'partner-blueprint', 'matches', 'recommendations'
         ]);
 
         let resource = null;
@@ -73,6 +76,11 @@ export const handler = async (event) => {
 
         if (resource === 'generate-medical-plan') {
             return await handleMedicalPlanRequest(event, ai, corsHeaders);
+        }
+
+        if (resource === 'recommendations') {
+            const data = await getKitRecommendationsForUser(userId);
+            return { statusCode: 200, headers: corsHeaders, body: JSON.stringify(data) };
         }
 
         if (resource === 'analyze-image' || resource === 'get-meal-suggestions' || resource === 'analyze-image-recipes') {

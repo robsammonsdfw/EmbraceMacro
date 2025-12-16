@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import type { MealPlan, SavedMeal, NutritionInfo } from '../types';
 import { PlusIcon, UserCircleIcon, GlobeAltIcon, StarIcon, CameraIcon, BeakerIcon } from './icons';
 import { MedicalPlannerModal } from './MedicalPlannerModal';
@@ -36,6 +36,12 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
     const [isMedicalModalOpen, setIsMedicalModalOpen] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
     const [activeMedicalConditions, setActiveMedicalConditions] = useState<DiseaseTemplate[]>([]);
+    const [recommendations, setRecommendations] = useState<any[]>([]);
+
+    useEffect(() => {
+        // Fetch recommendations on mount
+        apiService.getKitRecommendations().then(setRecommendations).catch(console.error);
+    }, []);
 
     const activePlan = plans.find(p => p.id === activePlanId);
 
@@ -82,7 +88,6 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
     const handleDragStart = (e: React.DragEvent, meal: SavedMeal) => {
         e.dataTransfer.setData('mealId', meal.id.toString());
         e.dataTransfer.effectAllowed = 'copy';
-        // Add a ghost image or styling here if desired
     };
 
     const handleDragOver = (e: React.DragEvent, slot: string) => {
@@ -155,7 +160,7 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                 });
             }
             
-            // Force a reload to show the new plan populated (simplest way to sync state in this architecture)
+            // Force a reload to show the new plan populated
             window.location.reload();
 
         } catch (error: any) {
@@ -235,6 +240,7 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                     onClose={() => setIsMedicalModalOpen(false)}
                     onGenerate={handleMedicalGenerate}
                     isLoading={isGenerating}
+                    recommendations={recommendations}
                 />
             )}
 
@@ -271,11 +277,14 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                                 </button>
                                 <button 
                                     onClick={() => setIsMedicalModalOpen(true)}
-                                    className="bg-indigo-600 text-white font-bold p-2 px-3 rounded-lg hover:bg-indigo-700 flex items-center space-x-1 shadow-sm"
+                                    className="bg-indigo-600 text-white font-bold p-2 px-3 rounded-lg hover:bg-indigo-700 flex items-center space-x-1 shadow-sm relative overflow-hidden"
                                     title="Medical AI Planner"
                                 >
-                                    <BeakerIcon />
-                                    <span className="text-xs">Medical AI</span>
+                                    <div className="absolute inset-0 bg-white/20 animate-[pulse_2s_infinite]"></div>
+                                    <div className="flex items-center space-x-1 relative z-10">
+                                        <BeakerIcon />
+                                        <span className="text-xs">Medical AI</span>
+                                    </div>
                                 </button>
                             </>
                         ) : (

@@ -4,6 +4,9 @@
 
 
 
+
+
+
 import type { NutritionInfo, Recipe, SavedMeal, MealPlan, MealPlanItem, MealPlanItemMetadata, GroceryList, GroceryItem, RewardsSummary, MealLogEntry, Assessment, GeneratedMedicalMeal } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
@@ -147,6 +150,10 @@ const medicalPlanSchema = {
 
 export const generateMedicalPlan = async (diseases: any[], cuisine: string, duration: 'day' | 'week'): Promise<GeneratedMedicalMeal[]> => {
     return callApi('/generate-medical-plan', 'POST', { diseases, cuisine, duration, schema: medicalPlanSchema });
+};
+
+export const getKitRecommendations = async (): Promise<any[]> => {
+    return callApi('/recommendations', 'GET');
 };
 
 const recipeSchema = {

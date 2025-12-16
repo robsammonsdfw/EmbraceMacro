@@ -72,7 +72,7 @@ export const findOrCreateUserByEmail = async (email) => {
         await ensureRewardsTables(client);
         
         // Ensure Medical Intelligence tables exist and are seeded
-        await ensureMedicalSchema(client);
+        await ensureMedicalSchema(client, res.rows[0].id); // Pass userID to seed entitlement
         
         // Ensure rewards balance entry exists for this user
         await client.query(`
@@ -104,11 +104,20 @@ const ensureRewardsTables = async (client) => {
             created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
             metadata JSONB DEFAULT '{}'
         );
+        CREATE TABLE IF NOT EXISTS user_entitlements (
+            id SERIAL PRIMARY KEY,
+            user_id VARCHAR(255),
+            source VARCHAR(50), -- 'shopify', 'manual'
+            external_product_id VARCHAR(100), -- Matches medical_kits.id
+            status VARCHAR(20) DEFAULT 'active',
+            starts_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            expires_at TIMESTAMPTZ
+        );
     `);
 };
 
 // --- Medical Intelligence Schema (New) ---
-const ensureMedicalSchema = async (client) => {
+const ensureMedicalSchema = async (client, userId) => {
     // 1. Dietary Profiles (The Solutions)
     await client.query(`
         CREATE TABLE IF NOT EXISTS dietary_profiles (
@@ -144,11 +153,11 @@ const ensureMedicalSchema = async (client) => {
     
     // Seed Profiles (Sample subset from screenshot)
     const profiles = [
-        ['ams_diabetes', 'AMS Diabetes', 'Glycemic control focus', '{"p":35, "c":25, "f":25}', 'High fiber, lean protein'],
-        ['ams_high_cholesterol', 'AMS High Cholesterol', 'Heart health focus', '{"p":40, "c":30, "f":30}', 'Low saturated fat'],
-        ['ams_diabetes_cholesterol', 'AMS Diabetes & High Cholesterol', 'Dual management', '{"p":40, "c":30, "f":30}', 'Balance of both'],
-        ['ams_hypertension', 'AMS Hypertension', 'BP management', '{"p":50, "c":25, "f":25}', 'Low sodium'],
-        ['ams_diabetes_hypertension', 'AMS Diabetes & Hypertension', 'Dual management', '{"p":50, "c":25, "f":25}', 'Low sodium, low GI'],
+        ['ams_diabetes', 'AMS Diabetes', 'Glycemic control focus', '{"p":35, "c":25, "f":40}', 'High fiber, lean protein'],
+        ['ams_high_cholesterol', 'AMS High Cholesterol', 'Heart health focus', '{"p":30, "c":40, "f":30}', 'Low saturated fat'],
+        ['ams_diabetes_cholesterol', 'AMS Diabetes & High Cholesterol', 'Dual management', '{"p":35, "c":35, "f":30}', 'Balance of both'],
+        ['ams_hypertension', 'AMS Hypertension', 'BP management', '{"p":30, "c":40, "f":30}', 'Low sodium'],
+        ['ams_diabetes_hypertension', 'AMS Diabetes & Hypertension', 'Dual management', '{"p":35, "c":35, "f":30}', 'Low sodium, low GI'],
         ['stable_blood_sugar', 'Stable Blood Sugar', 'Maintenance', '{"p":30, "c":40, "f":30}', 'Balanced'],
         ['ams_ckd', 'AMS Chronic Kidney Disease', 'Kidney support', '{"p":15, "c":60, "f":25}', 'Low protein, phosphorus'],
         ['ams_cirrhosis', 'AMS Cirrhosis', 'Liver support', '{"p":20, "c":50, "f":30}', 'Easy digest'],
@@ -184,22 +193,22 @@ const ensureMedicalSchema = async (client) => {
     // Seed Mappings (The spreadsheet logic)
     const mappings = [
         // Diabetes & Heart Health
-        ['kit_diabetes_heart', 'ams_diabetes', 1, 'Primary Option'],
-        ['kit_diabetes_heart', 'ams_diabetes_cholesterol', 2, 'For High Cholesterol'],
-        ['kit_diabetes_heart', 'ams_diabetes_hypertension', 3, 'For Hypertension'],
-        ['kit_diabetes_heart', 'stable_blood_sugar', 4, 'Maintenance'],
+        ['kit_diabetes_heart', 'ams_diabetes', 1, 'Diabetes Only'],
+        ['kit_diabetes_heart', 'ams_diabetes_cholesterol', 2, 'Diabetes + High Cholesterol'],
+        ['kit_diabetes_heart', 'ams_diabetes_hypertension', 3, 'Diabetes + Hypertension'],
+        ['kit_diabetes_heart', 'stable_blood_sugar', 4, 'Stable Blood Sugar (Preventative)'],
         
         // Kidney & Liver
-        ['kit_kidney_liver', 'ams_ckd', 1, 'Primary Option'],
+        ['kit_kidney_liver', 'ams_ckd', 1, 'Kidney Focus'],
         ['kit_kidney_liver', 'ams_cirrhosis', 2, 'Liver Focus'],
         
         // Men's Hormone
         ['kit_mens_hormone', 'healthy_aging', 1, 'Hormone Balance'],
         
         // Male Longevity
-        ['kit_longevity_male', 'healthy_aging', 1, 'Primary Option'],
-        ['kit_longevity_male', 'ams_high_cholesterol', 2, 'Heart Healthy'],
-        ['kit_longevity_male', 'ams_anti_inflamm', 3, 'Anti-Inflammatory']
+        ['kit_longevity_male', 'healthy_aging', 1, 'Standard Longevity'],
+        ['kit_longevity_male', 'ams_high_cholesterol', 2, 'Heart Healthy Focus'],
+        ['kit_longevity_male', 'ams_anti_inflamm', 3, 'Anti-Inflammatory Focus']
     ];
 
     for (const m of mappings) {
@@ -208,6 +217,64 @@ const ensureMedicalSchema = async (client) => {
             VALUES ($1, $2, $3, $4)
             ON CONFLICT (kit_id, profile_id) DO NOTHING;
         `, m);
+    }
+
+    // --- DEMO ONLY: Grant the user the Diabetes Kit so they see the UI ---
+    if (userId) {
+        await client.query(`
+            INSERT INTO user_entitlements (user_id, source, external_product_id, status)
+            SELECT $1, 'demo', 'kit_diabetes_heart', 'active'
+            WHERE NOT EXISTS (SELECT 1 FROM user_entitlements WHERE user_id = $1 AND external_product_id = 'kit_diabetes_heart');
+        `, [userId]);
+    }
+};
+
+export const getKitRecommendationsForUser = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const query = `
+            SELECT 
+                k.name as kit_name,
+                k.id as kit_id,
+                dp.id as profile_id,
+                dp.name as profile_name,
+                dp.description,
+                dp.macros,
+                dp.focus,
+                km.option_index,
+                km.label as option_label
+            FROM user_entitlements ue
+            JOIN medical_kits k ON ue.external_product_id = k.id
+            JOIN kit_mappings km ON k.id = km.kit_id
+            JOIN dietary_profiles dp ON km.profile_id = dp.id
+            WHERE ue.user_id = $1 AND ue.status = 'active'
+            ORDER BY k.name, km.option_index;
+        `;
+        const res = await client.query(query, [userId]);
+        
+        // Group by Kit
+        const recommendations = {};
+        res.rows.forEach(row => {
+            if (!recommendations[row.kit_id]) {
+                recommendations[row.kit_id] = {
+                    kitName: row.kit_name,
+                    options: []
+                };
+            }
+            recommendations[row.kit_id].options.push({
+                profileId: row.profile_id,
+                profileName: row.profile_name,
+                description: row.description,
+                macros: row.macros,
+                focus: row.focus,
+                optionIndex: row.option_index,
+                label: row.option_label
+            });
+        });
+        
+        return Object.values(recommendations);
+    } finally {
+        client.release();
     }
 };
 
