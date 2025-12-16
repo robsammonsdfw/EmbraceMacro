@@ -194,21 +194,23 @@ async function handleGeminiRequest(event, ai, headers) {
 async function handleMedicalPlanRequest(event, ai, headers) {
     try {
         const body = JSON.parse(event.body);
-        const { diseases, cuisine, duration, schema } = body;
+        // Add 'currentDay' parameter to allow single-day generation
+        const { diseases, cuisine, duration, currentDay, schema } = body;
 
-        console.log(`Generating Medical Plan: ${duration}, Cuisine: ${cuisine}, Conditions: ${diseases.length}`);
+        console.log(`Generating Medical Plan: ${duration}, Day: ${currentDay}, Conditions: ${diseases.length}`);
 
         const diseaseDetails = diseases.map(d => `${d.name} (Target: P${d.macros.p}% C${d.macros.c}% F${d.macros.f}%. Avoid: ${d.focus})`).join('; ');
-        const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-        const targetDays = duration === 'week' ? 'Monday to Sunday' : 'Today only';
+        
+        // Use the specific day requested, or default logic
+        const targetDays = currentDay ? currentDay : (duration === 'week' ? 'Monday to Sunday' : 'Today only');
 
         const prompt = `
-            Act as a Clinical Dietitian. Create a ${duration === 'week' ? '7-day' : '1-day'} meal plan.
+            Act as a Clinical Dietitian. Create meal plan for: ${targetDays}.
             Patient Conditions: ${diseaseDetails}.
             Cuisine: ${cuisine}.
-            Constraint: Consolidate conflicting rules by prioritizing safety (e.g. low sodium) then balancing macros.
+            CRITICAL: Output valid JSON only.
             Output: JSON array of meals.
-            Each meal MUST have: 'suggestedDay' (${targetDays}), 'suggestedSlot' (Breakfast, Lunch, Dinner, Snack), 'mealName', 'totalCalories', 'totalProtein', 'totalCarbs', 'totalFat', 'ingredients' (list with name, weightGrams, calories, protein, carbs, fat).
+            Each meal MUST have: 'suggestedDay' (${targetDays}), 'suggestedSlot' (Breakfast, Lunch, Dinner, Snack), 'mealName', 'totalCalories', 'totalProtein', 'totalCarbs', 'totalFat', 'ingredients' (list with name, weightGrams).
         `;
 
         const response = await ai.models.generateContent({ 

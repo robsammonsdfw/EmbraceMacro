@@ -35,6 +35,9 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
     // Medical Planner State
     const [isMedicalModalOpen, setIsMedicalModalOpen] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [generationProgress, setGenerationProgress] = useState(0);
+    const [generationStatus, setGenerationStatus] = useState('');
+    
     const [activeMedicalConditions, setActiveMedicalConditions] = useState<DiseaseTemplate[]>([]);
     const [recommendations, setRecommendations] = useState<any[]>([]);
 
@@ -88,6 +91,7 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
     const handleDragStart = (e: React.DragEvent, meal: SavedMeal) => {
         e.dataTransfer.setData('mealId', meal.id.toString());
         e.dataTransfer.effectAllowed = 'copy';
+        // Add a ghost image or styling here if desired
     };
 
     const handleDragOver = (e: React.DragEvent, slot: string) => {
@@ -123,57 +127,67 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
 
     const handleMedicalGenerate = async (diseases: DiseaseTemplate[], cuisine: string, duration: 'day' | 'week') => {
         setIsGenerating(true);
+        setGenerationProgress(0);
+        setGenerationStatus("Initializing Medical AI...");
         setActiveMedicalConditions(diseases);
 
         try {
-            // 1. Automatically create a new plan
+            // 1. Create Plan
             const planName = `Medical Plan - ${new Date().toLocaleDateString()} (${Math.floor(Math.random() * 1000)})`;
             const newPlan = await apiService.createMealPlan(planName);
             
-            // 2. Generate the meals
-            const generatedMeals = await apiService.generateMedicalPlan(diseases, cuisine, duration);
-            
-            // 3. Add meals to the new plan
-            for (const meal of generatedMeals) {
-                // Ensure ingredients have default values if missing from simplified AI response
-                const sanitizedIngredients = (meal.ingredients || []).map(ing => ({
-                    ...ing,
-                    calories: ing.calories || 0,
-                    protein: ing.protein || 0,
-                    carbs: ing.carbs || 0,
-                    fat: ing.fat || 0,
-                    weightGrams: ing.weightGrams || 100 // Default weight
-                }));
+            // 2. Determine Days to Generate
+            const targetDays = duration === 'week' ? DAYS : [selectedDay];
+            const totalSteps = targetDays.length;
 
-                const nutritionInfo: NutritionInfo = {
-                    ...meal,
-                    ingredients: sanitizedIngredients,
-                    source: 'medical-ai'
-                };
+            // 3. Client-Side Chaining (Loop)
+            // We request one day at a time to prevent timeouts
+            for (let i = 0; i < totalSteps; i++) {
+                const currentDay = targetDays[i];
+                
+                setGenerationStatus(`Analyzing & Drafting: ${currentDay}...`);
+                setGenerationProgress(Math.round(((i) / totalSteps) * 100));
 
-                await apiService.addMealFromHistoryToPlan(newPlan.id, nutritionInfo, {
-                    day: meal.suggestedDay,
-                    slot: meal.suggestedSlot,
-                    portion: 1,
-                    context: 'Medical Plan',
-                    addToGrocery: true
-                });
+                // Call for specific day
+                const generatedMeals = await apiService.generateMedicalPlan(diseases, cuisine, duration, currentDay);
+                
+                // Add items locally to plan
+                for (const meal of generatedMeals) {
+                    const sanitizedIngredients = (meal.ingredients || []).map(ing => ({
+                        ...ing,
+                        calories: ing.calories || 0,
+                        protein: ing.protein || 0,
+                        carbs: ing.carbs || 0,
+                        fat: ing.fat || 0,
+                        weightGrams: ing.weightGrams || 100
+                    }));
+
+                    const nutritionInfo: NutritionInfo = {
+                        ...meal,
+                        ingredients: sanitizedIngredients,
+                        source: 'medical-ai'
+                    };
+
+                    await apiService.addMealFromHistoryToPlan(newPlan.id, nutritionInfo, {
+                        day: meal.suggestedDay, // AI should return correct day now
+                        slot: meal.suggestedSlot,
+                        portion: 1,
+                        context: 'Medical Plan',
+                        addToGrocery: true
+                    });
+                }
             }
             
-            // Force a reload to show the new plan populated
+            setGenerationProgress(100);
+            setGenerationStatus("Finalizing...");
+            await new Promise(r => setTimeout(r, 800)); // Brief pause for UX completion feel
+            
+            // Reload to see new plan
             window.location.reload();
 
         } catch (error: any) {
             console.error(error);
-            if (error.message && (error.message.includes('503') || error.message.includes('504'))) {
-                if (duration === 'week') {
-                    alert("The AI service timed out generating a full week. Please try generating a 1-Day plan instead, as it is much faster.");
-                } else {
-                    alert("The AI service is currently busy. Please try again in a moment.");
-                }
-            } else {
-                alert("Failed to generate plan. Please try again.");
-            }
+            alert("Partial generation failed. Some meals may be missing.");
         } finally {
             setIsGenerating(false);
             setIsMedicalModalOpen(false);
@@ -240,6 +254,8 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                     onClose={() => setIsMedicalModalOpen(false)}
                     onGenerate={handleMedicalGenerate}
                     isLoading={isGenerating}
+                    progress={generationProgress}
+                    status={generationStatus}
                     recommendations={recommendations}
                 />
             )}
