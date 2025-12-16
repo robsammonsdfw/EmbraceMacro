@@ -37,7 +37,7 @@ const MealCard: React.FC<{
                 
                 {/* Overlay Actions */}
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                    <button onClick={onAdd} className="bg-emerald-500 text-white p-2 rounded-full hover:scale-110 transition-transform"><PlusIcon /></button>
+                    <button onClick={() => onAdd(meal)} className="bg-emerald-500 text-white p-2 rounded-full hover:scale-110 transition-transform"><PlusIcon /></button>
                 </div>
             </div>
 

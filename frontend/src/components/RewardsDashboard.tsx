@@ -4,18 +4,23 @@ import type { RewardsSummary } from '../types';
 import * as apiService from '../services/apiService';
 import { StarIcon, TrophyIcon, UserCircleIcon, ActivityIcon } from './icons';
 
+interface DataPoint {
+    date: string;
+    total: number;
+}
+
 // Simple SVG Line Chart Component
 const RewardsChart: React.FC<{ history: any[] }> = ({ history }) => {
     // Process history into points over time (cumulative)
     // Reverse because history is usually Descending
-    const dataPoints = [...history].reverse().reduce((acc, curr) => {
+    const dataPoints: DataPoint[] = [...history].reverse().reduce((acc: DataPoint[], curr) => {
         const lastTotal = acc.length > 0 ? acc[acc.length - 1].total : 0;
         acc.push({ 
             date: new Date(curr.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }), 
             total: lastTotal + curr.points_delta 
         });
         return acc;
-    }, [] as { date: string, total: number }[]);
+    }, []);
 
     // If no data, return empty state
     if (dataPoints.length < 2) return (
@@ -29,13 +34,13 @@ const RewardsChart: React.FC<{ history: any[] }> = ({ history }) => {
     const width = 600; 
     const padding = 20;
 
-    const maxVal = Math.max(...dataPoints.map(d => d.total)) * 1.1;
+    const maxVal = Math.max(...dataPoints.map((d: DataPoint) => d.total)) * 1.1;
     const minVal = 0;
 
     const getX = (index: number) => (index / (dataPoints.length - 1)) * (width - padding * 2) + padding;
     const getY = (val: number) => height - padding - ((val - minVal) / (maxVal - minVal)) * (height - padding * 2);
 
-    const pathD = dataPoints.map((d, i) => 
+    const pathD = dataPoints.map((d: DataPoint, i: number) => 
         `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(d.total)}`
     ).join(' ');
 
@@ -73,7 +78,7 @@ const RewardsChart: React.FC<{ history: any[] }> = ({ history }) => {
                     <path d={pathD} fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
 
                     {/* Points */}
-                    {dataPoints.map((d, i) => (
+                    {dataPoints.map((d: DataPoint, i: number) => (
                         <circle 
                             key={i} 
                             cx={getX(i)} cy={getY(d.total)} r="4" 
