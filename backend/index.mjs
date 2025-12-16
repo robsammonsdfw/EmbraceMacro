@@ -247,7 +247,7 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         const shopifyResponse = await callShopifyStorefrontAPI(mutation, variables);
         if (!shopifyResponse) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Login failed: Invalid response from store.' }) };
         
-        const data = shopifyResponse['customerAccessTokenCreate'];
+        const data = /** @type {any} */ (shopifyResponse)['customerAccessTokenCreate'];
         if (!data || data.customerUserErrors.length > 0) {
             return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid credentials.', details: data?.customerUserErrors[0]?.message }) };
         }
@@ -258,8 +258,7 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         const customerDataResponse = await callShopifyStorefrontAPI(customerQuery, {}, accessToken);
         
         // Access customer property safely with any cast
-        const customerData = /** @type {any} */ (customerDataResponse);
-        const customer = customerData?.customer;
+        const customer = /** @type {any} */ (customerDataResponse)?.customer;
 
         // Sync User in Postgres
         const user = await findOrCreateUserByEmail(email, customer?.id ? String(customer.id) : null);
