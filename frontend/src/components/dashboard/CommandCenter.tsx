@@ -101,7 +101,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
 
     return (
         <div className="space-y-6 animate-fade-in pb-10">
-            {/* Phase 2: Rewards Banner */}
+            {/* Rewards Banner */}
             <div className="bg-slate-900 rounded-2xl p-6 text-white shadow-lg flex items-center justify-between">
                 <div>
                     <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Health Wallet Balance</p>
@@ -131,7 +131,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Main Feed Column */}
                 <div className="lg:col-span-2 space-y-6">
-                    {/* Dynamic Social Feed connected to Friends Hub */}
+                    {/* Social Feed connected to real friend data */}
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="font-bold text-slate-900 flex items-center gap-2">
@@ -180,7 +180,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                         )}
                     </div>
 
-                    {/* Quick Actions (Preserved Functionality) */}
+                    {/* Quick Actions */}
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
                         <h3 className="font-bold text-slate-900 mb-4">Quick Log</h3>
                         <div className="grid grid-cols-4 gap-4">
@@ -204,9 +204,8 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                     </div>
                 </div>
 
-                {/* Side Column / Bottom Mobile */}
+                {/* Side Column */}
                 <div className="space-y-6">
-                    {/* Phase 2: Mini-Progress Bar (Body Twin) */}
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col justify-between min-h-[300px]">
                         <div>
                             <div className="flex justify-between items-center mb-2">
@@ -216,7 +215,6 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                             <p className="text-xs text-slate-500">Live Health Overlay</p>
                         </div>
                         
-                        {/* Mini Visual */}
                         <div className="flex-grow flex items-center justify-center my-4">
                              <DigitalTwinPanel 
                                 calories={dailyCalories}
