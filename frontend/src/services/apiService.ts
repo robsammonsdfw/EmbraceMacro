@@ -2,7 +2,7 @@
 import type { 
   NutritionInfo, Recipe, SavedMeal, MealPlan, MealPlanItem, MealPlanItemMetadata, 
   GroceryList, GroceryItem, RewardsSummary, MealLogEntry, Assessment, 
-  GeneratedMedicalMeal, UserProfile, Friendship, VisibilityMode 
+  UserProfile, Friendship, VisibilityMode 
 } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
@@ -33,7 +33,6 @@ export const updateMealVisibility = (mealId: number, visibility: VisibilityMode)
 export const updatePlanVisibility = (planId: number, visibility: VisibilityMode) => callApi(`/meal-plans/${planId}/visibility`, 'PATCH', { visibility });
 
 // --- Standard API ---
-// FIX: Improved schema to provide full nutritional data for analysis results
 export const analyzeImageWithGemini = (base64Image: string, mimeType: string): Promise<NutritionInfo> => 
     callApi('/analyze-image', 'POST', { 
         base64Image, 
@@ -67,7 +66,6 @@ export const analyzeImageWithGemini = (base64Image: string, mimeType: string): P
         } 
     });
 
-// FIX: Added missing getRecipesFromImage function for Pantry Chef feature
 export const getRecipesFromImage = (base64Image: string, mimeType: string): Promise<Recipe[]> => 
     callApi('/analyze-image', 'POST', { 
         base64Image, 
@@ -108,7 +106,6 @@ export const getRecipesFromImage = (base64Image: string, mimeType: string): Prom
         } 
     });
 
-// FIX: Added missing identifyGroceryItems function for smart scanning
 export const identifyGroceryItems = (base64Image: string, mimeType: string): Promise<{items: string[]}> => 
     callApi('/analyze-image', 'POST', { 
         base64Image, 
@@ -134,7 +131,6 @@ export const getMealLog = (): Promise<MealLogEntry[]> => callApi('/meal-log', 'G
 export const createMealLogEntry = (mealData: NutritionInfo, imageBase64: string): Promise<MealLogEntry> => callApi('/meal-log', 'POST', { mealData, imageBase64 });
 export const getRewardsSummary = (): Promise<RewardsSummary> => callApi('/rewards', 'GET');
 
-// FIX: Added missing grocery list management functions
 export const getGroceryLists = (): Promise<GroceryList[]> => callApi('/grocery-lists', 'GET');
 export const getGroceryListItems = (listId: number): Promise<GroceryItem[]> => callApi(`/grocery-lists/${listId}/items`, 'GET');
 export const createGroceryList = (name: string): Promise<GroceryList> => callApi('/grocery-lists', 'POST', { name });
@@ -153,3 +149,24 @@ export const savePartnerBlueprint = (preferences: any): Promise<void> => callApi
 export const getMatches = (type: string): Promise<any[]> => callApi(`/matches/${type}`, 'GET');
 export const getMealLogEntryById = (id: number): Promise<MealLogEntry> => callApi(`/meal-log/${id}`, 'GET');
 export const getSavedMealById = (id: number): Promise<SavedMeal> => callApi(`/saved-meals/${id}`, 'GET');
+
+export const getMealSuggestions = (condition: string, cuisine: string): Promise<NutritionInfo[]> => 
+    callApi('/analyze-image', 'POST', { 
+        prompt: `Generate 3 diverse meal suggestions for ${condition} in ${cuisine} cuisine.`,
+        schema: {
+            type: 'ARRAY',
+            items: {
+                type: 'OBJECT',
+                properties: {
+                    mealName: { type: 'STRING' },
+                    totalCalories: { type: 'NUMBER' },
+                    totalProtein: { type: 'NUMBER' },
+                    totalCarbs: { type: 'NUMBER' },
+                    totalFat: { type: 'NUMBER' },
+                    justification: { type: 'STRING' },
+                    ingredients: { type: 'ARRAY', items: { type: 'OBJECT', properties: { name: { type: 'STRING' } } } }
+                },
+                required: ['mealName', 'totalCalories', 'totalProtein', 'totalCarbs', 'totalFat', 'justification']
+            }
+        }
+    });

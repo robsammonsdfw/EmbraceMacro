@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import * as apiService from '../../services/apiService';
 import { UserProfile, Friendship } from '../../types';
-import { UserCircleIcon, UserGroupIcon, PlusIcon, XIcon, ClipboardCheckIcon } from '../icons';
+import { UserCircleIcon, UserGroupIcon, PlusIcon, XIcon } from '../icons';
 
 export const SocialManager: React.FC = () => {
     const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -95,7 +95,7 @@ export const SocialManager: React.FC = () => {
                             placeholder="Friend's email" 
                             value={searchEmail}
                             onChange={e => setSearchEmail(e.target.value)}
-                            className="flex-grow p-2 border border-slate-200 rounded-lg text-sm"
+                            className="flex-grow p-2 border border-slate-300 rounded-lg text-sm"
                         />
                         <button type="submit" className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold">Invite</button>
                     </form>

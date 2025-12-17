@@ -1,8 +1,8 @@
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import * as apiService from './services/apiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
-import type { NutritionInfo, SavedMeal, Recipe, MealLogEntry, MealPlan, MealPlanItemMetadata } from './types';
+import type { NutritionInfo, SavedMeal, Recipe, MealLogEntry, MealPlan } from './types';
 import { ImageUploader } from './components/ImageUploader';
 import { NutritionCard } from './components/NutritionCard';
 import { Loader } from './components/Loader';
@@ -57,6 +57,10 @@ const App: React.FC = () => {
   const [isAddToPlanModalOpen, setIsAddToPlanModalOpen] = useState(false);
   const [mealToAdd, setMealToAdd] = useState<MealDataType | null>(null);
 
+  const [suggestedMeals, setSuggestedMeals] = useState<NutritionInfo[] | null>(null);
+  const [isSuggesting, setIsSuggesting] = useState<boolean>(false);
+  const [suggestionError, setSuggestionError] = useState<string | null>(null);
+
   useEffect(() => {
     if (isAuthenticated && appMode === 'meals') {
       const loadInitialData = async () => {
@@ -79,9 +83,14 @@ const App: React.FC = () => {
       };
       loadInitialData();
     }
-  }, [isAuthenticated, appMode]);
+  }, [isAuthenticated, appMode, activePlanId]);
   
-  const resetAnalysisState = () => { setImage(null); setNutritionData(null); setRecipes(null); setError(null); };
+  const resetAnalysisState = () => { 
+    setImage(null); 
+    setNutritionData(null); 
+    setRecipes(null); 
+    setError(null); 
+  };
 
   const handleNavigation = (view: string) => {
     if (view === 'hub') { setAppMode('hub'); return; }
@@ -98,8 +107,12 @@ const App: React.FC = () => {
         } else if (img) {
             setImage(img);
             const base64Data = img.split(',')[1];
-            if (mode === 'pantry') setRecipes(await apiService.getRecipesFromImage(base64Data, 'image/jpeg'));
-            else setNutritionData(await apiService.analyzeImageWithGemini(base64Data, 'image/jpeg'));
+            if (mode === 'pantry') {
+                const results = await apiService.getRecipesFromImage(base64Data, 'image/jpeg');
+                setRecipes(results);
+            } else {
+                setNutritionData(await apiService.analyzeImageWithGemini(base64Data, 'image/jpeg'));
+            }
         }
     } catch (err) { setError('Analysis failed.'); } finally { setIsProcessing(false); }
   }, []);
@@ -114,24 +127,56 @@ const App: React.FC = () => {
     } catch (err) { setError("Could not save to history."); } finally { setIsProcessing(false); }
   }, []);
 
+  const handleGetSuggestions = useCallback(async (condition: string, cuisine: string) => {
+    setIsSuggesting(true);
+    setSuggestionError(null);
+    setSuggestedMeals(null);
+    try {
+        const suggestions = await apiService.getMealSuggestions(condition, cuisine);
+        setSuggestedMeals(suggestions);
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'An unknown error occurred.';
+        setSuggestionError(message);
+    } finally {
+        setIsSuggesting(false);
+    }
+  }, []);
+
   const renderContent = () => {
-      if (image || isProcessing || error || nutritionData) {
+      if (image || isProcessing || error || nutritionData || recipes) {
           return (
             <div className="space-y-6">
-                <ImageUploader image={image} />
+                {image && <ImageUploader image={image} />}
                 {isProcessing && <Loader message={processingMessage} />}
                 {error && <ErrorAlert message={error} />}
-                {nutritionData && !isProcessing && image && ( <NutritionCard data={nutritionData} onSaveToHistory={() => handleSaveToHistory(nutritionData, image)} /> )}
-                <button onClick={resetAnalysisState} className="w-full py-3 text-slate-500">Cancel</button>
+                {nutritionData && !isProcessing && (
+                    <NutritionCard data={nutritionData} onSaveToHistory={() => handleSaveToHistory(nutritionData, image || '')} />
+                )}
+                {recipes && !isProcessing && (
+                    <div className="space-y-6">
+                        <h2 className="text-2xl font-bold text-center text-slate-800">Pantry Chef Suggestions</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {recipes.map((recipe, idx) => (
+                                <RecipeCard 
+                                    key={idx} 
+                                    recipe={recipe} 
+                                    onAddToPlan={() => { setMealToAdd(recipe as any); setIsAddToPlanModalOpen(true); }} 
+                                />
+                            ))}
+                        </div>
+                    </div>
+                )}
+                <button onClick={resetAnalysisState} className="w-full py-3 text-slate-500 font-bold">Back to Dashboard</button>
             </div>
           );
       }
       switch(activeView) {
-        case 'home': return <CommandCenter dailyCalories={0} dailyProtein={0} rewardsBalance={0} userName={user?.firstName || 'User'} onScanClick={() => {}} onCameraClick={() => setIsCaptureOpen(true)} onBarcodeClick={() => {}} onPantryChefClick={() => {}} onRestaurantClick={() => {}} onUploadClick={() => {}} />;
+        case 'home': return <CommandCenter dailyCalories={0} dailyProtein={0} rewardsBalance={0} userName={user?.firstName || 'User'} onScanClick={() => {}} onCameraClick={() => { setCaptureInitialMode('meal'); setIsCaptureOpen(true); }} onBarcodeClick={() => { setCaptureInitialMode('barcode'); setIsCaptureOpen(true); }} onPantryChefClick={() => { setCaptureInitialMode('pantry'); setIsCaptureOpen(true); }} onRestaurantClick={() => { setCaptureInitialMode('restaurant'); setIsCaptureOpen(true); }} onUploadClick={() => setIsCaptureOpen(true)} />;
         case 'social': return <SocialManager />;
         case 'plan': return <MealPlanManager plans={mealPlans} activePlanId={activePlanId} savedMeals={savedMeals} onPlanChange={setActivePlanId} onCreatePlan={async (n) => setMealPlans([...mealPlans, await apiService.createMealPlan(n)])} onAddToPlan={m => {setMealToAdd(m); setIsAddToPlanModalOpen(true);}} onRemoveFromPlan={id => apiService.removeMealFromPlanItem(id)} onQuickAdd={(p, m, d, s) => apiService.addMealToPlan(p, m.id, {day: d, slot: s})} />;
         case 'meals': return <MealLibrary meals={savedMeals} onAdd={m => {setMealToAdd(m); setIsAddToPlanModalOpen(true);}} onDelete={id => apiService.deleteMeal(id)} />;
         case 'history': return <MealHistory logEntries={mealLog} onSaveMeal={async m => { const s = await apiService.saveMeal(m); setSavedMeals([...savedMeals, s]); return s; }} onAddToPlan={m => {setMealToAdd(m); setIsAddToPlanModalOpen(true);}} />;
+        case 'suggestions': return <MealSuggester onGetSuggestions={handleGetSuggestions} suggestions={suggestedMeals} isLoading={isSuggesting} error={suggestionError} onAddToPlan={m => { setMealToAdd(m as any); setIsAddToPlanModalOpen(true); }} onSaveMeal={async m => { const s = await apiService.saveMeal(m); setSavedMeals([...savedMeals, s]); return s; }} />;
         case 'grocery': return <GroceryList mealPlans={mealPlans} />;
         case 'rewards': return <RewardsDashboard />;
         case 'assessments': return <AssessmentHub />;
@@ -141,6 +186,8 @@ const App: React.FC = () => {
     }
   };
 
+  const [captureInitialMode, setCaptureInitialMode] = useState<'meal' | 'barcode' | 'pantry' | 'restaurant'>('meal');
+
   if (isAuthLoading) return <div className="min-h-screen flex items-center justify-center"><Loader message="Loading..." /></div>;
   if (!isAuthenticated) return <Login />;
   if (appMode === 'hub') return <Hub onEnterMeals={() => setAppMode('meals')} onLogout={logout} />;
@@ -149,7 +196,7 @@ const App: React.FC = () => {
   return (
     <AppLayout activeView={activeView} onNavigate={handleNavigation} onLogout={logout} mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen}>
         <InstallPrompt />
-        {isCaptureOpen && <CaptureFlow onClose={() => setIsCaptureOpen(false)} onCapture={handleCaptureResult} onRepeatMeal={m => setNutritionData(m)} onBodyScanClick={() => {}} />}
+        {isCaptureOpen && <CaptureFlow onClose={() => setIsCaptureOpen(false)} initialMode={captureInitialMode} onCapture={handleCaptureResult} onRepeatMeal={m => setNutritionData(m)} onBodyScanClick={() => {}} />}
         {isAddToPlanModalOpen && <AddToPlanModal plans={mealPlans} onSelectPlan={async (pid, meta) => { if(mealToAdd) await apiService.addMealToPlan(pid, (mealToAdd as any).id, meta); setIsAddToPlanModalOpen(false); }} onClose={() => setIsAddToPlanModalOpen(false)} />}
         <div className="md:hidden fixed bottom-0 left-0 right-0 z-40">
              <Navbar activeView={activeView} onNavigate={handleNavigation} onLogout={logout} onBackToHub={() => setAppMode('hub')} onCaptureClick={() => setIsCaptureOpen(true)} onOpenMenu={() => setMobileMenuOpen(true)} />
