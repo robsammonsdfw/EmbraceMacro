@@ -58,7 +58,7 @@ export const TodayStrip: React.FC<TodayStripProps> = ({ calories, calorieGoal, a
             />
 
             <StatCard 
-                label="Peloities"
+                label="Cardio Score"
                 value={activityScore}
                 subValue="Heart Pts"
                 icon={<HeartIcon />}
