@@ -46,7 +46,13 @@ import {
 export const handler = async (event) => {
     const { GEMINI_API_KEY, JWT_SECRET, FRONTEND_URL } = process.env;
 
-    const allowedOrigins = [FRONTEND_URL, "https://food.embracehealth.ai", "https://main.embracehealth.ai", "http://localhost:5173"].filter(Boolean);
+    const allowedOrigins = [
+        FRONTEND_URL, 
+        "https://food.embracehealth.ai", 
+        "https://main.embracehealth.ai", 
+        "http://localhost:5173"
+    ].filter(Boolean);
+    
     const origin = event.headers?.origin || event.headers?.Origin;
     const headers = {
         "Access-Control-Allow-Origin": allowedOrigins.includes(origin) ? origin : (FRONTEND_URL || '*'),
@@ -60,12 +66,14 @@ export const handler = async (event) => {
 
     if (method === 'OPTIONS') return { statusCode: 200, headers };
 
-    // Robustly strip stage name (e.g. /default/rewards or default/rewards)
+    // Normalize path by stripping AWS stage names
     path = path.replace(/^\/default/, '').replace(/^default/, '');
     if (!path.startsWith('/')) path = '/' + path;
 
+    // Public Routes
     if (path === '/auth/customer-login') return handleCustomerLogin(event, headers, JWT_SECRET);
 
+    // Authentication Guard
     const authHeader = event.headers?.authorization || event.headers?.Authorization;
     const token = authHeader?.split(' ')[1];
     
@@ -81,7 +89,7 @@ export const handler = async (event) => {
     const resource = pathParts[0];
 
     try {
-        // --- Social & Friends Routes ---
+        // --- Social Hub ---
         if (resource === 'social') {
             const sub = pathParts[1];
             if (sub === 'profile') {
@@ -103,7 +111,7 @@ export const handler = async (event) => {
             }
         }
 
-        // --- Core Persistences ---
+        // --- Saved Meals & History ---
         if (resource === 'saved-meals') {
             if (method === 'PATCH' && pathParts[2] === 'visibility') {
                 await updateMealVisibility(event.user.userId, parseInt(pathParts[1]), JSON.parse(event.body).visibility);
@@ -121,6 +129,7 @@ export const handler = async (event) => {
             if (method === 'POST') return { statusCode: 201, headers, body: JSON.stringify(await createMealLogEntry(event.user.userId, JSON.parse(event.body).mealData, JSON.parse(event.body).imageBase64)) };
         }
 
+        // --- Meal Plans ---
         if (resource === 'meal-plans') {
             if (method === 'PATCH' && pathParts[2] === 'visibility') {
                 await updatePlanVisibility(event.user.userId, parseInt(pathParts[1]), JSON.parse(event.body).visibility);
@@ -129,8 +138,13 @@ export const handler = async (event) => {
             if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getMealPlans(event.user.userId)) };
             if (method === 'POST' && pathParts[2] === 'items') return { statusCode: 201, headers, body: JSON.stringify(await addMealToPlanItem(event.user.userId, parseInt(pathParts[1]), JSON.parse(event.body).savedMealId, JSON.parse(event.body).metadata)) };
             if (method === 'POST') return { statusCode: 201, headers, body: JSON.stringify(await createMealPlan(event.user.userId, JSON.parse(event.body).name)) };
+            if (method === 'DELETE' && pathParts[1] === 'items' && pathParts[2]) {
+                await removeMealFromPlanItem(event.user.userId, parseInt(pathParts[2]));
+                return { statusCode: 204, headers };
+            }
         }
 
+        // --- Grocery Lists ---
         if (resource === 'grocery-lists') {
             const listIdStr = pathParts[1];
             const listId = listIdStr && !isNaN(parseInt(listIdStr)) ? parseInt(listIdStr) : null;
@@ -148,8 +162,7 @@ export const handler = async (event) => {
                 if (!listId && !sub) return { statusCode: 201, headers, body: JSON.stringify(await createGroceryList(event.user.userId, JSON.parse(event.body).name)) };
             }
             if (method === 'PATCH' && sub === 'items' && pathParts[3]) {
-                const itemId = parseInt(pathParts[3]);
-                return { statusCode: 200, headers, body: JSON.stringify(await updateGroceryListItem(event.user.userId, itemId, JSON.parse(event.body).checked)) };
+                return { statusCode: 200, headers, body: JSON.stringify(await updateGroceryListItem(event.user.userId, parseInt(pathParts[3]), JSON.parse(event.body).checked)) };
             }
             if (method === 'DELETE') {
                 if (sub === 'items' && pathParts[3]) { await removeGroceryItem(event.user.userId, parseInt(pathParts[3])); return { statusCode: 204, headers }; }
@@ -157,11 +170,9 @@ export const handler = async (event) => {
             }
         }
 
-        if (resource === 'rewards') {
-            return { statusCode: 200, headers, body: JSON.stringify(await getRewardsSummary(event.user.userId)) };
-        }
+        // --- Rewards & AI ---
+        if (resource === 'rewards') return { statusCode: 200, headers, body: JSON.stringify(await getRewardsSummary(event.user.userId)) };
 
-        // --- AI ---
         if (resource === 'analyze-image' || resource === 'analyze-image-recipes') {
             const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
             const { base64Image, mimeType, prompt, schema } = JSON.parse(event.body);
@@ -178,7 +189,7 @@ export const handler = async (event) => {
             return { statusCode: 200, headers, body: res.text };
         }
 
-        // Assessments, Blueprint, Matches
+        // --- Diagnostics & Matches ---
         if (resource === 'assessments') return { statusCode: 200, headers, body: JSON.stringify(await getAssessments()) };
         if (resource === 'partner-blueprint') {
             if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getPartnerBlueprint(event.user.userId)) };
@@ -187,15 +198,17 @@ export const handler = async (event) => {
         if (resource === 'matches') return { statusCode: 200, headers, body: JSON.stringify(await getMatches()) };
 
     } catch (error) {
-        console.error('Handler error:', error);
+        console.error('Handler runtime error:', error);
         return { statusCode: 500, headers, body: JSON.stringify({ error: error.message }) };
     }
-    return { statusCode: 404, headers, body: JSON.stringify({ error: 'Not Found', path, resource }) };
+
+    return { statusCode: 404, headers, body: JSON.stringify({ error: 'Not Found', path, method }) };
 };
 
 async function handleCustomerLogin(event, headers, JWT_SECRET) {
     try {
         const { email } = JSON.parse(event.body);
+        if (!email) throw new Error("Email is required");
         const user = await findOrCreateUserByEmail(email.toLowerCase().trim());
         const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
         return { statusCode: 200, headers, body: JSON.stringify({ token }) };
