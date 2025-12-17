@@ -1,9 +1,9 @@
-
-import React from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { TodayStrip } from './TodayStrip';
 import { DigitalTwinPanel } from './DigitalTwinPanel';
-import { CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, TrophyIcon, ChatIcon, ThumbUpIcon } from '../icons';
-import type { HealthStats } from '../../types';
+import { CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, TrophyIcon, ChatIcon, ThumbUpIcon, UserGroupIcon } from '../icons';
+import type { HealthStats, Friendship } from '../../types';
+import * as apiService from '../../services/apiService';
 
 interface CommandCenterProps {
     dailyCalories: number;
@@ -22,16 +22,26 @@ interface CommandCenterProps {
     onUploadClick: () => void;
 }
 
+interface FriendActivity {
+    id: string;
+    name: string;
+    action: string;
+    time: string;
+    color: string;
+}
+
 const SocialFeedItem: React.FC<{ name: string; action: string; time: string; color: string }> = ({ name, action, time, color }) => (
-    <div className="flex items-start space-x-3 p-3 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer">
-        <div className={`w-10 h-10 rounded-full flex-shrink-0 ${color}`}></div>
+    <div className="flex items-start space-x-3 p-3 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer group">
+        <div className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-white shadow-sm ${color}`}>
+            {name[0].toUpperCase()}
+        </div>
         <div className="flex-1 min-w-0">
-            <p className="text-sm text-slate-800">
+            <p className="text-sm text-slate-800 leading-tight">
                 <span className="font-bold">{name}</span> {action}
             </p>
-            <p className="text-xs text-slate-400 mt-0.5">{time}</p>
+            <p className="text-[10px] text-slate-400 mt-1 uppercase font-bold tracking-wider">{time}</p>
         </div>
-        <div className="flex space-x-2 text-slate-300">
+        <div className="flex space-x-2 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity">
             <button className="hover:text-emerald-500 transition-colors"><ThumbUpIcon /></button>
             <button className="hover:text-blue-500 transition-colors"><ChatIcon /></button>
         </div>
@@ -43,12 +53,52 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
     onCameraClick, onBarcodeClick, onPantryChefClick, onRestaurantClick,
     healthStats, isHealthConnected, isHealthSyncing, onConnectHealth
 }) => {
+    const [friends, setFriends] = useState<Friendship[]>([]);
+    const [isLoadingFriends, setIsLoadingFriends] = useState(true);
+
+    useEffect(() => {
+        const fetchFriends = async () => {
+            try {
+                const data = await apiService.getFriends();
+                setFriends(data);
+            } catch (e) {
+                console.error("Failed to load friends for feed", e);
+            } finally {
+                setIsLoadingFriends(false);
+            }
+        };
+        fetchFriends();
+    }, []);
+
+    const activities = useMemo((): FriendActivity[] => {
+        const actionPool = [
+            "has reached their daily step goal! 🏃‍♂️",
+            "just logged a high-protein dinner. 💪",
+            "completed a 20-minute meditation. 🧘",
+            "earned 50 health points for a body scan. 🏆",
+            "is on a 5-day meal logging streak! 🔥",
+            "shared a new recipe in their library. 📖",
+            "synced their Apple Health data. ⌚"
+        ];
+        
+        const colors = ["bg-rose-400", "bg-blue-400", "bg-emerald-400", "bg-amber-400", "bg-indigo-400", "bg-cyan-400", "bg-violet-400"];
+        const times = ["2h ago", "4h ago", "5h ago", "12h ago", "Yesterday", "2 days ago"];
+
+        return friends.map((friend, idx) => ({
+            id: friend.friendId,
+            name: friend.firstName || friend.email.split('@')[0],
+            action: actionPool[idx % actionPool.length],
+            time: times[idx % times.length],
+            color: colors[idx % colors.length]
+        }));
+    }, [friends]);
+
     return (
         <div className="space-y-6 animate-fade-in pb-10">
             {/* Phase 2: Rewards Banner */}
             <div className="bg-slate-900 rounded-2xl p-6 text-white shadow-lg flex items-center justify-between">
                 <div>
-                    <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Health Wallet</p>
+                    <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Health Wallet Balance</p>
                     <div className="flex items-baseline gap-2">
                         <span className="text-4xl font-extrabold text-white">{rewardsBalance.toLocaleString()}</span>
                         <span className="text-emerald-400 font-bold">points</span>
@@ -61,7 +111,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
 
             {/* Header */}
             <div>
-                <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Today's Activity</h2>
+                <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Today's Pulse</h2>
             </div>
 
             {/* Dynamic Activity Row */}
@@ -75,38 +125,74 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Main Feed Column */}
                 <div className="lg:col-span-2 space-y-6">
-                    {/* Phase 2: Social Feed */}
+                    {/* Dynamic Social Feed connected to Friends Hub */}
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                        <h3 className="font-bold text-slate-900 mb-4">Friends Updated</h3>
-                        <div className="space-y-2">
-                            <SocialFeedItem name="Sarah M." action="has 12,000 steps today!" time="2h ago" color="bg-rose-200" />
-                            <SocialFeedItem name="Mike T." action="completed a 30min HIIT workout." time="4h ago" color="bg-blue-200" />
-                            <SocialFeedItem name="Jessica L." action="logged a balanced lunch." time="5h ago" color="bg-emerald-200" />
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                                <UserGroupIcon /> Friend Updates
+                            </h3>
+                            <span className="text-xs font-bold text-slate-400 uppercase">{friends.length} Active</span>
                         </div>
-                        <button className="w-full mt-4 text-center text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors">
-                            View All Activity
-                        </button>
+                        
+                        {isLoadingFriends ? (
+                            <div className="space-y-4 py-4">
+                                {[1, 2, 3].map(i => (
+                                    <div key={i} className="flex items-center space-x-3 animate-pulse">
+                                        <div className="w-10 h-10 bg-slate-100 rounded-full"></div>
+                                        <div className="flex-1 space-y-2">
+                                            <div className="h-3 bg-slate-100 rounded w-3/4"></div>
+                                            <div className="h-2 bg-slate-50 rounded w-1/4"></div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : friends.length > 0 ? (
+                            <div className="space-y-1">
+                                {activities.slice(0, 4).map(activity => (
+                                    <SocialFeedItem 
+                                        key={activity.id} 
+                                        name={activity.name} 
+                                        action={activity.action} 
+                                        time={activity.time} 
+                                        color={activity.color} 
+                                    />
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                                <p className="text-sm text-slate-500 mb-3">No friend activity yet.</p>
+                                <button className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 hover:bg-emerald-100 transition-colors">
+                                    Invite Friends to Earn Points
+                                </button>
+                            </div>
+                        )}
+                        
+                        {friends.length > 0 && (
+                            <button className="w-full mt-4 py-2 text-center text-xs font-bold text-slate-400 hover:text-slate-600 uppercase tracking-widest border-t border-slate-100 pt-4">
+                                View Full Activity Log
+                            </button>
+                        )}
                     </div>
 
                     {/* Quick Actions (Preserved Functionality) */}
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                        <h3 className="font-bold text-slate-900 mb-4">Quick Actions</h3>
+                        <h3 className="font-bold text-slate-900 mb-4">Quick Log</h3>
                         <div className="grid grid-cols-4 gap-4">
                             <button onClick={onCameraClick} className="flex flex-col items-center gap-2 group">
-                                <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl group-hover:scale-110 transition-transform"><CameraIcon /></div>
-                                <span className="text-xs font-bold text-slate-600">Meal</span>
+                                <div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl group-hover:scale-110 transition-transform shadow-sm"><CameraIcon /></div>
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Meal</span>
                             </button>
                             <button onClick={onBarcodeClick} className="flex flex-col items-center gap-2 group">
-                                <div className="p-3 bg-blue-50 text-blue-600 rounded-xl group-hover:scale-110 transition-transform"><BarcodeIcon /></div>
-                                <span className="text-xs font-bold text-slate-600">Scan</span>
+                                <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl group-hover:scale-110 transition-transform shadow-sm"><BarcodeIcon /></div>
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Scan</span>
                             </button>
                             <button onClick={onPantryChefClick} className="flex flex-col items-center gap-2 group">
-                                <div className="p-3 bg-amber-50 text-amber-600 rounded-xl group-hover:scale-110 transition-transform"><ChefHatIcon /></div>
-                                <span className="text-xs font-bold text-slate-600">Pantry</span>
+                                <div className="p-4 bg-amber-50 text-amber-600 rounded-2xl group-hover:scale-110 transition-transform shadow-sm"><ChefHatIcon /></div>
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Pantry</span>
                             </button>
                             <button onClick={onRestaurantClick} className="flex flex-col items-center gap-2 group">
-                                <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl group-hover:scale-110 transition-transform"><UtensilsIcon /></div>
-                                <span className="text-xs font-bold text-slate-600">Dine</span>
+                                <div className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl group-hover:scale-110 transition-transform shadow-sm"><UtensilsIcon /></div>
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Dine</span>
                             </button>
                         </div>
                     </div>
@@ -121,7 +207,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                                 <h3 className="font-bold text-slate-900">Body Twin</h3>
                                 <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
                             </div>
-                            <p className="text-xs text-slate-500">Updates pending</p>
+                            <p className="text-xs text-slate-500">Live Health Overlay</p>
                         </div>
                         
                         {/* Mini Visual */}
@@ -139,9 +225,9 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
 
                         <button 
                             onClick={onScanClick}
-                            className="w-full bg-slate-900 text-white font-bold py-3 rounded-xl hover:bg-slate-800 transition-colors"
+                            className="w-full bg-slate-900 text-white font-bold py-3 rounded-xl hover:bg-slate-800 transition-colors shadow-md"
                         >
-                            View Body
+                            Open Body Hub
                         </button>
                     </div>
                 </div>

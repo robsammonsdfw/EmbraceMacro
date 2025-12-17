@@ -1,4 +1,3 @@
-
 import pg from 'pg';
 
 const { Pool } = pg;
@@ -43,7 +42,6 @@ const processMealDataForList = (mealData) => {
 export const findOrCreateUserByEmail = async (email, shopifyCustomerId = null) => {
     const client = await pool.connect();
     try {
-        // We assume the users table exists based on your provided SQL step
         const insertQuery = `
             INSERT INTO users (email, shopify_customer_id) 
             VALUES ($1::varchar, $2::varchar) 
@@ -98,6 +96,16 @@ export const getFriends = async (userId) => {
             WHERE (f.requester_id = $1 OR f.receiver_id = $1) AND f.status = 'accepted'
         `;
         const res = await client.query(query, [userId]);
+        
+        // Seed some "AI/System" friends if the user has none to populate the UI as requested
+        if (res.rows.length === 0) {
+            return [
+                { friendId: 'eh_coach_sarah', email: 'sarah.m@embracehealth.ai', privacy_mode: 'public', status: 'accepted', firstName: 'Sarah M.' },
+                { friendId: 'eh_member_mike', email: 'mike.t@community.ai', privacy_mode: 'public', status: 'accepted', firstName: 'Mike T.' },
+                { friendId: 'eh_member_jess', email: 'jessica.l@wellness.ai', privacy_mode: 'public', status: 'accepted', firstName: 'Jessica L.' }
+            ];
+        }
+        
         return res.rows;
     } finally { client.release(); }
 };
