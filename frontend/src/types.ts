@@ -1,8 +1,4 @@
 
-
-
-
-
 export interface Ingredient {
   name: string;
   weightGrams: number;
@@ -15,6 +11,8 @@ export interface Ingredient {
   sodium?: number;
   imageUrl?: string;
 }
+
+export type VisibilityMode = 'private' | 'friends' | 'public';
 
 export interface NutritionInfo {
   mealName: string;
@@ -33,6 +31,7 @@ export interface NutritionInfo {
   ecoScore?: string;
   allergens?: string[];
   source?: 'user' | 'coach' | 'community' | 'medical-ai'; 
+  visibility?: VisibilityMode;
 }
 
 export interface SavedMeal extends NutritionInfo {
@@ -55,13 +54,14 @@ export interface MealPlanItemMetadata {
 export interface MealPlanItem {
   id: number; 
   meal: SavedMeal;
-  metadata?: MealPlanItemMetadata; // Added metadata
+  metadata?: MealPlanItemMetadata;
 }
 
 export interface MealPlan {
   id: number;
   name: string;
   items: MealPlanItem[];
+  visibility?: VisibilityMode;
 }
 
 export interface Recipe {
@@ -92,6 +92,7 @@ export interface GroceryList {
     is_active: boolean;
     created_at: string;
     items?: GroceryItem[]; 
+    visibility?: VisibilityMode;
 }
 
 export interface RewardsLedgerEntry {
@@ -111,28 +112,19 @@ export interface RewardsSummary {
   history: RewardsLedgerEntry[];
 }
 
-export interface BodyScan {
-    id: number;
-    scan_data: any;
-    created_at: string;
+export interface UserProfile {
+    userId: string;
+    email: string;
+    firstName?: string;
+    privacyMode: 'public' | 'private';
+    bio?: string;
 }
 
-export interface SleepRecord {
-    id: number;
-    durationMinutes: number;
-    qualityScore?: number;
-    startTime: string;
-    endTime: string;
-    createdAt: string;
-}
-
-export interface UserEntitlement {
-    id: number;
-    source: string;
-    externalProductId?: string;
-    status: string;
-    startsAt: string;
-    expiresAt?: string;
+export interface Friendship {
+    friendId: string;
+    email: string;
+    firstName?: string;
+    status: 'pending' | 'accepted';
 }
 
 export interface OrderItem {
@@ -146,7 +138,7 @@ export interface Order {
   orderNumber: number;
   date: string;
   total: string;
-  status: string; // Fulfillment status e.g. 'FULFILLED', 'UNFULFILLED'
+  status: string;
   paymentStatus: string;
   items: OrderItem[];
 }
@@ -154,13 +146,12 @@ export interface Order {
 export interface LabResult {
   id: string;
   name: string;
-  result?: string; // e.g. "Normal", "High" (Placeholder)
+  result?: string;
   date: string;
-  status: string; // e.g. "Ordered", "Processing", "Results Ready"
+  status: string;
   orderNumber: number;
 }
 
-// --- Sprint 7.1: Assessment Engine ---
 export interface Question {
     id: string;
     text: string;
@@ -179,14 +170,13 @@ export interface Assessment {
 
 export interface UserTrait {
     trait: string;
-    value: number; // 0.0 to 1.0
+    value: number;
     updatedAt: string;
 }
 
-// --- Sprint 7.2: Matching & Blueprint ---
 export interface BlueprintPreference {
-    target: number; // 0.0 to 1.0 (Desired trait value)
-    importance: number; // 0.0 to 1.0 (Weight)
+    target: number;
+    importance: number;
     isDealbreaker: boolean;
 }
 
@@ -196,8 +186,8 @@ export interface PartnerBlueprint {
 
 export interface MatchProfile {
     userId: number;
-    email: string; // Or pseudonym
-    compatibilityScore: number; // 0-100%
+    email: string;
+    compatibilityScore: number;
     traits: Record<string, number>;
 }
 
@@ -206,7 +196,6 @@ export interface GeneratedMedicalMeal extends NutritionInfo {
     suggestedSlot: string;
 }
 
-// --- Sprint 7.3: Medical Kit Intelligence ---
 export interface MedicalKit {
     id: string;
     name: string;
@@ -223,7 +212,7 @@ export interface DietaryProfile {
 
 export interface KitRecommendation {
     kitId: string;
-    optionIndex: number; // 1, 2, 3, 4
+    optionIndex: number;
     profile: DietaryProfile;
-    label?: string; // "Primary Recommendation", "Alternative", etc.
+    label?: string;
 }
