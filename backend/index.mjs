@@ -60,10 +60,9 @@ export const handler = async (event) => {
 
     if (method === 'OPTIONS') return { statusCode: 200, headers };
 
-    // Strip potential stage name if present (e.g., /default/rewards -> /rewards)
-    if (path.startsWith('/default')) {
-        path = path.replace('/default', '');
-    }
+    // Robustly strip stage name (e.g. /default/rewards or default/rewards)
+    path = path.replace(/^\/default/, '').replace(/^default/, '');
+    if (!path.startsWith('/')) path = '/' + path;
 
     if (path === '/auth/customer-login') return handleCustomerLogin(event, headers, JWT_SECRET);
 
