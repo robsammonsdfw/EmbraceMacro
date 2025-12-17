@@ -2,7 +2,8 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import * as apiService from './services/apiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
-import type { NutritionInfo, SavedMeal, Recipe, MealLogEntry, MealPlan } from './types';
+import * as healthService from './services/healthService';
+import type { NutritionInfo, SavedMeal, Recipe, MealLogEntry, MealPlan, HealthStats } from './types';
 import { ImageUploader } from './components/ImageUploader';
 import { NutritionCard } from './components/NutritionCard';
 import { Loader } from './components/Loader';
@@ -61,6 +62,11 @@ const App: React.FC = () => {
   const [isSuggesting, setIsSuggesting] = useState<boolean>(false);
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
 
+  // Health Stats State
+  const [healthStats, setHealthStats] = useState<HealthStats>({ steps: 0, activeCalories: 0, cardioScore: 0 });
+  const [isHealthConnected, setIsHealthConnected] = useState(false);
+  const [isHealthSyncing, setIsHealthSyncing] = useState(false);
+
   useEffect(() => {
     if (isAuthenticated && appMode === 'meals') {
       const loadInitialData = async () => {
@@ -82,8 +88,44 @@ const App: React.FC = () => {
         }
       };
       loadInitialData();
+
+      // Check if health was connected previously in this session/device
+      const savedHealth = localStorage.getItem('health_connected');
+      if (savedHealth === 'true') {
+          setIsHealthConnected(true);
+          handleHealthSync();
+      }
     }
   }, [isAuthenticated, appMode, activePlanId]);
+
+  const handleHealthSync = async () => {
+      setIsHealthSyncing(true);
+      try {
+          const data = await healthService.syncHealthData();
+          setHealthStats(data);
+      } catch (e) {
+          console.error("Health sync failed", e);
+      } finally {
+          setIsHealthSyncing(false);
+      }
+  };
+
+  const handleConnectHealth = async () => {
+      setIsHealthSyncing(true);
+      const platform = healthService.getPlatform();
+      try {
+          const success = await healthService.connectHealthProvider(platform);
+          if (success) {
+              setIsHealthConnected(true);
+              localStorage.setItem('health_connected', 'true');
+              await handleHealthSync();
+          }
+      } catch (e) {
+          setError("Could not connect to health provider.");
+      } finally {
+          setIsHealthSyncing(false);
+      }
+  };
   
   const resetAnalysisState = () => { 
     setImage(null); 
@@ -171,7 +213,24 @@ const App: React.FC = () => {
           );
       }
       switch(activeView) {
-        case 'home': return <CommandCenter dailyCalories={0} dailyProtein={0} rewardsBalance={0} userName={user?.firstName || 'User'} onScanClick={() => {}} onCameraClick={() => { setCaptureInitialMode('meal'); setIsCaptureOpen(true); }} onBarcodeClick={() => { setCaptureInitialMode('barcode'); setIsCaptureOpen(true); }} onPantryChefClick={() => { setCaptureInitialMode('pantry'); setIsCaptureOpen(true); }} onRestaurantClick={() => { setCaptureInitialMode('restaurant'); setIsCaptureOpen(true); }} onUploadClick={() => setIsCaptureOpen(true)} />;
+        case 'home': return (
+            <CommandCenter 
+                dailyCalories={mealLog.reduce((acc, curr) => acc + curr.totalCalories, 0)} 
+                dailyProtein={0} 
+                rewardsBalance={2000} 
+                userName={user?.firstName || 'User'} 
+                healthStats={healthStats}
+                isHealthConnected={isHealthConnected}
+                isHealthSyncing={isHealthSyncing}
+                onConnectHealth={handleConnectHealth}
+                onScanClick={() => {}} 
+                onCameraClick={() => { setCaptureInitialMode('meal'); setIsCaptureOpen(true); }} 
+                onBarcodeClick={() => { setCaptureInitialMode('barcode'); setIsCaptureOpen(true); }} 
+                onPantryChefClick={() => { setCaptureInitialMode('pantry'); setIsCaptureOpen(true); }} 
+                onRestaurantClick={() => { setCaptureInitialMode('restaurant'); setIsCaptureOpen(true); }} 
+                onUploadClick={() => setIsCaptureOpen(true)} 
+            />
+        );
         case 'social': return <SocialManager />;
         case 'plan': return <MealPlanManager plans={mealPlans} activePlanId={activePlanId} savedMeals={savedMeals} onPlanChange={setActivePlanId} onCreatePlan={async (n) => setMealPlans([...mealPlans, await apiService.createMealPlan(n)])} onAddToPlan={m => {setMealToAdd(m); setIsAddToPlanModalOpen(true);}} onRemoveFromPlan={id => apiService.removeMealFromPlanItem(id)} onQuickAdd={(p, m, d, s) => apiService.addMealToPlan(p, m.id, {day: d, slot: s})} />;
         case 'meals': return <MealLibrary meals={savedMeals} onAdd={m => {setMealToAdd(m); setIsAddToPlanModalOpen(true);}} onDelete={id => apiService.deleteMeal(id)} />;

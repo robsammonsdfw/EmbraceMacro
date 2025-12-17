@@ -3,12 +3,17 @@ import React from 'react';
 import { TodayStrip } from './TodayStrip';
 import { DigitalTwinPanel } from './DigitalTwinPanel';
 import { CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, TrophyIcon, ChatIcon, ThumbUpIcon } from '../icons';
+import type { HealthStats } from '../../types';
 
 interface CommandCenterProps {
     dailyCalories: number;
     dailyProtein: number;
     rewardsBalance: number;
     userName: string;
+    healthStats: HealthStats;
+    isHealthConnected: boolean;
+    isHealthSyncing: boolean;
+    onConnectHealth: () => void;
     onScanClick: () => void;
     onCameraClick: () => void;
     onBarcodeClick: () => void;
@@ -35,7 +40,8 @@ const SocialFeedItem: React.FC<{ name: string; action: string; time: string; col
 
 export const CommandCenter: React.FC<CommandCenterProps> = ({ 
     dailyCalories, dailyProtein, rewardsBalance, onScanClick,
-    onCameraClick, onBarcodeClick, onPantryChefClick, onRestaurantClick
+    onCameraClick, onBarcodeClick, onPantryChefClick, onRestaurantClick,
+    healthStats, isHealthConnected, isHealthSyncing, onConnectHealth
 }) => {
     return (
         <div className="space-y-6 animate-fade-in pb-10">
@@ -44,7 +50,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                 <div>
                     <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Health Wallet</p>
                     <div className="flex items-baseline gap-2">
-                        <span className="text-4xl font-extrabold text-white">2,000</span>
+                        <span className="text-4xl font-extrabold text-white">{rewardsBalance.toLocaleString()}</span>
                         <span className="text-emerald-400 font-bold">points</span>
                     </div>
                 </div>
@@ -58,12 +64,12 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                 <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Today's Activity</h2>
             </div>
 
-            {/* Phase 2: Activity Row (3 Columns) */}
+            {/* Dynamic Activity Row */}
             <TodayStrip 
-                calories={Math.round(dailyCalories)}
-                calorieGoal={2000}
-                activityScore={75}
-                rewardsBalance={rewardsBalance}
+                stats={healthStats}
+                isConnected={isHealthConnected}
+                onConnect={onConnectHealth}
+                isSyncing={isHealthSyncing}
             />
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -125,7 +131,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                                 calorieGoal={2000}
                                 protein={dailyProtein}
                                 proteinGoal={150}
-                                activityScore={75}
+                                activityScore={healthStats.cardioScore || 0}
                                 onScanClick={onScanClick}
                                 miniMode={true}
                             />

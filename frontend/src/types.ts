@@ -43,6 +43,13 @@ export interface MealLogEntry extends NutritionInfo {
   createdAt: string;
 }
 
+export interface HealthStats {
+  steps: number;
+  activeCalories: number;
+  cardioScore: number;
+  lastSynced?: string;
+}
+
 export interface MealPlanItemMetadata {
   day?: string;      // e.g., "Monday", "Tuesday"
   slot?: string;     // e.g., "Breakfast", "Lunch", "Dinner", "Snack"
