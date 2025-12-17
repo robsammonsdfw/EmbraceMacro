@@ -78,11 +78,17 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
             "earned 50 health points for a body scan. 🏆",
             "is on a 5-day meal logging streak! 🔥",
             "shared a new recipe in their library. 📖",
-            "synced their Apple Health data. ⌚"
+            "synced their Apple Health data. ⌚",
+            "joined the 10k steps challenge. 🏁",
+            "logged a new personal best for protein intake. 🍗",
+            "reviewed a local healthy restaurant. 🥗"
         ];
         
-        const colors = ["bg-rose-400", "bg-blue-400", "bg-emerald-400", "bg-amber-400", "bg-indigo-400", "bg-cyan-400", "bg-violet-400"];
-        const times = ["2h ago", "4h ago", "5h ago", "12h ago", "Yesterday", "2 days ago"];
+        const colors = [
+            "bg-rose-400", "bg-blue-400", "bg-emerald-400", "bg-amber-400", 
+            "bg-indigo-400", "bg-cyan-400", "bg-violet-400", "bg-orange-400"
+        ];
+        const times = ["2h ago", "4h ago", "5h ago", "12h ago", "Yesterday", "2 days ago", "3 days ago"];
 
         return friends.map((friend, idx) => ({
             id: friend.friendId,
@@ -148,7 +154,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                             </div>
                         ) : friends.length > 0 ? (
                             <div className="space-y-1">
-                                {activities.slice(0, 4).map(activity => (
+                                {activities.slice(0, 5).map(activity => (
                                     <SocialFeedItem 
                                         key={activity.id} 
                                         name={activity.name} 

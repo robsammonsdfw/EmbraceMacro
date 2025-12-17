@@ -97,12 +97,15 @@ export const getFriends = async (userId) => {
         `;
         const res = await client.query(query, [userId]);
         
-        // Seed some "AI/System" friends if the user has none to populate the UI as requested
+        // Seed a rich set of "AI/System" friends if the user has none to populate the UI as requested
         if (res.rows.length === 0) {
             return [
                 { friendId: 'eh_coach_sarah', email: 'sarah.m@embracehealth.ai', privacy_mode: 'public', status: 'accepted', firstName: 'Sarah M.' },
                 { friendId: 'eh_member_mike', email: 'mike.t@community.ai', privacy_mode: 'public', status: 'accepted', firstName: 'Mike T.' },
-                { friendId: 'eh_member_jess', email: 'jessica.l@wellness.ai', privacy_mode: 'public', status: 'accepted', firstName: 'Jessica L.' }
+                { friendId: 'eh_member_jess', email: 'jessica.l@wellness.ai', privacy_mode: 'public', status: 'accepted', firstName: 'Jessica L.' },
+                { friendId: 'eh_coach_david', email: 'david.k@performance.ai', privacy_mode: 'public', status: 'accepted', firstName: 'David K.' },
+                { friendId: 'eh_member_elena', email: 'elena.v@longevity.ai', privacy_mode: 'public', status: 'accepted', firstName: 'Elena V.' },
+                { friendId: 'eh_member_chris', email: 'chris.p@transformation.ai', privacy_mode: 'public', status: 'accepted', firstName: 'Chris P.' }
             ];
         }
         
@@ -140,30 +143,23 @@ export const respondToFriendRequest = async (userId, requestId, status) => {
     } finally { client.release(); }
 };
 
-// --- Visibility Helper persistence ---
-
-export const updateMealVisibility = async (userId, mealId, visibility) => {
-    const client = await pool.connect();
-    try { await client.query(`UPDATE saved_meals SET visibility = $1 WHERE id = $2 AND user_id = $3`, [visibility, mealId, userId]); } finally { client.release(); }
-};
-
-export const updatePlanVisibility = async (userId, planId, visibility) => {
-    const client = await pool.connect();
-    try { await client.query(`UPDATE meal_plans SET visibility = $1 WHERE id = $2 AND user_id = $3`, [visibility, planId, userId]); } finally { client.release(); }
-};
-
-export const updateGroceryListVisibility = async (userId, listId, visibility) => {
-    const client = await pool.connect();
-    try { await client.query(`UPDATE grocery_lists SET visibility = $1 WHERE id = $2 AND user_id = $3`, [visibility, listId, userId]); } finally { client.release(); }
-};
-
 // --- Standard Persistences ---
 
 export const getSavedMeals = async (userId) => {
     const client = await pool.connect();
     try {
         const res = await client.query(`SELECT id, meal_data - 'imageBase64' as meal_data, visibility, (meal_data ? 'imageBase64') as has_image FROM saved_meals WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
-        return res.rows.map(row => ({ id: row.id, visibility: row.visibility, ...processMealDataForList(row.meal_data || {}), hasImage: row.has_image }));
+        
+        const meals = res.rows.map(row => ({ id: row.id, visibility: row.visibility, ...processMealDataForList(row.meal_data || {}), hasImage: row.has_image }));
+        
+        if (meals.length === 0) {
+            return [
+                { id: -1, mealName: 'Sample: Avocado Toast', totalCalories: 380, totalProtein: 12, totalCarbs: 45, totalFat: 18, ingredients: [], hasImage: false, visibility: 'public' },
+                { id: -2, mealName: 'Sample: Grilled Salmon', totalCalories: 520, totalProtein: 42, totalCarbs: 5, totalFat: 32, ingredients: [], hasImage: false, visibility: 'public' }
+            ];
+        }
+        
+        return meals;
     } finally { client.release(); }
 };
 
@@ -246,6 +242,79 @@ export const removeMealFromPlanItem = async (userId, planItemId) => {
     try { await client.query(`DELETE FROM meal_plan_items WHERE id = $1 AND user_id = $2`, [planItemId, userId]); } finally { client.release(); }
 };
 
+export const getMealLogEntries = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, meal_data, created_at, (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image FROM meal_log_entries WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
+        
+        if (res.rows.length === 0) {
+            const today = new Date().toISOString();
+            return [
+                { id: -1, mealName: 'Starter: Berry Smoothie', totalCalories: 280, totalProtein: 22, totalCarbs: 35, totalFat: 4, hasImage: false, createdAt: today, ingredients: [] },
+                { id: -2, mealName: 'Starter: Quinoa Bowl', totalCalories: 450, totalProtein: 18, totalCarbs: 60, totalFat: 12, hasImage: false, createdAt: today, ingredients: [] }
+            ];
+        }
+        
+        return res.rows.map(row => ({ id: row.id, ...(row.meal_data || {}), hasImage: row.has_image, imageUrl: null, createdAt: row.created_at }));
+    } finally { client.release(); }
+};
+
+export const getMealLogEntryById = async (userId, logId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, meal_data, image_base64, created_at FROM meal_log_entries WHERE id = $1 AND user_id = $2`, [logId, userId]);
+        if (res.rows.length === 0) return null;
+        const row = res.rows[0];
+        return { id: row.id, ...(row.meal_data || {}), imageUrl: row.image_base64 ? `data:image/jpeg;base64,${row.image_base64}` : null, hasImage: !!row.image_base64, createdAt: row.created_at };
+    } finally { client.release(); }
+};
+
+export const createMealLogEntry = async (userId, mealData, imageBase64) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`INSERT INTO meal_log_entries (user_id, meal_data, image_base64) VALUES ($1, $2, $3) RETURNING id, meal_data, image_base64, created_at`, [userId, mealData, imageBase64]);
+        await awardPoints(userId, 'meal_photo.logged', 50, { meal_log_id: res.rows[0].id });
+        const row = res.rows[0];
+        return { id: row.id, ...(row.meal_data || {}), imageUrl: row.image_base64 ? `data:image/jpeg;base64,${row.image_base64}` : null, hasImage: !!row.image_base64, createdAt: row.created_at };
+    } finally { client.release(); }
+};
+
+export const awardPoints = async (userId, eventType, points, metadata = {}) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        await client.query(`INSERT INTO rewards_ledger (user_id, event_type, points_delta, metadata) VALUES ($1, $2, $3, $4)`, [userId, eventType, points, metadata]);
+        await client.query(`UPDATE rewards_balances SET points_total = points_total + $2, points_available = points_available + $2, updated_at = CURRENT_TIMESTAMP WHERE user_id = $1`, [userId, points]);
+        await client.query('COMMIT');
+    } catch (e) { await client.query('ROLLBACK'); } finally { client.release(); }
+};
+
+export const getRewardsSummary = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const bal = await client.query(`SELECT points_total, points_available, tier FROM rewards_balances WHERE user_id = $1`, [userId]);
+        const hist = await client.query(`SELECT entry_id, event_type, points_delta, created_at, metadata FROM rewards_ledger WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`, [userId]);
+        return { ...(bal.rows[0] || { points_total: 0, points_available: 0, tier: 'Bronze' }), history: hist.rows };
+    } finally { client.release(); }
+};
+
+// --- Visibility Helper persistence ---
+
+export const updateMealVisibility = async (userId, mealId, visibility) => {
+    const client = await pool.connect();
+    try { await client.query(`UPDATE saved_meals SET visibility = $1 WHERE id = $2 AND user_id = $3`, [visibility, mealId, userId]); } finally { client.release(); }
+};
+
+export const updatePlanVisibility = async (userId, planId, visibility) => {
+    const client = await pool.connect();
+    try { await client.query(`UPDATE meal_plans SET visibility = $1 WHERE id = $2 AND user_id = $3`, [visibility, planId, userId]); } finally { client.release(); }
+};
+
+export const updateGroceryListVisibility = async (userId, listId, visibility) => {
+    const client = await pool.connect();
+    try { await client.query(`UPDATE grocery_lists SET visibility = $1 WHERE id = $2 AND user_id = $3`, [visibility, listId, userId]); } finally { client.release(); }
+};
+
 export const getGroceryLists = async (userId) => {
     const client = await pool.connect();
     try { const res = await client.query(`SELECT id, name, is_active, visibility, created_at FROM grocery_lists WHERE user_id = $1 ORDER BY created_at DESC`, [userId]); return res.rows; } finally { client.release(); }
@@ -306,53 +375,6 @@ export const importIngredientsFromPlans = async (userId, listId, planIds) => {
         mealRes.rows.forEach(r => r.meal_data?.ingredients?.forEach(i => ingredients.add(i.name)));
         for (const name of ingredients) await client.query(`INSERT INTO grocery_list_items (list_id, name) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [listId, name]);
         return await getGroceryListItems(userId, listId);
-    } finally { client.release(); }
-};
-
-export const getMealLogEntries = async (userId) => {
-    const client = await pool.connect();
-    try {
-        const res = await client.query(`SELECT id, meal_data, created_at, (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image FROM meal_log_entries WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
-        return res.rows.map(row => ({ id: row.id, ...(row.meal_data || {}), hasImage: row.has_image, imageUrl: null, createdAt: row.created_at }));
-    } finally { client.release(); }
-};
-
-export const getMealLogEntryById = async (userId, logId) => {
-    const client = await pool.connect();
-    try {
-        const res = await client.query(`SELECT id, meal_data, image_base64, created_at FROM meal_log_entries WHERE id = $1 AND user_id = $2`, [logId, userId]);
-        if (res.rows.length === 0) return null;
-        const row = res.rows[0];
-        return { id: row.id, ...(row.meal_data || {}), imageUrl: row.image_base64 ? `data:image/jpeg;base64,${row.image_base64}` : null, hasImage: !!row.image_base64, createdAt: row.created_at };
-    } finally { client.release(); }
-};
-
-export const createMealLogEntry = async (userId, mealData, imageBase64) => {
-    const client = await pool.connect();
-    try {
-        const res = await client.query(`INSERT INTO meal_log_entries (user_id, meal_data, image_base64) VALUES ($1, $2, $3) RETURNING id, meal_data, image_base64, created_at`, [userId, mealData, imageBase64]);
-        await awardPoints(userId, 'meal_photo.logged', 50, { meal_log_id: res.rows[0].id });
-        const row = res.rows[0];
-        return { id: row.id, ...(row.meal_data || {}), imageUrl: row.image_base64 ? `data:image/jpeg;base64,${row.image_base64}` : null, hasImage: !!row.image_base64, createdAt: row.created_at };
-    } finally { client.release(); }
-};
-
-export const awardPoints = async (userId, eventType, points, metadata = {}) => {
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-        await client.query(`INSERT INTO rewards_ledger (user_id, event_type, points_delta, metadata) VALUES ($1, $2, $3, $4)`, [userId, eventType, points, metadata]);
-        await client.query(`UPDATE rewards_balances SET points_total = points_total + $2, points_available = points_available + $2, updated_at = CURRENT_TIMESTAMP WHERE user_id = $1`, [userId, points]);
-        await client.query('COMMIT');
-    } catch (e) { await client.query('ROLLBACK'); } finally { client.release(); }
-};
-
-export const getRewardsSummary = async (userId) => {
-    const client = await pool.connect();
-    try {
-        const bal = await client.query(`SELECT points_total, points_available, tier FROM rewards_balances WHERE user_id = $1`, [userId]);
-        const hist = await client.query(`SELECT entry_id, event_type, points_delta, created_at, metadata FROM rewards_ledger WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`, [userId]);
-        return { ...(bal.rows[0] || { points_total: 0, points_available: 0, tier: 'Bronze' }), history: hist.rows };
     } finally { client.release(); }
 };
 
