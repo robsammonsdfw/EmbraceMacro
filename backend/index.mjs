@@ -1,7 +1,6 @@
 
 import { GoogleGenAI } from "@google/genai";
 import jwt from 'jsonwebtoken';
-import https from 'https';
 import {
     findOrCreateUserByEmail,
     getSavedMeals,
@@ -43,30 +42,41 @@ import {
     importIngredientsFromPlans,
     clearGroceryListItems
 } from './services/databaseService.mjs';
-import { Buffer } from 'buffer';
 
 export const handler = async (event) => {
-    const { GEMINI_API_KEY, JWT_SECRET, FRONTEND_URL, SHOPIFY_STOREFRONT_TOKEN, SHOPIFY_STORE_DOMAIN } = process.env;
+    const { GEMINI_API_KEY, JWT_SECRET, FRONTEND_URL } = process.env;
 
-    const allowedOrigins = [FRONTEND_URL, "https://food.embracehealth.ai", "http://localhost:5173"].filter(Boolean);
+    const allowedOrigins = [FRONTEND_URL, "https://food.embracehealth.ai", "https://main.embracehealth.ai", "http://localhost:5173"].filter(Boolean);
     const origin = event.headers?.origin || event.headers?.Origin;
     const headers = {
         "Access-Control-Allow-Origin": allowedOrigins.includes(origin) ? origin : (FRONTEND_URL || '*'),
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        "Access-Control-Allow-Methods": "OPTIONS,POST,GET,DELETE,PUT,PATCH"
+        "Access-Control-Allow-Methods": "OPTIONS,POST,GET,DELETE,PUT,PATCH",
+        "Content-Type": "application/json"
     };
 
-    let path = event.requestContext?.http?.path || event.path;
+    let path = event.requestContext?.http?.path || event.path || "";
     let method = event.requestContext?.http?.method || event.httpMethod;
 
     if (method === 'OPTIONS') return { statusCode: 200, headers };
 
+    // Strip potential stage name if present (e.g., /default/rewards -> /rewards)
+    if (path.startsWith('/default')) {
+        path = path.replace('/default', '');
+    }
+
     if (path === '/auth/customer-login') return handleCustomerLogin(event, headers, JWT_SECRET);
 
-    const token = (event.headers?.authorization || event.headers?.Authorization)?.split(' ')[1];
+    const authHeader = event.headers?.authorization || event.headers?.Authorization;
+    const token = authHeader?.split(' ')[1];
+    
     if (!token) return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized' }) };
 
-    try { event.user = jwt.verify(token, JWT_SECRET); } catch (err) { return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid token' }) }; }
+    try { 
+        event.user = jwt.verify(token, JWT_SECRET); 
+    } catch (err) { 
+        return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid token' }) }; 
+    }
 
     const pathParts = path.split('/').filter(Boolean);
     const resource = pathParts[0];
@@ -94,20 +104,12 @@ export const handler = async (event) => {
             }
         }
 
-        // --- Visibility Patches ---
-        if (method === 'PATCH') {
-            if (resource === 'saved-meals' && pathParts[2] === 'visibility') {
+        // --- Core Persistences ---
+        if (resource === 'saved-meals') {
+            if (method === 'PATCH' && pathParts[2] === 'visibility') {
                 await updateMealVisibility(event.user.userId, parseInt(pathParts[1]), JSON.parse(event.body).visibility);
                 return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
             }
-            if (resource === 'meal-plans' && pathParts[2] === 'visibility') {
-                await updatePlanVisibility(event.user.userId, parseInt(pathParts[1]), JSON.parse(event.body).visibility);
-                return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
-            }
-        }
-
-        // --- Core Persistences ---
-        if (resource === 'saved-meals') {
             if (method === 'GET' && pathParts[1]) return { statusCode: 200, headers, body: JSON.stringify(await getSavedMealById(event.user.userId, parseInt(pathParts[1]))) };
             if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getSavedMeals(event.user.userId)) };
             if (method === 'POST') return { statusCode: 201, headers, body: JSON.stringify(await saveMeal(event.user.userId, JSON.parse(event.body))) };
@@ -121,13 +123,15 @@ export const handler = async (event) => {
         }
 
         if (resource === 'meal-plans') {
+            if (method === 'PATCH' && pathParts[2] === 'visibility') {
+                await updatePlanVisibility(event.user.userId, parseInt(pathParts[1]), JSON.parse(event.body).visibility);
+                return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
+            }
             if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getMealPlans(event.user.userId)) };
             if (method === 'POST' && pathParts[2] === 'items') return { statusCode: 201, headers, body: JSON.stringify(await addMealToPlanItem(event.user.userId, parseInt(pathParts[1]), JSON.parse(event.body).savedMealId, JSON.parse(event.body).metadata)) };
             if (method === 'POST') return { statusCode: 201, headers, body: JSON.stringify(await createMealPlan(event.user.userId, JSON.parse(event.body).name)) };
         }
 
-        // --- Grocery Lists ---
-        // FIX: Added missing grocery-lists route handling for the persistence layer
         if (resource === 'grocery-lists') {
             const listIdStr = pathParts[1];
             const listId = listIdStr && !isNaN(parseInt(listIdStr)) ? parseInt(listIdStr) : null;
@@ -144,45 +148,59 @@ export const handler = async (event) => {
                 if (listId && sub === 'import') return { statusCode: 200, headers, body: JSON.stringify(await importIngredientsFromPlans(event.user.userId, listId, JSON.parse(event.body).planIds)) };
                 if (!listId && !sub) return { statusCode: 201, headers, body: JSON.stringify(await createGroceryList(event.user.userId, JSON.parse(event.body).name)) };
             }
-            if (method === 'PATCH' && sub === 'items' && pathParts[2]) {
-                const itemId = parseInt(pathParts[2]);
+            if (method === 'PATCH' && sub === 'items' && pathParts[3]) {
+                const itemId = parseInt(pathParts[3]);
                 return { statusCode: 200, headers, body: JSON.stringify(await updateGroceryListItem(event.user.userId, itemId, JSON.parse(event.body).checked)) };
             }
             if (method === 'DELETE') {
-                if (sub === 'items' && pathParts[2]) { await removeGroceryItem(event.user.userId, parseInt(pathParts[2])); return { statusCode: 204, headers }; }
+                if (sub === 'items' && pathParts[3]) { await removeGroceryItem(event.user.userId, parseInt(pathParts[3])); return { statusCode: 204, headers }; }
                 if (listId && !sub) { await deleteGroceryList(event.user.userId, listId); return { statusCode: 204, headers }; }
             }
         }
 
-        if (resource === 'rewards') return { statusCode: 200, headers, body: JSON.stringify(await getRewardsSummary(event.user.userId)) };
+        if (resource === 'rewards') {
+            return { statusCode: 200, headers, body: JSON.stringify(await getRewardsSummary(event.user.userId)) };
+        }
 
         // --- AI ---
-        if (resource === 'analyze-image') {
+        if (resource === 'analyze-image' || resource === 'analyze-image-recipes') {
             const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
             const { base64Image, mimeType, prompt, schema } = JSON.parse(event.body);
-            // FIX: Use gemini-3-flash-preview for general text and analysis tasks as per instructions
             const res = await ai.models.generateContent({ 
                 model: 'gemini-3-flash-preview', 
-                contents: { parts: [{ inlineData: { data: base64Image, mimeType } }, { text: prompt }] }, 
+                contents: { 
+                    parts: [
+                        ...(base64Image ? [{ inlineData: { data: base64Image, mimeType } }] : []),
+                        { text: prompt }
+                    ] 
+                }, 
                 config: { responseMimeType: 'application/json', responseSchema: schema } 
             });
             return { statusCode: 200, headers, body: res.text };
         }
 
+        // Assessments, Blueprint, Matches
+        if (resource === 'assessments') return { statusCode: 200, headers, body: JSON.stringify(await getAssessments()) };
+        if (resource === 'partner-blueprint') {
+            if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getPartnerBlueprint(event.user.userId)) };
+            if (method === 'POST') { await savePartnerBlueprint(event.user.userId, JSON.parse(event.body)); return { statusCode: 200, headers, body: JSON.stringify({ success: true }) }; }
+        }
+        if (resource === 'matches') return { statusCode: 200, headers, body: JSON.stringify(await getMatches()) };
+
     } catch (error) {
-        console.error(error);
+        console.error('Handler error:', error);
         return { statusCode: 500, headers, body: JSON.stringify({ error: error.message }) };
     }
-    return { statusCode: 404, headers, body: JSON.stringify({ error: 'Not Found' }) };
+    return { statusCode: 404, headers, body: JSON.stringify({ error: 'Not Found', path, resource }) };
 };
 
 async function handleCustomerLogin(event, headers, JWT_SECRET) {
     try {
-        const { email, password } = JSON.parse(event.body);
+        const { email } = JSON.parse(event.body);
         const user = await findOrCreateUserByEmail(email.toLowerCase().trim());
         const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
         return { statusCode: 200, headers, body: JSON.stringify({ token }) };
     } catch (e) {
-        return { statusCode: 500, headers, body: JSON.stringify({ error: 'Auth failed' }) };
+        return { statusCode: 500, headers, body: JSON.stringify({ error: 'Auth failed: ' + e.message }) };
     }
 }

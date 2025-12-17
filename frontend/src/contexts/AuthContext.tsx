@@ -8,7 +8,6 @@ interface User {
   [key: string]: any;
 }
 
-// This is the shape of the data we'll store in our context
 interface AuthContextType {
   token: string | null;
   isAuthenticated: boolean;
@@ -18,7 +17,6 @@ interface AuthContextType {
   isLoading: boolean;
 }
 
-// Initialize the context with `undefined` and a specific generic type.
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const AUTH_TOKEN_KEY = 'embracehealth-api-token';
@@ -40,47 +38,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // On initial load, check for a token in localStorage and from URL parameters
   useEffect(() => {
-    // Check for a token returned in the URL from the Shopify callback
     const urlParams = new URLSearchParams(window.location.search);
     const tokenFromUrl = urlParams.get('token');
 
     if (tokenFromUrl) {
       setToken(tokenFromUrl);
-      try {
-        localStorage.setItem(AUTH_TOKEN_KEY, tokenFromUrl);
-      } catch (e) {
-        console.error("Failed to save token to localStorage:", e);
-      }
-      // Clean the URL
+      localStorage.setItem(AUTH_TOKEN_KEY, tokenFromUrl);
       window.history.replaceState({}, document.title, window.location.pathname);
     } else {
-      // Otherwise, check localStorage for an existing session
       const storedToken = localStorage.getItem(AUTH_TOKEN_KEY);
-      if (storedToken) {
-        setToken(storedToken);
-      }
+      if (storedToken) setToken(storedToken);
     }
     setIsLoading(false);
   }, []);
 
   const login = useCallback((newToken: string) => {
     setToken(newToken);
-    try {
-        localStorage.setItem(AUTH_TOKEN_KEY, newToken);
-    } catch (e) {
-        console.error("Failed to save token to localStorage:", e);
-    }
+    localStorage.setItem(AUTH_TOKEN_KEY, newToken);
   }, []);
 
   const logout = useCallback(() => {
     setToken(null);
-    try {
-        localStorage.removeItem(AUTH_TOKEN_KEY);
-    } catch (e) {
-        console.error("Failed to remove token from localStorage:", e);
-    }
+    localStorage.removeItem(AUTH_TOKEN_KEY);
   }, []);
 
   const user = useMemo(() => {

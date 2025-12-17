@@ -8,8 +8,9 @@ export const CoachMatch: React.FC = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Reuse matching engine with 'coach' type
-        apiService.getMatches('coach').then(data => {
+        // Reuse matching engine
+        // FIX: Removed 'coach' argument to match the getMatches signature in apiService.ts which expects 0 arguments.
+        apiService.getMatches().then(data => {
             setMatches(data);
             setLoading(false);
         });

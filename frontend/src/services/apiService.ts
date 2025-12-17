@@ -10,13 +10,25 @@ const AUTH_TOKEN_KEY = 'embracehealth-api-token';
 
 const callApi = async (endpoint: string, method: string, body?: any) => {
     const token = localStorage.getItem(AUTH_TOKEN_KEY);
-    const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
+    // Ensure endpoint has leading slash
+    const formattedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = `${API_BASE_URL}${formattedEndpoint}`;
+    
     const headers: HeadersInit = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = `Bearer ${token}`;
-    const config: RequestInit = { method, headers };
-    if (body) config.body = JSON.stringify(body);
+    
+    const config: RequestInit = { 
+        method, 
+        headers,
+        body: body ? JSON.stringify(body) : undefined 
+    };
+
     const response = await fetch(url, config);
-    if (!response.ok) throw new Error(`API failed: ${response.status}`);
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`API Error [${response.status}] ${url}:`, errorText);
+        throw new Error(`API failed: ${response.status}`);
+    }
     return response.status === 204 ? null : response.json();
 };
 
@@ -37,7 +49,7 @@ export const analyzeImageWithGemini = (base64Image: string, mimeType: string): P
     callApi('/analyze-image', 'POST', { 
         base64Image, 
         mimeType, 
-        prompt: "Analyze the image of the food and identify the meal and all its ingredients. Provide estimated calories, protein, carbohydrates, and fat for each ingredient and for the total meal.", 
+        prompt: "Analyze the food image for ingredients and macros.", 
         schema: { 
             type: 'OBJECT', 
             properties: { 
@@ -67,10 +79,10 @@ export const analyzeImageWithGemini = (base64Image: string, mimeType: string): P
     });
 
 export const getRecipesFromImage = (base64Image: string, mimeType: string): Promise<Recipe[]> => 
-    callApi('/analyze-image', 'POST', { 
+    callApi('/analyze-image-recipes', 'POST', { 
         base64Image, 
         mimeType, 
-        prompt: "Identify visible food ingredients and suggest 3 diverse recipes that can be made with them.", 
+        prompt: "Suggest recipes based on visible ingredients.", 
         schema: { 
             type: 'ARRAY', 
             items: {
@@ -110,7 +122,7 @@ export const identifyGroceryItems = (base64Image: string, mimeType: string): Pro
     callApi('/analyze-image', 'POST', { 
         base64Image, 
         mimeType, 
-        prompt: "Identify all grocery items and food products visible in the image.", 
+        prompt: "Identify grocery items in image.", 
         schema: { 
             type: 'OBJECT', 
             properties: { 
@@ -146,13 +158,13 @@ export const getAssessments = (): Promise<Assessment[]> => callApi('/assessments
 export const submitAssessment = (assessmentId: string, responses: any): Promise<void> => callApi(`/assessments/submit`, 'POST', { assessmentId, responses });
 export const getPartnerBlueprint = (): Promise<any> => callApi('/partner-blueprint', 'GET');
 export const savePartnerBlueprint = (preferences: any): Promise<void> => callApi('/partner-blueprint', 'POST', preferences);
-export const getMatches = (type: string): Promise<any[]> => callApi(`/matches/${type}`, 'GET');
+export const getMatches = (): Promise<any[]> => callApi(`/matches`, 'GET');
 export const getMealLogEntryById = (id: number): Promise<MealLogEntry> => callApi(`/meal-log/${id}`, 'GET');
 export const getSavedMealById = (id: number): Promise<SavedMeal> => callApi(`/saved-meals/${id}`, 'GET');
 
 export const getMealSuggestions = (condition: string, cuisine: string): Promise<NutritionInfo[]> => 
     callApi('/analyze-image', 'POST', { 
-        prompt: `Generate 3 diverse meal suggestions for ${condition} in ${cuisine} cuisine.`,
+        prompt: `Suggest 3 meals for ${condition} with ${cuisine} cuisine.`,
         schema: {
             type: 'ARRAY',
             items: {
