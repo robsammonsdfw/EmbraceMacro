@@ -1,5 +1,5 @@
 
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import {
     findOrCreateUserByEmail,
@@ -80,6 +80,68 @@ export const handler = async (event) => {
     const resource = pathParts[0];
 
     try {
+        if (resource === 'calculate-readiness') {
+            const stats = JSON.parse(event.body);
+            const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+            const prompt = `Act as an elite sports scientist. Calculate a readiness score (1-100) based on these biometrics: 
+                Sleep: ${stats.sleepMinutes} mins, Quality: ${stats.sleepQuality}/100, HRV: ${stats.hrv}ms, Last Workout Intensity: ${stats.workoutIntensity}/10.
+                Return a label (e.g., "Push for a PR", "Rest Day") and a brief reasoning.`;
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: prompt,
+                config: {
+                    responseMimeType: 'application/json',
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            score: { type: Type.NUMBER },
+                            label: { type: Type.STRING },
+                            reasoning: { type: Type.STRING }
+                        },
+                        required: ['score', 'label', 'reasoning']
+                    }
+                }
+            });
+            return { statusCode: 200, headers, body: response.text };
+        }
+
+        if (resource === 'analyze-form') {
+            const { base64Image, exercise } = JSON.parse(event.body);
+            const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+            const prompt = `Analyze this image of a person performing a ${exercise}. Check for posture, alignment, and depth. Provide constructive feedback.`;
+            
+            const response = await ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: {
+                    parts: [
+                        { inlineData: { data: base64Image, mimeType: 'image/jpeg' } },
+                        { text: prompt }
+                    ]
+                },
+                config: {
+                    responseMimeType: 'application/json',
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            isCorrect: { type: Type.BOOLEAN },
+                            feedback: { type: Type.STRING },
+                            score: { type: Type.NUMBER }
+                        },
+                        required: ['isCorrect', 'feedback', 'score']
+                    }
+                }
+            });
+            return { statusCode: 200, headers, body: response.text };
+        }
+
+        if (resource === 'body' && pathParts[1] === 'log-recovery') {
+            const data = JSON.parse(event.body);
+            // In a real app, we'd save to databaseService. For now, award points and return success.
+            await awardPoints(event.user.userId, 'body.log_recovery', 15, { data });
+            return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
+        }
+
         if (resource === 'search-restaurants') {
             const { lat, lng } = JSON.parse(event.body);
             const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
@@ -155,7 +217,6 @@ export const handler = async (event) => {
             return { statusCode: 200, headers, body: res.text };
         }
 
-        // Generic rewards route
         if (resource === 'rewards') return { statusCode: 200, headers, body: JSON.stringify(await getRewardsSummary(event.user.userId)) };
 
     } catch (error) {

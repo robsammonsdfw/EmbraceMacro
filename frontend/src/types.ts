@@ -47,7 +47,29 @@ export interface HealthStats {
   steps: number;
   activeCalories: number;
   cardioScore: number;
+  hrv?: number; // Added for readiness
+  sleepMinutes?: number; // Added for readiness
   lastSynced?: string;
+}
+
+export interface RecoveryData {
+  sleepMinutes: number;
+  sleepQuality: number; // 1-100
+  hrv: number; // ms
+  workoutIntensity: number; // 1-10
+  timestamp: string;
+}
+
+export interface ReadinessScore {
+  score: number; // 1-100
+  label: string; // e.g., "Push for a PR", "Rest Day"
+  reasoning: string;
+}
+
+export interface FormAnalysisResult {
+  isCorrect: boolean;
+  feedback: string;
+  score: number;
 }
 
 export interface MealPlanItemMetadata {

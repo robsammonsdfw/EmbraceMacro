@@ -29,6 +29,8 @@ export const syncHealthData = async (): Promise<HealthStats> => {
                 steps: 8432,
                 activeCalories: 450,
                 cardioScore: 78,
+                hrv: 62, // Added simulated HRV
+                sleepMinutes: 440, // Added simulated sleep (7.3 hrs)
                 lastSynced: new Date().toISOString()
             });
         }, 1200);

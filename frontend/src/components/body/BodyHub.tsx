@@ -1,0 +1,236 @@
+
+import React, { useState, useEffect } from 'react';
+import { ActivityIcon, FireIcon, HeartIcon, ClockIcon, PlusIcon, CameraIcon, BeakerIcon } from '../icons';
+import * as apiService from '../../services/apiService';
+import type { HealthStats, ReadinessScore, RecoveryData } from '../../types';
+import { FormAnalysis } from './FormAnalysis';
+
+interface BodyHubProps {
+    healthStats: HealthStats;
+    onSyncHealth: () => void;
+}
+
+export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth }) => {
+    const [readiness, setReadiness] = useState<ReadinessScore | null>(null);
+    const [isCalculating, setIsCalculating] = useState(false);
+    const [isLogOpen, setIsLogOpen] = useState(false);
+    const [isFormCheckOpen, setIsFormCheckOpen] = useState(false);
+    
+    // Log Form State
+    const [logForm, setLogForm] = useState<RecoveryData>({
+        sleepMinutes: healthStats.sleepMinutes || 420,
+        sleepQuality: 80,
+        hrv: healthStats.hrv || 50,
+        workoutIntensity: 5,
+        timestamp: new Date().toISOString()
+    });
+
+    const getReadiness = async (data?: RecoveryData) => {
+        setIsCalculating(true);
+        try {
+            const result = await apiService.calculateReadiness(data || logForm);
+            setReadiness(result);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setIsCalculating(false);
+        }
+    };
+
+    useEffect(() => {
+        if (healthStats.hrv) {
+            getReadiness();
+        }
+    }, [healthStats.hrv]);
+
+    const handleLogSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsCalculating(true);
+        try {
+            await apiService.logRecoveryStats(logForm);
+            await getReadiness(logForm);
+            setIsLogOpen(false);
+            alert("Body metrics updated! Readiness score recalculated.");
+        } catch (e) {
+            alert("Failed to log metrics.");
+        } finally {
+            setIsCalculating(false);
+        }
+    };
+
+    return (
+        <div className="space-y-6 animate-fade-in pb-20">
+            {isFormCheckOpen && <FormAnalysis onClose={() => setIsFormCheckOpen(false)} />}
+
+            <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h2 className="text-3xl font-black text-slate-900 tracking-tight">Body Hub</h2>
+                    <p className="text-slate-500 font-medium">Predictive recovery & biometric integrity.</p>
+                </div>
+                <div className="flex gap-2">
+                    <button 
+                        onClick={() => setIsLogOpen(!isLogOpen)}
+                        className="bg-white border border-slate-200 px-4 py-2 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition"
+                    >
+                        <PlusIcon /> Log Metrics
+                    </button>
+                    <button 
+                        onClick={onSyncHealth}
+                        className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700 transition"
+                    >
+                        Sync Wearable
+                    </button>
+                </div>
+            </header>
+
+            {/* Manual Entry Form */}
+            {isLogOpen && (
+                <form onSubmit={handleLogSubmit} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xl animate-fade-in space-y-6">
+                    <div className="flex justify-between items-center mb-2">
+                        <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">Update Recovery Metrics</h3>
+                        <button type="button" onClick={() => setIsLogOpen(false)} className="text-slate-400 hover:text-slate-600"><PlusIcon className="rotate-45" /></button>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-500 uppercase">Sleep Duration (Minutes)</label>
+                            <input 
+                                type="number" 
+                                value={logForm.sleepMinutes}
+                                onChange={e => setLogForm({...logForm, sleepMinutes: parseInt(e.target.value)})}
+                                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-500 uppercase">Sleep Quality (1-100)</label>
+                            <input 
+                                type="range" 
+                                min="0" max="100"
+                                value={logForm.sleepQuality}
+                                onChange={e => setLogForm({...logForm, sleepQuality: parseInt(e.target.value)})}
+                                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                            />
+                            <div className="text-right font-black text-indigo-600">{logForm.sleepQuality}%</div>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-500 uppercase">HRV (Heart Rate Var, ms)</label>
+                            <input 
+                                type="number" 
+                                value={logForm.hrv}
+                                onChange={e => setLogForm({...logForm, hrv: parseInt(e.target.value)})}
+                                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-500 uppercase">Last Workout Intensity (1-10)</label>
+                            <input 
+                                type="range" 
+                                min="1" max="10"
+                                value={logForm.workoutIntensity}
+                                onChange={e => setLogForm({...logForm, workoutIntensity: parseInt(e.target.value)})}
+                                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
+                            />
+                            <div className="text-right font-black text-amber-600">{logForm.workoutIntensity}/10</div>
+                        </div>
+                    </div>
+
+                    <button 
+                        type="submit" 
+                        disabled={isCalculating}
+                        className="w-full py-4 bg-slate-900 text-white font-black uppercase tracking-widest text-sm rounded-2xl hover:bg-black transition-all"
+                    >
+                        {isCalculating ? 'Processing AI Readiness...' : 'Update & Calculate Readiness'}
+                    </button>
+                </form>
+            )}
+
+            {/* Readiness Dashboard */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2">
+                    <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
+                            <HeartIcon className="w-32 h-32" />
+                        </div>
+                        
+                        <div className="flex flex-col md:flex-row items-center gap-8">
+                            <div className="relative flex items-center justify-center w-48 h-48">
+                                <svg className="w-full h-full transform -rotate-90">
+                                    <circle cx="96" cy="96" r="80" stroke="#f1f5f9" strokeWidth="12" fill="none" />
+                                    <circle 
+                                        cx="96" cy="96" r="80" 
+                                        stroke={readiness ? (readiness.score > 70 ? '#10b981' : readiness.score > 40 ? '#f59e0b' : '#ef4444') : '#e2e8f0'} 
+                                        strokeWidth="12" fill="none" strokeLinecap="round"
+                                        strokeDasharray={2 * Math.PI * 80}
+                                        strokeDashoffset={(2 * Math.PI * 80) - ((readiness?.score || 0) / 100) * (2 * Math.PI * 80)}
+                                        className="transition-all duration-1000 ease-out"
+                                    />
+                                </svg>
+                                <div className="absolute flex flex-col items-center">
+                                    <span className="text-4xl font-black text-slate-900">{isCalculating ? '...' : readiness?.score || '--'}</span>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Ready Score</span>
+                                </div>
+                            </div>
+
+                            <div className="flex-1 text-center md:text-left">
+                                <h3 className="text-2xl font-black text-slate-900 mb-2">{readiness?.label || 'Calculating Readiness...'}</h3>
+                                <p className="text-slate-600 font-medium leading-relaxed">
+                                    {isCalculating ? "AI is processing your latest biometrics from Apple Health..." : readiness?.reasoning || "Log your sleep and HRV metrics to receive a predictive readiness score."}
+                                </p>
+                                
+                                <div className="mt-6 flex flex-wrap justify-center md:justify-start gap-4">
+                                    <div className="flex items-center gap-2 px-3 py-1 bg-slate-100 rounded-full">
+                                        <ClockIcon className="w-4 h-4 text-slate-400" />
+                                        <span className="text-xs font-bold text-slate-600">{Math.floor(healthStats.sleepMinutes! / 60)}h {healthStats.sleepMinutes! % 60}m Sleep</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 px-3 py-1 bg-slate-100 rounded-full">
+                                        <ActivityIcon className="w-4 h-4 text-indigo-500" />
+                                        <span className="text-xs font-bold text-slate-600">{healthStats.hrv || '--'}ms HRV</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="space-y-6">
+                    {/* Form Check Card */}
+                    <div className="bg-indigo-600 rounded-3xl p-6 text-white shadow-xl hover:shadow-2xl transition-all cursor-pointer group overflow-hidden relative" onClick={() => setIsFormCheckOpen(true)}>
+                        <div className="absolute -bottom-4 -right-4 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform"></div>
+                        <div className="relative z-10">
+                            <div className="bg-white/20 p-3 rounded-2xl w-fit mb-4 group-hover:bg-white/30 transition-colors">
+                                <CameraIcon />
+                            </div>
+                            <h3 className="text-xl font-black mb-1">AI Form Check</h3>
+                            <p className="text-indigo-100 text-sm font-medium">Real-time feedback on squat depth and posture alignment.</p>
+                            <div className="mt-6 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-emerald-300">
+                                <span>Analyze Now</span>
+                                <PlusIcon className="w-4 h-4" />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Lab/Biometric Card */}
+                    <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                        <h4 className="font-black text-slate-800 uppercase tracking-widest text-xs mb-4">Integrations</h4>
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 bg-rose-100 text-rose-600 rounded-xl flex items-center justify-center"><FireIcon /></div>
+                                    <span className="text-sm font-bold text-slate-700">Apple Health</span>
+                                </div>
+                                <span className="text-[10px] font-black text-emerald-500 uppercase tracking-wider">Connected</span>
+                            </div>
+                            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl grayscale opacity-50">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center"><BeakerIcon /></div>
+                                    <span className="text-sm font-bold text-slate-700">Oura Ring</span>
+                                </div>
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Syncing...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};

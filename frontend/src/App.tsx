@@ -22,6 +22,7 @@ import { RewardsDashboard } from './components/RewardsDashboard';
 import { AssessmentHub } from './components/tests/AssessmentHub';
 import { PartnerBlueprint } from './components/matching/PartnerBlueprint';
 import { SocialManager } from './components/social/SocialManager';
+import { BodyHub } from './components/body/BodyHub';
 
 type ActiveView = 'home' | 'plan' | 'meals' | 'history' | 'grocery' | 'rewards' | 'body' | 'social' | 'assessments' | 'blueprint' | 'labs' | 'orders';
 
@@ -40,7 +41,7 @@ const App: React.FC = () => {
   const [activePlanId, setActivePlanId] = useState<number | null>(null);
   
   // Health State
-  const [healthStats, setHealthStats] = useState<HealthStats>({ steps: 0, activeCalories: 0, cardioScore: 0 });
+  const [healthStats, setHealthStats] = useState<HealthStats>({ steps: 0, activeCalories: 0, cardioScore: 0, hrv: 0, sleepMinutes: 0 });
   const [isHealthConnected, setIsHealthConnected] = useState(false);
   const [isHealthSyncing, setIsHealthSyncing] = useState(false);
 
@@ -227,13 +228,10 @@ const App: React.FC = () => {
               return <PartnerBlueprint />;
           case 'body':
               return (
-                  <div className="max-w-4xl mx-auto space-y-6">
-                      <div className="bg-white p-8 rounded-3xl shadow-lg border border-slate-100 text-center">
-                          <h2 className="text-3xl font-black text-slate-900 mb-4">Body Hub</h2>
-                          <p className="text-slate-500 mb-8">Access your digital twin and biometric progression.</p>
-                          <button onClick={() => window.location.href='https://app.embracehealth.ai'} className="bg-indigo-600 text-white font-bold py-4 px-8 rounded-2xl shadow-xl hover:bg-indigo-700 transition">Launch 3D Scanner</button>
-                      </div>
-                  </div>
+                  <BodyHub 
+                    healthStats={healthStats} 
+                    onSyncHealth={handleConnectHealth} 
+                  />
               );
           default:
               return <div className="p-8 text-center text-slate-400">View coming soon...</div>;

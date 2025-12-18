@@ -2,7 +2,7 @@
 import type { 
   NutritionInfo, SavedMeal, MealPlan, MealPlanItem, MealPlanItemMetadata, 
   GroceryList, GroceryItem, RewardsSummary, MealLogEntry, Assessment, 
-  UserProfile, Friendship 
+  UserProfile, Friendship, ReadinessScore, FormAnalysisResult, RecoveryData
 } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
@@ -75,6 +75,19 @@ export const analyzeImageWithGemini = (base64Image: string, mimeType: string): P
         } 
     });
 
+/** New Body AI Features */
+
+export const calculateReadiness = (data: RecoveryData): Promise<ReadinessScore> => 
+    callApi('/calculate-readiness', 'POST', data);
+
+export const analyzeExerciseForm = (base64Image: string, exercise: string): Promise<FormAnalysisResult> => 
+    callApi('/analyze-form', 'POST', { base64Image, exercise });
+
+export const logRecoveryStats = (data: RecoveryData): Promise<any> => 
+    callApi('/body/log-recovery', 'POST', data);
+
+/** End New Body AI Features */
+
 export const identifyGroceryItems = (base64Image: string, mimeType: string): Promise<{ items: string[] }> => 
     callApi('/analyze-image', 'POST', { 
         base64Image, 
@@ -94,10 +107,8 @@ export const identifyGroceryItems = (base64Image: string, mimeType: string): Pro
 
 export const getSavedMeals = (): Promise<SavedMeal[]> => callApi('/saved-meals', 'GET');
 export const saveMeal = (mealData: NutritionInfo): Promise<SavedMeal> => callApi('/saved-meals', 'POST', mealData);
-// Fix: Added missing deleteMeal function
 export const deleteMeal = (id: number): Promise<void> => callApi(`/saved-meals/${id}`, 'DELETE');
 export const createMealLogEntry = (mealData: NutritionInfo, imageBase64: string): Promise<MealLogEntry> => callApi('/meal-log', 'POST', { mealData, imageBase64 });
-// Fix: Added missing getMealLog function to match usage in App.tsx
 export const getMealLog = (): Promise<MealLogEntry[]> => callApi('/meal-log', 'GET');
 export const getRewardsSummary = (): Promise<RewardsSummary> => callApi('/rewards', 'GET');
 export const getFriends = (): Promise<Friendship[]> => callApi('/social/friends', 'GET');
