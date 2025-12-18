@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { XIcon, CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, UserCircleIcon, SearchIcon, TagIcon, PhotoIcon, MapPinIcon } from './icons';
+import { XIcon, CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, UserCircleIcon, MapPinIcon } from './icons';
 import { BarcodeScanner } from './BarcodeScanner';
 import type { MealLogEntry } from '../types';
 import * as apiService from '../services/apiService';

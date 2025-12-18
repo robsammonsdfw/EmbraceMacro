@@ -1,8 +1,8 @@
 
 import type { 
-  NutritionInfo, Recipe, SavedMeal, MealPlan, MealPlanItem, MealPlanItemMetadata, 
+  NutritionInfo, SavedMeal, MealPlan, MealPlanItem, MealPlanItemMetadata, 
   GroceryList, GroceryItem, RewardsSummary, MealLogEntry, Assessment, 
-  UserProfile, Friendship, VisibilityMode 
+  UserProfile, Friendship 
 } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
@@ -75,7 +75,6 @@ export const analyzeImageWithGemini = (base64Image: string, mimeType: string): P
         } 
     });
 
-// Added to fix the error: Property 'identifyGroceryItems' does not exist on apiService
 export const identifyGroceryItems = (base64Image: string, mimeType: string): Promise<{ items: string[] }> => 
     callApi('/analyze-image', 'POST', { 
         base64Image, 
