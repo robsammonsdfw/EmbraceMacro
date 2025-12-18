@@ -1,9 +1,9 @@
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import * as apiService from './services/apiService';
 import { analyzeFoodImage } from './services/geminiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
-import type { NutritionInfo, SavedMeal, Recipe, MealLogEntry, MealPlan, HealthStats } from './types';
+import type { NutritionInfo } from './types';
 import { ImageUploader } from './components/ImageUploader';
 import { NutritionCard } from './components/NutritionCard';
 import { Loader } from './components/Loader';
@@ -96,14 +96,15 @@ const App: React.FC = () => {
                 </div>
             ) : (
                 <CommandCenter 
-                    dailyCalories={0} dailyProtein={0} rewardsBalance={150} 
+                    dailyCalories={0} dailyProtein={0} rewardsBalance={0} 
                     userName={user?.firstName || 'Hero'}
                     healthStats={{ steps: 0, activeCalories: 0, cardioScore: 0 }}
                     isHealthConnected={false} isHealthSyncing={false}
                     onConnectHealth={() => {}} onScanClick={() => {}}
                     onCameraClick={() => { setIsCaptureOpen(true); }}
                     onBarcodeClick={() => {}} onPantryChefClick={() => {}}
-                    onRestaurantClick={() => {}} onUploadClick={() => {}}
+                    onRestaurantClick={() => { setIsCaptureOpen(true); }}
+                    onUploadClick={() => {}}
                 />
             )}
         </div>
