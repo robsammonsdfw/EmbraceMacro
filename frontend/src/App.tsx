@@ -1,9 +1,10 @@
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import * as apiService from './services/apiService';
 import { analyzeFoodImage } from './services/geminiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
-import type { NutritionInfo } from './types';
+import { connectHealthProvider, syncHealthData } from './services/healthService';
+import type { NutritionInfo, MealLogEntry, SavedMeal, MealPlan, HealthStats } from './types';
 import { ImageUploader } from './components/ImageUploader';
 import { NutritionCard } from './components/NutritionCard';
 import { Loader } from './components/Loader';
@@ -13,18 +14,71 @@ import { Login } from './components/Login';
 import { AppLayout } from './components/layout/AppLayout';
 import { CommandCenter } from './components/dashboard/CommandCenter';
 import { CaptureFlow } from './components/CaptureFlow';
+import { MealPlanManager } from './components/MealPlanManager';
+import { MealLibrary } from './components/MealLibrary';
+import { MealHistory } from './components/MealHistory';
+import { GroceryList } from './components/GroceryList';
+import { RewardsDashboard } from './components/RewardsDashboard';
+import { AssessmentHub } from './components/tests/AssessmentHub';
+import { PartnerBlueprint } from './components/matching/PartnerBlueprint';
+import { SocialManager } from './components/social/SocialManager';
 
-type ActiveView = 'home' | 'plan' | 'meals' | 'history' | 'grocery' | 'rewards' | 'body' | 'social';
+type ActiveView = 'home' | 'plan' | 'meals' | 'history' | 'grocery' | 'rewards' | 'body' | 'social' | 'assessments' | 'blueprint' | 'labs' | 'orders';
 
 const App: React.FC = () => {
   const { isAuthenticated, isLoading: isAuthLoading, logout, user } = useAuth();
   const [activeView, setActiveView] = useState<ActiveView>('home');
   const [isCaptureOpen, setIsCaptureOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
+  // Data State
   const [image, setImage] = useState<string | null>(null);
   const [nutritionData, setNutritionData] = useState<NutritionInfo | null>(null);
+  const [mealLog, setMealLog] = useState<MealLogEntry[]>([]);
+  const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
+  const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
+  const [activePlanId, setActivePlanId] = useState<number | null>(null);
+  
+  // Health State
+  const [healthStats, setHealthStats] = useState<HealthStats>({ steps: 0, activeCalories: 0, cardioScore: 0 });
+  const [isHealthConnected, setIsHealthConnected] = useState(false);
+  const [isHealthSyncing, setIsHealthSyncing] = useState(false);
+
+  // UI State
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Initial Data Load
+  useEffect(() => {
+    if (isAuthenticated) {
+        Promise.all([
+            apiService.getMealLog().catch(() => []),
+            apiService.getSavedMeals().catch(() => []),
+            apiService.getMealPlans().catch(() => [])
+        ]).then(([log, saved, plans]) => {
+            setMealLog(log);
+            setSavedMeals(saved);
+            setMealPlans(plans);
+            if (plans.length > 0) setActivePlanId(plans[0].id);
+        });
+    }
+  }, [isAuthenticated]);
+
+  const handleConnectHealth = async () => {
+      setIsHealthSyncing(true);
+      try {
+          const success = await connectHealthProvider('web');
+          if (success) {
+              const stats = await syncHealthData();
+              setHealthStats(stats);
+              setIsHealthConnected(true);
+          }
+      } catch (e) {
+          console.error("Health connect failed", e);
+      } finally {
+          setIsHealthSyncing(false);
+      }
+  };
 
   const handleCaptureResult = useCallback(async (img: string | null, mode: any, barcode?: string) => {
     setIsCaptureOpen(false);
@@ -35,7 +89,8 @@ const App: React.FC = () => {
 
     try {
         if (mode === 'barcode' && barcode) {
-            setNutritionData(await getProductByBarcode(barcode));
+            const data = await getProductByBarcode(barcode);
+            setNutritionData(data);
         } else if (img) {
             setImage(img);
             const base64Data = img.split(',')[1];
@@ -53,7 +108,8 @@ const App: React.FC = () => {
     if (!nutritionData || !image) return;
     try {
       setIsProcessing(true);
-      await apiService.createMealLogEntry(nutritionData, image.split(',')[1]);
+      const newEntry = await apiService.createMealLogEntry(nutritionData, image.split(',')[1]);
+      setMealLog(prev => [newEntry, ...prev]);
       setNutritionData(null);
       setImage(null);
       setActiveView('home');
@@ -64,50 +120,146 @@ const App: React.FC = () => {
     }
   };
 
+  const handleAddSavedMealToPlan = async (meal: SavedMeal) => {
+      if (!activePlanId) return;
+      try {
+          const newItem = await apiService.addMealToPlan(activePlanId, meal.id, { slot: 'Lunch', day: 'Monday' });
+          setMealPlans(prev => prev.map(p => p.id === activePlanId ? { ...p, items: [...p.items, newItem] } : p));
+      } catch (e) {
+          alert("Failed to add to plan.");
+      }
+  };
+
+  const renderActiveView = () => {
+      if (image || isProcessing || nutritionData || error) {
+          return (
+              <div className="max-w-2xl mx-auto space-y-6">
+                {image && <ImageUploader image={image} />}
+                {isProcessing && <Loader message="Gemini is analyzing your meal..." />}
+                {error && <ErrorAlert message={error} />}
+                {nutritionData && !isProcessing && (
+                    <NutritionCard data={nutritionData} onSaveToHistory={handleSaveToHistory} />
+                )}
+                <button 
+                    onClick={() => { setImage(null); setNutritionData(null); setIsCaptureOpen(true); }}
+                    className="w-full py-4 text-emerald-600 font-black uppercase tracking-widest text-sm"
+                >
+                    Retake Photo
+                </button>
+            </div>
+          );
+      }
+
+      switch (activeView) {
+          case 'home':
+              return (
+                <CommandCenter 
+                    dailyCalories={mealLog.filter(e => new Date(e.createdAt).toDateString() === new Date().toDateString()).reduce((s, e) => s + e.totalCalories, 0)} 
+                    dailyProtein={mealLog.filter(e => new Date(e.createdAt).toDateString() === new Date().toDateString()).reduce((s, e) => s + e.totalProtein, 0)} 
+                    rewardsBalance={0} 
+                    userName={user?.firstName || 'Hero'}
+                    healthStats={healthStats}
+                    isHealthConnected={isHealthConnected} 
+                    isHealthSyncing={isHealthSyncing}
+                    onConnectHealth={handleConnectHealth} 
+                    onScanClick={() => setActiveView('body')}
+                    onCameraClick={() => setIsCaptureOpen(true)}
+                    onBarcodeClick={() => { setIsCaptureOpen(true); /* handles logic in CaptureFlow */ }} 
+                    onPantryChefClick={() => setIsCaptureOpen(true)}
+                    onRestaurantClick={() => { setIsCaptureOpen(true); }}
+                    onUploadClick={() => setIsCaptureOpen(true)}
+                />
+              );
+          case 'plan':
+              return <MealPlanManager 
+                        plans={mealPlans} 
+                        activePlanId={activePlanId} 
+                        savedMeals={savedMeals}
+                        onPlanChange={setActivePlanId}
+                        onCreatePlan={async (name) => {
+                            const p = await apiService.createMealPlan(name);
+                            setMealPlans(prev => [...prev, p]);
+                            setActivePlanId(p.id);
+                        }}
+                        onAddToPlan={() => setIsCaptureOpen(true)}
+                        onRemoveFromPlan={async (id) => {
+                            await apiService.removeMealFromPlanItem(id);
+                            setMealPlans(prev => prev.map(p => ({ ...p, items: p.items.filter(i => i.id !== id) })));
+                        }}
+                        onQuickAdd={async (pId, meal, day, slot) => {
+                            const item = await apiService.addMealToPlan(pId, meal.id, { day, slot });
+                            setMealPlans(prev => prev.map(p => p.id === pId ? { ...p, items: [...p.items, item] } : p));
+                        }}
+                    />;
+          case 'meals':
+              return <MealLibrary 
+                        meals={savedMeals} 
+                        onAdd={handleAddSavedMealToPlan} 
+                        onDelete={async (id) => {
+                            await apiService.deleteMeal(id);
+                            setSavedMeals(prev => prev.filter(m => m.id !== id));
+                        }} 
+                    />;
+          case 'history':
+              return <MealHistory 
+                        logEntries={mealLog} 
+                        onAddToPlan={async (data) => {
+                            const saved = await apiService.saveMeal(data);
+                            setSavedMeals(prev => [saved, ...prev]);
+                            handleAddSavedMealToPlan(saved);
+                            setActiveView('plan');
+                        }} 
+                        onSaveMeal={async (data) => {
+                            const saved = await apiService.saveMeal(data);
+                            setSavedMeals(prev => [saved, ...prev]);
+                            alert("Saved to Library!");
+                        }} 
+                    />;
+          case 'grocery':
+              return <GroceryList mealPlans={mealPlans} />;
+          case 'rewards':
+              return <RewardsDashboard />;
+          case 'social':
+              return <SocialManager />;
+          case 'assessments':
+              return <AssessmentHub />;
+          case 'blueprint':
+              return <PartnerBlueprint />;
+          case 'body':
+              return (
+                  <div className="max-w-4xl mx-auto space-y-6">
+                      <div className="bg-white p-8 rounded-3xl shadow-lg border border-slate-100 text-center">
+                          <h2 className="text-3xl font-black text-slate-900 mb-4">Body Hub</h2>
+                          <p className="text-slate-500 mb-8">Access your digital twin and biometric progression.</p>
+                          <button onClick={() => window.location.href='https://app.embracehealth.ai'} className="bg-indigo-600 text-white font-bold py-4 px-8 rounded-2xl shadow-xl hover:bg-indigo-700 transition">Launch 3D Scanner</button>
+                      </div>
+                  </div>
+              );
+          default:
+              return <div className="p-8 text-center text-slate-400">View coming soon...</div>;
+      }
+  };
+
   if (isAuthLoading) return <div className="min-h-screen flex items-center justify-center"><Loader message="Loading..." /></div>;
   if (!isAuthenticated) return <Login />;
 
   return (
-    <AppLayout activeView={activeView} onNavigate={(v) => setActiveView(v as ActiveView)} onLogout={logout} mobileMenuOpen={false} setMobileMenuOpen={() => {}}>
+    <AppLayout 
+        activeView={activeView} 
+        onNavigate={(v) => setActiveView(v as ActiveView)} 
+        onLogout={logout} 
+        mobileMenuOpen={mobileMenuOpen} 
+        setMobileMenuOpen={setMobileMenuOpen}
+    >
         {isCaptureOpen && (
             <CaptureFlow 
                 onClose={() => setIsCaptureOpen(false)} 
                 onCapture={handleCaptureResult} 
                 onRepeatMeal={() => {}} 
-                onBodyScanClick={() => {}} 
+                onBodyScanClick={() => setActiveView('body')} 
             />
         )}
-
-        <div className="max-w-2xl mx-auto space-y-6">
-            {(image || isProcessing || nutritionData || error) ? (
-                <div className="space-y-6">
-                    {image && <ImageUploader image={image} />}
-                    {isProcessing && <Loader message="Gemini is analyzing your meal..." />}
-                    {error && <ErrorAlert message={error} />}
-                    {nutritionData && !isProcessing && (
-                        <NutritionCard data={nutritionData} onSaveToHistory={handleSaveToHistory} />
-                    )}
-                    <button 
-                        onClick={() => { setImage(null); setNutritionData(null); setIsCaptureOpen(true); }}
-                        className="w-full py-4 text-emerald-600 font-black uppercase tracking-widest text-sm"
-                    >
-                        Retake Photo
-                    </button>
-                </div>
-            ) : (
-                <CommandCenter 
-                    dailyCalories={0} dailyProtein={0} rewardsBalance={0} 
-                    userName={user?.firstName || 'Hero'}
-                    healthStats={{ steps: 0, activeCalories: 0, cardioScore: 0 }}
-                    isHealthConnected={false} isHealthSyncing={false}
-                    onConnectHealth={() => {}} onScanClick={() => {}}
-                    onCameraClick={() => { setIsCaptureOpen(true); }}
-                    onBarcodeClick={() => {}} onPantryChefClick={() => {}}
-                    onRestaurantClick={() => { setIsCaptureOpen(true); }}
-                    onUploadClick={() => {}}
-                />
-            )}
-        </div>
+        {renderActiveView()}
     </AppLayout>
   );
 };

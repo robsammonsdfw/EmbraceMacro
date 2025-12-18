@@ -94,7 +94,11 @@ export const identifyGroceryItems = (base64Image: string, mimeType: string): Pro
 
 export const getSavedMeals = (): Promise<SavedMeal[]> => callApi('/saved-meals', 'GET');
 export const saveMeal = (mealData: NutritionInfo): Promise<SavedMeal> => callApi('/saved-meals', 'POST', mealData);
+// Fix: Added missing deleteMeal function
+export const deleteMeal = (id: number): Promise<void> => callApi(`/saved-meals/${id}`, 'DELETE');
 export const createMealLogEntry = (mealData: NutritionInfo, imageBase64: string): Promise<MealLogEntry> => callApi('/meal-log', 'POST', { mealData, imageBase64 });
+// Fix: Added missing getMealLog function to match usage in App.tsx
+export const getMealLog = (): Promise<MealLogEntry[]> => callApi('/meal-log', 'GET');
 export const getRewardsSummary = (): Promise<RewardsSummary> => callApi('/rewards', 'GET');
 export const getFriends = (): Promise<Friendship[]> => callApi('/social/friends', 'GET');
 export const getFriendRequests = (): Promise<any[]> => callApi('/social/requests', 'GET');
