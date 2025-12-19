@@ -22,7 +22,7 @@ export const AssessmentHub: React.FC = () => {
             setAssessments(testData);
             setGameState(stateData);
         } catch (err) {
-            console.error(err);
+            console.error("Failed to load assessments:", err);
         } finally {
             setLoading(false);
         }
@@ -74,8 +74,8 @@ export const AssessmentHub: React.FC = () => {
                     </div>
                 </div>
                 <div className="flex gap-2">
-                    {/* Visual indicators for stale data */}
-                    {gameState && Object.entries(gameState.lastUpdated).map(([cat, date]) => {
+                    {/* Visual indicators for stale data - Added safety check for lastUpdated */}
+                    {gameState?.lastUpdated && Object.entries(gameState.lastUpdated).map(([cat, date]) => {
                         const isStale = (Date.now() - new Date(date).getTime()) > 86400000;
                         return (
                             <div key={cat} title={`${cat}: ${isStale ? 'Stale' : 'Fresh'}`} className={`w-3 h-3 rounded-full border-2 border-white shadow-sm ${isStale ? 'bg-rose-400' : 'bg-emerald-400'}`}></div>
@@ -95,7 +95,7 @@ export const AssessmentHub: React.FC = () => {
                 {/* Fixed "Daily Check" active entry */}
                 <div className="bg-slate-900 rounded-3xl p-6 text-white shadow-xl flex flex-col justify-between h-full group hover:scale-[1.02] transition-all">
                     <div>
-                        <div className="bg-emerald-500 w-fit p-2 rounded-xl mb-4 group-hover:rotate-12 transition-transform">
+                        <div className="bg-emerald-50 w-fit p-2 rounded-xl mb-4 group-hover:rotate-12 transition-transform">
                             <ActivityIcon className="w-5 h-5" />
                         </div>
                         <h3 className="text-xl font-black mb-2">Daily Pulse</h3>
