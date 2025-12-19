@@ -142,18 +142,26 @@ const processMealDataForSave = (mealData) => {
     const data = { ...mealData };
     delete data.id;
     delete data.createdAt;
-    delete data.imageUrl; // We save image separately or as part of base64 col
+    delete data.imageUrl; 
     return data;
 };
 
+// Optimization: This function does NOT include the base64 string for list views
 const processMealDataForClient = (dbRow) => {
     const meal = dbRow.meal_data || {};
     return {
         ...meal,
         id: dbRow.id,
         createdAt: dbRow.created_at,
-        imageUrl: dbRow.image_base64 ? `data:image/jpeg;base64,${dbRow.image_base64}` : null,
         hasImage: !!dbRow.image_base64
+    };
+};
+
+// Special function for single entry detail where we WANT the image
+const processFullMealForClient = (dbRow) => {
+    return {
+        ...processMealDataForClient(dbRow),
+        imageUrl: dbRow.image_base64 ? `data:image/jpeg;base64,${dbRow.image_base64}` : null
     };
 };
 
@@ -231,15 +239,19 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
         const processed = processMealDataForSave(mealData);
         const res = await client.query(`INSERT INTO meal_log_entries (user_id, meal_data, image_base64) VALUES ($1, $2, $3) RETURNING *`, [userId, processed, imageBase64]);
         await awardPoints(userId, 'meal.logged', 50);
-        return processMealDataForClient(res.rows[0]);
+        return processFullMealForClient(res.rows[0]);
     } finally { client.release(); }
 };
 
 export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
     try {
-        const res = await client.query(`SELECT * FROM meal_log_entries WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
-        return res.rows.map(processMealDataForClient);
+        // Optimization: Do NOT select image_base64 here to keep payload small
+        const res = await client.query(`SELECT id, user_id, meal_data, created_at, (image_base64 IS NOT NULL) as has_image FROM meal_log_entries WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
+        return res.rows.map(row => ({
+            ...processMealDataForClient(row),
+            hasImage: row.has_image
+        }));
     } finally { client.release(); }
 };
 
@@ -247,7 +259,7 @@ export const getMealLogEntryById = async (userId, id) => {
     const client = await pool.connect();
     try {
         const res = await client.query(`SELECT * FROM meal_log_entries WHERE id = $1 AND user_id = $2`, [id, userId]);
-        return res.rows[0] ? processMealDataForClient(res.rows[0]) : null;
+        return res.rows[0] ? processFullMealForClient(res.rows[0]) : null;
     } finally { client.release(); }
 };
 
@@ -276,7 +288,7 @@ export const getSavedMealById = async (userId, id) => {
     const client = await pool.connect();
     try {
         const res = await client.query(`SELECT * FROM saved_meals WHERE id = $1 AND user_id = $2`, [id, userId]);
-        return res.rows[0] ? processMealDataForClient(res.rows[0]) : null;
+        return res.rows[0] ? processFullMealForClient(res.rows[0]) : null;
     } finally { client.release(); }
 };
 
@@ -384,7 +396,7 @@ export const setActiveGroceryList = async (userId, id) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        await client.query(`UPDATE grocery_lists SET is_active = FALSE WHERE user_id = $1`, [userId]);
+        await client.query(`UPDATE grocery_lists SET is_active = FALSE WHERE user_id = $1`);
         await client.query(`UPDATE grocery_lists SET is_active = TRUE WHERE id = $1 AND user_id = $2`, [id, userId]);
         await client.query('COMMIT');
     } catch(e) { await client.query('ROLLBACK'); throw e; } finally { client.release(); }
