@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { FireIcon, ActivityIcon, HeartIcon, ClockIcon, GlobeAltIcon, TrophyIcon } from '../icons';
+import { FireIcon, ActivityIcon, ClockIcon, GlobeAltIcon, TrophyIcon } from '../icons';
 import type { HealthStats, UserDashboardPrefs } from '../../types';
 import { getPlatform } from '../../services/healthService';
 
