@@ -34,7 +34,9 @@ import {
     getSavedMealById,
     importIngredientsFromPlans,
     clearGroceryListItems,
-    awardPoints
+    awardPoints,
+    getAssessments,
+    submitAssessment
 } from './services/databaseService.mjs';
 
 export const handler = async (event) => {
@@ -82,10 +84,15 @@ export const handler = async (event) => {
     try {
         if (resource === 'assessments') {
             const sub = pathParts[1];
+            if (!sub && method === 'GET') {
+                return { statusCode: 200, headers, body: JSON.stringify(await getAssessments()) };
+            }
+            if (sub === 'submit' && method === 'POST') {
+                const { assessmentId, responses } = JSON.parse(event.body);
+                await submitAssessment(event.user.userId, assessmentId, responses);
+                return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
+            }
             if (sub === 'state' && method === 'GET') {
-                // Assessment State Logic
-                const userId = event.user.userId;
-                // In a real app, fetch last logs from DB. Simulating for now.
                 const state = {
                     lastUpdated: {
                         EatingHabits: new Date(Date.now() - 86400000 * 2).toISOString(),
@@ -95,7 +102,6 @@ export const handler = async (event) => {
                     }
                 };
 
-                // Trigger Logic
                 let passivePrompt = null;
                 const now = Date.now();
                 const eatingStale = (now - new Date(state.lastUpdated.EatingHabits).getTime()) > 86400000;

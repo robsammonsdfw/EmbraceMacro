@@ -13,7 +13,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ assessment, onComplete, 
     const [responses, setResponses] = useState<Record<string, any>>({});
     const [currentStep, setCurrentStep] = useState(0);
 
-    const questions = assessment.questions;
+    const questions = assessment.questions || [];
     const currentQuestion = questions[currentStep];
 
     const handleNext = () => {
@@ -25,8 +25,22 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ assessment, onComplete, 
     };
 
     const handleAnswer = (value: any) => {
+        if (!currentQuestion) return;
         setResponses(prev => ({ ...prev, [currentQuestion.id]: value }));
     };
+
+    if (questions.length === 0) {
+        return (
+            <div className="fixed inset-0 bg-white z-50 flex items-center justify-center p-8">
+                <div className="text-center">
+                    <p className="text-slate-500 mb-4">This assessment has no questions configured.</p>
+                    <button onClick={onClose} className="px-6 py-2 bg-slate-900 text-white rounded-xl">Close</button>
+                </div>
+            </div>
+        );
+    }
+
+    if (!currentQuestion) return null;
 
     const isCurrentAnswered = responses[currentQuestion.id] !== undefined;
 

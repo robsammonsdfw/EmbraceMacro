@@ -370,10 +370,33 @@ export const getRewardsSummary = async (userId) => {
 };
 
 /**
- * Assessments & Matches (Placeholders)
+ * Assessments & Matches
  */
-export const getAssessments = async () => [{ id: 'general', title: 'Daily Health', description: 'Quick check-in.', questions: [] }];
-export const submitAssessment = async (userId, assessmentId, responses) => {};
+export const getAssessments = async () => [
+    { 
+        id: 'daily_pulse', 
+        title: 'Daily Health Pulse', 
+        description: 'Standard baseline metrics for your twin.', 
+        questions: [
+            { id: 'q1', text: 'How would you rate your sleep quality last night?', type: 'scale', min: 1, max: 10 },
+            { id: 'q2', text: 'Did you feel energetic during your main focus hours today?', type: 'boolean' },
+            { id: 'q3', text: 'Any joint pain or inflammation today?', type: 'boolean' }
+        ] 
+    },
+    { 
+        id: 'metabolic', 
+        title: 'Metabolic Deep Dive', 
+        description: 'Assess glucose and insulin sensitivity markers.', 
+        questions: [
+            { id: 'm1', text: 'Rate your post-meal energy dip level.', type: 'scale', min: 1, max: 10 }
+        ] 
+    }
+];
+
+export const submitAssessment = async (userId, assessmentId, responses) => {
+    await awardPoints(userId, `assessment.${assessmentId}`, 50, { responses });
+};
+
 export const getPartnerBlueprint = async (userId) => ({});
 export const savePartnerBlueprint = async (userId, prefs) => {};
 export const getMatches = async () => [];
