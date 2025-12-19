@@ -28,8 +28,6 @@ import {
     getFriendRequests,
     sendFriendRequest,
     respondToFriendRequest,
-    updateMealVisibility,
-    updatePlanVisibility,
     getMealLogEntryById,
     getSavedMealById,
     importIngredientsFromPlans,
@@ -41,11 +39,12 @@ import {
     savePartnerBlueprint,
     getMatches,
     getHealthMetrics,
-    syncHealthMetrics
+    syncHealthMetrics,
+    getDashboardPrefs,
+    saveDashboardPrefs
 } from './services/databaseService.mjs';
 
 export const handler = async (event) => {
-    // FIX: Removed GEMINI_API_KEY from environment variable destructuring to comply with guidelines
     const { JWT_SECRET, FRONTEND_URL } = process.env;
 
     const allowedOrigins = [
@@ -88,73 +87,53 @@ export const handler = async (event) => {
     const resource = pathParts[0];
 
     try {
+        // --- Health ---
         if (resource === 'health-metrics') {
-            if (method === 'GET') {
-                const stats = await getHealthMetrics(event.user.userId);
-                return { statusCode: 200, headers, body: JSON.stringify(stats || {}) };
-            }
-            if (method === 'POST') {
-                const stats = JSON.parse(event.body);
-                const updated = await syncHealthMetrics(event.user.userId, stats);
-                return { statusCode: 200, headers, body: JSON.stringify(updated) };
-            }
+            if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getHealthMetrics(event.user.userId) || {}) };
+            if (method === 'POST') return { statusCode: 200, headers, body: JSON.stringify(await syncHealthMetrics(event.user.userId, JSON.parse(event.body))) };
         }
-        
-        if (resource === 'assessments') {
+
+        // --- Body / Dashboard ---
+        if (resource === 'body') {
             const sub = pathParts[1];
-            if (!sub && method === 'GET') {
-                return { statusCode: 200, headers, body: JSON.stringify(await getAssessments()) };
+            if (sub === 'dashboard-prefs') {
+                if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getDashboardPrefs(event.user.userId)) };
+                if (method === 'POST') { await saveDashboardPrefs(event.user.userId, JSON.parse(event.body)); return { statusCode: 200, headers, body: JSON.stringify({ success: true }) }; }
             }
-            if (sub === 'submit' && method === 'POST') {
-                const { assessmentId, responses } = JSON.parse(event.body);
-                await submitAssessment(event.user.userId, assessmentId, responses);
+            if (sub === 'log-recovery' && method === 'POST') {
+                const data = JSON.parse(event.body);
+                await awardPoints(event.user.userId, 'body.log_recovery', 15, { data });
                 return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
             }
-            if (sub === 'state' && method === 'GET') {
-                const state = {
-                    lastUpdated: {
-                        EatingHabits: new Date(Date.now() - 86400000 * 2).toISOString(),
-                        PhysicalFitness: new Date().toISOString(),
-                        WorkFocus: new Date(Date.now() - 86400000 * 3).toISOString(),
-                        SocialLife: new Date(Date.now() - 86400000 * 0.5).toISOString()
-                    }
-                };
+        }
 
-                let passivePrompt = null;
-                const now = Date.now();
-                const eatingStale = (now - new Date(state.lastUpdated.EatingHabits).getTime()) > 86400000;
-                
-                if (eatingStale) {
-                    passivePrompt = {
-                        id: 'p_eating_pulse',
-                        category: 'EatingHabits',
-                        question: "How would you rate your focus and energy after your last meal?",
-                        type: 'scale'
-                    };
+        // --- Meal Log (History) ---
+        if (resource === 'meal-log') {
+            const sub = pathParts[1];
+            if (!sub) {
+                if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getMealLogEntries(event.user.userId)) };
+                if (method === 'POST') {
+                    const { mealData, imageBase64 } = JSON.parse(event.body);
+                    return { statusCode: 201, headers, body: JSON.stringify(await createMealLogEntry(event.user.userId, mealData, imageBase64)) };
                 }
-
-                return { statusCode: 200, headers, body: JSON.stringify({ ...state, passivePrompt }) };
-            }
-
-            if (sub === 'passive-response' && method === 'POST') {
-                const { promptId, response } = JSON.parse(event.body);
-                await awardPoints(event.user.userId, 'assessment.passive_pulse', 15, { promptId, response });
-                return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
+            } else {
+                return { statusCode: 200, headers, body: JSON.stringify(await getMealLogEntryById(event.user.userId, parseInt(sub))) };
             }
         }
 
-        if (resource === 'partner-blueprint') {
-            if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getPartnerBlueprint(event.user.userId)) };
-            if (method === 'POST') {
-                await savePartnerBlueprint(event.user.userId, JSON.parse(event.body));
-                return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
+        // --- Saved Meals ---
+        if (resource === 'saved-meals') {
+            const sub = pathParts[1];
+            if (!sub) {
+                if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getSavedMeals(event.user.userId)) };
+                if (method === 'POST') return { statusCode: 201, headers, body: JSON.stringify(await saveMeal(event.user.userId, JSON.parse(event.body))) };
+            } else {
+                if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getSavedMealById(event.user.userId, parseInt(sub))) };
+                if (method === 'DELETE') { await deleteMeal(event.user.userId, parseInt(sub)); return { statusCode: 204, headers }; }
             }
         }
 
-        if (resource === 'matches') {
-            if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getMatches(event.user.userId)) };
-        }
-
+        // --- Meal Plans ---
         if (resource === 'meal-plans') {
             const sub = pathParts[1];
             if (!sub) {
@@ -172,6 +151,7 @@ export const handler = async (event) => {
             }
         }
 
+        // --- Grocery Lists ---
         if (resource === 'grocery-lists') {
             const sub = pathParts[1];
             if (!sub) {
@@ -194,142 +174,62 @@ export const handler = async (event) => {
             }
         }
 
-        if (resource === 'calculate-readiness') {
-            const stats = JSON.parse(event.body);
-            // FIX: Initialize GoogleGenAI with process.env.API_KEY directly as per guidelines
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const prompt = `Act as an elite sports scientist. Calculate a readiness score (1-100) based on these biometrics: 
-                Sleep: ${stats.sleepMinutes} mins, Quality: ${stats.sleepQuality}/100, HRV: ${stats.hrv}ms, Last Workout Intensity: ${stats.workoutIntensity}/10.
-                Return a label (e.g., "Push for a PR", "Rest Day") and a brief reasoning.`;
-
-            const response = await ai.models.generateContent({
-                model: 'gemini-3-flash-preview',
-                contents: prompt,
-                config: {
-                    responseMimeType: 'application/json',
-                    responseSchema: {
-                        type: Type.OBJECT,
-                        properties: {
-                            score: { type: Type.NUMBER },
-                            label: { type: Type.STRING },
-                            reasoning: { type: Type.STRING }
-                        },
-                        required: ['score', 'label', 'reasoning']
-                    }
-                }
-            });
-            return { statusCode: 200, headers, body: response.text };
-        }
-
-        if (resource === 'analyze-form') {
-            const { base64Image, exercise } = JSON.parse(event.body);
-            // FIX: Initialize GoogleGenAI with process.env.API_KEY directly as per guidelines
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const prompt = `Analyze this image of a person performing a ${exercise}. Check for posture, alignment, and depth. Provide constructive feedback.`;
-            
-            const response = await ai.models.generateContent({
-                model: 'gemini-3-flash-preview',
-                contents: {
-                    parts: [
-                        { inlineData: { data: base64Image, mimeType: 'image/jpeg' } },
-                        { text: prompt }
-                    ]
-                },
-                config: {
-                    responseMimeType: 'application/json',
-                    responseSchema: {
-                        type: Type.OBJECT,
-                        properties: {
-                            isCorrect: { type: Type.BOOLEAN },
-                            feedback: { type: Type.STRING },
-                            score: { type: Type.NUMBER }
-                        },
-                        required: ['isCorrect', 'feedback', 'score']
-                    }
-                }
-            });
-            return { statusCode: 200, headers, body: response.text };
-        }
-
-        if (resource === 'body' && pathParts[1] === 'log-recovery') {
-            const data = JSON.parse(event.body);
-            await awardPoints(event.user.userId, 'body.log_recovery', 15, { data });
-            return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
-        }
-
-        if (resource === 'search-restaurants') {
-            const { lat, lng } = JSON.parse(event.body);
-            // FIX: Initialize GoogleGenAI with process.env.API_KEY directly as per guidelines
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const response = await ai.models.generateContent({
-                // FIX: Use gemini-2.5-flash for maps grounding as per guidelines
-                model: "gemini-2.5-flash",
-                contents: `I am at [${lat}, ${lng}]. Use Google Maps to list exactly which restaurant I am likely at and 4 other highly rated nearby healthy options.`,
-                config: {
-                    tools: [{ googleMaps: {} }],
-                    toolConfig: {
-                        retrievalConfig: {
-                            latLng: { latitude: lat, longitude: lng }
-                        }
-                    }
-                },
-            });
-            const places = response.candidates?.[0]?.groundingMetadata?.groundingChunks
-                ?.filter(chunk => chunk.maps)
-                ?.map(chunk => ({ title: chunk.maps.title, uri: chunk.maps.uri })) || [];
-            
-            return { statusCode: 200, headers, body: JSON.stringify({ text: response.text, places }) };
-        }
-
+        // --- Social ---
         if (resource === 'social') {
             const sub = pathParts[1];
-            if (sub === 'check-in' && method === 'POST') {
-                const { locationName } = JSON.parse(event.body);
-                await awardPoints(event.user.userId, 'social.checkin', 25, { location: locationName });
-                return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
-            }
-            if (sub === 'profile') {
-                if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getSocialProfile(event.user.userId)) };
-                if (method === 'PATCH') return { statusCode: 200, headers, body: JSON.stringify(await updateSocialProfile(event.user.userId, JSON.parse(event.body))) };
-            }
             if (sub === 'friends' && method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getFriends(event.user.userId)) };
             if (sub === 'requests') {
                 if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getFriendRequests(event.user.userId)) };
-                if (method === 'POST') {
-                    await sendFriendRequest(event.user.userId, JSON.parse(event.body).email);
-                    return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
-                }
+                if (method === 'POST') { await sendFriendRequest(event.user.userId, JSON.parse(event.body).email); return { statusCode: 200, headers, body: JSON.stringify({ success: true }) }; }
                 if (method === 'PATCH') {
                     const { requestId, status } = JSON.parse(event.body);
                     await respondToFriendRequest(event.user.userId, requestId, status);
                     return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
                 }
             }
-        }
-
-        if (resource === 'saved-meals') {
-            const sub = pathParts[1];
-            if (!sub) {
-                if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getSavedMeals(event.user.userId)) };
-                if (method === 'POST') return { statusCode: 201, headers, body: JSON.stringify(await saveMeal(event.user.userId, JSON.parse(event.body))) };
-            } else {
-                if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getSavedMealById(event.user.userId, parseInt(sub))) };
-                if (method === 'DELETE') { await deleteMeal(event.user.userId, parseInt(sub)); return { statusCode: 204, headers }; }
+            if (sub === 'profile') {
+                if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getSocialProfile(event.user.userId)) };
+                if (method === 'PATCH') return { statusCode: 200, headers, body: JSON.stringify(await updateSocialProfile(event.user.userId, JSON.parse(event.body))) };
             }
-        }
-        
-        if (resource === 'meal-log') {
-            const sub = pathParts[1];
-            if (!sub) {
-                if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getMealLogEntries(event.user.userId)) };
-                if (method === 'POST') return { statusCode: 201, headers, body: JSON.stringify(await createMealLogEntry(event.user.userId, JSON.parse(event.body).mealData, JSON.parse(event.body).imageBase64)) };
-            } else {
-                if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getMealLogEntryById(event.user.userId, parseInt(sub))) };
+            if (sub === 'check-in' && method === 'POST') {
+                const { locationName } = JSON.parse(event.body);
+                await awardPoints(event.user.userId, 'social.checkin', 25, { location: locationName });
+                return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
             }
         }
 
-        if (resource === 'analyze-image' || resource === 'analyze-image-recipes') {
-            // FIX: Initialize GoogleGenAI with process.env.API_KEY directly as per guidelines
+        // --- Rewards ---
+        if (resource === 'rewards' && method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getRewardsSummary(event.user.userId)) };
+
+        // --- Assessments ---
+        if (resource === 'assessments') {
+            const sub = pathParts[1];
+            if (!sub && method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getAssessments()) };
+            if (sub === 'submit' && method === 'POST') {
+                const { assessmentId, responses } = JSON.parse(event.body);
+                await submitAssessment(event.user.userId, assessmentId, responses);
+                return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
+            }
+            if (sub === 'state' && method === 'GET') {
+                const state = { lastUpdated: { EatingHabits: new Date().toISOString(), PhysicalFitness: new Date().toISOString() } };
+                return { statusCode: 200, headers, body: JSON.stringify(state) };
+            }
+            if (sub === 'passive-response' && method === 'POST') {
+                const { promptId, response } = JSON.parse(event.body);
+                await awardPoints(event.user.userId, 'assessment.passive_pulse', 15, { promptId, response });
+                return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
+            }
+        }
+
+        // --- Matching & Blueprints ---
+        if (resource === 'partner-blueprint') {
+            if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getPartnerBlueprint(event.user.userId)) };
+            if (method === 'POST') { await savePartnerBlueprint(event.user.userId, JSON.parse(event.body)); return { statusCode: 200, headers, body: JSON.stringify({ success: true }) }; }
+        }
+        if (resource === 'matches' && method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getMatches(event.user.userId)) };
+
+        // --- AI Processing ---
+        if (resource === 'analyze-image' || resource === 'analyze-image-grocery' || resource === 'analyze-image-recipes') {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const { base64Image, mimeType, prompt, schema } = JSON.parse(event.body);
             const res = await ai.models.generateContent({ 
@@ -337,7 +237,7 @@ export const handler = async (event) => {
                 contents: { 
                     parts: [
                         ...(base64Image ? [{ inlineData: { data: base64Image, mimeType } }] : []),
-                        { text: prompt }
+                        { text: prompt || "Analyze this image." }
                     ] 
                 }, 
                 config: { responseMimeType: 'application/json', responseSchema: schema } 
@@ -345,14 +245,65 @@ export const handler = async (event) => {
             return { statusCode: 200, headers, body: res.text };
         }
 
-        if (resource === 'rewards') return { statusCode: 200, headers, body: JSON.stringify(await getRewardsSummary(event.user.userId)) };
+        if (resource === 'calculate-readiness') {
+            const stats = JSON.parse(event.body);
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const res = await ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: `Predict recovery for Sleep: ${stats.sleepMinutes} mins, Quality: ${stats.sleepQuality}/100, HRV: ${stats.hrv}ms.`,
+                config: {
+                    responseMimeType: 'application/json',
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: { score: { type: Type.NUMBER }, label: { type: Type.STRING }, reasoning: { type: Type.STRING } },
+                        required: ['score', 'label', 'reasoning']
+                    }
+                }
+            });
+            return { statusCode: 200, headers, body: res.text };
+        }
+
+        if (resource === 'analyze-form') {
+            const { base64Image, exercise } = JSON.parse(event.body);
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const res = await ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: { parts: [{ inlineData: { data: base64Image, mimeType: 'image/jpeg' } }, { text: `Analyze posture for ${exercise}` }] },
+                config: {
+                    responseMimeType: 'application/json',
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: { isCorrect: { type: Type.BOOLEAN }, feedback: { type: Type.STRING }, score: { type: Type.NUMBER } },
+                        required: ['isCorrect', 'feedback', 'score']
+                    }
+                }
+            });
+            return { statusCode: 200, headers, body: res.text };
+        }
+
+        if (resource === 'search-restaurants') {
+            const { lat, lng } = JSON.parse(event.body);
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const response = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: `List healthy restaurants near [${lat}, ${lng}].`,
+                config: {
+                    tools: [{ googleMaps: {} }],
+                    toolConfig: { retrievalConfig: { latLng: { latitude: lat, longitude: lng } } }
+                },
+            });
+            const places = response.candidates?.[0]?.groundingMetadata?.groundingChunks
+                ?.filter(chunk => chunk.maps)
+                ?.map(chunk => ({ title: chunk.maps.title, uri: chunk.maps.uri })) || [];
+            return { statusCode: 200, headers, body: JSON.stringify({ text: response.text, places }) };
+        }
 
     } catch (error) {
         console.error('Handler error:', error);
         return { statusCode: 500, headers, body: JSON.stringify({ error: error.message }) };
     }
 
-    return { statusCode: 404, headers, body: JSON.stringify({ error: 'Not Found' }) };
+    return { statusCode: 404, headers, body: JSON.stringify({ error: 'Not Found: ' + path }) };
 };
 
 async function handleCustomerLogin(event, headers, JWT_SECRET) {
@@ -362,6 +313,6 @@ async function handleCustomerLogin(event, headers, JWT_SECRET) {
         const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
         return { statusCode: 200, headers, body: JSON.stringify({ token }) };
     } catch (e) {
-        return { statusCode: 500, headers, body: JSON.stringify({ error: 'Auth failed' }) };
+        return { statusCode: 500, headers, body: JSON.stringify({ error: 'Auth failed: ' + e.message }) };
     }
 }
