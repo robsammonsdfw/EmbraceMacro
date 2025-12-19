@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { ActivityIcon, FireIcon, HeartIcon, ClockIcon, PlusIcon, CameraIcon, BeakerIcon, UserCircleIcon, TrophyIcon } from '../icons';
+import { ActivityIcon, FireIcon, HeartIcon, ClockIcon, PlusIcon, CameraIcon, BeakerIcon, UserCircleIcon } from '../icons';
 import * as apiService from '../../services/apiService';
 import type { HealthStats, ReadinessScore, RecoveryData } from '../../types';
 import { FormAnalysis } from './FormAnalysis';
