@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { ActivityIcon, FireIcon, HeartIcon, ClockIcon, PlusIcon, CameraIcon, BeakerIcon } from '../icons';
+import { ActivityIcon, FireIcon, HeartIcon, ClockIcon, PlusIcon, CameraIcon, BeakerIcon, UserCircleIcon, TrophyIcon } from '../icons';
 import * as apiService from '../../services/apiService';
 import type { HealthStats, ReadinessScore, RecoveryData } from '../../types';
 import { FormAnalysis } from './FormAnalysis';
@@ -58,37 +58,88 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth }) =
         }
     };
 
+    const handleStartBodyScan = () => {
+        const token = localStorage.getItem('embracehealth-api-token');
+        const url = token 
+            ? `https://app.embracehealth.ai?token=${encodeURIComponent(token)}`
+            : 'https://app.embracehealth.ai';
+        window.open(url, '_blank');
+    };
+
     return (
-        <div className="space-y-6 animate-fade-in pb-20">
+        <div className="space-y-6 animate-fade-in pb-20 max-w-5xl mx-auto">
             {isFormCheckOpen && <FormAnalysis onClose={() => setIsFormCheckOpen(false)} />}
 
             <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h2 className="text-3xl font-black text-slate-900 tracking-tight">Body Hub</h2>
-                    <p className="text-slate-500 font-medium">Predictive recovery & biometric integrity.</p>
+                    <h2 className="text-3xl font-black text-slate-900 tracking-tight">Body Intelligence</h2>
+                    <p className="text-slate-500 font-medium">Predictive recovery & Prism 3D biometrics.</p>
                 </div>
                 <div className="flex gap-2">
                     <button 
                         onClick={() => setIsLogOpen(!isLogOpen)}
                         className="bg-white border border-slate-200 px-4 py-2 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition"
                     >
-                        <PlusIcon /> Log Metrics
+                        <PlusIcon className="w-4 h-4" /> Log Biometrics
                     </button>
                     <button 
                         onClick={onSyncHealth}
-                        className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700 transition"
+                        className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700 transition shadow-md"
                     >
                         Sync Wearable
                     </button>
                 </div>
             </header>
 
+            {/* Prism Scanner CTA */}
+            <section className="bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-950 rounded-[2rem] p-8 text-white shadow-2xl relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-12 opacity-10 group-hover:scale-110 transition-transform duration-700 pointer-events-none">
+                    <UserCircleIcon className="w-64 h-64" />
+                </div>
+                <div className="relative z-10 max-w-lg">
+                    <div className="inline-flex items-center gap-2 bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-4 border border-indigo-500/30">
+                        <ActivityIcon className="w-3 h-3" /> Prism 3D Scanner
+                    </div>
+                    <h3 className="text-3xl font-black mb-3">Sync Your Prism Scan</h3>
+                    <p className="text-indigo-100/70 text-lg font-medium leading-relaxed mb-8">
+                        The Prism scanner creates a clinical 3D avatar of your body, tracking muscle gain, body fat percentage, and posture alignment with medical precision.
+                    </p>
+                    <button 
+                        onClick={handleStartBodyScan}
+                        className="bg-emerald-500 hover:bg-emerald-400 text-white font-black py-4 px-8 rounded-2xl shadow-xl transform active:scale-95 transition-all flex items-center gap-3 text-lg"
+                    >
+                        <span>Perform Body Scan</span>
+                        <PlusIcon className="w-5 h-5" />
+                    </button>
+                </div>
+                
+                {/* Prism Metrics Preview (Placeholder/Ghost) */}
+                <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-4 opacity-50">
+                    <div className="bg-white/5 border border-white/10 p-4 rounded-2xl backdrop-blur-sm">
+                        <p className="text-[10px] font-bold text-indigo-300 uppercase">Body Fat %</p>
+                        <p className="text-2xl font-black">--</p>
+                    </div>
+                    <div className="bg-white/5 border border-white/10 p-4 rounded-2xl backdrop-blur-sm">
+                        <p className="text-[10px] font-bold text-indigo-300 uppercase">Lean Mass</p>
+                        <p className="text-2xl font-black">--</p>
+                    </div>
+                    <div className="bg-white/5 border border-white/10 p-4 rounded-2xl backdrop-blur-sm">
+                        <p className="text-[10px] font-bold text-indigo-300 uppercase">Waist/Hip</p>
+                        <p className="text-2xl font-black">--</p>
+                    </div>
+                    <div className="bg-white/5 border border-white/10 p-4 rounded-2xl backdrop-blur-sm">
+                        <p className="text-[10px] font-bold text-indigo-300 uppercase">Posture</p>
+                        <p className="text-2xl font-black">--</p>
+                    </div>
+                </div>
+            </section>
+
             {/* Manual Entry Form */}
             {isLogOpen && (
                 <form onSubmit={handleLogSubmit} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xl animate-fade-in space-y-6">
                     <div className="flex justify-between items-center mb-2">
                         <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">Update Recovery Metrics</h3>
-                        <button type="button" onClick={() => setIsLogOpen(false)} className="text-slate-400 hover:text-slate-600"><PlusIcon className="rotate-45" /></button>
+                        <button type="button" onClick={() => setIsLogOpen(false)} className="text-slate-400 hover:text-slate-600"><PlusIcon className="rotate-45 w-6 h-6" /></button>
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -137,7 +188,7 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth }) =
                     <button 
                         type="submit" 
                         disabled={isCalculating}
-                        className="w-full py-4 bg-slate-900 text-white font-black uppercase tracking-widest text-sm rounded-2xl hover:bg-black transition-all"
+                        className="w-full py-4 bg-slate-900 text-white font-black uppercase tracking-widest text-sm rounded-2xl hover:bg-black transition-all shadow-lg"
                     >
                         {isCalculating ? 'Processing AI Readiness...' : 'Update & Calculate Readiness'}
                     </button>
@@ -198,7 +249,7 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth }) =
                         <div className="absolute -bottom-4 -right-4 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform"></div>
                         <div className="relative z-10">
                             <div className="bg-white/20 p-3 rounded-2xl w-fit mb-4 group-hover:bg-white/30 transition-colors">
-                                <CameraIcon />
+                                <CameraIcon className="w-6 h-6" />
                             </div>
                             <h3 className="text-xl font-black mb-1">AI Form Check</h3>
                             <p className="text-indigo-100 text-sm font-medium">Real-time feedback on squat depth and posture alignment.</p>
@@ -215,14 +266,14 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth }) =
                         <div className="space-y-4">
                             <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 bg-rose-100 text-rose-600 rounded-xl flex items-center justify-center"><FireIcon /></div>
+                                    <div className="w-8 h-8 bg-rose-100 text-rose-600 rounded-xl flex items-center justify-center"><FireIcon className="w-4 h-4" /></div>
                                     <span className="text-sm font-bold text-slate-700">Apple Health</span>
                                 </div>
                                 <span className="text-[10px] font-black text-emerald-500 uppercase tracking-wider">Connected</span>
                             </div>
                             <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl grayscale opacity-50">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center"><BeakerIcon /></div>
+                                    <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center"><BeakerIcon className="w-4 h-4" /></div>
                                     <span className="text-sm font-bold text-slate-700">Oura Ring</span>
                                 </div>
                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Syncing...</span>

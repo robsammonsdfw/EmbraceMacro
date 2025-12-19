@@ -2,7 +2,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { TodayStrip } from './TodayStrip';
 import { DigitalTwinPanel } from './DigitalTwinPanel';
-import { CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, TrophyIcon, ChatIcon, ThumbUpIcon, UserGroupIcon } from '../icons';
+// Added missing ActivityIcon to the icons import list
+import { CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, TrophyIcon, ChatIcon, ThumbUpIcon, UserGroupIcon, UserCircleIcon, PlusIcon, ActivityIcon } from '../icons';
 import type { HealthStats, Friendship } from '../../types';
 import * as apiService from '../../services/apiService';
 
@@ -43,8 +44,8 @@ const SocialFeedItem: React.FC<{ name: string; action: string; time: string; col
             <p className="text-[10px] text-slate-400 mt-1 uppercase font-bold tracking-wider">{time}</p>
         </div>
         <div className="flex space-x-2 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button className="hover:text-emerald-500 transition-colors"><ThumbUpIcon /></button>
-            <button className="hover:text-blue-500 transition-colors"><ChatIcon /></button>
+            <button className="hover:text-emerald-500 transition-colors"><ThumbUpIcon className="w-4 h-4" /></button>
+            <button className="hover:text-blue-500 transition-colors"><ChatIcon className="w-4 h-4" /></button>
         </div>
     </div>
 );
@@ -112,13 +113,20 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                     </div>
                 </div>
                 <div className="bg-white/10 p-3 rounded-full">
-                    <TrophyIcon />
+                    <TrophyIcon className="w-6 h-6" />
                 </div>
             </div>
 
             {/* Header */}
-            <div>
+            <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Today's Pulse</h2>
+                <button 
+                    onClick={onScanClick}
+                    className="flex items-center gap-2 bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full text-xs font-bold border border-emerald-100 hover:bg-emerald-100 transition-colors"
+                >
+                    <UserCircleIcon className="w-4 h-4" />
+                    <span>Body Hub</span>
+                </button>
             </div>
 
             {/* Dynamic Activity Row */}
@@ -136,7 +144,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="font-bold text-slate-900 flex items-center gap-2">
-                                <UserGroupIcon /> Friend Updates
+                                <UserGroupIcon className="w-5 h-5 text-indigo-500" /> Friend Updates
                             </h3>
                             <span className="text-xs font-bold text-slate-400 uppercase">{friends.length} Active</span>
                         </div>
@@ -186,19 +194,19 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                         <h3 className="font-bold text-slate-900 mb-4">Quick Log</h3>
                         <div className="grid grid-cols-4 gap-4">
                             <button onClick={onCameraClick} className="flex flex-col items-center gap-2 group">
-                                <div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl group-hover:scale-110 transition-transform shadow-sm"><CameraIcon /></div>
+                                <div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl group-hover:scale-110 transition-transform shadow-sm"><CameraIcon className="w-6 h-6" /></div>
                                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Meal</span>
                             </button>
                             <button onClick={onBarcodeClick} className="flex flex-col items-center gap-2 group">
-                                <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl group-hover:scale-110 transition-transform shadow-sm"><BarcodeIcon /></div>
+                                <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl group-hover:scale-110 transition-transform shadow-sm"><BarcodeIcon className="w-6 h-6" /></div>
                                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Scan</span>
                             </button>
                             <button onClick={onPantryChefClick} className="flex flex-col items-center gap-2 group">
-                                <div className="p-4 bg-amber-50 text-amber-600 rounded-2xl group-hover:scale-110 transition-transform shadow-sm"><ChefHatIcon /></div>
+                                <div className="p-4 bg-amber-50 text-amber-600 rounded-2xl group-hover:scale-110 transition-transform shadow-sm"><ChefHatIcon className="w-6 h-6" /></div>
                                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Pantry</span>
                             </button>
                             <button onClick={onRestaurantClick} className="flex flex-col items-center gap-2 group">
-                                <div className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl group-hover:scale-110 transition-transform shadow-sm"><UtensilsIcon /></div>
+                                <div className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl group-hover:scale-110 transition-transform shadow-sm"><UtensilsIcon className="w-6 h-6" /></div>
                                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Dine</span>
                             </button>
                         </div>
@@ -207,7 +215,28 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
 
                 {/* Side Column */}
                 <div className="space-y-6">
-                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col justify-between min-h-[300px]">
+                    {/* Prism Scanner CTA Card */}
+                    <div 
+                        onClick={() => {
+                            const token = localStorage.getItem('embracehealth-api-token');
+                            window.open(token ? `https://app.embracehealth.ai?token=${encodeURIComponent(token)}` : 'https://app.embracehealth.ai', '_blank');
+                        }}
+                        className="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-2xl p-6 text-white shadow-lg cursor-pointer hover:shadow-xl transition-all group overflow-hidden relative"
+                    >
+                        <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform"></div>
+                        <div className="relative z-10">
+                            <h3 className="font-bold text-lg mb-1 flex items-center gap-2">
+                                <ActivityIcon className="w-4 h-4" /> 3D Body Scan
+                            </h3>
+                            <p className="text-indigo-100 text-xs mb-6">Launch Prism Scanner to track 3D body composition.</p>
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-black uppercase tracking-widest bg-white/20 px-2 py-1 rounded">Open App</span>
+                                <PlusIcon className="w-4 h-4" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col justify-between min-h-[250px]">
                         <div>
                             <div className="flex justify-between items-center mb-2">
                                 <h3 className="font-bold text-slate-900">Body Twin</h3>
@@ -230,7 +259,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
 
                         <button 
                             onClick={onScanClick}
-                            className="w-full bg-slate-900 text-white font-bold py-3 rounded-xl hover:bg-slate-800 transition-colors shadow-md"
+                            className="w-full bg-slate-900 text-white font-bold py-3 rounded-xl hover:bg-slate-800 transition-colors shadow-md text-sm"
                         >
                             Open Body Hub
                         </button>
