@@ -44,14 +44,8 @@ const App: React.FC = () => {
   
   // Health State
   const [healthStats, setHealthStats] = useState<HealthStats>({ 
-    steps: 0, 
-    activeCalories: 0, 
-    restingCalories: 0, 
-    distanceMiles: 0, 
-    flightsClimbed: 0, 
-    cardioScore: 0, 
-    hrv: 0, 
-    sleepMinutes: 0 
+    steps: 0, activeCalories: 0, restingCalories: 0, distanceMiles: 0, 
+    flightsClimbed: 0, heartRate: 0, cardioScore: 0, hrv: 0, sleepMinutes: 0 
   });
   const [isHealthConnected, setIsHealthConnected] = useState(false);
   const [isHealthSyncing, setIsHealthSyncing] = useState(false);
@@ -69,6 +63,18 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const refreshHealth = useCallback(async () => {
+      try {
+          const stats = await apiService.getHealthStatsFromDB();
+          if (stats && Object.keys(stats).length > 0) {
+              setHealthStats(prev => ({ ...prev, ...stats }));
+              setIsHealthConnected(true);
+          }
+      } catch (e) {
+          console.error("Failed to fetch health from DB", e);
+      }
+  }, []);
+
   // Initial Data Load
   useEffect(() => {
     if (isAuthenticated) {
@@ -77,7 +83,8 @@ const App: React.FC = () => {
             apiService.getSavedMeals().catch(() => []),
             apiService.getMealPlans().catch(() => []),
             apiService.getDashboardPrefs().catch(() => ({ selectedWidgets: ['steps', 'activeCalories', 'distanceMiles'] })),
-            refreshWallet().catch(() => null)
+            refreshWallet().catch(() => null),
+            refreshHealth().catch(() => null)
         ]).then(([log, saved, plans, prefs]) => {
             setMealLog(log);
             setSavedMeals(saved);
@@ -86,19 +93,23 @@ const App: React.FC = () => {
             if (plans.length > 0) setActivePlanId(plans[0].id);
         });
     }
-  }, [isAuthenticated, refreshWallet]);
+  }, [isAuthenticated, refreshWallet, refreshHealth]);
 
-  const handleConnectHealth = async () => {
+  const handleConnectHealth = async (source: 'apple' | 'fitbit' = 'apple') => {
       setIsHealthSyncing(true);
       try {
-          const success = await connectHealthProvider('web');
+          // 1. Trigger simulated device sync
+          const provider = source === 'apple' ? 'ios' : 'fitbit';
+          const success = await connectHealthProvider(provider);
           if (success) {
-              const stats = await syncHealthData();
-              setHealthStats(stats);
-              setIsHealthConnected(true);
+              const freshDeviceStats = await syncHealthData(source);
+              // 2. Sync to DB logic (Backend handles "highest value" comparison)
+              await apiService.syncHealthStatsToDB(freshDeviceStats);
+              // 3. Refresh from DB source of truth
+              await refreshHealth();
           }
       } catch (e) {
-          console.error("Health connect failed", e);
+          console.error("Health sync failed", e);
       } finally {
           setIsHealthSyncing(false);
       }
@@ -109,6 +120,7 @@ const App: React.FC = () => {
       await apiService.saveDashboardPrefs(newPrefs);
   };
 
+  // ... (rest of handleCaptureResult, handleSaveToHistory, etc. remains the same) ...
   const handleCaptureResult = useCallback(async (img: string | null, mode: any, barcode?: string) => {
     setIsCaptureOpen(false);
     setImage(null);

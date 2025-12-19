@@ -3,7 +3,7 @@ import type {
   NutritionInfo, SavedMeal, MealPlan, MealPlanItem, MealPlanItemMetadata, 
   GroceryList, GroceryItem, RewardsSummary, MealLogEntry, Assessment, 
   UserProfile, Friendship, ReadinessScore, FormAnalysisResult, RecoveryData,
-  AssessmentState, UserDashboardPrefs
+  AssessmentState, UserDashboardPrefs, HealthStats
 } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
@@ -32,6 +32,14 @@ const callApi = async (endpoint: string, method: string, body?: any) => {
     return response.status === 204 ? null : response.json();
 };
 
+/** Health Aggregator Stats */
+export const getHealthStatsFromDB = (): Promise<HealthStats> => 
+    callApi('/health-metrics', 'GET');
+
+export const syncHealthStatsToDB = (stats: Partial<HealthStats>): Promise<HealthStats> => 
+    callApi('/health-metrics', 'POST', stats);
+
+// ... rest of apiService.ts ...
 export interface MapPlace {
     title: string;
     uri: string;

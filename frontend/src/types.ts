@@ -49,6 +49,7 @@ export interface HealthStats {
   restingCalories: number;
   distanceMiles: number;
   flightsClimbed: number;
+  heartRate: number;
   cardioScore: number;
   hrv?: number;
   sleepMinutes?: number;

@@ -39,11 +39,14 @@ import {
     submitAssessment,
     getPartnerBlueprint,
     savePartnerBlueprint,
-    getMatches
+    getMatches,
+    getHealthMetrics,
+    syncHealthMetrics
 } from './services/databaseService.mjs';
 
 export const handler = async (event) => {
-    const { GEMINI_API_KEY, JWT_SECRET, FRONTEND_URL } = process.env;
+    // FIX: Removed GEMINI_API_KEY from environment variable destructuring to comply with guidelines
+    const { JWT_SECRET, FRONTEND_URL } = process.env;
 
     const allowedOrigins = [
         FRONTEND_URL, 
@@ -85,6 +88,18 @@ export const handler = async (event) => {
     const resource = pathParts[0];
 
     try {
+        if (resource === 'health-metrics') {
+            if (method === 'GET') {
+                const stats = await getHealthMetrics(event.user.userId);
+                return { statusCode: 200, headers, body: JSON.stringify(stats || {}) };
+            }
+            if (method === 'POST') {
+                const stats = JSON.parse(event.body);
+                const updated = await syncHealthMetrics(event.user.userId, stats);
+                return { statusCode: 200, headers, body: JSON.stringify(updated) };
+            }
+        }
+        
         if (resource === 'assessments') {
             const sub = pathParts[1];
             if (!sub && method === 'GET') {
@@ -181,7 +196,8 @@ export const handler = async (event) => {
 
         if (resource === 'calculate-readiness') {
             const stats = JSON.parse(event.body);
-            const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+            // FIX: Initialize GoogleGenAI with process.env.API_KEY directly as per guidelines
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const prompt = `Act as an elite sports scientist. Calculate a readiness score (1-100) based on these biometrics: 
                 Sleep: ${stats.sleepMinutes} mins, Quality: ${stats.sleepQuality}/100, HRV: ${stats.hrv}ms, Last Workout Intensity: ${stats.workoutIntensity}/10.
                 Return a label (e.g., "Push for a PR", "Rest Day") and a brief reasoning.`;
@@ -207,7 +223,8 @@ export const handler = async (event) => {
 
         if (resource === 'analyze-form') {
             const { base64Image, exercise } = JSON.parse(event.body);
-            const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+            // FIX: Initialize GoogleGenAI with process.env.API_KEY directly as per guidelines
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const prompt = `Analyze this image of a person performing a ${exercise}. Check for posture, alignment, and depth. Provide constructive feedback.`;
             
             const response = await ai.models.generateContent({
@@ -242,9 +259,11 @@ export const handler = async (event) => {
 
         if (resource === 'search-restaurants') {
             const { lat, lng } = JSON.parse(event.body);
-            const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+            // FIX: Initialize GoogleGenAI with process.env.API_KEY directly as per guidelines
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const response = await ai.models.generateContent({
-                model: "gemini-2.5-flash-preview-09-2025",
+                // FIX: Use gemini-2.5-flash for maps grounding as per guidelines
+                model: "gemini-2.5-flash",
                 contents: `I am at [${lat}, ${lng}]. Use Google Maps to list exactly which restaurant I am likely at and 4 other highly rated nearby healthy options.`,
                 config: {
                     tools: [{ googleMaps: {} }],
@@ -310,7 +329,8 @@ export const handler = async (event) => {
         }
 
         if (resource === 'analyze-image' || resource === 'analyze-image-recipes') {
-            const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+            // FIX: Initialize GoogleGenAI with process.env.API_KEY directly as per guidelines
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const { base64Image, mimeType, prompt, schema } = JSON.parse(event.body);
             const res = await ai.models.generateContent({ 
                 model: 'gemini-3-flash-preview', 
