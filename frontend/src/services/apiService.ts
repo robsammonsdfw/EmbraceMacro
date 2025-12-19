@@ -3,11 +3,8 @@ import type {
   NutritionInfo, SavedMeal, MealPlan, MealPlanItem, MealPlanItemMetadata, 
   GroceryList, GroceryItem, RewardsSummary, MealLogEntry, Assessment, 
   UserProfile, Friendship, ReadinessScore, FormAnalysisResult, RecoveryData,
-  AssessmentState, UserDashboardPrefs, HealthStats
+  AssessmentState, UserDashboardPrefs, HealthStats, Recipe
 } from '../types';
-
-// FIX: Imported Type for schema definitions.
-import { Type } from "@google/genai";
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
 const AUTH_TOKEN_KEY = 'embracehealth-api-token';
@@ -35,7 +32,6 @@ const callApi = async (endpoint: string, method: string, body?: any) => {
     return response.status === 204 ? null : response.json();
 };
 
-// FIX: Exported MapPlace interface.
 export interface MapPlace {
     uri: string;
     title: string;
@@ -65,7 +61,7 @@ export const getMealPlans = (): Promise<MealPlan[]> => callApi('/meal-plans', 'G
 export const createMealPlan = (name: string): Promise<MealPlan> => callApi('/meal-plans', 'POST', { name });
 export const addMealToPlan = (planId: number, savedMealId: number, metadata: MealPlanItemMetadata): Promise<MealPlanItem> => 
     callApi(`/meal-plans/${planId}/items`, 'POST', { savedMealId, metadata });
-export const removeMealFromPlanItem = (id: number): Promise<void> => callApi(`/meal-plan/items/${id}`, 'DELETE');
+export const removeMealFromPlanItem = (id: number): Promise<void> => callApi(`/meal-plans/items/${id}`, 'DELETE');
 
 // Grocery
 export const getGroceryLists = (): Promise<GroceryList[]> => callApi('/grocery-lists', 'GET');
@@ -83,23 +79,8 @@ export const clearGroceryListItems = (listId: number, type: 'all' | 'checked'): 
 export const importIngredientsFromPlans = (listId: number, planIds: number[]): Promise<GroceryItem[]> => 
     callApi(`/grocery-lists/${listId}/import`, 'POST', { planIds });
 
-// FIX: Added identifyGroceryItems method.
 export const identifyGroceryItems = (base64Image: string, mimeType: string): Promise<{ items: string[] }> => 
-    callApi('/analyze-image-grocery', 'POST', { 
-        base64Image, 
-        mimeType, 
-        prompt: "Identify all food items in this image for a grocery list.",
-        schema: {
-            type: Type.OBJECT,
-            properties: {
-                items: {
-                    type: Type.ARRAY,
-                    items: { type: Type.STRING }
-                }
-            },
-            required: ["items"]
-        }
-    });
+    callApi('/analyze-image-grocery', 'POST', { base64Image, mimeType });
 
 // Social
 export const getFriends = (): Promise<Friendship[]> => callApi('/social/friends', 'GET');
@@ -110,33 +91,40 @@ export const sendFriendRequest = (email: string): Promise<void> => callApi('/soc
 export const respondToFriendRequest = (requestId: number, status: 'accepted' | 'rejected'): Promise<void> => 
     callApi('/social/requests', 'PATCH', { requestId, status });
 
-// FIX: Added searchNearbyRestaurants method.
+// Discovery
 export const searchNearbyRestaurants = (latitude: number, longitude: number): Promise<{ places: MapPlace[] }> =>
     callApi('/search-nearby-restaurants', 'POST', { latitude, longitude });
 
-// FIX: Added checkInAtLocation method.
 export const checkInAtLocation = (locationName: string): Promise<void> =>
     callApi('/check-in', 'POST', { locationName });
 
-// AI Form
+// AI Analysis
 export const analyzeExerciseForm = (base64Image: string, exercise: string): Promise<FormAnalysisResult> => 
     callApi('/analyze-form', 'POST', { base64Image, exercise });
-export const analyzeImageWithGemini = (base64Image: string, mimeType: string): Promise<NutritionInfo> => 
-    callApi('/analyze-image', 'POST', { base64Image, mimeType, prompt: "Analyze this food image." });
 
-// Placeholders for Assessments & Blueprint
+export const analyzeImageWithGemini = (base64Image: string, mimeType: string): Promise<NutritionInfo> => 
+    callApi('/analyze-image', 'POST', { base64Image, mimeType });
+
+export const getMealSuggestions = (condition: string, cuisine: string): Promise<NutritionInfo[]> =>
+    callApi('/get-meal-suggestions', 'POST', { condition, cuisine });
+
+export const getRecipesFromImage = (base64Image: string, mimeType: string): Promise<Recipe[]> =>
+    callApi('/analyze-image-recipes', 'POST', { base64Image, mimeType });
+
+// Assessments
 export const getAssessments = (): Promise<Assessment[]> => callApi('/assessments', 'GET').catch(() => []);
 export const getAssessmentState = (): Promise<AssessmentState> => callApi('/assessments/state', 'GET').catch(() => ({ lastUpdated: {} }));
 export const submitAssessment = (assessmentId: string, responses: any): Promise<void> => callApi('/assessments/submit', 'POST', { assessmentId, responses });
-
-// FIX: Added submitPassivePulseResponse method.
 export const submitPassivePulseResponse = (promptId: string, value: any): Promise<void> =>
     callApi('/assessments/passive-pulse', 'POST', { promptId, value });
 
+// Matching
 export const getPartnerBlueprint = (): Promise<{ preferences: any }> => callApi('/partner-blueprint', 'GET').catch(() => ({ preferences: {} }));
 export const savePartnerBlueprint = (preferences: any): Promise<void> => callApi('/partner-blueprint', 'POST', preferences);
 export const getMatches = (): Promise<any[]> => callApi('/matches', 'GET').catch(() => []);
-export const calculateReadiness = (stats: RecoveryData): Promise<ReadinessScore> => callApi('/calculate-readiness', 'POST', stats).catch(() => ({ score: 50, label: 'Standard', reasoning: 'Data pending.' }));
+
+// Body & Recovery
+export const calculateReadiness = (stats: RecoveryData): Promise<ReadinessScore> => callApi('/calculate-readiness', 'POST', stats);
 export const logRecoveryStats = (data: RecoveryData): Promise<void> => callApi('/body/log-recovery', 'POST', data);
 export const getDashboardPrefs = (): Promise<UserDashboardPrefs> => callApi('/body/dashboard-prefs', 'GET').catch(() => ({ selectedWidgets: ['steps', 'activeCalories', 'distanceMiles'] }));
 export const saveDashboardPrefs = (prefs: UserDashboardPrefs): Promise<void> => callApi('/body/dashboard-prefs', 'POST', prefs);

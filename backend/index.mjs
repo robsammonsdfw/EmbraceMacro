@@ -3,8 +3,107 @@ import { GoogleGenAI, Type } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import * as db from './services/databaseService.mjs';
 
+// --- Shared AI Schemas ---
+
+const nutritionSchema = {
+    type: Type.OBJECT,
+    properties: {
+        mealName: { type: Type.STRING },
+        totalCalories: { type: Type.NUMBER },
+        totalProtein: { type: Type.NUMBER },
+        totalCarbs: { type: Type.NUMBER },
+        totalFat: { type: Type.NUMBER },
+        ingredients: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    name: { type: Type.STRING },
+                    weightGrams: { type: Type.NUMBER },
+                    calories: { type: Type.NUMBER },
+                    protein: { type: Type.NUMBER },
+                    carbs: { type: Type.NUMBER },
+                    fat: { type: Type.NUMBER },
+                },
+                required: ["name", "weightGrams", "calories", "protein", "carbs", "fat"]
+            }
+        }
+    },
+    required: ["mealName", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "ingredients"]
+};
+
+const grocerySchema = {
+    type: Type.OBJECT,
+    properties: {
+        items: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING }
+        }
+    },
+    required: ["items"]
+};
+
+const recipeSchema = {
+    type: Type.ARRAY,
+    items: {
+        type: Type.OBJECT,
+        properties: {
+            recipeName: { type: Type.STRING },
+            description: { type: Type.STRING },
+            ingredients: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        name: { type: Type.STRING },
+                        quantity: { type: Type.STRING }
+                    },
+                    required: ["name", "quantity"]
+                }
+            },
+            instructions: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+            },
+            nutrition: {
+                type: Type.OBJECT,
+                properties: {
+                    totalCalories: { type: Type.NUMBER },
+                    totalProtein: { type: Type.NUMBER },
+                    totalCarbs: { type: Type.NUMBER },
+                    totalFat: { type: Type.NUMBER }
+                },
+                required: ["totalCalories", "totalProtein", "totalCarbs", "totalFat"]
+            }
+        },
+        required: ["recipeName", "description", "ingredients", "instructions", "nutrition"]
+    }
+};
+
+const suggestionSchema = {
+    type: Type.ARRAY,
+    items: {
+        type: Type.OBJECT,
+        properties: {
+            ...nutritionSchema.properties,
+            justification: { type: Type.STRING }
+        },
+        required: ["mealName", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "ingredients", "justification"]
+    }
+};
+
+const formAnalysisSchema = {
+    type: Type.OBJECT,
+    properties: {
+        isCorrect: { type: Type.BOOLEAN },
+        feedback: { type: Type.STRING },
+        score: { type: Type.NUMBER }
+    },
+    required: ["isCorrect", "feedback", "score"]
+};
+
 export const handler = async (event) => {
-    const { JWT_SECRET, FRONTEND_URL } = process.env;
+    const { JWT_SECRET, FRONTEND_URL, API_KEY } = process.env;
 
     const allowedOrigins = [FRONTEND_URL, "https://food.embracehealth.ai", "https://main.embracehealth.ai", "http://localhost:5173"].filter(Boolean);
     const origin = event.headers?.origin || event.headers?.Origin;
@@ -23,6 +122,7 @@ export const handler = async (event) => {
     path = path.replace(/^\/default/, '').replace(/^default/, '');
     if (!path.startsWith('/')) path = '/' + path;
 
+    // Public Auth
     if (path === '/auth/customer-login') {
         const { email } = JSON.parse(event.body);
         const user = await db.findOrCreateUserByEmail(email);
@@ -30,16 +130,18 @@ export const handler = async (event) => {
         return { statusCode: 200, headers, body: JSON.stringify({ token }) };
     }
 
+    // JWT Check
     const authHeader = event.headers?.authorization || event.headers?.Authorization;
-    const token = authHeader?.split(' ')[1];
-    if (!token) return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized' }) };
+    const tokenStr = authHeader?.split(' ')[1];
+    if (!tokenStr) return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized' }) };
 
-    try { event.user = jwt.verify(token, JWT_SECRET); } catch (err) { return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid token' }) }; }
+    try { event.user = jwt.verify(tokenStr, JWT_SECRET); } catch (err) { return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid token' }) }; }
 
     const pathParts = path.split('/').filter(Boolean);
     const resource = pathParts[0];
 
     try {
+        // --- Social ---
         if (resource === 'social') {
             const sub = pathParts[1];
             if (sub === 'friends') return { statusCode: 200, headers, body: JSON.stringify(await db.getFriends(event.user.userId)) };
@@ -54,6 +156,7 @@ export const handler = async (event) => {
             }
         }
 
+        // --- Food Logic ---
         if (resource === 'meal-log') {
             const sub = pathParts[1];
             if (!sub) {
@@ -89,6 +192,7 @@ export const handler = async (event) => {
             }
         }
 
+        // --- Grocery ---
         if (resource === 'grocery-lists') {
             const sub = pathParts[1];
             if (!sub) {
@@ -111,6 +215,7 @@ export const handler = async (event) => {
             }
         }
 
+        // --- Health & Dashboard ---
         if (resource === 'health-metrics') {
             if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await db.getHealthMetrics(event.user.userId)) };
             if (method === 'POST') return { statusCode: 200, headers, body: JSON.stringify(await db.syncHealthMetrics(event.user.userId, JSON.parse(event.body))) };
@@ -118,65 +223,64 @@ export const handler = async (event) => {
 
         if (resource === 'rewards') return { statusCode: 200, headers, body: JSON.stringify(await db.getRewardsSummary(event.user.userId)) };
 
-        // FIX: Added search-nearby-restaurants route using Google Maps grounding.
         if (resource === 'search-nearby-restaurants') {
             const { latitude, longitude } = JSON.parse(event.body);
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = new GoogleGenAI({ apiKey: API_KEY });
             const response = await ai.models.generateContent({
                 model: "gemini-2.5-flash-lite-latest",
                 contents: "What good healthy restaurants are nearby?",
                 config: {
                     tools: [{ googleMaps: {} }],
-                    toolConfig: {
-                        retrievalConfig: {
-                            latLng: {
-                                latitude,
-                                longitude
-                            }
-                        }
-                    }
+                    toolConfig: { retrievalConfig: { latLng: { latitude, longitude } } }
                 },
             });
             const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-            const places = chunks
-                .filter(c => c.maps)
-                .map(c => ({ uri: c.maps.uri, title: c.maps.title }));
+            const places = chunks.filter(c => c.maps).map(c => ({ uri: c.maps.uri, title: c.maps.title }));
             return { statusCode: 200, headers, body: JSON.stringify({ places }) };
         }
 
-        // FIX: Added check-in route.
         if (resource === 'check-in') {
             const { locationName } = JSON.parse(event.body);
             await db.awardPoints(event.user.userId, 'restaurant.check_in', 25, { location: locationName });
             return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
         }
 
-        // FIX: Added assessments/passive-pulse route.
-        if (resource === 'assessments' && pathParts[1] === 'passive-pulse') {
-             const { promptId, value } = JSON.parse(event.body);
-             await db.awardPoints(event.user.userId, 'assessment.passive_pulse', 15, { promptId, value });
-             return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
-        }
-
-        // AI Helpers
-        if (resource === 'analyze-image' || resource === 'analyze-image-grocery' || resource === 'analyze-image-recipes' || resource === 'get-meal-suggestions') {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        // --- AI Processing ---
+        if (resource === 'analyze-image' || resource === 'analyze-image-grocery' || resource === 'analyze-image-recipes' || resource === 'get-meal-suggestions' || resource === 'analyze-form') {
+            const ai = new GoogleGenAI({ apiKey: API_KEY });
             const body = JSON.parse(event.body);
-            const { base64Image, mimeType, prompt, schema } = body;
+            const { base64Image, mimeType, condition, cuisine } = body;
             
-            const parts = [];
-            if (base64Image && mimeType) {
-                parts.push({ inlineData: { data: base64Image, mimeType } });
+            let prompt = "";
+            // FIX: Initializing schema without an immediate assignment to nutritionSchema to avoid strict type inference 
+            // that prevents re-assignment to other incompatible schema shapes below.
+            let schema;
+
+            if (resource === 'analyze-image') {
+                prompt = "Analyze the image of the food and identify the meal and all its ingredients. Provide a detailed nutritional breakdown including estimated calories, protein, carbohydrates, and fat for each ingredient and for the total meal. Use average portion sizes if necessary for estimation.";
+                schema = nutritionSchema;
+            } else if (resource === 'analyze-image-grocery') {
+                prompt = "Identify all food items in this image for a grocery list.";
+                schema = grocerySchema;
+            } else if (resource === 'analyze-image-recipes') {
+                prompt = "Analyze the image to identify all visible food ingredients. Based on these ingredients, suggest 3 diverse meal recipes. Provide descriptive name, short description, ingredients with quantities, and instructions.";
+                schema = recipeSchema;
+            } else if (resource === 'get-meal-suggestions') {
+                prompt = `Generate 3 diverse meal suggestions suitable for someone with ${condition}. The cuisine preference is ${cuisine}. Provide detailed nutritional breakdown and a brief justification.`;
+                schema = suggestionSchema;
+            } else if (resource === 'analyze-form') {
+                prompt = `Analyze the person's form for the exercise: ${body.exercise}. Give a score and feedback.`;
+                schema = formAnalysisSchema;
             }
-            parts.push({ text: prompt || "Analyze this request." });
+
+            const parts = [];
+            if (base64Image && mimeType) parts.push({ inlineData: { data: base64Image, mimeType } });
+            parts.push({ text: prompt });
 
             const res = await ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
                 contents: [{ parts }],
-                config: { 
-                    responseMimeType: 'application/json', 
-                    responseSchema: schema 
-                }
+                config: { responseMimeType: 'application/json', responseSchema: schema }
             });
             return { statusCode: 200, headers, body: res.text };
         }
