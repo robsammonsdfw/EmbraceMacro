@@ -1,4 +1,3 @@
-
 import pg from 'pg';
 
 const { Pool } = pg;
@@ -341,7 +340,20 @@ export const importIngredientsFromPlans = async (userId, listId, planIds) => {
  */
 export const getHealthMetrics = async (userId) => {
     const client = await pool.connect();
-    try { return (await client.query(`SELECT * FROM health_metrics WHERE user_id = $1`, [userId])).rows[0] || {}; } finally { client.release(); }
+    try { 
+        const res = await client.query(`
+            SELECT 
+                steps, 
+                active_calories as "activeCalories", 
+                resting_calories as "restingCalories", 
+                distance_miles as "distanceMiles", 
+                flights_climbed as "flightsClimbed", 
+                heart_rate as "heartRate", 
+                last_synced as "lastSynced"
+            FROM health_metrics WHERE user_id = $1
+        `, [userId]);
+        return res.rows[0] || {}; 
+    } finally { client.release(); }
 };
 
 export const syncHealthMetrics = async (userId, stats) => {
@@ -357,8 +369,24 @@ export const syncHealthMetrics = async (userId, stats) => {
                         flights_climbed = GREATEST(health_metrics.flights_climbed, EXCLUDED.flights_climbed),
                         heart_rate = GREATEST(health_metrics.heart_rate, EXCLUDED.heart_rate),
                         last_synced = CURRENT_TIMESTAMP 
-                   RETURNING *`;
-        return (await client.query(q, [userId, stats.steps || 0, stats.activeCalories || 0, stats.restingCalories || 0, stats.distanceMiles || 0, stats.flightsClimbed || 0, stats.heartRate || 0])).rows[0];
+                   RETURNING 
+                        steps, 
+                        active_calories as "activeCalories", 
+                        resting_calories as "restingCalories", 
+                        distance_miles as "distanceMiles", 
+                        flights_climbed as "flightsClimbed", 
+                        heart_rate as "heartRate", 
+                        last_synced as "lastSynced"`;
+        const res = await client.query(q, [
+            userId, 
+            stats.steps || 0, 
+            stats.activeCalories || 0, 
+            stats.restingCalories || 0, 
+            stats.distanceMiles || 0, 
+            stats.flightsClimbed || 0, 
+            stats.heartRate || 0
+        ]);
+        return res.rows[0];
     } finally { client.release(); }
 };
 
