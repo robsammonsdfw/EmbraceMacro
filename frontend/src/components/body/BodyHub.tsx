@@ -1,22 +1,24 @@
 
 import React, { useState, useEffect } from 'react';
-import { ActivityIcon, FireIcon, HeartIcon, ClockIcon, PlusIcon, CameraIcon, BeakerIcon, UserCircleIcon } from '../icons';
+import { ActivityIcon, FireIcon, HeartIcon, ClockIcon, PlusIcon, CameraIcon, BeakerIcon, UserCircleIcon, GlobeAltIcon, TrophyIcon } from '../icons';
 import * as apiService from '../../services/apiService';
-import type { HealthStats, ReadinessScore, RecoveryData } from '../../types';
+import type { HealthStats, ReadinessScore, RecoveryData, UserDashboardPrefs } from '../../types';
 import { FormAnalysis } from './FormAnalysis';
 
 interface BodyHubProps {
     healthStats: HealthStats;
     onSyncHealth: () => void;
+    dashboardPrefs: UserDashboardPrefs;
+    onUpdatePrefs: (prefs: UserDashboardPrefs) => void;
 }
 
-export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth }) => {
+export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth, dashboardPrefs, onUpdatePrefs }) => {
     const [readiness, setReadiness] = useState<ReadinessScore | null>(null);
     const [isCalculating, setIsCalculating] = useState(false);
     const [isLogOpen, setIsLogOpen] = useState(false);
     const [isFormCheckOpen, setIsFormCheckOpen] = useState(false);
+    const [showWidgetConfig, setShowWidgetConfig] = useState(false);
     
-    // Log Form State
     const [logForm, setLogForm] = useState<RecoveryData>({
         sleepMinutes: healthStats.sleepMinutes || 420,
         sleepQuality: 80,
@@ -58,6 +60,19 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth }) =
         }
     };
 
+    const handleToggleWidget = (id: string) => {
+        let newList = [...dashboardPrefs.selectedWidgets];
+        if (newList.includes(id)) {
+            newList = newList.filter(item => item !== id);
+        } else if (newList.length < 3) {
+            newList.push(id);
+        } else {
+            alert("You can only select up to 3 widgets for the dashboard.");
+            return;
+        }
+        onUpdatePrefs({ selectedWidgets: newList });
+    };
+
     const handleStartBodyScan = () => {
         const token = localStorage.getItem('embracehealth-api-token');
         const url = token 
@@ -65,6 +80,14 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth }) =
             : 'https://app.embracehealth.ai';
         window.open(url, '_blank');
     };
+
+    const widgetOptions = [
+        { id: 'steps', label: 'Steps', value: healthStats.steps.toLocaleString(), icon: <ActivityIcon /> },
+        { id: 'activeCalories', label: 'Active Energy', value: `${Math.round(healthStats.activeCalories)} kcal`, icon: <FireIcon /> },
+        { id: 'restingCalories', label: 'Resting Energy', value: `${Math.round(healthStats.restingCalories)} kcal`, icon: <TrophyIcon /> },
+        { id: 'distanceMiles', label: 'Distance', value: `${healthStats.distanceMiles.toFixed(2)} mi`, icon: <GlobeAltIcon /> },
+        { id: 'flightsClimbed', label: 'Flights', value: `${healthStats.flightsClimbed} floors`, icon: <ActivityIcon /> }
+    ];
 
     return (
         <div className="space-y-6 animate-fade-in pb-20 max-w-5xl mx-auto">
@@ -76,6 +99,12 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth }) =
                     <p className="text-slate-500 font-medium">Predictive recovery & Prism 3D biometrics.</p>
                 </div>
                 <div className="flex gap-2">
+                    <button 
+                        onClick={() => setShowWidgetConfig(!showWidgetConfig)}
+                        className="bg-white border border-slate-200 px-4 py-2 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition"
+                    >
+                        {showWidgetConfig ? 'Done Configuring' : 'Dashboard Widgets'}
+                    </button>
                     <button 
                         onClick={() => setIsLogOpen(!isLogOpen)}
                         className="bg-white border border-slate-200 px-4 py-2 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition"
@@ -90,6 +119,51 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth }) =
                     </button>
                 </div>
             </header>
+
+            {/* Widget Configuration Panel */}
+            {showWidgetConfig && (
+                <section className="bg-emerald-50 border border-emerald-100 p-6 rounded-3xl animate-fade-in space-y-4">
+                    <h3 className="font-black text-emerald-800 uppercase tracking-widest text-sm">Command Center Setup</h3>
+                    <p className="text-emerald-700 text-sm">Choose up to 3 stats to display as widgets on your main dashboard.</p>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                        {widgetOptions.map(opt => (
+                            <button
+                                key={opt.id}
+                                onClick={() => handleToggleWidget(opt.id)}
+                                className={`p-4 rounded-2xl border transition-all flex flex-col items-center gap-2 ${
+                                    dashboardPrefs.selectedWidgets.includes(opt.id)
+                                    ? 'bg-emerald-500 text-white border-emerald-600 shadow-md scale-105'
+                                    : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300'
+                                }`}
+                            >
+                                <div className={dashboardPrefs.selectedWidgets.includes(opt.id) ? 'text-white' : 'text-slate-400'}>
+                                    {opt.icon}
+                                </div>
+                                <div className="text-center leading-tight">
+                                    <p className="text-[10px] font-bold uppercase tracking-tighter opacity-80">{opt.label}</p>
+                                    <p className="font-black text-sm">{opt.value}</p>
+                                </div>
+                                {dashboardPrefs.selectedWidgets.includes(opt.id) && (
+                                    <div className="bg-white text-emerald-600 text-[10px] font-black px-1.5 py-0.5 rounded-full mt-1">
+                                        Slot {dashboardPrefs.selectedWidgets.indexOf(opt.id) + 1}
+                                    </div>
+                                )}
+                            </button>
+                        ))}
+                    </div>
+                </section>
+            )}
+
+            {/* Full Metrics Display (The ones not in widgets, or all) */}
+            <section className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                 {widgetOptions.map(opt => (
+                    <div key={opt.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center text-center">
+                        <div className="text-slate-400 mb-2">{opt.icon}</div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{opt.label}</p>
+                        <p className="text-xl font-black text-slate-800">{opt.value}</p>
+                    </div>
+                 ))}
+            </section>
 
             {/* Prism Scanner CTA */}
             <section className="bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-950 rounded-[2rem] p-8 text-white shadow-2xl relative overflow-hidden group">
@@ -113,7 +187,6 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth }) =
                     </button>
                 </div>
                 
-                {/* Prism Metrics Preview (Placeholder/Ghost) */}
                 <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-4 opacity-50">
                     <div className="bg-white/5 border border-white/10 p-4 rounded-2xl backdrop-blur-sm">
                         <p className="text-[10px] font-bold text-indigo-300 uppercase">Body Fat %</p>
@@ -244,7 +317,6 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth }) =
                 </div>
 
                 <div className="space-y-6">
-                    {/* Form Check Card */}
                     <div className="bg-indigo-600 rounded-3xl p-6 text-white shadow-xl hover:shadow-2xl transition-all cursor-pointer group overflow-hidden relative" onClick={() => setIsFormCheckOpen(true)}>
                         <div className="absolute -bottom-4 -right-4 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform"></div>
                         <div className="relative z-10">
@@ -260,7 +332,6 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth }) =
                         </div>
                     </div>
 
-                    {/* Lab/Biometric Card */}
                     <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
                         <h4 className="font-black text-slate-800 uppercase tracking-widest text-xs mb-4">Integrations</h4>
                         <div className="space-y-4">

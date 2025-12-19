@@ -2,9 +2,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { TodayStrip } from './TodayStrip';
 import { DigitalTwinPanel } from './DigitalTwinPanel';
-// Added missing ActivityIcon to the icons import list
 import { CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, TrophyIcon, ChatIcon, ThumbUpIcon, UserGroupIcon, UserCircleIcon, PlusIcon, ActivityIcon } from '../icons';
-import type { HealthStats, Friendship } from '../../types';
+import type { HealthStats, Friendship, UserDashboardPrefs } from '../../types';
 import * as apiService from '../../services/apiService';
 
 interface CommandCenterProps {
@@ -22,6 +21,7 @@ interface CommandCenterProps {
     onPantryChefClick: () => void;
     onRestaurantClick: () => void;
     onUploadClick: () => void;
+    dashboardPrefs: UserDashboardPrefs;
 }
 
 interface FriendActivity {
@@ -53,7 +53,8 @@ const SocialFeedItem: React.FC<{ name: string; action: string; time: string; col
 export const CommandCenter: React.FC<CommandCenterProps> = ({ 
     dailyCalories, dailyProtein, rewardsBalance, onScanClick,
     onCameraClick, onBarcodeClick, onPantryChefClick, onRestaurantClick,
-    healthStats, isHealthConnected, isHealthSyncing, onConnectHealth
+    healthStats, isHealthConnected, isHealthSyncing, onConnectHealth,
+    dashboardPrefs
 }) => {
     const [friends, setFriends] = useState<Friendship[]>([]);
     const [isLoadingFriends, setIsLoadingFriends] = useState(true);
@@ -103,7 +104,6 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
 
     return (
         <div className="space-y-6 animate-fade-in pb-10">
-            {/* Rewards Banner */}
             <div className="bg-slate-900 rounded-2xl p-6 text-white shadow-lg flex items-center justify-between">
                 <div>
                     <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Health Wallet Balance</p>
@@ -117,7 +117,6 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                 </div>
             </div>
 
-            {/* Header */}
             <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Today's Pulse</h2>
                 <button 
@@ -129,18 +128,16 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                 </button>
             </div>
 
-            {/* Dynamic Activity Row */}
             <TodayStrip 
                 stats={healthStats}
                 isConnected={isHealthConnected}
                 onConnect={onConnectHealth}
                 isSyncing={isHealthSyncing}
+                dashboardPrefs={dashboardPrefs}
             />
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Main Feed Column */}
                 <div className="lg:col-span-2 space-y-6">
-                    {/* Social Feed connected to real friend data */}
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="font-bold text-slate-900 flex items-center gap-2">
@@ -189,7 +186,6 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                         )}
                     </div>
 
-                    {/* Quick Actions */}
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
                         <h3 className="font-bold text-slate-900 mb-4">Quick Log</h3>
                         <div className="grid grid-cols-4 gap-4">
@@ -213,9 +209,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                     </div>
                 </div>
 
-                {/* Side Column */}
                 <div className="space-y-6">
-                    {/* Prism Scanner CTA Card */}
                     <div 
                         onClick={() => {
                             const token = localStorage.getItem('embracehealth-api-token');

@@ -1,7 +1,7 @@
 
 import React from 'react';
-import { FireIcon, ActivityIcon, HeartIcon, ClockIcon } from '../icons';
-import type { HealthStats } from '../../types';
+import { FireIcon, ActivityIcon, HeartIcon, ClockIcon, GlobeAltIcon, TrophyIcon } from '../icons';
+import type { HealthStats, UserDashboardPrefs } from '../../types';
 import { getPlatform } from '../../services/healthService';
 
 interface TodayStripProps {
@@ -9,6 +9,7 @@ interface TodayStripProps {
     isConnected: boolean;
     onConnect: () => void;
     isSyncing?: boolean;
+    dashboardPrefs: UserDashboardPrefs;
 }
 
 const StatCard: React.FC<{
@@ -40,7 +41,7 @@ const StatCard: React.FC<{
     </div>
 );
 
-export const TodayStrip: React.FC<TodayStripProps> = ({ stats, isConnected, onConnect, isSyncing }) => {
+export const TodayStrip: React.FC<TodayStripProps> = ({ stats, isConnected, onConnect, isSyncing, dashboardPrefs }) => {
     const platform = getPlatform();
 
     if (!isConnected) {
@@ -63,12 +64,22 @@ export const TodayStrip: React.FC<TodayStripProps> = ({ stats, isConnected, onCo
                     )}
                     <div className="text-center">
                         <h3 className="text-lg font-bold">Connect {platformName}</h3>
-                        <p className="text-sm opacity-90">Sync steps, calories, and cardio markers automatically.</p>
+                        <p className="text-sm opacity-90">Sync steps, calories, and distance automatically.</p>
                     </div>
                 </button>
             </div>
         );
     }
+
+    const availableWidgets = [
+        { id: 'steps', label: 'Steps', value: stats.steps.toLocaleString(), subValue: 'Goal: 10k', icon: <ActivityIcon />, colors: 'bg-blue-50 text-blue-600' },
+        { id: 'activeCalories', label: 'Active Energy', value: Math.round(stats.activeCalories), subValue: 'kcal', icon: <FireIcon />, colors: 'bg-emerald-50 text-emerald-600' },
+        { id: 'restingCalories', label: 'Resting Energy', value: Math.round(stats.restingCalories), subValue: 'kcal', icon: <TrophyIcon />, colors: 'bg-indigo-50 text-indigo-600' },
+        { id: 'distanceMiles', label: 'Distance', value: stats.distanceMiles.toFixed(2), subValue: 'miles', icon: <GlobeAltIcon />, colors: 'bg-amber-50 text-amber-600' },
+        { id: 'flightsClimbed', label: 'Flights', value: stats.flightsClimbed, subValue: 'floors', icon: <ActivityIcon />, colors: 'bg-rose-50 text-rose-600' }
+    ];
+
+    const selectedWidgets = availableWidgets.filter(w => dashboardPrefs.selectedWidgets.includes(w.id)).slice(0, 3);
 
     return (
         <div className="space-y-4 mb-6">
@@ -82,32 +93,24 @@ export const TodayStrip: React.FC<TodayStripProps> = ({ stats, isConnected, onCo
                 )}
             </div>
             <div className="grid grid-cols-3 gap-4">
-                <StatCard 
-                    label="Steps"
-                    value={stats.steps.toLocaleString()}
-                    subValue="Goal: 10k"
-                    icon={<ActivityIcon />}
-                    colors="bg-blue-50 text-blue-600"
-                />
-                
-                <StatCard 
-                    label="Calories"
-                    value={Math.round(stats.activeCalories)}
-                    subValue="Active"
-                    icon={<FireIcon />}
-                    colors="bg-emerald-50 text-emerald-600"
-                />
-
-                <StatCard 
-                    label="Cardio"
-                    value={stats.cardioScore}
-                    subValue="Heart Pts"
-                    icon={<HeartIcon />}
-                    colors="bg-rose-50 text-rose-600"
-                />
+                {selectedWidgets.map(widget => (
+                    <StatCard 
+                        key={widget.id}
+                        label={widget.label}
+                        value={widget.value}
+                        subValue={widget.subValue}
+                        icon={widget.icon}
+                        colors={widget.colors}
+                    />
+                ))}
+                {selectedWidgets.length === 0 && (
+                    <div className="col-span-3 py-10 text-center text-slate-400 bg-white rounded-2xl border border-dashed border-slate-200">
+                        No widgets selected. Edit in My Body.
+                    </div>
+                )}
             </div>
             <button 
-                onClick={onConnect} // Re-using connect as sync for this component logic
+                onClick={onConnect}
                 className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-xl text-xs font-bold transition-colors"
             >
                 {isSyncing ? 'Syncing...' : 'Force Sync Now'}

@@ -3,7 +3,7 @@ import type {
   NutritionInfo, SavedMeal, MealPlan, MealPlanItem, MealPlanItemMetadata, 
   GroceryList, GroceryItem, RewardsSummary, MealLogEntry, Assessment, 
   UserProfile, Friendship, ReadinessScore, FormAnalysisResult, RecoveryData,
-  AssessmentState
+  AssessmentState, UserDashboardPrefs
 } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
@@ -76,16 +76,25 @@ export const analyzeImageWithGemini = (base64Image: string, mimeType: string): P
         } 
     });
 
-/** Assessment Features */
+/** Dashboard Prefs */
+export const getDashboardPrefs = async (): Promise<UserDashboardPrefs> => {
+    const stored = localStorage.getItem('user-dashboard-prefs');
+    if (stored) return JSON.parse(stored);
+    return { selectedWidgets: ['steps', 'activeCalories', 'distanceMiles'] };
+};
 
+export const saveDashboardPrefs = async (prefs: UserDashboardPrefs): Promise<void> => {
+    localStorage.setItem('user-dashboard-prefs', JSON.stringify(prefs));
+};
+
+/** Assessment Features */
 export const getAssessmentState = (): Promise<AssessmentState> => 
     callApi('/assessments/state', 'GET');
 
 export const submitPassivePulseResponse = (promptId: string, response: any): Promise<any> => 
     callApi('/assessments/passive-response', 'POST', { promptId, response });
 
-/** New Body AI Features */
-
+/** Body AI Features */
 export const calculateReadiness = (data: RecoveryData): Promise<ReadinessScore> => 
     callApi('/calculate-readiness', 'POST', data);
 
@@ -94,8 +103,6 @@ export const analyzeExerciseForm = (base64Image: string, exercise: string): Prom
 
 export const logRecoveryStats = (data: RecoveryData): Promise<any> => 
     callApi('/body/log-recovery', 'POST', data);
-
-/** End New Body AI Features */
 
 export const identifyGroceryItems = (base64Image: string, mimeType: string): Promise<{ items: string[] }> => 
     callApi('/analyze-image', 'POST', { 

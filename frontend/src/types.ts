@@ -46,10 +46,17 @@ export interface MealLogEntry extends NutritionInfo {
 export interface HealthStats {
   steps: number;
   activeCalories: number;
+  restingCalories: number;
+  distanceMiles: number;
+  flightsClimbed: number;
   cardioScore: number;
-  hrv?: number; // Added for readiness
-  sleepMinutes?: number; // Added for readiness
+  hrv?: number;
+  sleepMinutes?: number;
   lastSynced?: string;
+}
+
+export interface UserDashboardPrefs {
+  selectedWidgets: string[]; // IDs of the metrics to show on Command Center
 }
 
 export interface RecoveryData {
@@ -245,8 +252,6 @@ export interface KitRecommendation {
     profile: DietaryProfile;
     label?: string;
 }
-
-/** Passive Pulse Types */
 
 export interface PassivePrompt {
   id: string;

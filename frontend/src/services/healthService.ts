@@ -6,13 +6,11 @@ export type PlatformType = 'ios' | 'android' | 'web';
 export const getPlatform = (): PlatformType => {
     const userAgent = navigator.userAgent || navigator.vendor;
     if (/android/i.test(userAgent)) return 'android';
-    // Check for iPad, iPhone, iPod
     if (/iPad|iPhone|iPod/.test(userAgent) && !(window as any).MSStream) return 'ios';
     return 'web';
 };
 
 export const connectHealthProvider = async (platform: PlatformType): Promise<boolean> => {
-    // Simulate API call to request permissions and link accounts
     return new Promise((resolve) => {
         setTimeout(() => {
             console.log(`Connected to ${platform === 'ios' ? 'Apple Health' : platform === 'android' ? 'Health Connect' : 'Google Fit'}`);
@@ -22,15 +20,18 @@ export const connectHealthProvider = async (platform: PlatformType): Promise<boo
 };
 
 export const syncHealthData = async (): Promise<HealthStats> => {
-    // Simulate fetching data from the connected provider
+    // Simulate fetching real data matching the user's provided Apple Health activity screenshot
     return new Promise((resolve) => {
         setTimeout(() => {
             resolve({
-                steps: 8432,
-                activeCalories: 450,
+                steps: 1642,
+                activeCalories: 65.3,
+                restingCalories: 1414,
+                distanceMiles: 0.69,
+                flightsClimbed: 4,
                 cardioScore: 78,
-                hrv: 62, // Added simulated HRV
-                sleepMinutes: 440, // Added simulated sleep (7.3 hrs)
+                hrv: 62,
+                sleepMinutes: 440,
                 lastSynced: new Date().toISOString()
             });
         }, 1200);

@@ -4,7 +4,7 @@ import * as apiService from './services/apiService';
 import { analyzeFoodImage } from './services/geminiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
 import { connectHealthProvider, syncHealthData } from './services/healthService';
-import type { NutritionInfo, MealLogEntry, SavedMeal, MealPlan, HealthStats } from './types';
+import type { NutritionInfo, MealLogEntry, SavedMeal, MealPlan, HealthStats, UserDashboardPrefs } from './types';
 import { ImageUploader } from './components/ImageUploader';
 import { NutritionCard } from './components/NutritionCard';
 import { Loader } from './components/Loader';
@@ -40,9 +40,19 @@ const App: React.FC = () => {
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
   const [activePlanId, setActivePlanId] = useState<number | null>(null);
   const [walletBalance, setWalletBalance] = useState<number>(0);
+  const [dashboardPrefs, setDashboardPrefs] = useState<UserDashboardPrefs>({ selectedWidgets: ['steps', 'activeCalories', 'distanceMiles'] });
   
   // Health State
-  const [healthStats, setHealthStats] = useState<HealthStats>({ steps: 0, activeCalories: 0, cardioScore: 0, hrv: 0, sleepMinutes: 0 });
+  const [healthStats, setHealthStats] = useState<HealthStats>({ 
+    steps: 0, 
+    activeCalories: 0, 
+    restingCalories: 0, 
+    distanceMiles: 0, 
+    flightsClimbed: 0, 
+    cardioScore: 0, 
+    hrv: 0, 
+    sleepMinutes: 0 
+  });
   const [isHealthConnected, setIsHealthConnected] = useState(false);
   const [isHealthSyncing, setIsHealthSyncing] = useState(false);
 
@@ -66,11 +76,13 @@ const App: React.FC = () => {
             apiService.getMealLog().catch(() => []),
             apiService.getSavedMeals().catch(() => []),
             apiService.getMealPlans().catch(() => []),
+            apiService.getDashboardPrefs().catch(() => ({ selectedWidgets: ['steps', 'activeCalories', 'distanceMiles'] })),
             refreshWallet().catch(() => null)
-        ]).then(([log, saved, plans]) => {
+        ]).then(([log, saved, plans, prefs]) => {
             setMealLog(log);
             setSavedMeals(saved);
             setMealPlans(plans);
+            setDashboardPrefs(prefs);
             if (plans.length > 0) setActivePlanId(plans[0].id);
         });
     }
@@ -90,6 +102,11 @@ const App: React.FC = () => {
       } finally {
           setIsHealthSyncing(false);
       }
+  };
+
+  const handleUpdateDashboardPrefs = async (newPrefs: UserDashboardPrefs) => {
+      setDashboardPrefs(newPrefs);
+      await apiService.saveDashboardPrefs(newPrefs);
   };
 
   const handleCaptureResult = useCallback(async (img: string | null, mode: any, barcode?: string) => {
@@ -125,7 +142,7 @@ const App: React.FC = () => {
       setNutritionData(null);
       setImage(null);
       setActiveView('home');
-      refreshWallet(); // Update points display
+      refreshWallet(); 
     } catch (err) {
       setError("Failed to save to log.");
     } finally {
@@ -181,6 +198,7 @@ const App: React.FC = () => {
                     onPantryChefClick={() => setIsCaptureOpen(true)}
                     onRestaurantClick={() => { setIsCaptureOpen(true); }}
                     onUploadClick={() => setIsCaptureOpen(true)}
+                    dashboardPrefs={dashboardPrefs}
                 />
               );
           case 'plan':
@@ -244,7 +262,9 @@ const App: React.FC = () => {
               return (
                   <BodyHub 
                     healthStats={healthStats} 
-                    onSyncHealth={handleConnectHealth} 
+                    onSyncHealth={handleConnectHealth}
+                    dashboardPrefs={dashboardPrefs}
+                    onUpdatePrefs={handleUpdateDashboardPrefs}
                   />
               );
           default:
