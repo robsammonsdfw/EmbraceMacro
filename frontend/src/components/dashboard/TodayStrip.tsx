@@ -40,7 +40,7 @@ const StatCard: React.FC<{
     </div>
 );
 
-export const TodayStrip: React.FC<TodayStripProps> = ({ stats, isConnected, onConnect, isSyncing, dashboardPrefs }) => {
+export const TodayStrip: React.FC<TodayStripProps> = ({ stats, onConnect, isSyncing, dashboardPrefs }) => {
     
     const availableWidgets = [
         { id: 'steps', label: 'Steps', value: stats.steps.toLocaleString(), subValue: 'Highest Logged', icon: <ActivityIcon />, colors: 'bg-blue-50 text-blue-600' },

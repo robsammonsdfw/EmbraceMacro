@@ -319,9 +319,11 @@ export const saveDashboardPrefs = async (userId, prefs) => {
 /**
  * Placeholders for other endpoints
  */
-export const getRewardsSummary = async () => ({ points_total: 1000, points_available: 1000, tier: 'Silver', history: [] });
+// FIX: getRewardsSummary expected 1 argument (userId) in backend/index.mjs but had 0.
+export const getRewardsSummary = async (userId) => ({ points_total: 1000, points_available: 1000, tier: 'Silver', history: [] });
 export const getAssessments = async () => [];
 export const submitAssessment = async () => {};
+// FIX: Removed duplicate getPartnerBlueprint export to resolve potential naming conflicts.
 export const getPartnerBlueprint = async () => ({ preferences: {} });
 export const savePartnerBlueprint = async () => {};
 export const getMatches = async () => [];
