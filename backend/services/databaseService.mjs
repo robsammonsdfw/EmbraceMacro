@@ -352,7 +352,7 @@ export const getHealthMetrics = async (userId) => {
                 last_synced as "lastSynced"
             FROM health_metrics WHERE user_id = $1
         `, [userId]);
-        return res.rows[0] || {}; 
+        return res.rows[0] || { steps: 0, activeCalories: 0, restingCalories: 0, distanceMiles: 0, flightsClimbed: 0, heartRate: 0 }; 
     } finally { client.release(); }
 };
 

@@ -52,7 +52,7 @@ export const findOrCreateUserByEmail = async (email) => {
             throw new Error("Failed to find or create user after insert operation.");
         }
         
-        // Ensure rewards tables exist (Simplified migration strategy for this demo)
+        // Ensure rewards tables exist
         await ensureRewardsTables(client);
         
         // Ensure rewards balance entry exists for this user
@@ -99,13 +99,11 @@ export const awardPoints = async (userId, eventType, points, metadata = {}) => {
     try {
         await client.query('BEGIN');
 
-        // 1. Insert into ledger
         await client.query(`
             INSERT INTO rewards_ledger (user_id, event_type, points_delta, metadata)
             VALUES ($1, $2, $3, $4)
         `, [userId, eventType, points, metadata]);
 
-        // 2. Update balances
         const updateRes = await client.query(`
             UPDATE rewards_balances
             SET points_total = points_total + $2,
@@ -115,7 +113,6 @@ export const awardPoints = async (userId, eventType, points, metadata = {}) => {
             RETURNING points_total
         `, [userId, points]);
         
-        // 3. Recalculate Tier
         const newTotal = updateRes.rows[0].points_total;
         let newTier = 'Bronze';
         if (newTotal >= 5000) newTier = 'Platinum';
@@ -677,7 +674,7 @@ export const getHealthMetrics = async (userId) => {
                 last_synced as "lastSynced"
             FROM health_metrics WHERE user_id = $1
         `, [userId]);
-        return res.rows[0] || {}; 
+        return res.rows[0] || { steps: 0, activeCalories: 0, restingCalories: 0, distanceMiles: 0, flightsClimbed: 0, heartRate: 0 }; 
     } finally { client.release(); }
 };
 
