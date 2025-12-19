@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import * as db from './services/databaseService.mjs';
@@ -169,9 +168,21 @@ export const handler = async (event) => {
             }
         }
 
+        // --- Partner Blueprint & Matching ---
+        if (resource === 'partner-blueprint') {
+            if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await db.getPartnerBlueprint(event.user.userId)) };
+            if (method === 'POST') {
+                await db.savePartnerBlueprint(event.user.userId, JSON.parse(event.body));
+                return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
+            }
+        }
+
+        if (resource === 'matches') {
+            return { statusCode: 200, headers, body: JSON.stringify(await db.getMatches(event.user.userId)) };
+        }
+
         if (resource === 'calculate-readiness' && method === 'POST') {
             const data = JSON.parse(event.body);
-            // Simple Readiness logic
             const score = Math.round(Math.min(100, (data.sleepMinutes / 480) * 50 + (10 - data.workoutIntensity) * 5));
             let label = "Standard Recovery";
             if (score > 80) label = "Optimal: Push for PR";
@@ -251,6 +262,11 @@ export const handler = async (event) => {
             if (sub === 'submit') {
                 const { assessmentId, responses } = JSON.parse(event.body);
                 await db.submitAssessment(event.user.userId, assessmentId, responses);
+                return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
+            }
+            if (sub === 'passive-pulse') {
+                const { promptId, value } = JSON.parse(event.body);
+                await db.submitPassivePulseResponse(event.user.userId, promptId, value);
                 return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
             }
         }

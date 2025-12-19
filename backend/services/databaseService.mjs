@@ -443,10 +443,56 @@ export const logRecoveryStats = async (userId, data) => {
     } finally { client.release(); }
 };
 
+/**
+ * Assessments, Blueprints & Matching
+ */
 export const getAssessments = async () => [
     { id: 'daily-pulse', title: 'Daily Pulse', description: 'Quick check of your mental and physical state.', questions: [{id: 'mood', text: 'How is your mood?', type: 'scale', min: 1, max: 10}] }
 ];
 export const submitAssessment = async (userId, id, resp) => { await awardPoints(userId, 'assessment.complete', 50, { assessmentId: id }); };
-export const getPartnerBlueprint = async () => ({ preferences: {} });
-export const savePartnerBlueprint = async () => {};
-export const getMatches = async () => [];
+
+export const submitPassivePulseResponse = async (userId, promptId, value) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`INSERT INTO user_assessments (user_id, assessment_id, responses) VALUES ($1, $2, $3)`, [userId, promptId, { value }]);
+        await awardPoints(userId, 'passive.pulse_complete', 15, { promptId });
+    } finally { client.release(); }
+};
+
+export const getPartnerBlueprint = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT preferences FROM partner_blueprints WHERE user_id = $1`, [userId]);
+        return res.rows[0] || { preferences: {} };
+    } finally { client.release(); }
+};
+
+export const savePartnerBlueprint = async (userId, preferences) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`
+            INSERT INTO partner_blueprints (user_id, preferences)
+            VALUES ($1, $2)
+            ON CONFLICT (user_id) DO UPDATE SET preferences = EXCLUDED.preferences
+        `, [userId, preferences]);
+    } finally { client.release(); }
+};
+
+export const getMatches = async (userId) => {
+    const client = await pool.connect();
+    try {
+        // Simple compatibility logic: find other users who have blueprints
+        const res = await client.query(`
+            SELECT u.id as "userId", u.email, 85 as "compatibilityScore"
+            FROM partner_blueprints pb
+            JOIN users u ON pb.user_id = u.id
+            WHERE pb.user_id != $1
+            LIMIT 5
+        `, [userId]);
+        return res.rows;
+    } finally { client.release(); }
+};
+
+export const getPartnerBlueprintStatic = async () => ({ preferences: {} });
+export const savePartnerBlueprintStatic = async () => {};
+export const getMatchesStatic = async () => [];
