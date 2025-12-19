@@ -39,6 +39,7 @@ const App: React.FC = () => {
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
   const [activePlanId, setActivePlanId] = useState<number | null>(null);
+  const [walletBalance, setWalletBalance] = useState<number>(0);
   
   // Health State
   const [healthStats, setHealthStats] = useState<HealthStats>({ steps: 0, activeCalories: 0, cardioScore: 0, hrv: 0, sleepMinutes: 0 });
@@ -49,13 +50,23 @@ const App: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  const refreshWallet = useCallback(async () => {
+    try {
+        const rewards = await apiService.getRewardsSummary();
+        setWalletBalance(rewards.points_total);
+    } catch (e) {
+        console.error("Failed to refresh wallet", e);
+    }
+  }, []);
+
   // Initial Data Load
   useEffect(() => {
     if (isAuthenticated) {
         Promise.all([
             apiService.getMealLog().catch(() => []),
             apiService.getSavedMeals().catch(() => []),
-            apiService.getMealPlans().catch(() => [])
+            apiService.getMealPlans().catch(() => []),
+            refreshWallet().catch(() => null)
         ]).then(([log, saved, plans]) => {
             setMealLog(log);
             setSavedMeals(saved);
@@ -63,7 +74,7 @@ const App: React.FC = () => {
             if (plans.length > 0) setActivePlanId(plans[0].id);
         });
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, refreshWallet]);
 
   const handleConnectHealth = async () => {
       setIsHealthSyncing(true);
@@ -114,6 +125,7 @@ const App: React.FC = () => {
       setNutritionData(null);
       setImage(null);
       setActiveView('home');
+      refreshWallet(); // Update points display
     } catch (err) {
       setError("Failed to save to log.");
     } finally {
@@ -157,7 +169,7 @@ const App: React.FC = () => {
                 <CommandCenter 
                     dailyCalories={mealLog.filter(e => new Date(e.createdAt).toDateString() === new Date().toDateString()).reduce((s, e) => s + e.totalCalories, 0)} 
                     dailyProtein={mealLog.filter(e => new Date(e.createdAt).toDateString() === new Date().toDateString()).reduce((s, e) => s + e.totalProtein, 0)} 
-                    rewardsBalance={0} 
+                    rewardsBalance={walletBalance} 
                     userName={user?.firstName || 'Hero'}
                     healthStats={healthStats}
                     isHealthConnected={isHealthConnected} 
@@ -165,7 +177,7 @@ const App: React.FC = () => {
                     onConnectHealth={handleConnectHealth} 
                     onScanClick={() => setActiveView('body')}
                     onCameraClick={() => setIsCaptureOpen(true)}
-                    onBarcodeClick={() => { setIsCaptureOpen(true); /* handles logic in CaptureFlow */ }} 
+                    onBarcodeClick={() => { setIsCaptureOpen(true); }} 
                     onPantryChefClick={() => setIsCaptureOpen(true)}
                     onRestaurantClick={() => { setIsCaptureOpen(true); }}
                     onUploadClick={() => setIsCaptureOpen(true)}
@@ -209,11 +221,13 @@ const App: React.FC = () => {
                             setSavedMeals(prev => [saved, ...prev]);
                             handleAddSavedMealToPlan(saved);
                             setActiveView('plan');
+                            refreshWallet();
                         }} 
                         onSaveMeal={async (data) => {
                             const saved = await apiService.saveMeal(data);
                             setSavedMeals(prev => [saved, ...prev]);
                             alert("Saved to Library!");
+                            refreshWallet();
                         }} 
                     />;
           case 'grocery':
