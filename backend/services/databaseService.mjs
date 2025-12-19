@@ -75,7 +75,7 @@ export const updateSocialProfile = async (userId, updates) => {
 };
 
 /**
- * Friends - Bidirectional logic with correct column names (user_id, friend_id)
+ * Friends - Bidirectional logic with correct column names (requester_id, receiver_id)
  */
 export const getFriends = async (userId) => {
     const client = await pool.connect();
@@ -83,8 +83,8 @@ export const getFriends = async (userId) => {
         const res = await client.query(`
             SELECT u.id as "friendId", u.email, u.first_name as "firstName"
             FROM friendships f
-            JOIN users u ON (CASE WHEN f.user_id = $1 THEN f.friend_id ELSE f.user_id END) = u.id
-            WHERE (f.user_id = $1 OR f.friend_id = $1) AND f.status = 'accepted'
+            JOIN users u ON (CASE WHEN f.requester_id = $1 THEN f.receiver_id ELSE f.requester_id END) = u.id
+            WHERE (f.requester_id = $1 OR f.receiver_id = $1) AND f.status = 'accepted'
         `, [userId]);
         return res.rows;
     } finally { client.release(); }
@@ -96,8 +96,8 @@ export const getFriendRequests = async (userId) => {
         const res = await client.query(`
             SELECT f.id, u.email
             FROM friendships f
-            JOIN users u ON f.user_id = u.id
-            WHERE f.friend_id = $1 AND f.status = 'pending'
+            JOIN users u ON f.requester_id = u.id
+            WHERE f.receiver_id = $1 AND f.status = 'pending'
         `, [userId]);
         return res.rows;
     } finally { client.release(); }
@@ -108,13 +108,13 @@ export const sendFriendRequest = async (userId, email) => {
     try {
         const target = await client.query(`SELECT id FROM users WHERE email = $1`, [email.toLowerCase().trim()]);
         if (target.rows.length === 0) throw new Error("User not found");
-        await client.query(`INSERT INTO friendships (user_id, friend_id, status) VALUES ($1, $2, 'pending') ON CONFLICT DO NOTHING`, [userId, target.rows[0].id]);
+        await client.query(`INSERT INTO friendships (requester_id, receiver_id, status) VALUES ($1, $2, 'pending') ON CONFLICT DO NOTHING`, [userId, target.rows[0].id]);
     } finally { client.release(); }
 };
 
 export const respondToFriendRequest = async (userId, requestId, status) => {
     const client = await pool.connect();
-    try { await client.query(`UPDATE friendships SET status = $1 WHERE id = $2 AND friend_id = $3`, [status, requestId, userId]); } finally { client.release(); }
+    try { await client.query(`UPDATE friendships SET status = $1 WHERE id = $2 AND receiver_id = $3`, [status, requestId, userId]); } finally { client.release(); }
 };
 
 /**
