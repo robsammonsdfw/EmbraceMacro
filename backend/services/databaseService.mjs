@@ -397,7 +397,47 @@ export const submitAssessment = async (userId, assessmentId, responses) => {
     await awardPoints(userId, `assessment.${assessmentId}`, 50, { responses });
 };
 
-export const getPartnerBlueprint = async (userId) => ({});
-export const savePartnerBlueprint = async (userId, prefs) => {};
-export const getMatches = async () => [];
+/**
+ * Blueprints & Matches
+ */
+
+export const getPartnerBlueprint = async (userId) => {
+    const client = await pool.connect();
+    try {
+        // Ensure user_blueprints table exists
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS user_blueprints (
+                user_id INT PRIMARY KEY REFERENCES users(id),
+                preferences JSONB DEFAULT '{}',
+                updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+        const res = await client.query(`SELECT preferences FROM user_blueprints WHERE user_id = $1`, [userId]);
+        return res.rows[0] || { preferences: {} };
+    } finally { client.release(); }
+};
+
+export const savePartnerBlueprint = async (userId, prefs) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`
+            INSERT INTO user_blueprints (user_id, preferences) 
+            VALUES ($1, $2) 
+            ON CONFLICT (user_id) DO UPDATE SET preferences = $2, updated_at = CURRENT_TIMESTAMP
+        `, [userId, prefs]);
+        await awardPoints(userId, 'blueprint.updated', 25);
+    } finally { client.release(); }
+};
+
+export const getMatches = async (userId) => {
+    // Simulated matching engine logic:
+    // In a real app, this would query the DB for users with overlapping blueprint values
+    // For now, we return 3 high-quality simulated matches.
+    return [
+        { userId: 101, email: "alex.fit@example.com", compatibilityScore: 94, traits: { sleep: 0.8, intensity: 0.9 } },
+        { userId: 102, email: "sam.wellness@example.com", compatibilityScore: 88, traits: { sleep: 0.6, intensity: 0.7 } },
+        { userId: 103, email: "jordan.paleo@example.com", compatibilityScore: 82, traits: { sleep: 0.9, intensity: 0.5 } }
+    ];
+};
+
 export const getKitRecommendationsForUser = async (userId) => [];

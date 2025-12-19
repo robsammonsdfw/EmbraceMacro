@@ -36,7 +36,10 @@ import {
     clearGroceryListItems,
     awardPoints,
     getAssessments,
-    submitAssessment
+    submitAssessment,
+    getPartnerBlueprint,
+    savePartnerBlueprint,
+    getMatches
 } from './services/databaseService.mjs';
 
 export const handler = async (event) => {
@@ -123,6 +126,18 @@ export const handler = async (event) => {
                 await awardPoints(event.user.userId, 'assessment.passive_pulse', 15, { promptId, response });
                 return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
             }
+        }
+
+        if (resource === 'partner-blueprint') {
+            if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getPartnerBlueprint(event.user.userId)) };
+            if (method === 'POST') {
+                await savePartnerBlueprint(event.user.userId, JSON.parse(event.body));
+                return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
+            }
+        }
+
+        if (resource === 'matches') {
+            if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getMatches(event.user.userId)) };
         }
 
         if (resource === 'meal-plans') {
