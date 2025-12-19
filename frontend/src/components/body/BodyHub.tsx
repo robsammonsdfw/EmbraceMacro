@@ -7,7 +7,7 @@ import { FormAnalysis } from './FormAnalysis';
 
 interface BodyHubProps {
     healthStats: HealthStats;
-    onSyncHealth: () => void;
+    onSyncHealth: (source?: 'apple' | 'fitbit') => void;
     dashboardPrefs: UserDashboardPrefs;
     onUpdatePrefs: (prefs: UserDashboardPrefs) => void;
 }
@@ -111,12 +111,6 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth, das
                     >
                         <PlusIcon className="w-4 h-4" /> Log Biometrics
                     </button>
-                    <button 
-                        onClick={onSyncHealth}
-                        className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700 transition shadow-md"
-                    >
-                        Sync Wearable
-                    </button>
                 </div>
             </header>
 
@@ -154,7 +148,7 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth, das
                 </section>
             )}
 
-            {/* Full Metrics Display (The ones not in widgets, or all) */}
+            {/* Full Metrics Display */}
             <section className="grid grid-cols-2 md:grid-cols-5 gap-4">
                  {widgetOptions.map(opt => (
                     <div key={opt.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center text-center">
@@ -185,25 +179,6 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth, das
                         <span>Perform Body Scan</span>
                         <PlusIcon className="w-5 h-5" />
                     </button>
-                </div>
-                
-                <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-4 opacity-50">
-                    <div className="bg-white/5 border border-white/10 p-4 rounded-2xl backdrop-blur-sm">
-                        <p className="text-[10px] font-bold text-indigo-300 uppercase">Body Fat %</p>
-                        <p className="text-2xl font-black">--</p>
-                    </div>
-                    <div className="bg-white/5 border border-white/10 p-4 rounded-2xl backdrop-blur-sm">
-                        <p className="text-[10px] font-bold text-indigo-300 uppercase">Lean Mass</p>
-                        <p className="text-2xl font-black">--</p>
-                    </div>
-                    <div className="bg-white/5 border border-white/10 p-4 rounded-2xl backdrop-blur-sm">
-                        <p className="text-[10px] font-bold text-indigo-300 uppercase">Waist/Hip</p>
-                        <p className="text-2xl font-black">--</p>
-                    </div>
-                    <div className="bg-white/5 border border-white/10 p-4 rounded-2xl backdrop-blur-sm">
-                        <p className="text-[10px] font-bold text-indigo-300 uppercase">Posture</p>
-                        <p className="text-2xl font-black">--</p>
-                    </div>
                 </div>
             </section>
 
@@ -298,13 +273,15 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth, das
                             <div className="flex-1 text-center md:text-left">
                                 <h3 className="text-2xl font-black text-slate-900 mb-2">{readiness?.label || 'Calculating Readiness...'}</h3>
                                 <p className="text-slate-600 font-medium leading-relaxed">
-                                    {isCalculating ? "AI is processing your latest biometrics from Apple Health..." : readiness?.reasoning || "Log your sleep and HRV metrics to receive a predictive readiness score."}
+                                    {isCalculating ? "AI is processing your latest biometrics..." : readiness?.reasoning || "Log your sleep and HRV metrics to receive a predictive readiness score."}
                                 </p>
                                 
                                 <div className="mt-6 flex flex-wrap justify-center md:justify-start gap-4">
                                     <div className="flex items-center gap-2 px-3 py-1 bg-slate-100 rounded-full">
                                         <ClockIcon className="w-4 h-4 text-slate-400" />
-                                        <span className="text-xs font-bold text-slate-600">{Math.floor(healthStats.sleepMinutes! / 60)}h {healthStats.sleepMinutes! % 60}m Sleep</span>
+                                        <span className="text-xs font-bold text-slate-600">
+                                            {healthStats.sleepMinutes ? `${Math.floor(healthStats.sleepMinutes / 60)}h ${healthStats.sleepMinutes % 60}m Sleep` : '-- Sleep'}
+                                        </span>
                                     </div>
                                     <div className="flex items-center gap-2 px-3 py-1 bg-slate-100 rounded-full">
                                         <ActivityIcon className="w-4 h-4 text-indigo-500" />
@@ -335,20 +312,26 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth, das
                     <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
                         <h4 className="font-black text-slate-800 uppercase tracking-widest text-xs mb-4">Integrations</h4>
                         <div className="space-y-4">
-                            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl">
+                            <button 
+                                onClick={() => onSyncHealth('apple')}
+                                className="w-full flex items-center justify-between p-3 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-colors"
+                            >
                                 <div className="flex items-center gap-3">
                                     <div className="w-8 h-8 bg-rose-100 text-rose-600 rounded-xl flex items-center justify-center"><FireIcon className="w-4 h-4" /></div>
                                     <span className="text-sm font-bold text-slate-700">Apple Health</span>
                                 </div>
-                                <span className="text-[10px] font-black text-emerald-500 uppercase tracking-wider">Connected</span>
-                            </div>
-                            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl grayscale opacity-50">
+                                <span className="text-[10px] font-black text-emerald-500 uppercase tracking-wider">Sync</span>
+                            </button>
+                            <button 
+                                onClick={() => onSyncHealth('fitbit')}
+                                className="w-full flex items-center justify-between p-3 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-colors"
+                            >
                                 <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center"><BeakerIcon className="w-4 h-4" /></div>
-                                    <span className="text-sm font-bold text-slate-700">Oura Ring</span>
+                                    <div className="w-8 h-8 bg-[#00B0B9]/10 text-[#00B0B9] rounded-xl flex items-center justify-center"><ActivityIcon className="w-4 h-4" /></div>
+                                    <span className="text-sm font-bold text-slate-700">Fitbit App</span>
                                 </div>
-                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Syncing...</span>
-                            </div>
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Connect</span>
+                            </button>
                         </div>
                     </div>
                 </div>

@@ -53,7 +53,7 @@ const SocialFeedItem: React.FC<{ name: string; action: string; time: string; col
 export const CommandCenter: React.FC<CommandCenterProps> = ({ 
     dailyCalories, dailyProtein, rewardsBalance, onScanClick,
     onCameraClick, onBarcodeClick, onPantryChefClick, onRestaurantClick,
-    healthStats, isHealthSyncing, onConnectHealth,
+    healthStats, isHealthSyncing, isHealthConnected, onConnectHealth,
     dashboardPrefs
 }) => {
     const [friends, setFriends] = useState<Friendship[]>([]);
@@ -128,8 +128,10 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                 </button>
             </div>
 
+            {/* FIX: Passed isConnected prop to TodayStrip */}
             <TodayStrip 
                 stats={healthStats}
+                isConnected={isHealthConnected}
                 onConnect={onConnectHealth}
                 isSyncing={isHealthSyncing}
                 dashboardPrefs={dashboardPrefs}
