@@ -80,6 +80,45 @@ export const handler = async (event) => {
     const resource = pathParts[0];
 
     try {
+        if (resource === 'assessments') {
+            const sub = pathParts[1];
+            if (sub === 'state' && method === 'GET') {
+                // Assessment State Logic
+                const userId = event.user.userId;
+                // In a real app, fetch last logs from DB. Simulating for now.
+                const state = {
+                    lastUpdated: {
+                        EatingHabits: new Date(Date.now() - 86400000 * 2).toISOString(),
+                        PhysicalFitness: new Date().toISOString(),
+                        WorkFocus: new Date(Date.now() - 86400000 * 3).toISOString(),
+                        SocialLife: new Date(Date.now() - 86400000 * 0.5).toISOString()
+                    }
+                };
+
+                // Trigger Logic
+                let passivePrompt = null;
+                const now = Date.now();
+                const eatingStale = (now - new Date(state.lastUpdated.EatingHabits).getTime()) > 86400000;
+                
+                if (eatingStale) {
+                    passivePrompt = {
+                        id: 'p_eating_pulse',
+                        category: 'EatingHabits',
+                        question: "How would you rate your focus and energy after your last meal?",
+                        type: 'scale'
+                    };
+                }
+
+                return { statusCode: 200, headers, body: JSON.stringify({ ...state, passivePrompt }) };
+            }
+
+            if (sub === 'passive-response' && method === 'POST') {
+                const { promptId, response } = JSON.parse(event.body);
+                await awardPoints(event.user.userId, 'assessment.passive_pulse', 15, { promptId, response });
+                return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
+            }
+        }
+
         if (resource === 'calculate-readiness') {
             const stats = JSON.parse(event.body);
             const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
@@ -137,7 +176,6 @@ export const handler = async (event) => {
 
         if (resource === 'body' && pathParts[1] === 'log-recovery') {
             const data = JSON.parse(event.body);
-            // In a real app, we'd save to databaseService. For now, award points and return success.
             await awardPoints(event.user.userId, 'body.log_recovery', 15, { data });
             return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
         }

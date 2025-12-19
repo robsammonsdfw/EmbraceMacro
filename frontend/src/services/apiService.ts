@@ -2,7 +2,8 @@
 import type { 
   NutritionInfo, SavedMeal, MealPlan, MealPlanItem, MealPlanItemMetadata, 
   GroceryList, GroceryItem, RewardsSummary, MealLogEntry, Assessment, 
-  UserProfile, Friendship, ReadinessScore, FormAnalysisResult, RecoveryData
+  UserProfile, Friendship, ReadinessScore, FormAnalysisResult, RecoveryData,
+  AssessmentState
 } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
@@ -74,6 +75,14 @@ export const analyzeImageWithGemini = (base64Image: string, mimeType: string): P
             required: ['mealName', 'totalCalories', 'totalProtein', 'totalCarbs', 'totalFat', 'ingredients'] 
         } 
     });
+
+/** Assessment Features */
+
+export const getAssessmentState = (): Promise<AssessmentState> => 
+    callApi('/assessments/state', 'GET');
+
+export const submitPassivePulseResponse = (promptId: string, response: any): Promise<any> => 
+    callApi('/assessments/passive-response', 'POST', { promptId, response });
 
 /** New Body AI Features */
 

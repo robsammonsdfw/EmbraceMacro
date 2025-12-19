@@ -245,3 +245,18 @@ export interface KitRecommendation {
     profile: DietaryProfile;
     label?: string;
 }
+
+/** Passive Pulse Types */
+
+export interface PassivePrompt {
+  id: string;
+  category: 'EatingHabits' | 'PhysicalFitness' | 'WorkFocus' | 'SocialLife';
+  question: string;
+  type: 'scale' | 'boolean' | 'choice';
+  options?: { label: string; value: any }[];
+}
+
+export interface AssessmentState {
+  lastUpdated: Record<string, string>;
+  passivePrompt?: PassivePrompt;
+}
