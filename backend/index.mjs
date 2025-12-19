@@ -125,6 +125,45 @@ export const handler = async (event) => {
             }
         }
 
+        if (resource === 'meal-plans') {
+            const sub = pathParts[1];
+            if (!sub) {
+                if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getMealPlans(event.user.userId)) };
+                if (method === 'POST') return { statusCode: 201, headers, body: JSON.stringify(await createMealPlan(event.user.userId, JSON.parse(event.body).name)) };
+            } else if (sub === 'items' && pathParts[2]) {
+                if (method === 'DELETE') { await removeMealFromPlanItem(event.user.userId, parseInt(pathParts[2])); return { statusCode: 204, headers }; }
+            } else {
+                const planId = parseInt(sub);
+                if (pathParts[2] === 'items' && method === 'POST') {
+                    const { savedMealId, metadata } = JSON.parse(event.body);
+                    return { statusCode: 201, headers, body: JSON.stringify(await addMealToPlanItem(event.user.userId, planId, savedMealId, metadata)) };
+                }
+                if (method === 'DELETE') { await deleteMealPlan(event.user.userId, planId); return { statusCode: 204, headers }; }
+            }
+        }
+
+        if (resource === 'grocery-lists') {
+            const sub = pathParts[1];
+            if (!sub) {
+                if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getGroceryLists(event.user.userId)) };
+                if (method === 'POST') return { statusCode: 201, headers, body: JSON.stringify(await createGroceryList(event.user.userId, JSON.parse(event.body).name)) };
+            } else if (sub === 'items' && pathParts[2]) {
+                const itemId = parseInt(pathParts[2]);
+                if (method === 'PATCH') return { statusCode: 200, headers, body: JSON.stringify(await updateGroceryListItem(event.user.userId, itemId, JSON.parse(event.body).checked)) };
+                if (method === 'DELETE') { await removeGroceryItem(event.user.userId, itemId); return { statusCode: 204, headers }; }
+            } else {
+                const listId = parseInt(sub);
+                if (pathParts[2] === 'items') {
+                    if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getGroceryListItems(event.user.userId, listId)) };
+                    if (method === 'POST') return { statusCode: 201, headers, body: JSON.stringify(await addGroceryItem(event.user.userId, listId, JSON.parse(event.body).name)) };
+                }
+                if (pathParts[2] === 'active' && method === 'POST') { await setActiveGroceryList(event.user.userId, listId); return { statusCode: 200, headers, body: JSON.stringify({ success: true }) }; }
+                if (pathParts[2] === 'clear' && method === 'POST') { await clearGroceryListItems(event.user.userId, listId, JSON.parse(event.body).type); return { statusCode: 200, headers, body: JSON.stringify({ success: true }) }; }
+                if (pathParts[2] === 'import' && method === 'POST') return { statusCode: 200, headers, body: JSON.stringify(await importIngredientsFromPlans(event.user.userId, listId, JSON.parse(event.body).planIds)) };
+                if (method === 'DELETE') { await deleteGroceryList(event.user.userId, listId); return { statusCode: 204, headers }; }
+            }
+        }
+
         if (resource === 'calculate-readiness') {
             const stats = JSON.parse(event.body);
             const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
@@ -235,14 +274,24 @@ export const handler = async (event) => {
         }
 
         if (resource === 'saved-meals') {
-            if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getSavedMeals(event.user.userId)) };
-            if (method === 'POST') return { statusCode: 201, headers, body: JSON.stringify(await saveMeal(event.user.userId, JSON.parse(event.body))) };
-            if (method === 'DELETE') { await deleteMeal(event.user.userId, parseInt(pathParts[1])); return { statusCode: 204, headers }; }
+            const sub = pathParts[1];
+            if (!sub) {
+                if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getSavedMeals(event.user.userId)) };
+                if (method === 'POST') return { statusCode: 201, headers, body: JSON.stringify(await saveMeal(event.user.userId, JSON.parse(event.body))) };
+            } else {
+                if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getSavedMealById(event.user.userId, parseInt(sub))) };
+                if (method === 'DELETE') { await deleteMeal(event.user.userId, parseInt(sub)); return { statusCode: 204, headers }; }
+            }
         }
         
         if (resource === 'meal-log') {
-            if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getMealLogEntries(event.user.userId)) };
-            if (method === 'POST') return { statusCode: 201, headers, body: JSON.stringify(await createMealLogEntry(event.user.userId, JSON.parse(event.body).mealData, JSON.parse(event.body).imageBase64)) };
+            const sub = pathParts[1];
+            if (!sub) {
+                if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getMealLogEntries(event.user.userId)) };
+                if (method === 'POST') return { statusCode: 201, headers, body: JSON.stringify(await createMealLogEntry(event.user.userId, JSON.parse(event.body).mealData, JSON.parse(event.body).imageBase64)) };
+            } else {
+                if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await getMealLogEntryById(event.user.userId, parseInt(sub))) };
+            }
         }
 
         if (resource === 'analyze-image' || resource === 'analyze-image-recipes') {
