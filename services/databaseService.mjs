@@ -569,7 +569,7 @@ export const clearGroceryList = async (userId, type) => {
 };
 
 /**
- * Friends - Bidirectional logic with correct column names (user_id, friend_id)
+ * Friends - Bidirectional logic with correct column names (user1_id, user2_id)
  */
 export const getFriends = async (userId) => {
     const client = await pool.connect();
@@ -577,8 +577,8 @@ export const getFriends = async (userId) => {
         const res = await client.query(`
             SELECT u.id as "friendId", u.email, u.first_name as "firstName"
             FROM friendships f
-            JOIN users u ON (CASE WHEN f.user_id = $1 THEN f.friend_id ELSE f.user_id END) = u.id
-            WHERE (f.user_id = $1 OR f.friend_id = $1) AND f.status = 'accepted'
+            JOIN users u ON (CASE WHEN f.user1_id = $1 THEN f.user2_id ELSE f.user1_id END) = u.id
+            WHERE (f.user1_id = $1 OR f.user2_id = $1) AND f.status = 'accepted'
         `, [userId]);
         return res.rows;
     } finally { client.release(); }
@@ -590,8 +590,8 @@ export const getFriendRequests = async (userId) => {
         const res = await client.query(`
             SELECT f.id, u.email
             FROM friendships f
-            JOIN users u ON f.user_id = u.id
-            WHERE f.friend_id = $1 AND f.status = 'pending'
+            JOIN users u ON f.user1_id = u.id
+            WHERE f.user2_id = $1 AND f.status = 'pending'
         `, [userId]);
         return res.rows;
     } finally { client.release(); }
@@ -602,13 +602,13 @@ export const sendFriendRequest = async (userId, email) => {
     try {
         const target = await client.query(`SELECT id FROM users WHERE email = $1`, [email.toLowerCase().trim()]);
         if (target.rows.length === 0) throw new Error("User not found");
-        await client.query(`INSERT INTO friendships (user_id, friend_id, status) VALUES ($1, $2, 'pending') ON CONFLICT DO NOTHING`, [userId, target.rows[0].id]);
+        await client.query(`INSERT INTO friendships (user1_id, user2_id, status) VALUES ($1, $2, 'pending') ON CONFLICT DO NOTHING`, [userId, target.rows[0].id]);
     } finally { client.release(); }
 };
 
 export const respondToFriendRequest = async (userId, requestId, status) => {
     const client = await pool.connect();
-    try { await client.query(`UPDATE friendships SET status = $1 WHERE id = $2 AND friend_id = $3`, [status, requestId, userId]); } finally { client.release(); }
+    try { await client.query(`UPDATE friendships SET status = $1 WHERE id = $2 AND user2_id = $3`, [status, requestId, userId]); } finally { client.release(); }
 };
 
 export const getSocialProfile = async (userId) => {
@@ -802,7 +802,14 @@ export const syncHealthMetrics = async (userId, stats) => {
     try {
         const q = `INSERT INTO health_metrics (user_id, steps, active_calories, resting_calories, distance_miles, flights_climbed, heart_rate, last_synced)
                    VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
-                   ON CONFLICT (user_id) DO UPDATE SET steps = GREATEST(health_metrics.steps, EXCLUDED.steps), active_calories = GREATEST(health_metrics.active_calories, EXCLUDED.active_calories), last_synced = CURRENT_TIMESTAMP RETURNING *`;
+                   ON CONFLICT (user_id) DO UPDATE SET 
+                        steps = GREATEST(health_metrics.steps, EXCLUDED.steps), 
+                        active_calories = GREATEST(health_metrics.active_calories, EXCLUDED.active_calories),
+                        resting_calories = GREATEST(health_metrics.resting_calories, EXCLUDED.resting_calories),
+                        distance_miles = GREATEST(health_metrics.distance_miles, EXCLUDED.distance_miles),
+                        flights_climbed = GREATEST(health_metrics.flights_climbed, EXCLUDED.flights_climbed),
+                        heart_rate = GREATEST(health_metrics.heart_rate, EXCLUDED.heart_rate),
+                        last_synced = CURRENT_TIMESTAMP RETURNING *`;
         return (await client.query(q, [userId, stats.steps || 0, stats.activeCalories || 0, stats.restingCalories || 0, stats.distanceMiles || 0, stats.flightsClimbed || 0, stats.heartRate || 0])).rows[0];
     } finally { client.release(); }
 };

@@ -11,11 +11,17 @@ export const getPlatform = (): PlatformType => {
 };
 
 export const connectHealthProvider = async (platform: PlatformType): Promise<boolean> => {
+    if (platform === 'fitbit') {
+        alert("Redirecting to Fitbit for authorization... (Simulation)");
+        // Simulate a popup or redirect
+        window.open('https://www.fitbit.com/login', '_blank', 'width=500,height=600');
+    }
+    
     return new Promise((resolve) => {
         setTimeout(() => {
             console.log(`Connected to ${platform}`);
             resolve(true);
-        }, 1500);
+        }, 2000);
     });
 };
 
@@ -40,14 +46,14 @@ export const syncHealthData = async (source: 'apple' | 'fitbit' = 'apple'): Prom
                 resolve({
                     steps: 5800, // Significantly higher than Apple
                     activeCalories: 145.5,
-                    restingCalories: 1414,
+                    restingCalories: 1550,
                     distanceMiles: 2.1,
-                    flightsClimbed: 2, // Lower than Apple, so Apple's '4' should persist
-                    heartRate: 85, // Peak HR or current, we'll keep the higher one
+                    flightsClimbed: 2, // Lower than Apple, so Apple's '4' should persist via GREATEST
+                    heartRate: 85, // Peak HR or current
                     hrv: 68,
                     sleepMinutes: 420
                 });
             }
-        }, 1200);
+        }, 1500);
     });
 };
