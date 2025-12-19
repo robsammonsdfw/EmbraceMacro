@@ -156,6 +156,29 @@ export const handler = async (event) => {
             }
         }
 
+        // --- Body Hub Fixes ---
+        if (resource === 'body') {
+            const sub = pathParts[1];
+            if (sub === 'dashboard-prefs') {
+                if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await db.getDashboardPrefs(event.user.userId)) };
+                if (method === 'POST') { await db.saveDashboardPrefs(event.user.userId, JSON.parse(event.body)); return { statusCode: 200, headers, body: JSON.stringify({ success: true }) }; }
+            }
+            if (sub === 'log-recovery' && method === 'POST') {
+                await db.logRecoveryStats(event.user.userId, JSON.parse(event.body));
+                return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
+            }
+        }
+
+        if (resource === 'calculate-readiness' && method === 'POST') {
+            const data = JSON.parse(event.body);
+            // Simple Readiness logic
+            const score = Math.round(Math.min(100, (data.sleepMinutes / 480) * 50 + (10 - data.workoutIntensity) * 5));
+            let label = "Standard Recovery";
+            if (score > 80) label = "Optimal: Push for PR";
+            if (score < 50) label = "Rest Day Advised";
+            return { statusCode: 200, headers, body: JSON.stringify({ score, label, reasoning: "Based on sleep duration and nervous system balance." }) };
+        }
+
         // --- Food Logic ---
         if (resource === 'meal-log') {
             const sub = pathParts[1];
@@ -215,10 +238,21 @@ export const handler = async (event) => {
             }
         }
 
-        // --- Health & Dashboard ---
+        // --- Health & Assessments ---
         if (resource === 'health-metrics') {
             if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await db.getHealthMetrics(event.user.userId)) };
             if (method === 'POST') return { statusCode: 200, headers, body: JSON.stringify(await db.syncHealthMetrics(event.user.userId, JSON.parse(event.body))) };
+        }
+
+        if (resource === 'assessments') {
+            const sub = pathParts[1];
+            if (!sub) return { statusCode: 200, headers, body: JSON.stringify(await db.getAssessments()) };
+            if (sub === 'state') return { statusCode: 200, headers, body: JSON.stringify({ lastUpdated: {} }) };
+            if (sub === 'submit') {
+                const { assessmentId, responses } = JSON.parse(event.body);
+                await db.submitAssessment(event.user.userId, assessmentId, responses);
+                return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
+            }
         }
 
         if (resource === 'rewards') return { statusCode: 200, headers, body: JSON.stringify(await db.getRewardsSummary(event.user.userId)) };
@@ -252,8 +286,6 @@ export const handler = async (event) => {
             const { base64Image, mimeType, condition, cuisine } = body;
             
             let prompt = "";
-            // FIX: Initializing schema without an immediate assignment to nutritionSchema to avoid strict type inference 
-            // that prevents re-assignment to other incompatible schema shapes below.
             let schema;
 
             if (resource === 'analyze-image') {

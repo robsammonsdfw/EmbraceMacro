@@ -14,7 +14,6 @@ const pool = new Pool({
 const toListJson = (row) => {
     if (!row) return null;
     const data = row.meal_data || {};
-    // Ensure the image string is NOT in the nested JSON
     delete data.imageBase64; 
     delete data.imageUrl;
     
@@ -22,7 +21,7 @@ const toListJson = (row) => {
         ...data,
         id: row.id,
         createdAt: row.created_at,
-        hasImage: !!row.has_image // Boolean flag is cheap, base64 is expensive
+        hasImage: !!row.has_image
     };
 };
 
@@ -77,17 +76,16 @@ export const updateSocialProfile = async (userId, updates) => {
 };
 
 /**
- * Friends
+ * Friends - Fixed Column Names
  */
 export const getFriends = async (userId) => {
     const client = await pool.connect();
     try {
-        // Query specifically handles undirected friendship rows
         const res = await client.query(`
             SELECT u.id as "friendId", u.email, u.first_name as "firstName"
             FROM friendships f
-            JOIN users u ON (CASE WHEN f.user_id_1 = $1 THEN f.user_id_2 ELSE f.user_id_1 END) = u.id
-            WHERE (f.user_id_1 = $1 OR f.user_id_2 = $1) AND f.status = 'accepted'
+            JOIN users u ON (CASE WHEN f.user1_id = $1 THEN f.user2_id ELSE f.user1_id END) = u.id
+            WHERE (f.user1_id = $1 OR f.user2_id = $1) AND f.status = 'accepted'
         `, [userId]);
         return res.rows;
     } finally { client.release(); }
@@ -99,8 +97,8 @@ export const getFriendRequests = async (userId) => {
         const res = await client.query(`
             SELECT f.id, u.email
             FROM friendships f
-            JOIN users u ON f.user_id_1 = u.id
-            WHERE f.user_id_2 = $1 AND f.status = 'pending'
+            JOIN users u ON f.user1_id = u.id
+            WHERE f.user2_id = $1 AND f.status = 'pending'
         `, [userId]);
         return res.rows;
     } finally { client.release(); }
@@ -111,22 +109,21 @@ export const sendFriendRequest = async (userId, email) => {
     try {
         const target = await client.query(`SELECT id FROM users WHERE email = $1`, [email.toLowerCase().trim()]);
         if (target.rows.length === 0) throw new Error("User not found");
-        await client.query(`INSERT INTO friendships (user_id_1, user_id_2, status) VALUES ($1, $2, 'pending') ON CONFLICT DO NOTHING`, [userId, target.rows[0].id]);
+        await client.query(`INSERT INTO friendships (user1_id, user2_id, status) VALUES ($1, $2, 'pending') ON CONFLICT DO NOTHING`, [userId, target.rows[0].id]);
     } finally { client.release(); }
 };
 
 export const respondToFriendRequest = async (userId, requestId, status) => {
     const client = await pool.connect();
-    try { await client.query(`UPDATE friendships SET status = $1 WHERE id = $2 AND user_id_2 = $3`, [status, requestId, userId]); } finally { client.release(); }
+    try { await client.query(`UPDATE friendships SET status = $1 WHERE id = $2 AND user2_id = $3`, [status, requestId, userId]); } finally { client.release(); }
 };
 
 /**
- * Meal History (Log) - Payload Optimized
+ * Meal History
  */
 export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
     try {
-        // OPTIMIZATION: Do NOT select image_base64 here.
         const res = await client.query(`
             SELECT id, meal_data, created_at, (image_base64 IS NOT NULL) as has_image 
             FROM meal_log_entries 
@@ -149,27 +146,25 @@ export const getMealLogEntryById = async (userId, id) => {
 export const createMealLogEntry = async (userId, mealData, imageBase64) => {
     const client = await pool.connect();
     try {
-        // Ensure image data is not duplicated in JSONB
         const cleanData = { ...mealData };
         delete cleanData.imageUrl;
         delete cleanData.imageBase64;
-
         const res = await client.query(`
             INSERT INTO meal_log_entries (user_id, meal_data, image_base64) 
             VALUES ($1, $2, $3) 
             RETURNING id, meal_data, created_at, (image_base64 IS NOT NULL) as has_image
         `, [userId, cleanData, imageBase64]);
+        await awardPoints(userId, 'meal.photo_logged', 50);
         return toListJson(res.rows[0]);
     } finally { client.release(); }
 };
 
 /**
- * Saved Meals - Payload Optimized
+ * Saved Meals
  */
 export const getSavedMeals = async (userId) => {
     const client = await pool.connect();
     try {
-        // OPTIMIZATION: Do NOT select image_base64 here.
         const res = await client.query(`
             SELECT id, meal_data, (image_base64 IS NOT NULL) as has_image 
             FROM saved_meals 
@@ -195,17 +190,16 @@ export const saveMeal = async (userId, mealData) => {
         if (mealData.imageUrl?.startsWith('data:')) {
             image = mealData.imageUrl.split(',')[1];
         }
-        
         const cleanData = { ...mealData };
         delete cleanData.imageUrl;
         delete cleanData.imageBase64;
         delete cleanData.id;
-
         const res = await client.query(`
             INSERT INTO saved_meals (user_id, meal_data, image_base64) 
             VALUES ($1, $2, $3) 
             RETURNING id, meal_data, (image_base64 IS NOT NULL) as has_image
         `, [userId, cleanData, image]);
+        await awardPoints(userId, 'meal.saved', 10);
         return toListJson(res.rows[0]);
     } finally { client.release(); }
 };
@@ -216,7 +210,7 @@ export const deleteMeal = async (userId, id) => {
 };
 
 /**
- * Meal Plans - Payload Optimized
+ * Meal Plans
  */
 export const getMealPlans = async (userId) => {
     const client = await pool.connect();
@@ -343,7 +337,7 @@ export const importIngredientsFromPlans = async (userId, listId, planIds) => {
 };
 
 /**
- * Health & Dashboard
+ * Health & Dashboard Prefs
  */
 export const getHealthMetrics = async (userId) => {
     const client = await pool.connect();
@@ -362,7 +356,10 @@ export const syncHealthMetrics = async (userId, stats) => {
 
 export const getDashboardPrefs = async (userId) => {
     const client = await pool.connect();
-    try { return (await client.query(`SELECT dashboard_prefs FROM users WHERE id = $1`, [userId])).rows[0]?.dashboard_prefs || { selectedWidgets: ['steps', 'activeCalories', 'distanceMiles'] }; } finally { client.release(); }
+    try { 
+        const res = await client.query(`SELECT dashboard_prefs FROM users WHERE id = $1`, [userId]);
+        return res.rows[0]?.dashboard_prefs || { selectedWidgets: ['steps', 'activeCalories', 'distanceMiles'] }; 
+    } finally { client.release(); }
 };
 
 export const saveDashboardPrefs = async (userId, prefs) => {
@@ -371,19 +368,49 @@ export const saveDashboardPrefs = async (userId, prefs) => {
 };
 
 /**
- * Rewards & Assessments
+ * Rewards & Recovery
  */
-// FIX: Added awardPoints export to handle point distribution.
 export const awardPoints = async (userId, eventType, points, metadata = {}) => {
-    console.log(`Awarding ${points} points to user ${userId} for ${eventType}`, metadata);
-    // In a real implementation, this would insert into rewards_ledger and update rewards_balances tables.
+    const client = await pool.connect();
+    try {
+        await client.query(`INSERT INTO rewards_ledger (user_id, event_type, points_delta, metadata) VALUES ($1, $2, $3, $4)`, [userId, eventType, points, metadata]);
+        await client.query(`
+            INSERT INTO rewards_balances (user_id, points_total, points_available)
+            VALUES ($1, $2, $2)
+            ON CONFLICT (user_id) DO UPDATE SET points_total = rewards_balances.points_total + EXCLUDED.points_total, points_available = rewards_balances.points_available + EXCLUDED.points_available, updated_at = CURRENT_TIMESTAMP
+        `, [userId, points]);
+    } catch(e) { console.error("Award points failed", e); } finally { client.release(); }
 };
 
 export const getRewardsSummary = async (userId) => {
-    return { points_total: 1000, points_available: 1000, tier: 'Silver', history: [] };
+    const client = await pool.connect();
+    try {
+        const bal = await client.query(`SELECT points_total, points_available, tier FROM rewards_balances WHERE user_id = $1`, [userId]);
+        const hist = await client.query(`SELECT * FROM rewards_ledger WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20`, [userId]);
+        return { 
+            points_total: bal.rows[0]?.points_total || 0, 
+            points_available: bal.rows[0]?.points_available || 0, 
+            tier: bal.rows[0]?.tier || 'Bronze',
+            history: hist.rows
+        };
+    } finally { client.release(); }
 };
-export const getAssessments = async () => [];
-export const submitAssessment = async () => {};
+
+export const logRecoveryStats = async (userId, data) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`
+            INSERT INTO sleep_records (user_id, duration_minutes, quality_score)
+            VALUES ($1, $2, $3)
+        `, [userId, data.sleepMinutes, data.sleepQuality]);
+        await awardPoints(userId, 'recovery.logged', 20);
+    } finally { client.release(); }
+};
+
+export const getAssessments = async () => [
+    { id: 'daily-pulse', title: 'Daily Pulse', description: 'Quick check of your mental and physical state.', questions: [{id: 'mood', text: 'How is your mood?', type: 'scale', min: 1, max: 10}] }
+];
+export const submitAssessment = async (userId, id, resp) => { await awardPoints(userId, 'assessment.complete', 50, { assessmentId: id }); };
 export const getPartnerBlueprint = async () => ({ preferences: {} });
 export const savePartnerBlueprint = async () => {};
 export const getMatches = async () => [];
