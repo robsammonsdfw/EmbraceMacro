@@ -130,7 +130,6 @@ export const awardPoints = async (userId, eventType, points, metadata = {}) => {
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Error awarding points:', err);
-        // We don't throw here to avoid blocking the main user action if rewards fail
     } finally {
         client.release();
     }
@@ -180,7 +179,6 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
         const res = await client.query(query, [userId, mealData, imageBase64]);
         const row = res.rows[0];
         
-        // Award points for logging a meal
         await awardPoints(userId, 'meal_photo.logged', 50, { meal_log_id: row.id });
 
         const mealDataFromDb = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
@@ -261,7 +259,6 @@ export const saveMeal = async (userId, mealData) => {
         const res = await client.query(query, [userId, mealDataForDb]);
         const row = res.rows[0];
         
-        // Award points for saving a meal
         await awardPoints(userId, 'meal.saved', 10, { saved_meal_id: row.id });
         
         const mealDataFromDb = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
@@ -305,7 +302,6 @@ export const getMealPlans = async (userId) => {
         `;
         const res = await client.query(query, [userId]);
         
-        // Process flat results into nested structure
         const plans = new Map();
         res.rows.forEach(row => {
             if (!plans.has(row.plan_id)) {
@@ -315,7 +311,7 @@ export const getMealPlans = async (userId) => {
                     items: [],
                 });
             }
-            if (row.item_id) { // Ensure item exists (for empty plans)
+            if (row.item_id) {
                 const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
                 plans.get(row.plan_id).items.push({
                     id: row.item_id,
@@ -340,9 +336,9 @@ export const createMealPlan = async (userId, name) => {
     try {
         const query = `INSERT INTO meal_plans (user_id, name) VALUES ($1, $2) RETURNING id, name;`;
         const res = await client.query(query, [userId, name]);
-        return { ...res.rows[0], items: [] }; // Return new plan with empty items
+        return { ...res.rows[0], items: [] };
     } catch(err) {
-        if (err.code === '23505') { // unique_violation
+        if (err.code === '23505') {
             throw new Error(`A meal plan with the name "${name}" already exists.`);
         }
         console.error('Database error in createMealPlan:', err);
@@ -355,7 +351,6 @@ export const createMealPlan = async (userId, name) => {
 export const deleteMealPlan = async (userId, planId) => {
     const client = await pool.connect();
     try {
-        // ON DELETE CASCADE will handle deleting items from meal_plan_items
         await client.query(`DELETE FROM meal_plans WHERE id = $1 AND user_id = $2;`, [planId, userId]);
     } catch(err) {
         console.error('Database error in deleteMealPlan:', err);
@@ -369,14 +364,13 @@ export const deleteMealPlan = async (userId, planId) => {
 export const addMealToPlanItem = async (userId, planId, savedMealId) => {
     const client = await pool.connect();
     try {
-        // Verify the user owns the plan and the meal before inserting
         const checkQuery = `
            SELECT (SELECT user_id FROM meal_plans WHERE id = $1) = $3 AS owns_plan,
                   (SELECT user_id FROM saved_meals WHERE id = $2) = $3 AS owns_meal;
         `;
         const checkRes = await client.query(checkQuery, [planId, savedMealId, userId]);
         if (!checkRes.rows[0] || !checkRes.rows[0].owns_plan || !checkRes.rows[0].owns_meal) {
-            throw new Error("Authorization error: Cannot add meal to a plan you don't own, or meal/plan does not exist.");
+            throw new Error("Authorization error.");
         }
 
         const insertQuery = `
@@ -387,7 +381,6 @@ export const addMealToPlanItem = async (userId, planId, savedMealId) => {
         const insertRes = await client.query(insertQuery, [userId, planId, savedMealId]);
         const newItemId = insertRes.rows[0].id;
 
-        // Fetch the full data for the new item to return to client
         const selectQuery = `
             SELECT 
                 i.id,
@@ -406,10 +399,6 @@ export const addMealToPlanItem = async (userId, planId, savedMealId) => {
         };
 
     } catch (err) {
-        if (err.code === '23505') { // unique_violation on (meal_plan_id, saved_meal_id)
-            console.warn(`Meal ${savedMealId} is already in plan ${planId}.`);
-            throw new Error('This meal is already in the selected plan.');
-        }
         console.error('Database error in addMealToPlanItem:', err);
         throw new Error('Could not add meal to plan.');
     } finally {
@@ -422,21 +411,14 @@ export const addMealAndLinkToPlan = async (userId, mealData, planId) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        
-        // Step 1: Save the new meal to get an ID.
         const newMeal = await saveMeal(userId, mealData);
-        
-        // Step 2: Add the newly saved meal to the specified plan.
         const newPlanItem = await addMealToPlanItem(userId, planId, newMeal.id);
-        
         await client.query('COMMIT');
-        
         return newPlanItem;
-
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Database transaction error in addMealAndLinkToPlan:', err);
-        throw new Error('Could not add meal from history to plan due to a database error.');
+        throw new Error('Could not add meal.');
     } finally {
         client.release();
     }
@@ -478,15 +460,12 @@ export const getGroceryList = async (userId) => {
 export const generateGroceryList = async (userId, planIds = []) => {
     const client = await pool.connect();
     if (planIds.length === 0) {
-        // Clear the list if no plans are selected
         await client.query(`DELETE FROM grocery_list_items WHERE user_id = $1;`, [userId]);
         return [];
     }
     
     try {
         await client.query('BEGIN');
-
-        // Step 1: Get all ingredients from meals within the selected plans
         const mealQuery = `
             SELECT sm.meal_data
             FROM saved_meals sm
@@ -495,14 +474,8 @@ export const generateGroceryList = async (userId, planIds = []) => {
         `;
         const mealRes = await client.query(mealQuery, [userId, planIds]);
         const allIngredients = mealRes.rows.flatMap(row => row.meal_data?.ingredients || []);
-        
-        // Step 2: Create a unique, sorted list of ingredient names
         const uniqueIngredientNames = [...new Set(allIngredients.map(ing => ing.name))].sort();
-
-        // Step 3: Clear the old list
         await client.query(`DELETE FROM grocery_list_items WHERE user_id = $1;`, [userId]);
-
-        // Step 4: Insert the new list if there are any ingredients
         if (uniqueIngredientNames.length > 0) {
             const insertQuery = `
                 INSERT INTO grocery_list_items (user_id, name)
@@ -510,12 +483,8 @@ export const generateGroceryList = async (userId, planIds = []) => {
             `;
             await client.query(insertQuery, [userId, uniqueIngredientNames]);
         }
-        
         await client.query('COMMIT');
-
-        // Step 5: Return the newly created list
         return getGroceryList(userId);
-
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Database transaction error in generateGroceryList:', err);
@@ -535,9 +504,6 @@ export const updateGroceryListItem = async (userId, itemId, checked) => {
             RETURNING id, name, checked;
         `;
         const res = await client.query(query, [checked, itemId, userId]);
-        if (res.rows.length === 0) {
-            throw new Error("Grocery item not found or user unauthorized.");
-        }
         return res.rows[0];
     } catch (err) {
         console.error('Database error in updateGroceryListItem:', err);
@@ -556,19 +522,19 @@ export const clearGroceryList = async (userId, type) => {
         } else if (type === 'all') {
             query = `DELETE FROM grocery_list_items WHERE user_id = $1;`;
         } else {
-            throw new Error("Invalid clear type specified.");
+            throw new Error("Invalid clear type.");
         }
         await client.query(query, [userId]);
     } catch (err) {
         console.error('Database error in clearGroceryList:', err);
-        throw new Error('Could not clear grocery list items.');
+        throw new Error('Could not clear grocery list.');
     } finally {
         client.release();
     }
 };
 
 /**
- * Friends - Bidirectional logic with correct column names (user1_id, user2_id)
+ * Friends - Bidirectional logic with correct column names (user_id, friend_id)
  */
 export const getFriends = async (userId) => {
     const client = await pool.connect();
@@ -576,8 +542,8 @@ export const getFriends = async (userId) => {
         const res = await client.query(`
             SELECT u.id as "friendId", u.email, u.first_name as "firstName"
             FROM friendships f
-            JOIN users u ON (CASE WHEN f.user1_id = $1 THEN f.user2_id ELSE f.user1_id END) = u.id
-            WHERE (f.user1_id = $1 OR f.user2_id = $1) AND f.status = 'accepted'
+            JOIN users u ON (CASE WHEN f.user_id = $1 THEN f.friend_id ELSE f.user_id END) = u.id
+            WHERE (f.user_id = $1 OR f.friend_id = $1) AND f.status = 'accepted'
         `, [userId]);
         return res.rows;
     } finally { client.release(); }
@@ -589,8 +555,8 @@ export const getFriendRequests = async (userId) => {
         const res = await client.query(`
             SELECT f.id, u.email
             FROM friendships f
-            JOIN users u ON f.user1_id = u.id
-            WHERE f.user2_id = $1 AND f.status = 'pending'
+            JOIN users u ON f.user_id = u.id
+            WHERE f.friend_id = $1 AND f.status = 'pending'
         `, [userId]);
         return res.rows;
     } finally { client.release(); }
@@ -601,13 +567,13 @@ export const sendFriendRequest = async (userId, email) => {
     try {
         const target = await client.query(`SELECT id FROM users WHERE email = $1`, [email.toLowerCase().trim()]);
         if (target.rows.length === 0) throw new Error("User not found");
-        await client.query(`INSERT INTO friendships (user1_id, user2_id, status) VALUES ($1, $2, 'pending') ON CONFLICT DO NOTHING`, [userId, target.rows[0].id]);
+        await client.query(`INSERT INTO friendships (user_id, friend_id, status) VALUES ($1, $2, 'pending') ON CONFLICT DO NOTHING`, [userId, target.rows[0].id]);
     } finally { client.release(); }
 };
 
 export const respondToFriendRequest = async (userId, requestId, status) => {
     const client = await pool.connect();
-    try { await client.query(`UPDATE friendships SET status = $1 WHERE id = $2 AND user2_id = $3`, [status, requestId, userId]); } finally { client.release(); }
+    try { await client.query(`UPDATE friendships SET status = $1 WHERE id = $2 AND friend_id = $3`, [status, requestId, userId]); } finally { client.release(); }
 };
 
 export const getSocialProfile = async (userId) => {
@@ -650,9 +616,7 @@ export const saveSleepRecord = async (userId, sleepData) => {
             sleepData.endTime
         ]);
         
-        // Award points for tracking sleep
         await awardPoints(userId, 'sleep.tracked', 20);
-
         const row = res.rows[0];
         return {
             id: row.id,
@@ -691,98 +655,6 @@ export const getSleepRecords = async (userId) => {
     } catch (err) {
         console.error('Database error in getSleepRecords:', err);
         throw new Error('Could not retrieve sleep records.');
-    } finally {
-        client.release();
-    }
-};
-
-// --- User Entitlements ---
-
-export const getUserEntitlements = async (userId) => {
-    const client = await pool.connect();
-    try {
-        const query = `
-            SELECT id, source, external_product_id, status, starts_at, expires_at 
-            FROM user_entitlements 
-            WHERE user_id = $1 AND status = 'active'
-            ORDER BY starts_at DESC;
-        `;
-        const res = await client.query(query, [userId]);
-        return res.rows.map(row => ({
-            id: row.id,
-            source: row.source,
-            externalProductId: row.external_product_id,
-            status: row.status,
-            startsAt: row.starts_at,
-            expiresAt: row.expires_at
-        }));
-    } catch (err) {
-        console.error('Database error in getUserEntitlements:', err);
-        throw new Error('Could not retrieve entitlements.');
-    } finally {
-        client.release();
-    }
-};
-
-export const grantEntitlement = async (userId, entitlementData) => {
-    const client = await pool.connect();
-    try {
-        const query = `
-            INSERT INTO user_entitlements (user_id, source, external_product_id, status, expires_at)
-            VALUES ($1, $2, $3, 'active', $4)
-            RETURNING id, source, external_product_id, status, starts_at, expires_at;
-        `;
-        const res = await client.query(query, [
-            userId, 
-            entitlementData.source, 
-            entitlementData.externalProductId,
-            entitlementData.expiresAt || null
-        ]);
-        
-        const row = res.rows[0];
-        return {
-            id: row.id,
-            source: row.source,
-            externalProductId: row.external_product_id,
-            status: row.status,
-            startsAt: row.starts_at,
-            expiresAt: row.expires_at
-        };
-    } catch (err) {
-        console.error('Database error in grantEntitlement:', err);
-        throw new Error('Could not grant entitlement.');
-    } finally {
-        client.release();
-    }
-};
-
-// --- Body Scans ---
-export const saveBodyScan = async (userId, scanData) => {
-    const client = await pool.connect();
-    try {
-        const query = `INSERT INTO body_scans (user_id, scan_data) VALUES ($1, $2) RETURNING id, scan_data, created_at;`;
-        const res = await client.query(query, [userId, scanData]);
-        
-        await awardPoints(userId, 'body_scan.completed', 100);
-
-        return res.rows[0];
-    } catch (err) {
-        console.error('Database error in saveBodyScan:', err);
-        throw new Error('Could not save scan.');
-    } finally {
-        client.release();
-    }
-};
-
-export const getBodyScans = async (userId) => {
-    const client = await pool.connect();
-    try {
-        const query = `SELECT id, scan_data, created_at FROM body_scans WHERE user_id = $1 ORDER BY created_at DESC;`;
-        const res = await client.query(query, [userId]);
-        return res.rows;
-    } catch (err) {
-        console.error('Database error in getBodyScans:', err);
-        throw new Error('Could not retrieve scans.');
     } finally {
         client.release();
     }
