@@ -130,13 +130,26 @@ export const handler = async (event) => {
         if (resource === 'rewards') return { statusCode: 200, headers, body: JSON.stringify(await db.getRewardsSummary(event.user.userId)) };
 
         // --- AI Helpers ---
-        if (resource === 'analyze-image' || resource === 'analyze-image-grocery' || resource === 'analyze-image-recipes') {
+        // FIX: Consolidated AI handlers and fixed generateContent parameter structure. 
+        // Added 'get-meal-suggestions' to the supported resources. 
+        // Ensured contents is passed as an array for standard compatibility and handled missing image data gracefully.
+        if (resource === 'analyze-image' || resource === 'analyze-image-grocery' || resource === 'analyze-image-recipes' || resource === 'get-meal-suggestions') {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const { base64Image, mimeType, prompt, schema } = JSON.parse(event.body);
+            
+            const parts = [];
+            if (base64Image && mimeType) {
+                parts.push({ inlineData: { data: base64Image, mimeType } });
+            }
+            parts.push({ text: prompt || "Analyze this request." });
+
             const res = await ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
-                contents: { parts: [{ inlineData: { data: base64Image, mimeType } }, { text: prompt || "Analyze this image." }] },
-                config: { responseMimeType: 'application/json', responseSchema: schema }
+                contents: [{ parts }],
+                config: { 
+                    responseMimeType: 'application/json', 
+                    responseSchema: schema 
+                }
             });
             return { statusCode: 200, headers, body: res.text };
         }
