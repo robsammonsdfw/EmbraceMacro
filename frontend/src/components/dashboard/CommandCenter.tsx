@@ -14,7 +14,7 @@ interface CommandCenterProps {
     healthStats: HealthStats;
     isHealthConnected: boolean;
     isHealthSyncing: boolean;
-    onConnectHealth: () => void;
+    onConnectHealth: (source?: 'apple' | 'fitbit') => void;
     onScanClick: () => void;
     onCameraClick: () => void;
     onBarcodeClick: () => void;
@@ -53,7 +53,7 @@ const SocialFeedItem: React.FC<{ name: string; action: string; time: string; col
 export const CommandCenter: React.FC<CommandCenterProps> = ({ 
     dailyCalories, dailyProtein, rewardsBalance, onScanClick,
     onCameraClick, onBarcodeClick, onPantryChefClick, onRestaurantClick,
-    healthStats, isHealthConnected, isHealthSyncing, onConnectHealth,
+    healthStats, isHealthSyncing, onConnectHealth,
     dashboardPrefs
 }) => {
     const [friends, setFriends] = useState<Friendship[]>([]);
@@ -130,7 +130,6 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
 
             <TodayStrip 
                 stats={healthStats}
-                isConnected={isHealthConnected}
                 onConnect={onConnectHealth}
                 isSyncing={isHealthSyncing}
                 dashboardPrefs={dashboardPrefs}
