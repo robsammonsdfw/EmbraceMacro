@@ -40,7 +40,6 @@ export const handler = async (event) => {
     const resource = pathParts[0];
 
     try {
-        // --- Social ---
         if (resource === 'social') {
             const sub = pathParts[1];
             if (sub === 'friends') return { statusCode: 200, headers, body: JSON.stringify(await db.getFriends(event.user.userId)) };
@@ -55,7 +54,6 @@ export const handler = async (event) => {
             }
         }
 
-        // --- Meal Log ---
         if (resource === 'meal-log') {
             const sub = pathParts[1];
             if (!sub) {
@@ -66,7 +64,6 @@ export const handler = async (event) => {
             }
         }
 
-        // --- Saved Meals ---
         if (resource === 'saved-meals') {
             const sub = pathParts[1];
             if (!sub) {
@@ -78,7 +75,6 @@ export const handler = async (event) => {
             }
         }
 
-        // --- Meal Plans ---
         if (resource === 'meal-plans') {
             const sub = pathParts[1];
             if (!sub) {
@@ -93,7 +89,6 @@ export const handler = async (event) => {
             }
         }
 
-        // --- Grocery Lists ---
         if (resource === 'grocery-lists') {
             const sub = pathParts[1];
             if (!sub) {
@@ -116,26 +111,58 @@ export const handler = async (event) => {
             }
         }
 
-        // --- Health & Body ---
         if (resource === 'health-metrics') {
             if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await db.getHealthMetrics(event.user.userId)) };
             if (method === 'POST') return { statusCode: 200, headers, body: JSON.stringify(await db.syncHealthMetrics(event.user.userId, JSON.parse(event.body))) };
         }
-        if (resource === 'body' && pathParts[1] === 'dashboard-prefs') {
-            if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await db.getDashboardPrefs(event.user.userId)) };
-            if (method === 'POST') { await db.saveDashboardPrefs(event.user.userId, JSON.parse(event.body)); return { statusCode: 200, headers, body: JSON.stringify({ success: true }) }; }
-        }
 
-        // --- Rewards ---
         if (resource === 'rewards') return { statusCode: 200, headers, body: JSON.stringify(await db.getRewardsSummary(event.user.userId)) };
 
-        // --- AI Helpers ---
-        // FIX: Consolidated AI handlers and fixed generateContent parameter structure. 
-        // Added 'get-meal-suggestions' to the supported resources. 
-        // Ensured contents is passed as an array for standard compatibility and handled missing image data gracefully.
+        // FIX: Added search-nearby-restaurants route using Google Maps grounding.
+        if (resource === 'search-nearby-restaurants') {
+            const { latitude, longitude } = JSON.parse(event.body);
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const response = await ai.models.generateContent({
+                model: "gemini-2.5-flash-lite-latest",
+                contents: "What good healthy restaurants are nearby?",
+                config: {
+                    tools: [{ googleMaps: {} }],
+                    toolConfig: {
+                        retrievalConfig: {
+                            latLng: {
+                                latitude,
+                                longitude
+                            }
+                        }
+                    }
+                },
+            });
+            const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+            const places = chunks
+                .filter(c => c.maps)
+                .map(c => ({ uri: c.maps.uri, title: c.maps.title }));
+            return { statusCode: 200, headers, body: JSON.stringify({ places }) };
+        }
+
+        // FIX: Added check-in route.
+        if (resource === 'check-in') {
+            const { locationName } = JSON.parse(event.body);
+            await db.awardPoints(event.user.userId, 'restaurant.check_in', 25, { location: locationName });
+            return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
+        }
+
+        // FIX: Added assessments/passive-pulse route.
+        if (resource === 'assessments' && pathParts[1] === 'passive-pulse') {
+             const { promptId, value } = JSON.parse(event.body);
+             await db.awardPoints(event.user.userId, 'assessment.passive_pulse', 15, { promptId, value });
+             return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
+        }
+
+        // AI Helpers
         if (resource === 'analyze-image' || resource === 'analyze-image-grocery' || resource === 'analyze-image-recipes' || resource === 'get-meal-suggestions') {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const { base64Image, mimeType, prompt, schema } = JSON.parse(event.body);
+            const body = JSON.parse(event.body);
+            const { base64Image, mimeType, prompt, schema } = body;
             
             const parts = [];
             if (base64Image && mimeType) {

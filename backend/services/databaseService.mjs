@@ -8,18 +8,27 @@ const pool = new Pool({
     }
 });
 
-// Optimization: Helpers to remove large image strings from list results
+/**
+ * Helper: Removes large base64 strings from meal data objects for list views.
+ */
 const toListJson = (row) => {
+    if (!row) return null;
     const data = row.meal_data || {};
+    // Ensure the image string is NOT in the nested JSON
+    delete data.imageBase64; 
+    delete data.imageUrl;
+    
     return {
         ...data,
         id: row.id,
         createdAt: row.created_at,
-        hasImage: !!row.image_base64,
-        imageUrl: null // Never send base64 in a list
+        hasImage: !!row.has_image // Boolean flag is cheap, base64 is expensive
     };
 };
 
+/**
+ * Helper: Formats a single row for detailed view including the image.
+ */
 const toDetailJson = (row) => {
     if (!row) return null;
     const data = row.meal_data || {};
@@ -68,16 +77,17 @@ export const updateSocialProfile = async (userId, updates) => {
 };
 
 /**
- * Friends (Using user_id_1 / user_id_2)
+ * Friends
  */
 export const getFriends = async (userId) => {
     const client = await pool.connect();
     try {
+        // Query specifically handles undirected friendship rows
         const res = await client.query(`
             SELECT u.id as "friendId", u.email, u.first_name as "firstName"
             FROM friendships f
-            JOIN users u ON (f.user_id_1 = u.id OR f.user_id_2 = u.id)
-            WHERE (f.user_id_1 = $1 OR f.user_id_2 = $1) AND u.id != $1 AND f.status = 'accepted'
+            JOIN users u ON (CASE WHEN f.user_id_1 = $1 THEN f.user_id_2 ELSE f.user_id_1 END) = u.id
+            WHERE (f.user_id_1 = $1 OR f.user_id_2 = $1) AND f.status = 'accepted'
         `, [userId]);
         return res.rows;
     } finally { client.release(); }
@@ -111,12 +121,19 @@ export const respondToFriendRequest = async (userId, requestId, status) => {
 };
 
 /**
- * Meal History
+ * Meal History (Log) - Payload Optimized
  */
 export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
     try {
-        const res = await client.query(`SELECT id, meal_data, created_at, (image_base64 IS NOT NULL) as has_image FROM meal_log_entries WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
+        // OPTIMIZATION: Do NOT select image_base64 here.
+        const res = await client.query(`
+            SELECT id, meal_data, created_at, (image_base64 IS NOT NULL) as has_image 
+            FROM meal_log_entries 
+            WHERE user_id = $1 
+            ORDER BY created_at DESC 
+            LIMIT 50
+        `, [userId]);
         return res.rows.map(toListJson);
     } finally { client.release(); }
 };
@@ -132,18 +149,33 @@ export const getMealLogEntryById = async (userId, id) => {
 export const createMealLogEntry = async (userId, mealData, imageBase64) => {
     const client = await pool.connect();
     try {
-        const res = await client.query(`INSERT INTO meal_log_entries (user_id, meal_data, image_base64) VALUES ($1, $2, $3) RETURNING *`, [userId, mealData, imageBase64]);
-        return toDetailJson(res.rows[0]);
+        // Ensure image data is not duplicated in JSONB
+        const cleanData = { ...mealData };
+        delete cleanData.imageUrl;
+        delete cleanData.imageBase64;
+
+        const res = await client.query(`
+            INSERT INTO meal_log_entries (user_id, meal_data, image_base64) 
+            VALUES ($1, $2, $3) 
+            RETURNING id, meal_data, created_at, (image_base64 IS NOT NULL) as has_image
+        `, [userId, cleanData, imageBase64]);
+        return toListJson(res.rows[0]);
     } finally { client.release(); }
 };
 
 /**
- * Saved Meals
+ * Saved Meals - Payload Optimized
  */
 export const getSavedMeals = async (userId) => {
     const client = await pool.connect();
     try {
-        const res = await client.query(`SELECT id, meal_data, (image_base64 IS NOT NULL) as has_image FROM saved_meals WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
+        // OPTIMIZATION: Do NOT select image_base64 here.
+        const res = await client.query(`
+            SELECT id, meal_data, (image_base64 IS NOT NULL) as has_image 
+            FROM saved_meals 
+            WHERE user_id = $1 
+            ORDER BY created_at DESC
+        `, [userId]);
         return res.rows.map(toListJson);
     } finally { client.release(); }
 };
@@ -159,11 +191,22 @@ export const getSavedMealById = async (userId, id) => {
 export const saveMeal = async (userId, mealData) => {
     const client = await pool.connect();
     try {
-        const image = mealData.imageUrl?.startsWith('data:') ? mealData.imageUrl.split(',')[1] : null;
-        const data = { ...mealData };
-        delete data.imageUrl;
-        const res = await client.query(`INSERT INTO saved_meals (user_id, meal_data, image_base64) VALUES ($1, $2, $3) RETURNING *`, [userId, data, image]);
-        return toDetailJson(res.rows[0]);
+        let image = null;
+        if (mealData.imageUrl?.startsWith('data:')) {
+            image = mealData.imageUrl.split(',')[1];
+        }
+        
+        const cleanData = { ...mealData };
+        delete cleanData.imageUrl;
+        delete cleanData.imageBase64;
+        delete cleanData.id;
+
+        const res = await client.query(`
+            INSERT INTO saved_meals (user_id, meal_data, image_base64) 
+            VALUES ($1, $2, $3) 
+            RETURNING id, meal_data, (image_base64 IS NOT NULL) as has_image
+        `, [userId, cleanData, image]);
+        return toListJson(res.rows[0]);
     } finally { client.release(); }
 };
 
@@ -173,7 +216,7 @@ export const deleteMeal = async (userId, id) => {
 };
 
 /**
- * Meal Plans
+ * Meal Plans - Payload Optimized
  */
 export const getMealPlans = async (userId) => {
     const client = await pool.connect();
@@ -187,7 +230,14 @@ export const getMealPlans = async (userId) => {
                 JOIN saved_meals sm ON i.saved_meal_id = sm.id
                 WHERE i.meal_plan_id = $1
             `, [plan.id]);
-            plans.push({ ...plan, items: items.rows.map(r => ({ id: r.id, metadata: r.metadata, meal: toListJson({ id: r.meal_id, meal_data: r.meal_data, image_base64: r.has_image ? 'y' : null }) })) });
+            plans.push({ 
+                ...plan, 
+                items: items.rows.map(r => ({ 
+                    id: r.id, 
+                    metadata: r.metadata, 
+                    meal: toListJson({ id: r.meal_id, meal_data: r.meal_data, has_image: r.has_image }) 
+                })) 
+            });
         }
         return plans;
     } finally { client.release(); }
@@ -206,7 +256,11 @@ export const addMealToPlanItem = async (userId, planId, savedMealId, metadata) =
     try {
         const res = await client.query(`INSERT INTO meal_plan_items (user_id, meal_plan_id, saved_meal_id, metadata) VALUES ($1, $2, $3, $4) RETURNING id`, [userId, planId, savedMealId, metadata]);
         const meal = await client.query(`SELECT id, meal_data, (image_base64 IS NOT NULL) as has_image FROM saved_meals WHERE id = $1`, [savedMealId]);
-        return { id: res.rows[0].id, metadata, meal: toListJson({ id: meal.rows[0].id, meal_data: meal.rows[0].meal_data, image_base64: meal.rows[0].has_image ? 'y' : null }) };
+        return { 
+            id: res.rows[0].id, 
+            metadata, 
+            meal: toListJson({ id: meal.rows[0].id, meal_data: meal.rows[0].meal_data, has_image: meal.rows[0].has_image }) 
+        };
     } finally { client.release(); }
 };
 
@@ -317,13 +371,19 @@ export const saveDashboardPrefs = async (userId, prefs) => {
 };
 
 /**
- * Placeholders for other endpoints
+ * Rewards & Assessments
  */
-// FIX: getRewardsSummary expected 1 argument (userId) in backend/index.mjs but had 0.
-export const getRewardsSummary = async (userId) => ({ points_total: 1000, points_available: 1000, tier: 'Silver', history: [] });
+// FIX: Added awardPoints export to handle point distribution.
+export const awardPoints = async (userId, eventType, points, metadata = {}) => {
+    console.log(`Awarding ${points} points to user ${userId} for ${eventType}`, metadata);
+    // In a real implementation, this would insert into rewards_ledger and update rewards_balances tables.
+};
+
+export const getRewardsSummary = async (userId) => {
+    return { points_total: 1000, points_available: 1000, tier: 'Silver', history: [] };
+};
 export const getAssessments = async () => [];
 export const submitAssessment = async () => {};
-// FIX: Removed duplicate getPartnerBlueprint export to resolve potential naming conflicts.
 export const getPartnerBlueprint = async () => ({ preferences: {} });
 export const savePartnerBlueprint = async () => {};
 export const getMatches = async () => [];
