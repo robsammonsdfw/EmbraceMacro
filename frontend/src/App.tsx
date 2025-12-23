@@ -1,10 +1,9 @@
-
 import React, { useState, useCallback, useEffect } from 'react';
 import * as apiService from './services/apiService';
 import { analyzeFoodImage } from './services/geminiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
 import { connectHealthProvider, syncHealthData } from './services/healthService';
-import type { NutritionInfo, MealLogEntry, SavedMeal, MealPlan, HealthStats, UserDashboardPrefs } from './types';
+import type { NutritionInfo, MealLogEntry, SavedMeal, MealPlan, HealthStats, UserDashboardPrefs, HealthJourney } from './types';
 import { ImageUploader } from './components/ImageUploader';
 import { NutritionCard } from './components/NutritionCard';
 import { Loader } from './components/Loader';
@@ -40,7 +39,10 @@ const App: React.FC = () => {
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
   const [activePlanId, setActivePlanId] = useState<number | null>(null);
   const [walletBalance, setWalletBalance] = useState<number>(0);
-  const [dashboardPrefs, setDashboardPrefs] = useState<UserDashboardPrefs>({ selectedWidgets: ['steps', 'activeCalories', 'distanceMiles'] });
+  const [dashboardPrefs, setDashboardPrefs] = useState<UserDashboardPrefs>({ 
+    selectedWidgets: ['steps', 'activeCalories', 'distanceMiles'],
+    selectedJourney: 'general-health'
+  });
   
   // Health State
   const [healthStats, setHealthStats] = useState<HealthStats>({ 
@@ -82,7 +84,7 @@ const App: React.FC = () => {
             apiService.getMealLog().catch(() => []),
             apiService.getSavedMeals().catch(() => []),
             apiService.getMealPlans().catch(() => []),
-            apiService.getDashboardPrefs().catch(() => ({ selectedWidgets: ['steps', 'activeCalories', 'distanceMiles'] })),
+            apiService.getDashboardPrefs().catch(() => ({ selectedWidgets: ['steps', 'activeCalories', 'distanceMiles'], selectedJourney: 'general-health' as HealthJourney })),
             refreshWallet().catch(() => null),
             refreshHealth().catch(() => null)
         ]).then(([log, saved, plans, prefs]) => {
@@ -98,14 +100,11 @@ const App: React.FC = () => {
   const handleConnectHealth = async (source: 'apple' | 'fitbit' = 'apple') => {
       setIsHealthSyncing(true);
       try {
-          // 1. Trigger simulated device sync
           const provider = source === 'apple' ? 'ios' : 'fitbit';
           const success = await connectHealthProvider(provider);
           if (success) {
               const freshDeviceStats = await syncHealthData(source);
-              // 2. Sync to DB logic (Backend handles "highest value" comparison)
               await apiService.syncHealthStatsToDB(freshDeviceStats);
-              // 3. Refresh from DB source of truth
               await refreshHealth();
           }
       } catch (e) {
@@ -120,7 +119,25 @@ const App: React.FC = () => {
       await apiService.saveDashboardPrefs(newPrefs);
   };
 
-  // ... (rest of handleCaptureResult, handleSaveToHistory, etc. remains the same) ...
+  const handleJourneyChange = async (journey: HealthJourney) => {
+      const journeyToWidgets: Record<HealthJourney, string[]> = {
+          'weight-loss': ['steps', 'activeCalories', 'distanceMiles'],
+          'muscle-cut': ['activeCalories', 'steps', 'heartRate'],
+          'muscle-bulk': ['restingCalories', 'activeCalories', 'flightsClimbed'],
+          'heart-health': ['heartRate', 'activeCalories', 'steps'],
+          'blood-pressure': ['heartRate', 'restingCalories', 'sleepMinutes'],
+          'general-health': ['steps', 'distanceMiles', 'flightsClimbed']
+      };
+      
+      const newPrefs: UserDashboardPrefs = {
+          ...dashboardPrefs,
+          selectedJourney: journey,
+          selectedWidgets: journeyToWidgets[journey] || dashboardPrefs.selectedWidgets
+      };
+      
+      handleUpdateDashboardPrefs(newPrefs);
+  };
+
   const handleCaptureResult = useCallback(async (img: string | null, mode: any, barcode?: string) => {
     setIsCaptureOpen(false);
     setImage(null);
@@ -294,6 +311,8 @@ const App: React.FC = () => {
         onLogout={logout} 
         mobileMenuOpen={mobileMenuOpen} 
         setMobileMenuOpen={setMobileMenuOpen}
+        selectedJourney={dashboardPrefs.selectedJourney}
+        onJourneyChange={handleJourneyChange}
     >
         {isCaptureOpen && (
             <CaptureFlow 

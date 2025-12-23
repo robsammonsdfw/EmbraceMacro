@@ -1,7 +1,7 @@
-
 import React from 'react';
 import { SidebarNav } from './SidebarNav';
-import { MenuIcon, XIcon } from '../icons';
+import { MenuIcon, XIcon, ActivityIcon } from '../icons';
+import { HealthJourney } from '../../types';
 
 interface AppLayoutProps {
     children: React.ReactNode;
@@ -11,7 +11,18 @@ interface AppLayoutProps {
     rightPanel?: React.ReactNode;
     mobileMenuOpen: boolean;
     setMobileMenuOpen: (open: boolean) => void;
+    selectedJourney?: HealthJourney;
+    onJourneyChange: (journey: HealthJourney) => void;
 }
+
+export const JOURNEYS: { id: HealthJourney; label: string }[] = [
+    { id: 'weight-loss', label: 'Lose Weight Only' },
+    { id: 'muscle-cut', label: 'Gain Muscle & Cut' },
+    { id: 'muscle-bulk', label: 'Gain Muscle & Bulk' },
+    { id: 'heart-health', label: 'Heart Health' },
+    { id: 'blood-pressure', label: 'Lower Blood Pressure' },
+    { id: 'general-health', label: 'General Health' },
+];
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ 
     children, 
@@ -20,7 +31,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     onLogout, 
     rightPanel,
     mobileMenuOpen,
-    setMobileMenuOpen
+    setMobileMenuOpen,
+    selectedJourney,
+    onJourneyChange
 }) => {
 
     const handleMobileNavigate = (view: string) => {
@@ -62,20 +75,53 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                                 <XIcon />
                              </button>
                          </div>
-                         <SidebarNav activeView={activeView} onNavigate={handleMobileNavigate} onLogout={onLogout} />
+                         <SidebarNav 
+                            activeView={activeView} 
+                            onNavigate={handleMobileNavigate} 
+                            onLogout={onLogout} 
+                            selectedJourney={selectedJourney}
+                            onJourneyChange={onJourneyChange}
+                         />
                     </div>
                 </div>
             )}
 
             {/* Desktop Sidebar (Persistent) */}
             <div className="hidden md:block w-64 flex-shrink-0 h-screen sticky top-0 border-r border-slate-200 bg-white z-30">
-                <SidebarNav activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} />
+                <SidebarNav 
+                    activeView={activeView} 
+                    onNavigate={onNavigate} 
+                    onLogout={onLogout}
+                    selectedJourney={selectedJourney}
+                    onJourneyChange={onJourneyChange}
+                />
             </div>
 
             {/* Main Content Area */}
             <div className="flex-grow flex flex-col md:flex-row min-w-0">
-                <main className="flex-1 p-4 md:p-8 overflow-y-auto max-w-5xl mx-auto w-full">
-                    {children}
+                <main className="flex-1 overflow-y-auto w-full">
+                    {/* Desktop Sub-header for Journey Selection */}
+                    <div className="hidden md:flex bg-white border-b border-slate-200 px-8 py-3 items-center justify-between sticky top-0 z-20 shadow-sm">
+                        <div className="flex items-center gap-2 text-slate-500">
+                             <ActivityIcon className="w-4 h-4" />
+                             <span className="text-xs font-bold uppercase tracking-widest">Active Journey</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <select 
+                                value={selectedJourney}
+                                onChange={(e) => onJourneyChange(e.target.value as HealthJourney)}
+                                className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-black text-slate-700 outline-none hover:border-emerald-500 transition-colors"
+                            >
+                                {JOURNEYS.map(j => (
+                                    <option key={j.id} value={j.id}>{j.label}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="p-4 md:p-8 max-w-5xl mx-auto">
+                        {children}
+                    </div>
                 </main>
 
                 {/* Right Rail - Desktop Only */}

@@ -1,9 +1,8 @@
-
 import React, { useEffect, useState, useMemo } from 'react';
 import { TodayStrip } from './TodayStrip';
 import { DigitalTwinPanel } from './DigitalTwinPanel';
-import { CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, TrophyIcon, ChatIcon, ThumbUpIcon, UserGroupIcon, UserCircleIcon, PlusIcon, ActivityIcon } from '../icons';
-import type { HealthStats, Friendship, UserDashboardPrefs } from '../../types';
+import { CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, TrophyIcon, ChatIcon, ThumbUpIcon, UserGroupIcon, UserCircleIcon, PlusIcon, ActivityIcon, FireIcon } from '../icons';
+import type { HealthStats, Friendship, UserDashboardPrefs, HealthJourney } from '../../types';
 import * as apiService from '../../services/apiService';
 
 interface CommandCenterProps {
@@ -59,6 +58,18 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
     const [friends, setFriends] = useState<Friendship[]>([]);
     const [isLoadingFriends, setIsLoadingFriends] = useState(true);
 
+    const journeyLabel = useMemo(() => {
+        const labels: Record<string, string> = {
+            'weight-loss': 'Weight Loss Only',
+            'muscle-cut': 'Muscle Gain & Cut',
+            'muscle-bulk': 'Muscle Gain & Bulk',
+            'heart-health': 'Improve Heart Health',
+            'blood-pressure': 'Lower Blood Pressure',
+            'general-health': 'General Health'
+        };
+        return labels[dashboardPrefs.selectedJourney || ''] || 'My Health';
+    }, [dashboardPrefs.selectedJourney]);
+
     useEffect(() => {
         const fetchFriends = async () => {
             try {
@@ -104,21 +115,28 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
 
     return (
         <div className="space-y-6 animate-fade-in pb-10">
-            <div className="bg-slate-900 rounded-2xl p-6 text-white shadow-lg flex items-center justify-between">
-                <div>
+            <div className="bg-slate-900 rounded-2xl p-6 text-white shadow-lg flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex-1">
                     <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Health Wallet Balance</p>
                     <div className="flex items-baseline gap-2">
                         <span className="text-4xl font-extrabold text-white">{rewardsBalance.toLocaleString()}</span>
                         <span className="text-emerald-400 font-bold">points</span>
                     </div>
                 </div>
-                <div className="bg-white/10 p-3 rounded-full">
-                    <TrophyIcon className="w-6 h-6" />
+                
+                <div className="h-px w-full md:h-12 md:w-px bg-slate-700 hidden md:block"></div>
+
+                <div className="flex-1 text-center md:text-right">
+                    <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Current Journey</p>
+                    <div className="flex items-center justify-center md:justify-end gap-2 text-emerald-400 font-black">
+                        <ActivityIcon className="w-4 h-4" />
+                        <span className="text-lg uppercase tracking-tight">{journeyLabel}</span>
+                    </div>
                 </div>
             </div>
 
             <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Today's Pulse</h2>
+                <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Status Update</h2>
                 <button 
                     onClick={onScanClick}
                     className="flex items-center gap-2 bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full text-xs font-bold border border-emerald-100 hover:bg-emerald-100 transition-colors"
@@ -128,7 +146,6 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                 </button>
             </div>
 
-            {/* FIX: Passed isConnected prop to TodayStrip */}
             <TodayStrip 
                 stats={healthStats}
                 isConnected={isHealthConnected}
@@ -139,29 +156,49 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 space-y-6">
+                    {/* Goal-specific insight module */}
+                    <div className="bg-gradient-to-br from-emerald-500 to-cyan-600 rounded-2xl p-6 text-white shadow-md relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-4 opacity-20">
+                            <FireIcon className="w-24 h-24" />
+                        </div>
+                        <div className="relative z-10">
+                            <h3 className="text-lg font-black uppercase tracking-widest mb-2">Journey Insight</h3>
+                            {dashboardPrefs.selectedJourney === 'weight-loss' && (
+                                <p className="text-white/90 font-medium">Your step count is currently <span className="font-black">15% higher</span> than yesterday. This deficit is ideal for weight loss without muscle loss.</p>
+                            )}
+                            {dashboardPrefs.selectedJourney === 'muscle-cut' && (
+                                <p className="text-white/90 font-medium">Focus on hitting your <span className="font-black">{dailyProtein}g protein target</span> while maintaining a slight calorie deficit to preserve mass.</p>
+                            )}
+                            {dashboardPrefs.selectedJourney === 'heart-health' && (
+                                <p className="text-white/90 font-medium">Your resting heart rate is <span className="font-black">trending down</span>. Keep up the consistent cardio for long-term health.</p>
+                            )}
+                             {(!dashboardPrefs.selectedJourney || dashboardPrefs.selectedJourney === 'general-health') && (
+                                <p className="text-white/90 font-medium">Maintain consistency in logging. Regular updates help our AI calibrate your digital twin for better accuracy.</p>
+                            )}
+                        </div>
+                    </div>
+
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="font-bold text-slate-900 flex items-center gap-2">
-                                <UserGroupIcon className="w-5 h-5 text-indigo-500" /> Friend Updates
+                                <UserGroupIcon className="w-5 h-5 text-indigo-500" /> Community
                             </h3>
-                            <span className="text-xs font-bold text-slate-400 uppercase">{friends.length} Active</span>
                         </div>
                         
                         {isLoadingFriends ? (
                             <div className="space-y-4 py-4">
-                                {[1, 2, 3].map(i => (
+                                {[1, 2].map(i => (
                                     <div key={i} className="flex items-center space-x-3 animate-pulse">
                                         <div className="w-10 h-10 bg-slate-100 rounded-full"></div>
                                         <div className="flex-1 space-y-2">
                                             <div className="h-3 bg-slate-100 rounded w-3/4"></div>
-                                            <div className="h-2 bg-slate-50 rounded w-1/4"></div>
                                         </div>
                                     </div>
                                 ))}
                             </div>
                         ) : friends.length > 0 ? (
                             <div className="space-y-1">
-                                {activities.slice(0, 5).map(activity => (
+                                {activities.slice(0, 3).map(activity => (
                                     <SocialFeedItem 
                                         key={activity.id} 
                                         name={activity.name} 
@@ -172,39 +209,30 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                                 ))}
                             </div>
                         ) : (
-                            <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                                <p className="text-sm text-slate-500 mb-3">No friend activity yet.</p>
-                                <button className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 hover:bg-emerald-100 transition-colors">
-                                    Invite Friends to Earn Points
-                                </button>
+                            <div className="text-center py-4 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                                <p className="text-sm text-slate-500">No updates.</p>
                             </div>
-                        )}
-                        
-                        {friends.length > 0 && (
-                            <button className="w-full mt-4 py-2 text-center text-xs font-bold text-slate-400 hover:text-slate-600 uppercase tracking-widest border-t border-slate-100 pt-4">
-                                View Full Activity Log
-                            </button>
                         )}
                     </div>
 
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                        <h3 className="font-bold text-slate-900 mb-4">Quick Log</h3>
+                        <h3 className="font-bold text-slate-900 mb-4 uppercase tracking-widest text-xs">Quick Log</h3>
                         <div className="grid grid-cols-4 gap-4">
                             <button onClick={onCameraClick} className="flex flex-col items-center gap-2 group">
                                 <div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl group-hover:scale-110 transition-transform shadow-sm"><CameraIcon className="w-6 h-6" /></div>
-                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Meal</span>
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight text-center">Meal</span>
                             </button>
                             <button onClick={onBarcodeClick} className="flex flex-col items-center gap-2 group">
                                 <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl group-hover:scale-110 transition-transform shadow-sm"><BarcodeIcon className="w-6 h-6" /></div>
-                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Scan</span>
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight text-center">Scan</span>
                             </button>
                             <button onClick={onPantryChefClick} className="flex flex-col items-center gap-2 group">
                                 <div className="p-4 bg-amber-50 text-amber-600 rounded-2xl group-hover:scale-110 transition-transform shadow-sm"><ChefHatIcon className="w-6 h-6" /></div>
-                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Pantry</span>
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight text-center">Pantry</span>
                             </button>
                             <button onClick={onRestaurantClick} className="flex flex-col items-center gap-2 group">
                                 <div className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl group-hover:scale-110 transition-transform shadow-sm"><UtensilsIcon className="w-6 h-6" /></div>
-                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Dine</span>
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight text-center">Dine</span>
                             </button>
                         </div>
                     </div>
@@ -234,10 +262,10 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col justify-between min-h-[250px]">
                         <div>
                             <div className="flex justify-between items-center mb-2">
-                                <h3 className="font-bold text-slate-900">Body Twin</h3>
+                                <h3 className="font-bold text-slate-900 uppercase tracking-widest text-xs">Body Twin</h3>
                                 <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
                             </div>
-                            <p className="text-xs text-slate-500">Live Health Overlay</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Live Health Overlay</p>
                         </div>
                         
                         <div className="flex-grow flex items-center justify-center my-4">

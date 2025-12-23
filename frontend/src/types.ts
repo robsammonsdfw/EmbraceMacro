@@ -1,4 +1,3 @@
-
 export interface Ingredient {
   name: string;
   weightGrams: number;
@@ -13,6 +12,14 @@ export interface Ingredient {
 }
 
 export type VisibilityMode = 'private' | 'friends' | 'public';
+
+export type HealthJourney = 
+  | 'weight-loss' 
+  | 'muscle-cut' 
+  | 'muscle-bulk' 
+  | 'heart-health' 
+  | 'blood-pressure'
+  | 'general-health';
 
 export interface NutritionInfo {
   mealName: string;
@@ -58,6 +65,7 @@ export interface HealthStats {
 
 export interface UserDashboardPrefs {
   selectedWidgets: string[]; // IDs of the metrics to show on Command Center
+  selectedJourney?: HealthJourney;
 }
 
 export interface RecoveryData {

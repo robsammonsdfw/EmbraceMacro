@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import type { Assessment, AssessmentState } from '../../types';
 import * as apiService from '../../services/apiService';
@@ -75,8 +74,9 @@ export const AssessmentHub: React.FC = () => {
                 </div>
                 <div className="flex gap-2">
                     {/* Visual indicators for stale data - Added safety check for lastUpdated */}
+                    {/* FIX: Cast date to string to fix Date constructor TypeScript error */}
                     {gameState?.lastUpdated && Object.entries(gameState.lastUpdated).map(([cat, date]) => {
-                        const isStale = (Date.now() - new Date(date).getTime()) > 86400000;
+                        const isStale = (Date.now() - new Date(date as string).getTime()) > 86400000;
                         return (
                             <div key={cat} title={`${cat}: ${isStale ? 'Stale' : 'Fresh'}`} className={`w-3 h-3 rounded-full border-2 border-white shadow-sm ${isStale ? 'bg-rose-400' : 'bg-emerald-400'}`}></div>
                         );
