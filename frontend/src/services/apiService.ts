@@ -1,4 +1,3 @@
-
 import type { 
   NutritionInfo, SavedMeal, MealPlan, MealPlanItem, MealPlanItemMetadata, 
   GroceryList, GroceryItem, RewardsSummary, MealLogEntry, Assessment, 
@@ -23,13 +22,28 @@ const callApi = async (endpoint: string, method: string, body?: any) => {
         body: body ? JSON.stringify(body) : undefined 
     };
 
-    const response = await fetch(url, config);
-    if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`API Error [${response.status}] ${url}:`, errorText);
-        throw new Error(`API failed: ${response.status}`);
+    try {
+        const response = await fetch(url, config);
+        
+        if (response.status === 401) {
+            console.error("Session expired or invalid. Logging out...");
+            localStorage.removeItem(AUTH_TOKEN_KEY);
+            // Force reload to trigger AuthContext reset and redirect to login
+            window.location.reload();
+            throw new Error("Unauthorized");
+        }
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`API Error [${response.status}] ${url}:`, errorText);
+            throw new Error(`API failed: ${response.status}`);
+        }
+        
+        return response.status === 204 ? null : response.json();
+    } catch (error) {
+        console.error("Fetch error:", error);
+        throw error;
     }
-    return response.status === 204 ? null : response.json();
 };
 
 export interface MapPlace {
