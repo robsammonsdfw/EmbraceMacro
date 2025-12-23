@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { TodayStrip } from './TodayStrip';
 import { DigitalTwinPanel } from './DigitalTwinPanel';
-import { CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, TrophyIcon, ChatIcon, ThumbUpIcon, UserGroupIcon, UserCircleIcon, PlusIcon, ActivityIcon, FireIcon } from '../icons';
-import type { HealthStats, Friendship, UserDashboardPrefs, HealthJourney } from '../../types';
+import { CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, ChatIcon, ThumbUpIcon, UserGroupIcon, UserCircleIcon, PlusIcon, ActivityIcon, FireIcon } from '../icons';
+import type { HealthStats, Friendship, UserDashboardPrefs } from '../../types';
 import * as apiService from '../../services/apiService';
 
 interface CommandCenterProps {
@@ -116,9 +116,9 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
     return (
         <div className="space-y-6 animate-fade-in pb-10">
             <div className="bg-slate-900 rounded-2xl p-6 text-white shadow-lg flex flex-col md:flex-row items-center justify-between gap-4">
-                <div className="flex-1">
+                <div className="flex-1 text-center md:text-left">
                     <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Health Wallet Balance</p>
-                    <div className="flex items-baseline gap-2">
+                    <div className="flex items-baseline justify-center md:justify-start gap-2">
                         <span className="text-4xl font-extrabold text-white">{rewardsBalance.toLocaleString()}</span>
                         <span className="text-emerald-400 font-bold">points</span>
                     </div>
@@ -127,7 +127,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                 <div className="h-px w-full md:h-12 md:w-px bg-slate-700 hidden md:block"></div>
 
                 <div className="flex-1 text-center md:text-right">
-                    <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Current Journey</p>
+                    <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Active Journey</p>
                     <div className="flex items-center justify-center md:justify-end gap-2 text-emerald-400 font-black">
                         <ActivityIcon className="w-4 h-4" />
                         <span className="text-lg uppercase tracking-tight">{journeyLabel}</span>
@@ -164,16 +164,19 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                         <div className="relative z-10">
                             <h3 className="text-lg font-black uppercase tracking-widest mb-2">Journey Insight</h3>
                             {dashboardPrefs.selectedJourney === 'weight-loss' && (
-                                <p className="text-white/90 font-medium">Your step count is currently <span className="font-black">15% higher</span> than yesterday. This deficit is ideal for weight loss without muscle loss.</p>
+                                <p className="text-white/90 font-medium">Your step count is currently <span className="font-black">15% higher</span> than yesterday. Maintaining this calorie deficit is critical for consistent fat loss.</p>
                             )}
                             {dashboardPrefs.selectedJourney === 'muscle-cut' && (
-                                <p className="text-white/90 font-medium">Focus on hitting your <span className="font-black">{dailyProtein}g protein target</span> while maintaining a slight calorie deficit to preserve mass.</p>
+                                <p className="text-white/90 font-medium">Prioritize your <span className="font-black">{dailyProtein}g protein intake</span> today. High protein during a cut ensures muscle preservation while fat stores are utilized.</p>
+                            )}
+                            {dashboardPrefs.selectedJourney === 'muscle-bulk' && (
+                                <p className="text-white/90 font-medium">You are currently in a <span className="font-black">surplus phase</span>. Ensure you're hitting your compound lifting sessions to maximize lean mass accrual.</p>
                             )}
                             {dashboardPrefs.selectedJourney === 'heart-health' && (
-                                <p className="text-white/90 font-medium">Your resting heart rate is <span className="font-black">trending down</span>. Keep up the consistent cardio for long-term health.</p>
+                                <p className="text-white/90 font-medium">Resting heart rate is <span className="font-black">trending lower</span> this week. Keep up the Zone 2 cardio work to strengthen your cardiovascular baseline.</p>
                             )}
                              {(!dashboardPrefs.selectedJourney || dashboardPrefs.selectedJourney === 'general-health') && (
-                                <p className="text-white/90 font-medium">Maintain consistency in logging. Regular updates help our AI calibrate your digital twin for better accuracy.</p>
+                                <p className="text-white/90 font-medium">Consistency is key. Every logged meal helps our medical AI calibrate your digital twin for more accurate predictive modeling.</p>
                             )}
                         </div>
                     </div>
@@ -210,7 +213,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                             </div>
                         ) : (
                             <div className="text-center py-4 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                                <p className="text-sm text-slate-500">No updates.</p>
+                                <p className="text-sm text-slate-500">No community updates yet.</p>
                             </div>
                         )}
                     </div>
@@ -251,9 +254,9 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                             <h3 className="font-bold text-lg mb-1 flex items-center gap-2">
                                 <ActivityIcon className="w-4 h-4" /> 3D Body Scan
                             </h3>
-                            <p className="text-indigo-100 text-xs mb-6">Launch Prism Scanner to track 3D body composition.</p>
+                            <p className="text-indigo-100 text-xs mb-6">Open Prism Scanner to track muscle and body composition.</p>
                             <div className="flex items-center justify-between">
-                                <span className="text-[10px] font-black uppercase tracking-widest bg-white/20 px-2 py-1 rounded">Open App</span>
+                                <span className="text-[10px] font-black uppercase tracking-widest bg-white/20 px-2 py-1 rounded">Launch App</span>
                                 <PlusIcon className="w-4 h-4" />
                             </div>
                         </div>
@@ -265,7 +268,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                                 <h3 className="font-bold text-slate-900 uppercase tracking-widest text-xs">Body Twin</h3>
                                 <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
                             </div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase">Live Health Overlay</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Real-time Biometric Overlay</p>
                         </div>
                         
                         <div className="flex-grow flex items-center justify-center my-4">
