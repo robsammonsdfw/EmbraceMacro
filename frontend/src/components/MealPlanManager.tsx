@@ -26,6 +26,7 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedDay, setSelectedDay] = useState<string>('Monday');
     const [isMobileLibraryOpen, setIsMobileLibraryOpen] = useState(false);
+    const [pendingSlot, setPendingSlot] = useState<string | null>(null);
 
     const activePlan = plans.find(p => p.id === activePlanId);
 
@@ -34,7 +35,7 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
         m.mealName.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    // -- Drag & Drop Handlers --
+    // -- Drag & Drop Handlers (Desktop) --
     const handleDragStart = (e: React.DragEvent, meal: SavedMeal) => {
         setDraggingMealId(meal.id);
         e.dataTransfer.setData('mealId', meal.id.toString());
@@ -57,6 +58,22 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
         setDraggingMealId(null);
     };
 
+    // -- Tap Handlers (Mobile) --
+    const handleSlotClick = (slot: string, hasItem: boolean) => {
+        if (!hasItem && window.innerWidth < 1024) {
+            setPendingSlot(slot);
+            setIsMobileLibraryOpen(true);
+        }
+    };
+
+    const handleMealSelect = (meal: SavedMeal) => {
+        if (window.innerWidth < 1024 && activePlanId && pendingSlot) {
+            onQuickAdd(activePlanId, meal, selectedDay, pendingSlot);
+            setIsMobileLibraryOpen(false);
+            setPendingSlot(null);
+        }
+    };
+
     const handleCreatePlanSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (newPlanName.trim()) {
@@ -74,12 +91,18 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                         <BookOpenIcon /> My Library
                     </h3>
                     <button 
-                        onClick={() => setIsMobileLibraryOpen(false)}
+                        onClick={() => { setIsMobileLibraryOpen(false); setPendingSlot(null); }}
                         className="lg:hidden p-2 text-slate-400 hover:text-slate-600 bg-white rounded-lg border border-slate-200 shadow-sm"
                     >
                         <XIcon className="w-5 h-5" />
                     </button>
                 </div>
+                {pendingSlot && (
+                    <div className="mb-3 px-3 py-1.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold uppercase rounded-md border border-emerald-100 flex items-center justify-between">
+                        <span>Adding to {pendingSlot}</span>
+                        <button onClick={() => setPendingSlot(null)} className="text-emerald-400">Cancel</button>
+                    </div>
+                )}
                 <div className="relative">
                     <input 
                         type="text" 
@@ -100,11 +123,7 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                         key={meal.id}
                         draggable
                         onDragStart={(e) => handleDragStart(e, meal)}
-                        onClick={() => {
-                            if (window.innerWidth < 1024 && activePlanId) {
-                                // For mobile, if they tap, maybe we can auto-add or keep it for drag
-                            }
-                        }}
+                        onClick={() => handleMealSelect(meal)}
                         className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm cursor-grab active:cursor-grabbing hover:shadow-md hover:border-emerald-300 transition-all group"
                     >
                         <div className="flex items-center gap-3">
@@ -116,7 +135,10 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                                 )}
                             </div>
                             <div className="flex-grow min-w-0">
-                                <p className="font-semibold text-slate-800 text-xs truncate">{meal.mealName}</p>
+                                <div className="flex justify-between items-start">
+                                    <p className="font-semibold text-slate-800 text-xs truncate">{meal.mealName}</p>
+                                    <span className="lg:hidden text-[10px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded font-bold">ADD</span>
+                                </div>
                                 <p className="text-[10px] text-slate-500">{Math.round(meal.totalCalories)} kcal</p>
                             </div>
                         </div>
@@ -154,7 +176,7 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
             {isMobileLibraryOpen && (
                 <div 
                     className="fixed inset-0 bg-black/40 z-40 lg:hidden"
-                    onClick={() => setIsMobileLibraryOpen(false)}
+                    onClick={() => { setIsMobileLibraryOpen(false); setPendingSlot(null); }}
                 />
             )}
 
@@ -231,25 +253,23 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                 <div className="flex-grow space-y-4 overflow-y-auto pr-1 pb-10">
                     {FIXED_SLOTS.map((slot) => {
                         const slotItem = activePlan?.items.find(item => item.metadata?.slot === slot && item.metadata?.day === selectedDay);
+                        const isPending = pendingSlot === slot;
 
                         return (
                             <div 
                                 key={slot}
                                 onDragOver={handleDragOver}
                                 onDrop={(e) => handleDrop(e, slot)}
-                                onClick={() => {
-                                    if (!slotItem && window.innerWidth < 1024) {
-                                        setIsMobileLibraryOpen(true);
-                                    }
-                                }}
+                                onClick={() => handleSlotClick(slot, !!slotItem)}
                                 className={`
                                     relative p-4 rounded-xl border-2 transition-all min-h-[120px] flex flex-col justify-center cursor-pointer lg:cursor-default
                                     ${draggingMealId && !slotItem ? 'border-dashed border-emerald-300 bg-emerald-50/50' : 'border-slate-200 bg-white shadow-sm'}
+                                    ${!slotItem && isPending ? 'border-emerald-500 ring-2 ring-emerald-100 bg-emerald-50/30' : ''}
                                     ${!slotItem ? 'hover:border-emerald-200 hover:bg-slate-50/50 group' : ''}
                                 `}
                             >
                                 <div className="absolute top-3 left-4 flex items-center gap-2">
-                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider pointer-events-none">
+                                    <span className={`text-xs font-bold uppercase tracking-wider pointer-events-none ${isPending ? 'text-emerald-600' : 'text-slate-400'}`}>
                                         {slot}
                                     </span>
                                 </div>
@@ -287,10 +307,10 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                                             <span className="text-emerald-600 font-bold animate-pulse text-sm">Drop here</span>
                                         ) : (
                                             <div className="flex flex-col items-center gap-2">
-                                                <div className="p-3 bg-slate-100 rounded-full text-slate-300 lg:hidden group-hover:text-emerald-400 group-hover:bg-emerald-50 transition-colors">
+                                                <div className={`p-3 rounded-full transition-colors ${isPending ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-300 lg:hidden group-hover:text-emerald-400 group-hover:bg-emerald-50'}`}>
                                                     <PlusIcon className="w-6 h-6" />
                                                 </div>
-                                                <span className="text-sm font-medium">Empty Slot</span>
+                                                <span className={`text-sm font-medium ${isPending ? 'text-emerald-700' : ''}`}>{isPending ? 'Selecting Meal...' : 'Empty Slot'}</span>
                                                 <span className="text-[10px] uppercase font-bold text-slate-300 lg:hidden">Tap to add meal</span>
                                             </div>
                                         )}
@@ -301,9 +321,10 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                                     <button 
                                         onClick={(e) => {
                                             e.stopPropagation();
+                                            setPendingSlot(slot);
                                             setIsMobileLibraryOpen(true);
                                         }} 
-                                        className="lg:hidden absolute top-2 right-2 p-2 text-emerald-500 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors border border-emerald-100 shadow-sm"
+                                        className={`lg:hidden absolute top-2 right-2 p-2 rounded-lg transition-colors border shadow-sm ${isPending ? 'bg-emerald-500 text-white border-emerald-600' : 'text-emerald-500 bg-emerald-50 border-emerald-100 hover:bg-emerald-100'}`}
                                         title="Open Meal Library"
                                     >
                                         <BookOpenIcon className="w-4 h-4" />
