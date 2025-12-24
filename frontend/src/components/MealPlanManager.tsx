@@ -9,7 +9,6 @@ interface MealPlanManagerProps {
     savedMeals: SavedMeal[];
     onPlanChange: (id: number) => void;
     onCreatePlan: (name: string) => void;
-    onAddToPlan: (meal: SavedMeal | NutritionInfo) => void; 
     onRemoveFromPlan: (itemId: number) => void;
     onQuickAdd: (planId: number, meal: SavedMeal, day: string, slot: string) => void;
 }
@@ -18,7 +17,7 @@ const FIXED_SLOTS = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 export const MealPlanManager: React.FC<MealPlanManagerProps> = ({ 
-    plans, activePlanId, savedMeals, onPlanChange, onCreatePlan, onAddToPlan, onRemoveFromPlan, onQuickAdd
+    plans, activePlanId, savedMeals, onPlanChange, onCreatePlan, onRemoveFromPlan, onQuickAdd
 }) => {
     const [isMedicalModalOpen, setIsMedicalModalOpen] = useState(false);
     const [newPlanName, setNewPlanName] = useState('');
@@ -40,9 +39,6 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
         setDraggingMealId(meal.id);
         e.dataTransfer.setData('mealId', meal.id.toString());
         e.dataTransfer.effectAllowed = 'copy';
-        // On mobile, we might want to keep the drawer open during drag, 
-        // but often dragging to a background element closes overlays.
-        // For now we keep it simple.
     };
 
     const handleDragOver = (e: React.DragEvent) => {
@@ -59,8 +55,6 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
             onQuickAdd(activePlanId, meal, selectedDay, slot);
         }
         setDraggingMealId(null);
-        // Optional: close drawer after successful drop on mobile
-        // setIsMobileLibraryOpen(false);
     };
 
     const handleCreatePlanSubmit = (e: React.FormEvent) => {
@@ -81,7 +75,7 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                     </h3>
                     <button 
                         onClick={() => setIsMobileLibraryOpen(false)}
-                        className="lg:hidden p-1 text-slate-400 hover:text-slate-600"
+                        className="lg:hidden p-2 text-slate-400 hover:text-slate-600 bg-white rounded-lg border border-slate-200 shadow-sm"
                     >
                         <XIcon className="w-5 h-5" />
                     </button>
@@ -106,6 +100,12 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                         key={meal.id}
                         draggable
                         onDragStart={(e) => handleDragStart(e, meal)}
+                        onClick={() => {
+                            if (window.innerWidth < 1024 && activePlanId) {
+                                // Fallback: click to add to next available or logic could be added here
+                                // For now, we rely on the drag or the slot trigger
+                            }
+                        }}
                         className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm cursor-grab active:cursor-grabbing hover:shadow-md hover:border-emerald-300 transition-all group"
                     >
                         <div className="flex items-center gap-3">
@@ -150,6 +150,14 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
             >
                 {LibraryContent}
             </div>
+
+            {/* Backdrop for mobile drawer */}
+            {isMobileLibraryOpen && (
+                <div 
+                    className="fixed inset-0 bg-black/40 z-40 lg:hidden"
+                    onClick={() => setIsMobileLibraryOpen(false)}
+                />
+            )}
 
             {/* DESKTOP SIDEBAR (Persistent) */}
             <div className="hidden lg:flex w-1/3 flex-col bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
@@ -230,23 +238,21 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                                 key={slot}
                                 onDragOver={handleDragOver}
                                 onDrop={(e) => handleDrop(e, slot)}
+                                onClick={() => {
+                                    if (!slotItem && window.innerWidth < 1024) {
+                                        setIsMobileLibraryOpen(true);
+                                    }
+                                }}
                                 className={`
-                                    relative p-4 rounded-xl border-2 transition-all min-h-[120px] flex flex-col justify-center
+                                    relative p-4 rounded-xl border-2 transition-all min-h-[120px] flex flex-col justify-center cursor-pointer lg:cursor-default
                                     ${draggingMealId && !slotItem ? 'border-dashed border-emerald-300 bg-emerald-50/50' : 'border-slate-200 bg-white shadow-sm'}
+                                    ${!slotItem ? 'hover:border-emerald-200 hover:bg-slate-50/50' : ''}
                                 `}
                             >
                                 <div className="absolute top-3 left-4 flex items-center gap-2">
                                     <span className="text-xs font-bold text-slate-400 uppercase tracking-wider pointer-events-none">
                                         {slot}
                                     </span>
-                                    {/* Mobile Library Trigger */}
-                                    <button 
-                                        onClick={() => setIsMobileLibraryOpen(true)}
-                                        className="lg:hidden p-1 bg-slate-100 text-slate-500 rounded-md hover:bg-emerald-100 hover:text-emerald-600 transition-colors"
-                                        title="Open Library"
-                                    >
-                                        <BookOpenIcon className="w-3 h-3" />
-                                    </button>
                                 </div>
 
                                 {slotItem ? (
@@ -267,7 +273,10 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                                             </div>
                                         </div>
                                         <button 
-                                            onClick={() => onRemoveFromPlan(slotItem.id)}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onRemoveFromPlan(slotItem.id);
+                                            }}
                                             className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
                                         >
                                             <TrashIcon className="w-4 h-4" />
@@ -278,17 +287,27 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                                         {draggingMealId ? (
                                             <span className="text-emerald-600 font-bold animate-pulse text-sm">Drop here</span>
                                         ) : (
-                                            <span className="text-sm">Empty Slot</span>
+                                            <div className="flex flex-col items-center gap-2">
+                                                <div className="p-3 bg-slate-100 rounded-full text-slate-300 lg:hidden group-hover:text-emerald-400 group-hover:bg-emerald-50 transition-colors">
+                                                    <PlusIcon className="w-6 h-6" />
+                                                </div>
+                                                <span className="text-sm font-medium">Empty Slot</span>
+                                                <span className="text-[10px] uppercase font-bold text-slate-300 lg:hidden">Tap to add meal</span>
+                                            </div>
                                         )}
                                     </div>
                                 )}
                                 
                                 {!slotItem && !draggingMealId && (
                                     <button 
-                                        onClick={() => setIsMobileLibraryOpen(true)} 
-                                        className="lg:hidden absolute bottom-3 right-3 text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-full font-bold transition-colors"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setIsMobileLibraryOpen(true);
+                                        }} 
+                                        className="lg:hidden absolute top-2 right-2 p-2 text-emerald-500 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors border border-emerald-100 shadow-sm"
+                                        title="Open Meal Library"
                                     >
-                                        + Drag Meal
+                                        <BookOpenIcon className="w-4 h-4" />
                                     </button>
                                 )}
                             </div>

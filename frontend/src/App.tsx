@@ -241,7 +241,6 @@ const App: React.FC = () => {
                             setMealPlans(prev => [...prev, p]);
                             setActivePlanId(p.id);
                         }}
-                        onAddToPlan={() => setIsCaptureOpen(true)}
                         onRemoveFromPlan={async (id) => {
                             await apiService.removeMealFromPlanItem(id);
                             setMealPlans(prev => prev.map(p => ({ ...p, items: p.items.filter(i => i.id !== id) })));
