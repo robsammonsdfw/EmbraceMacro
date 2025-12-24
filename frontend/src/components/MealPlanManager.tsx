@@ -1,7 +1,6 @@
-
 import React, { useState } from 'react';
 import type { MealPlan, SavedMeal, NutritionInfo } from '../types';
-import { BeakerIcon, PlusIcon, TrashIcon, BookOpenIcon, CameraOffIcon, SearchIcon } from './icons';
+import { BeakerIcon, PlusIcon, TrashIcon, BookOpenIcon, CameraOffIcon, SearchIcon, XIcon } from './icons';
 import { MedicalPlannerModal } from './MedicalPlannerModal';
 
 interface MealPlanManagerProps {
@@ -26,15 +25,24 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
     const [isCreatingPlan, setIsCreatingPlan] = useState(false);
     const [draggingMealId, setDraggingMealId] = useState<number | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
-    const [selectedDay, setSelectedDay] = useState<string>('Monday'); // Default to Monday for this view
+    const [selectedDay, setSelectedDay] = useState<string>('Monday');
+    const [isMobileLibraryOpen, setIsMobileLibraryOpen] = useState(false);
 
     const activePlan = plans.find(p => p.id === activePlanId);
+
+    // Filter meals for sidebar/drawer
+    const filteredSavedMeals = savedMeals.filter(m => 
+        m.mealName.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
     // -- Drag & Drop Handlers --
     const handleDragStart = (e: React.DragEvent, meal: SavedMeal) => {
         setDraggingMealId(meal.id);
         e.dataTransfer.setData('mealId', meal.id.toString());
         e.dataTransfer.effectAllowed = 'copy';
+        // On mobile, we might want to keep the drawer open during drag, 
+        // but often dragging to a background element closes overlays.
+        // For now we keep it simple.
     };
 
     const handleDragOver = (e: React.DragEvent) => {
@@ -51,6 +59,8 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
             onQuickAdd(activePlanId, meal, selectedDay, slot);
         }
         setDraggingMealId(null);
+        // Optional: close drawer after successful drop on mobile
+        // setIsMobileLibraryOpen(false);
     };
 
     const handleCreatePlanSubmit = (e: React.FormEvent) => {
@@ -62,13 +72,68 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
         }
     };
 
-    // Filter meals for sidebar
-    const filteredSavedMeals = savedMeals.filter(m => 
-        m.mealName.toLowerCase().includes(searchTerm.toLowerCase())
+    const LibraryContent = (
+        <div className="flex flex-col h-full bg-white">
+            <div className="p-4 border-b border-slate-200 bg-slate-50">
+                <div className="flex justify-between items-center mb-3 lg:block">
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                        <BookOpenIcon /> My Library
+                    </h3>
+                    <button 
+                        onClick={() => setIsMobileLibraryOpen(false)}
+                        className="lg:hidden p-1 text-slate-400 hover:text-slate-600"
+                    >
+                        <XIcon className="w-5 h-5" />
+                    </button>
+                </div>
+                <div className="relative">
+                    <input 
+                        type="text" 
+                        placeholder="Search meals..." 
+                        className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                    <div className="absolute left-3 top-2.5 text-slate-400">
+                        <SearchIcon className="w-4 h-4" />
+                    </div>
+                </div>
+            </div>
+            
+            <div className="flex-grow overflow-y-auto p-3 space-y-3 bg-slate-50/50">
+                {filteredSavedMeals.map(meal => (
+                    <div 
+                        key={meal.id}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, meal)}
+                        className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm cursor-grab active:cursor-grabbing hover:shadow-md hover:border-emerald-300 transition-all group"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-md bg-slate-100 flex-shrink-0 overflow-hidden">
+                                {meal.imageUrl ? (
+                                    <img src={meal.imageUrl} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-slate-300 scale-75"><CameraOffIcon /></div>
+                                )}
+                            </div>
+                            <div className="flex-grow min-w-0">
+                                <p className="font-semibold text-slate-800 text-xs truncate">{meal.mealName}</p>
+                                <p className="text-[10px] text-slate-500">{Math.round(meal.totalCalories)} kcal</p>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+                {filteredSavedMeals.length === 0 && (
+                    <div className="text-center py-10 text-slate-400 text-xs">
+                        No meals found.
+                    </div>
+                )}
+            </div>
+        </div>
     );
 
     return (
-        <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-100px)] animate-fade-in">
+        <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-100px)] animate-fade-in relative overflow-hidden">
             {isMedicalModalOpen && (
                 <MedicalPlannerModal 
                     onClose={() => setIsMedicalModalOpen(false)}
@@ -77,75 +142,28 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                 />
             )}
 
-            {/* LEFT COLUMN: Saved Meals (Draggable Source) */}
-            <div className="w-full lg:w-1/3 flex flex-col bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden order-2 lg:order-1">
-                <div className="p-4 border-b border-slate-200 bg-slate-50">
-                    <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                        <BookOpenIcon /> My Kitchen Library
-                    </h3>
-                    <div className="mt-3 relative">
-                        <input 
-                            type="text" 
-                            placeholder="Search saved meals..." 
-                            className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                        <div className="absolute left-3 top-2.5 text-slate-400">
-                            <SearchIcon />
-                        </div>
-                    </div>
-                </div>
-                
-                <div className="flex-grow overflow-y-auto p-3 space-y-3 bg-slate-50/50">
-                    {filteredSavedMeals.map(meal => (
-                        <div 
-                            key={meal.id}
-                            draggable
-                            onDragStart={(e) => handleDragStart(e, meal)}
-                            className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm cursor-grab active:cursor-grabbing hover:shadow-md hover:border-emerald-300 transition-all group"
-                        >
-                            <div className="flex items-center gap-3">
-                                <div className="w-12 h-12 rounded-md bg-slate-100 flex-shrink-0 overflow-hidden">
-                                    {meal.imageUrl ? (
-                                        <img src={meal.imageUrl} alt="" className="w-full h-full object-cover" />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-slate-300"><CameraOffIcon /></div>
-                                    )}
-                                </div>
-                                <div className="flex-grow min-w-0">
-                                    <p className="font-semibold text-slate-800 text-sm truncate">{meal.mealName}</p>
-                                    <p className="text-xs text-slate-500">{Math.round(meal.totalCalories)} kcal • {Math.round(meal.totalProtein)}g Pro</p>
-                                </div>
-                                <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <div className="bg-slate-100 p-1.5 rounded text-slate-400">
-                                        <div className="w-4 h-4 grid grid-cols-2 gap-0.5">
-                                            <div className="bg-current rounded-[1px]"></div>
-                                            <div className="bg-current rounded-[1px]"></div>
-                                            <div className="bg-current rounded-[1px]"></div>
-                                            <div className="bg-current rounded-[1px]"></div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                    {filteredSavedMeals.length === 0 && (
-                        <div className="text-center py-10 text-slate-400 text-sm">
-                            No meals found. Save some meals first!
-                        </div>
-                    )}
-                </div>
+            {/* MOBILE SLIDE-OUT DRAWER */}
+            <div 
+                className={`fixed inset-y-0 right-0 z-50 w-72 bg-white shadow-2xl transform transition-transform duration-300 ease-in-out border-l border-slate-200 lg:hidden ${
+                    isMobileLibraryOpen ? 'translate-x-0' : 'translate-x-full'
+                }`}
+            >
+                {LibraryContent}
             </div>
 
-            {/* RIGHT COLUMN: The Plan (Drop Zones) */}
-            <div className="w-full lg:w-2/3 flex flex-col order-1 lg:order-2">
+            {/* DESKTOP SIDEBAR (Persistent) */}
+            <div className="hidden lg:flex w-1/3 flex-col bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                {LibraryContent}
+            </div>
+
+            {/* MAIN PLAN AREA */}
+            <div className="w-full lg:w-2/3 flex flex-col">
                 {/* Header & Controls */}
                 <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm mb-4">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
                         <div>
                             <h2 className="text-2xl font-bold text-slate-900">Meal Planner</h2>
-                            <p className="text-sm text-slate-500">Drag meals from the library to build your day.</p>
+                            <p className="text-sm text-slate-500">Drag items to build your day.</p>
                         </div>
                         <div className="flex items-center gap-2 w-full sm:w-auto">
                             {isCreatingPlan ? (
@@ -177,14 +195,14 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                                         onClick={() => setIsCreatingPlan(true)}
                                         className="bg-slate-900 text-white px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-1 hover:bg-slate-700 transition-colors whitespace-nowrap"
                                     >
-                                        <PlusIcon /> New
+                                        <PlusIcon className="w-4 h-4" /> New
                                     </button>
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    {/* Day Selector (Visual Only for this demo, assuming standard week) */}
+                    {/* Day Selector */}
                     <div className="flex overflow-x-auto no-scrollbar gap-2 pb-2 border-b border-slate-100">
                         {DAYS.map(day => (
                             <button
@@ -203,12 +221,8 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                 </div>
 
                 {/* Drop Zones */}
-                <div className="flex-grow space-y-4 overflow-y-auto pr-1">
+                <div className="flex-grow space-y-4 overflow-y-auto pr-1 pb-10">
                     {FIXED_SLOTS.map((slot) => {
-                        // Find item in this slot for the active plan
-                        // NOTE: In a real app, we filter by day as well. 
-                        // For this demo, we assume the 'items' array contains items for the *current* view or all.
-                        // We will filter by slot name in metadata.
                         const slotItem = activePlan?.items.find(item => item.metadata?.slot === slot && item.metadata?.day === selectedDay);
 
                         return (
@@ -221,59 +235,60 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                                     ${draggingMealId && !slotItem ? 'border-dashed border-emerald-300 bg-emerald-50/50' : 'border-slate-200 bg-white shadow-sm'}
                                 `}
                             >
-                                <div className="absolute top-3 left-4 text-xs font-bold text-slate-400 uppercase tracking-wider pointer-events-none">
-                                    {slot}
+                                <div className="absolute top-3 left-4 flex items-center gap-2">
+                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider pointer-events-none">
+                                        {slot}
+                                    </span>
+                                    {/* Mobile Library Trigger */}
+                                    <button 
+                                        onClick={() => setIsMobileLibraryOpen(true)}
+                                        className="lg:hidden p-1 bg-slate-100 text-slate-500 rounded-md hover:bg-emerald-100 hover:text-emerald-600 transition-colors"
+                                        title="Open Library"
+                                    >
+                                        <BookOpenIcon className="w-3 h-3" />
+                                    </button>
                                 </div>
 
                                 {slotItem ? (
                                     <div className="flex items-center justify-between mt-4">
                                         <div className="flex items-center gap-4">
-                                            <div className="w-16 h-16 rounded-lg bg-slate-100 overflow-hidden flex-shrink-0">
+                                            <div className="w-14 h-14 rounded-lg bg-slate-100 overflow-hidden flex-shrink-0">
                                                 {slotItem.meal.imageUrl ? (
                                                     <img src={slotItem.meal.imageUrl} alt="" className="w-full h-full object-cover" />
                                                 ) : (
-                                                    <div className="flex items-center justify-center h-full text-slate-300"><UtensilsIcon /></div>
+                                                    <div className="flex items-center justify-center h-full text-slate-300"><UtensilsIcon className="w-5 h-5" /></div>
                                                 )}
                                             </div>
                                             <div>
-                                                <h4 className="font-bold text-slate-800">{slotItem.meal.mealName}</h4>
-                                                <p className="text-sm text-slate-500">
-                                                    {Math.round(slotItem.meal.totalCalories)} kcal • {Math.round(slotItem.meal.totalProtein)}g Pro
+                                                <h4 className="font-bold text-slate-800 text-sm">{slotItem.meal.mealName}</h4>
+                                                <p className="text-xs text-slate-500">
+                                                    {Math.round(slotItem.meal.totalCalories)} kcal
                                                 </p>
-                                                {slotItem.metadata?.portion && slotItem.metadata.portion !== 1 && (
-                                                    <span className="text-xs bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded font-bold">
-                                                        {slotItem.metadata.portion}x Portion
-                                                    </span>
-                                                )}
                                             </div>
                                         </div>
                                         <button 
                                             onClick={() => onRemoveFromPlan(slotItem.id)}
                                             className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
-                                            title="Remove from plan"
                                         >
-                                            <TrashIcon />
+                                            <TrashIcon className="w-4 h-4" />
                                         </button>
                                     </div>
                                 ) : (
                                     <div className="flex flex-col items-center justify-center text-slate-400 mt-4 pointer-events-none">
                                         {draggingMealId ? (
-                                            <span className="text-emerald-600 font-bold animate-pulse">Drop here to assign</span>
+                                            <span className="text-emerald-600 font-bold animate-pulse text-sm">Drop here</span>
                                         ) : (
-                                            <>
-                                                <span className="text-sm">Empty Slot</span>
-                                            </>
+                                            <span className="text-sm">Empty Slot</span>
                                         )}
                                     </div>
                                 )}
                                 
-                                {/* Fallback "Add" button for non-drag interactions */}
                                 {!slotItem && !draggingMealId && (
                                     <button 
-                                        onClick={() => onAddToPlan({ mealName: '', totalCalories: 0, totalProtein: 0, totalCarbs: 0, totalFat: 0, ingredients: [] })} 
-                                        className="absolute bottom-3 right-3 text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-full font-bold transition-colors"
+                                        onClick={() => setIsMobileLibraryOpen(true)} 
+                                        className="lg:hidden absolute bottom-3 right-3 text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-full font-bold transition-colors"
                                     >
-                                        + Log
+                                        + Drag Meal
                                     </button>
                                 )}
                             </div>
@@ -282,9 +297,9 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
 
                     <button 
                         onClick={() => setIsMedicalModalOpen(true)}
-                        className="w-full py-4 mt-4 border-2 border-dashed border-indigo-200 bg-indigo-50/50 rounded-2xl text-indigo-500 font-bold hover:bg-indigo-100 transition-all flex items-center justify-center gap-2"
+                        className="w-full py-4 mt-4 border-2 border-dashed border-indigo-200 bg-indigo-50/50 rounded-2xl text-indigo-500 font-bold hover:bg-indigo-100 transition-all flex items-center justify-center gap-2 text-sm"
                     >
-                        <BeakerIcon /> Generate Full Day Plan with AI
+                        <BeakerIcon className="w-5 h-5" /> Generate Plan with AI
                     </button>
                 </div>
             </div>
@@ -292,10 +307,9 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
     );
 };
 
-// Simple Utensils Icon for internal use if missing from imports
-const UtensilsIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+// Simple Utensils Icon for internal use
+const UtensilsIcon = ({ className }: { className?: string }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className || "h-6 w-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
     </svg>
 );
-    
