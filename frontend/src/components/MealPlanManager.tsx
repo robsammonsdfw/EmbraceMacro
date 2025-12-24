@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { MealPlan, SavedMeal, NutritionInfo } from '../types';
+import type { MealPlan, SavedMeal } from '../types';
 import { BeakerIcon, PlusIcon, TrashIcon, BookOpenIcon, CameraOffIcon, SearchIcon, XIcon } from './icons';
 import { MedicalPlannerModal } from './MedicalPlannerModal';
 
@@ -102,8 +102,7 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                         onDragStart={(e) => handleDragStart(e, meal)}
                         onClick={() => {
                             if (window.innerWidth < 1024 && activePlanId) {
-                                // Fallback: click to add to next available or logic could be added here
-                                // For now, we rely on the drag or the slot trigger
+                                // For mobile, if they tap, maybe we can auto-add or keep it for drag
                             }
                         }}
                         className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm cursor-grab active:cursor-grabbing hover:shadow-md hover:border-emerald-300 transition-all group"
@@ -246,7 +245,7 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                                 className={`
                                     relative p-4 rounded-xl border-2 transition-all min-h-[120px] flex flex-col justify-center cursor-pointer lg:cursor-default
                                     ${draggingMealId && !slotItem ? 'border-dashed border-emerald-300 bg-emerald-50/50' : 'border-slate-200 bg-white shadow-sm'}
-                                    ${!slotItem ? 'hover:border-emerald-200 hover:bg-slate-50/50' : ''}
+                                    ${!slotItem ? 'hover:border-emerald-200 hover:bg-slate-50/50 group' : ''}
                                 `}
                             >
                                 <div className="absolute top-3 left-4 flex items-center gap-2">
