@@ -111,8 +111,8 @@ export const handler = async (event) => {
     const resource = pathParts[0];
 
     try {
-        // --- Professional Coaching Hub ---
-        if (resource === 'coaching') {
+        // --- Professional Coaching Hub (Non-Proxy) ---
+        if (resource === 'coaching' && !proxyCoachId) {
             const sub = pathParts[1];
             if (sub === 'invite' && method === 'POST') {
                 return { statusCode: 201, headers, body: JSON.stringify(await db.inviteCoachingClient(decoded.userId, JSON.parse(event.body).email)) };
@@ -141,19 +141,37 @@ export const handler = async (event) => {
         }
 
         // --- Coach Feature: Client List ---
-        if (resource === 'coach' && pathParts[1] === 'clients') {
+        if (resource === 'coach' && pathParts[1] === 'clients' && !proxyCoachId) {
             return { statusCode: 200, headers, body: JSON.stringify(await db.getAssignedClients(decoded.userId)) };
         }
 
-        // --- Proxy Permission Logic Gate ---
-        const readonlyModules = ['body', 'assessments', 'blueprint'];
-        if (proxyCoachId && method !== 'GET' && readonlyModules.includes(resource)) {
-             return { statusCode: 403, headers, body: JSON.stringify({ error: 'Report-only module' }) };
-        }
+        // --- Dynamic Proxy Permission Gate ---
+        if (proxyCoachId) {
+            const forbiddenModules = ['rewards', 'social', 'labs', 'orders', 'check-in'];
+            if (forbiddenModules.includes(resource)) {
+                 return { statusCode: 403, headers, body: JSON.stringify({ error: 'Access forbidden for proxy session' }) };
+            }
 
-        const forbiddenModules = ['rewards', 'social', 'labs', 'orders', 'check-in', 'analyze-image'];
-        if (proxyCoachId && forbiddenModules.includes(resource)) {
-             return { statusCode: 403, headers, body: JSON.stringify({ error: 'Module access forbidden for proxy' }) };
+            const moduleMap = {
+                'meal-log': 'meals',
+                'saved-meals': 'meals',
+                'meal-plans': 'meals',
+                'grocery-lists': 'grocery',
+                'health-metrics': 'body',
+                'body': 'body',
+                'assessments': 'assessments',
+                'blueprint': 'blueprint'
+            };
+
+            const permissionKey = moduleMap[resource];
+            const userPerm = proxyPermissions?.[permissionKey] || 'none';
+
+            if (userPerm === 'none') {
+                 return { statusCode: 403, headers, body: JSON.stringify({ error: `Permission denied for ${resource}` }) };
+            }
+            if (userPerm === 'read' && method !== 'GET') {
+                 return { statusCode: 403, headers, body: JSON.stringify({ error: `Module ${resource} is Read-Only for proxy` }) };
+            }
         }
 
         // --- Standard Resources ---

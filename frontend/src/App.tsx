@@ -124,13 +124,15 @@ const App: React.FC = () => {
 
   const renderActiveView = () => {
       if (image || isProcessing || nutritionData || error) {
+          // Dynamic permission for the capture card
+          const mealsPerm = proxyClient?.permissions?.meals || 'full';
           return (
               <div className="max-w-2xl mx-auto space-y-6">
                 {image && <ImageUploader image={image} />}
                 {isProcessing && <Loader message="Analyzing..." />}
                 {error && <ErrorAlert message={error} />}
                 {nutritionData && !isProcessing && (
-                  <CoachProxyUI permission={proxyClient ? 'read' : 'full'}>
+                  <CoachProxyUI permission={mealsPerm}>
                     <NutritionCard data={nutritionData} onSaveToHistory={handleSaveToHistory} />
                   </CoachProxyUI>
                 )}
