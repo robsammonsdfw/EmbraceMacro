@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { HomeIcon, BookOpenIcon, UserCircleIcon, BeakerIcon, ClipboardListIcon, TrophyIcon, Squares2X2Icon, ClipboardCheckIcon, HeartIcon, PlusIcon, UserGroupIcon, ActivityIcon } from '../icons';
+import { HomeIcon, BookOpenIcon, UserCircleIcon, BeakerIcon, ClipboardListIcon, TrophyIcon, Squares2X2Icon, ClipboardCheckIcon, HeartIcon, PlusIcon, UserGroupIcon, ActivityIcon, UsersIcon } from '../icons';
 import { HealthJourney } from '../../types';
 import { JOURNEYS } from './AppLayout';
 
@@ -9,6 +10,7 @@ interface SidebarNavProps {
     onLogout: () => void;
     selectedJourney?: HealthJourney;
     onJourneyChange: (journey: HealthJourney) => void;
+    showClientsTab?: boolean;
 }
 
 const NavItem: React.FC<{ 
@@ -33,7 +35,7 @@ const NavItem: React.FC<{
     </button>
 );
 
-export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, onLogout, selectedJourney, onJourneyChange }) => {
+export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, onLogout, selectedJourney, onJourneyChange, showClientsTab }) => {
     return (
         <div className="h-full flex flex-col bg-white">
             <div className="p-6">
@@ -41,21 +43,12 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
             </div>
 
             <div className="flex-grow px-4 space-y-2 overflow-y-auto">
-                {/* Mobile Journey Selector */}
-                <div className="md:hidden px-4 py-3 mb-2 bg-slate-50 rounded-2xl border border-slate-100">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1">
-                        <ActivityIcon className="w-3 h-3" /> Health Journey
-                    </p>
-                    <select 
-                        value={selectedJourney}
-                        onChange={(e) => onJourneyChange(e.target.value as HealthJourney)}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-2 py-2 text-xs font-bold text-slate-700 outline-none"
-                    >
-                        {JOURNEYS.map(j => (
-                            <option key={j.id} value={j.id}>{j.label}</option>
-                        ))}
-                    </select>
-                </div>
+                {showClientsTab && (
+                    <div className="mb-4">
+                        <NavItem id="clients" label="My Clients" icon={<UsersIcon />} isActive={activeView === 'clients'} onClick={() => onNavigate('clients')} />
+                        <div className="h-px bg-slate-100 my-4"></div>
+                    </div>
+                )}
 
                 <NavItem id="home" label="Command Center" icon={<HomeIcon />} isActive={activeView === 'home'} onClick={() => onNavigate('home')} />
                 <NavItem id="social" label="Social Hub" icon={<UserGroupIcon />} isActive={activeView === 'social'} onClick={() => onNavigate('social')} />

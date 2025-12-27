@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { SidebarNav } from './SidebarNav';
 import { MenuIcon, XIcon, ActivityIcon } from '../icons';
@@ -13,6 +14,7 @@ interface AppLayoutProps {
     setMobileMenuOpen: (open: boolean) => void;
     selectedJourney?: HealthJourney;
     onJourneyChange: (journey: HealthJourney) => void;
+    showClientsTab?: boolean;
 }
 
 export const JOURNEYS: { id: HealthJourney; label: string }[] = [
@@ -25,17 +27,8 @@ export const JOURNEYS: { id: HealthJourney; label: string }[] = [
 ];
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ 
-    children, 
-    activeView, 
-    onNavigate, 
-    onLogout, 
-    rightPanel,
-    mobileMenuOpen,
-    setMobileMenuOpen,
-    selectedJourney,
-    onJourneyChange
+    children, activeView, onNavigate, onLogout, rightPanel, mobileMenuOpen, setMobileMenuOpen, selectedJourney, onJourneyChange, showClientsTab
 }) => {
-
     const handleMobileNavigate = (view: string) => {
         onNavigate(view);
         setMobileMenuOpen(false);
@@ -43,106 +36,40 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
-            {/* Mobile Header with Hamburger */}
             <div className="md:hidden bg-white border-b border-slate-200 p-4 flex justify-between items-center sticky top-0 z-30 shadow-sm">
-                 <h1 className="text-xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500">
-                    Embrace
-                </h1>
-                <button 
-                    onClick={() => setMobileMenuOpen(true)}
-                    className="p-2 -mr-2 text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
-                >
-                    <MenuIcon />
-                </button>
+                 <h1 className="text-xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500">Embrace</h1>
+                <button onClick={() => setMobileMenuOpen(true)} className="p-2 -mr-2 text-slate-600 hover:bg-slate-100 rounded-full transition-colors"><MenuIcon /></button>
             </div>
 
-            {/* Mobile Menu Overlay (Drawer) */}
             {mobileMenuOpen && (
                 <div className="fixed inset-0 z-50 flex md:hidden">
-                    {/* Backdrop */}
-                    <div 
-                        className="fixed inset-0 bg-black/50 transition-opacity" 
-                        onClick={() => setMobileMenuOpen(false)}
-                    ></div>
-                    
-                    {/* Drawer */}
+                    <div className="fixed inset-0 bg-black/50 transition-opacity" onClick={() => setMobileMenuOpen(false)}></div>
                     <div className="relative bg-white w-72 h-full shadow-2xl flex flex-col animate-slide-in-left">
-                         <div className="absolute top-4 right-4 z-10">
-                             <button 
-                                onClick={() => setMobileMenuOpen(false)} 
-                                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full"
-                             >
-                                <XIcon />
-                             </button>
-                         </div>
-                         <SidebarNav 
-                            activeView={activeView} 
-                            onNavigate={handleMobileNavigate} 
-                            onLogout={onLogout} 
-                            selectedJourney={selectedJourney}
-                            onJourneyChange={onJourneyChange}
-                         />
+                         <div className="absolute top-4 right-4 z-10"><button onClick={() => setMobileMenuOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full"><XIcon /></button></div>
+                         <SidebarNav activeView={activeView} onNavigate={handleMobileNavigate} onLogout={onLogout} selectedJourney={selectedJourney} onJourneyChange={onJourneyChange} showClientsTab={showClientsTab} />
                     </div>
                 </div>
             )}
 
-            {/* Desktop Sidebar (Persistent) */}
             <div className="hidden md:block w-64 flex-shrink-0 h-screen sticky top-0 border-r border-slate-200 bg-white z-30">
-                <SidebarNav 
-                    activeView={activeView} 
-                    onNavigate={onNavigate} 
-                    onLogout={onLogout}
-                    selectedJourney={selectedJourney}
-                    onJourneyChange={onJourneyChange}
-                />
+                <SidebarNav activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} selectedJourney={selectedJourney} onJourneyChange={onJourneyChange} showClientsTab={showClientsTab} />
             </div>
 
-            {/* Main Content Area */}
             <div className="flex-grow flex flex-col md:flex-row min-w-0">
                 <main className="flex-1 overflow-y-auto w-full">
-                    {/* Desktop Sub-header for Journey Selection */}
                     <div className="hidden md:flex bg-white border-b border-slate-200 px-8 py-3 items-center justify-between sticky top-0 z-20 shadow-sm">
-                        <div className="flex items-center gap-2 text-slate-500">
-                             <ActivityIcon className="w-4 h-4" />
-                             <span className="text-xs font-bold uppercase tracking-widest">Active Journey</span>
-                        </div>
+                        <div className="flex items-center gap-2 text-slate-500"><ActivityIcon className="w-4 h-4" /><span className="text-xs font-bold uppercase tracking-widest">Active Journey</span></div>
                         <div className="flex items-center gap-3">
-                            <select 
-                                value={selectedJourney}
-                                onChange={(e) => onJourneyChange(e.target.value as HealthJourney)}
-                                className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-black text-slate-700 outline-none hover:border-emerald-500 transition-colors"
-                            >
-                                {JOURNEYS.map(j => (
-                                    <option key={j.id} value={j.id}>{j.label}</option>
-                                ))}
+                            <select value={selectedJourney} onChange={(e) => onJourneyChange(e.target.value as HealthJourney)} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-black text-slate-700 outline-none hover:border-emerald-500 transition-colors">
+                                {JOURNEYS.map(j => (<option key={j.id} value={j.id}>{j.label}</option>))}
                             </select>
                         </div>
                     </div>
-
-                    <div className="p-4 md:p-8 max-w-5xl mx-auto">
-                        {children}
-                    </div>
+                    <div className="p-4 md:p-8 max-w-5xl mx-auto">{children}</div>
                 </main>
-
-                {/* Right Rail - Desktop Only */}
-                {rightPanel && (
-                    <aside className="hidden xl:block w-80 flex-shrink-0 p-6 border-l border-slate-200 bg-white/50 h-screen sticky top-0 overflow-y-auto">
-                        <div className="space-y-6">
-                            {rightPanel}
-                        </div>
-                    </aside>
-                )}
+                {rightPanel && (<aside className="hidden xl:block w-80 flex-shrink-0 p-6 border-l border-slate-200 bg-white/50 h-screen sticky top-0 overflow-y-auto"><div className="space-y-6">{rightPanel}</div></aside>)}
             </div>
-            
-            <style>{`
-                @keyframes slide-in-left {
-                    from { transform: translateX(-100%); }
-                    to { transform: translateX(0); }
-                }
-                .animate-slide-in-left {
-                    animation: slide-in-left 0.3s ease-out forwards;
-                }
-            `}</style>
+            <style>{`@keyframes slide-in-left { from { transform: translateX(-100%); } to { transform: translateX(0); } } .animate-slide-in-left { animation: slide-in-left 0.3s ease-out forwards; }`}</style>
         </div>
     );
 };
