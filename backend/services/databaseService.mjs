@@ -25,12 +25,17 @@ const processMealDataForSave = (mealData) => {
 /**
  * Helper function to prepare meal data for the client.
  */
-const processMealDataForClient = (mealData) => {
+const processMealDataForClient = (mealData, includeImage = true) => {
     const dataForClient = { ...mealData };
-    if (dataForClient.imageBase64) {
-        dataForClient.imageUrl = `data:image/jpeg;base64,${dataForClient.imageBase64}`;
-        delete dataForClient.imageBase64;
+    const base64 = dataForClient.imageBase64;
+    dataForClient.hasImage = !!base64;
+    
+    if (includeImage && base64) {
+        dataForClient.imageUrl = `data:image/jpeg;base64,${base64}`;
     }
+    
+    // Always remove the heavy raw base64 string from the JSON object
+    delete dataForClient.imageBase64;
     return dataForClient;
 };
 
@@ -219,8 +224,9 @@ export const createMealLogEntry = async (userId, mealData, imageBase64, proxyCoa
 export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
     try {
-        const res = await client.query(`SELECT id, meal_data, image_base64, created_at FROM meal_log_entries WHERE user_id = $1 ORDER BY created_at DESC;`, [userId]);
-        return res.rows.map(row => ({ id: row.id, ...(row.meal_data || {}), imageUrl: `data:image/jpeg;base64,${row.image_base64}`, createdAt: row.created_at }));
+        // Optimization: Do NOT select image_base64 for list view. Only a boolean flag.
+        const res = await client.query(`SELECT id, meal_data, (image_base64 IS NOT NULL) as "hasImage", created_at FROM meal_log_entries WHERE user_id = $1 ORDER BY created_at DESC;`, [userId]);
+        return res.rows.map(row => ({ id: row.id, ...(row.meal_data || {}), hasImage: row.hasImage, createdAt: row.created_at }));
     } finally { client.release(); }
 };
 
@@ -245,7 +251,7 @@ export const saveMeal = async (userId, mealData, proxyCoachId = null) => {
         if (!proxyCoachId) {
             await awardPoints(userId, 'meal.saved', 10, { saved_meal_id: row.id });
         }
-        return { id: row.id, ...processMealDataForClient(row.meal_data || {}) };
+        return { id: row.id, ...processMealDataForClient(row.meal_data || {}, true) };
     } finally { client.release(); }
 };
 
@@ -253,7 +259,8 @@ export const getSavedMeals = async (userId) => {
     const client = await pool.connect();
     try {
         const res = await client.query(`SELECT id, meal_data FROM saved_meals WHERE user_id = $1 ORDER BY created_at DESC;`, [userId]);
-        return res.rows.map(row => ({ id: row.id, ...processMealDataForClient(row.meal_data || {}) }));
+        // Optimization: includeImage = false for list view
+        return res.rows.map(row => ({ id: row.id, ...processMealDataForClient(row.meal_data || {}, false) }));
     } finally { client.release(); }
 };
 
@@ -262,7 +269,8 @@ export const getSavedMealById = async (userId, mealId) => {
     try {
         const res = await client.query(`SELECT id, meal_data FROM saved_meals WHERE id = $1 AND user_id = $2`, [mealId, userId]);
         if (res.rows.length === 0) return null;
-        return { id: res.rows[0].id, ...processMealDataForClient(res.rows[0].meal_data || {}) };
+        // Optimization: includeImage = true for single item fetch
+        return { id: res.rows[0].id, ...processMealDataForClient(res.rows[0].meal_data || {}, true) };
     } finally { client.release(); }
 };
 
@@ -287,7 +295,14 @@ export const getMealPlans = async (userId) => {
         const plans = new Map();
         res.rows.forEach(row => {
             if (!plans.has(row.plan_id)) plans.set(row.plan_id, { id: row.plan_id, name: row.plan_name, items: [] });
-            if (row.item_id) plans.get(row.plan_id).items.push({ id: row.item_id, meal: { id: row.meal_id, ...processMealDataForClient(row.meal_data || {}) }, metadata: row.metadata });
+            if (row.item_id) {
+                // Optimization: includeImage = false for plan lists
+                plans.get(row.plan_id).items.push({ 
+                    id: row.item_id, 
+                    meal: { id: row.meal_id, ...processMealDataForClient(row.meal_data || {}, false) }, 
+                    metadata: row.metadata 
+                });
+            }
         });
         return Array.from(plans.values());
     } finally { client.release(); }
@@ -307,7 +322,8 @@ export const addMealToPlanItem = async (userId, planId, savedMealId, proxyCoachI
         const insertRes = await client.query(`INSERT INTO meal_plan_items (user_id, meal_plan_id, saved_meal_id, created_by_proxy, proxy_action, metadata) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id;`, [userId, planId, savedMealId, proxyCoachId, !!proxyCoachId, metadata]);
         const selectRes = await client.query(`SELECT i.id, m.id as meal_id, m.meal_data FROM meal_plan_items i JOIN saved_meals m ON i.saved_meal_id = m.id WHERE i.id = $1;`, [insertRes.rows[0].id]);
         const row = selectRes.rows[0];
-        return { id: row.id, meal: { id: row.meal_id, ...processMealDataForClient(row.meal_data || {}) } };
+        // includeImage = false here to be consistent with getMealPlans
+        return { id: row.id, meal: { id: row.meal_id, ...processMealDataForClient(row.meal_data || {}, false) } };
     } finally { client.release(); }
 };
 
