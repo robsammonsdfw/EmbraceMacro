@@ -10,31 +10,46 @@ const pool = new Pool({
 
 /**
  * Helper function to prepare meal data for database insertion.
+ * Extracts base64 from data URIs and ensures clean JSON storage.
  */
 const processMealDataForSave = (mealData) => {
     const dataForDb = { ...mealData };
-    if (dataForDb.imageUrl && dataForDb.imageUrl.startsWith('data:image')) {
+    
+    // If imageUrl is a data URI, extract base64 part
+    if (typeof dataForDb.imageUrl === 'string' && dataForDb.imageUrl.startsWith('data:image')) {
         dataForDb.imageBase64 = dataForDb.imageUrl.split(',')[1];
         delete dataForDb.imageUrl;
     }
+    
+    // Cleanup standard fields that should be top-level or are auto-generated
     delete dataForDb.id;
     delete dataForDb.createdAt;
+    delete dataForDb.hasImage;
     return dataForDb;
 };
 
 /**
  * Helper function to prepare meal data for the client.
+ * Handles prefixing and ensures heavy image data isn't leaked into lists.
  */
 const processMealDataForClient = (mealData, includeImage = true) => {
+    if (!mealData) return {};
     const dataForClient = { ...mealData };
-    const base64 = dataForClient.imageBase64;
-    dataForClient.hasImage = !!base64;
     
-    if (includeImage && base64) {
-        dataForClient.imageUrl = `data:image/jpeg;base64,${base64}`;
+    // Use either the imageBase64 key inside JSON or handle existing imageUrl
+    const base64Raw = dataForClient.imageBase64;
+    dataForClient.hasImage = !!base64Raw || (!!dataForClient.imageUrl && dataForClient.imageUrl.startsWith('data:image'));
+    
+    if (includeImage && base64Raw) {
+        // Only prefix if not already prefixed
+        const prefix = 'data:image/jpeg;base64,';
+        dataForClient.imageUrl = base64Raw.startsWith('data:image') ? base64Raw : `${prefix}${base64Raw}`;
+    } else if (!includeImage) {
+        // CRITICAL: Ensure NO image strings are present in list responses
+        delete dataForClient.imageUrl;
     }
     
-    // Always remove the heavy raw base64 string from the JSON object
+    // Always remove the heavy raw base64 string from the JSON object to keep payload small
     delete dataForClient.imageBase64;
     return dataForClient;
 };
@@ -43,7 +58,6 @@ export const ensureSchema = async () => {
     const client = await pool.connect();
     try {
         await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'user';`);
-
         await client.query(`
             CREATE TABLE IF NOT EXISTS coach_client_relations (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -55,15 +69,12 @@ export const ensureSchema = async () => {
                 UNIQUE(coach_id, client_id)
             );
         `);
-        
         const tables = ['meal_log_entries', 'saved_meals', 'meal_plans', 'meal_plan_items', 'grocery_list_items', 'grocery_lists'];
         for (const table of tables) {
             await client.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS created_by_proxy INTEGER REFERENCES users(id);`);
             await client.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS proxy_action BOOLEAN DEFAULT FALSE;`);
         }
         await client.query(`ALTER TABLE grocery_lists ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT FALSE;`);
-        
-        // Ensure rewards tables
         await client.query(`
             CREATE TABLE IF NOT EXISTS rewards_balances (
                 user_id INTEGER PRIMARY KEY REFERENCES users(id),
@@ -81,48 +92,23 @@ export const ensureSchema = async () => {
                 metadata JSONB DEFAULT '{}'
             );
         `);
-    } finally {
-        client.release();
-    }
+    } finally { client.release(); }
 };
-
-// --- Rewards Logic ---
 
 export const awardPoints = async (userId, eventType, points, metadata = {}) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        await client.query(`
-            INSERT INTO rewards_ledger (user_id, event_type, points_delta, metadata)
-            VALUES ($1, $2, $3, $4)
-        `, [userId, eventType, points, metadata]);
-
-        const updateRes = await client.query(`
-            UPDATE rewards_balances
-            SET points_total = points_total + $2,
-                points_available = points_available + $2,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE user_id = $1
-            RETURNING points_total
-        `, [userId, points]);
-        
+        await client.query(`INSERT INTO rewards_ledger (user_id, event_type, points_delta, metadata) VALUES ($1, $2, $3, $4)`, [userId, eventType, points, metadata]);
+        const updateRes = await client.query(`UPDATE rewards_balances SET points_total = points_total + $2, points_available = points_available + $2, updated_at = CURRENT_TIMESTAMP WHERE user_id = $1 RETURNING points_total`, [userId, points]);
         if (updateRes.rows.length > 0) {
             const newTotal = updateRes.rows[0].points_total;
             let newTier = 'Bronze';
-            if (newTotal >= 5000) newTier = 'Platinum';
-            else if (newTotal >= 1000) newTier = 'Gold';
-            else if (newTotal >= 200) newTier = 'Silver';
-
+            if (newTotal >= 5000) newTier = 'Platinum'; else if (newTotal >= 1000) newTier = 'Gold'; else if (newTotal >= 200) newTier = 'Silver';
             await client.query(`UPDATE rewards_balances SET tier = $2 WHERE user_id = $1`, [userId, newTier]);
         }
-
         await client.query('COMMIT');
-    } catch (err) {
-        await client.query('ROLLBACK');
-        console.error('Error awarding points:', err);
-    } finally {
-        client.release();
-    }
+    } catch (err) { await client.query('ROLLBACK'); console.error('Error awarding points:', err); } finally { client.release(); }
 };
 
 export const getRewardsSummary = async (userId) => {
@@ -134,15 +120,12 @@ export const getRewardsSummary = async (userId) => {
     } finally { client.release(); }
 };
 
-// --- User & Role Management ---
-
 export const findOrCreateUserByEmail = async (email) => {
     const client = await pool.connect();
     try {
         await client.query(`INSERT INTO users (email) VALUES ($1) ON CONFLICT (email) DO NOTHING;`, [email]);
         const res = await client.query(`SELECT id, email, role, first_name as "firstName" FROM users WHERE email = $1;`, [email]);
         const user = res.rows[0];
-        // Ensure balance exists
         await client.query(`INSERT INTO rewards_balances (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`, [user.id]);
         return user;
     } finally { client.release(); }
@@ -155,8 +138,6 @@ export const updateUserRole = async (userId, role) => {
         return res.rows[0];
     } finally { client.release(); }
 };
-
-// --- Coaching & Proxy ---
 
 export const validateProxyAccess = async (coachId, clientId) => {
     const client = await pool.connect();
@@ -213,20 +194,16 @@ export const createMealLogEntry = async (userId, mealData, imageBase64, proxyCoa
     try {
         const res = await client.query(`INSERT INTO meal_log_entries (user_id, meal_data, image_base64, created_by_proxy, proxy_action) VALUES ($1, $2, $3, $4, $5) RETURNING id, meal_data, image_base64, created_at;`, [userId, mealData, imageBase64, proxyCoachId, !!proxyCoachId]);
         const row = res.rows[0];
-        // Only award points for user actions, not proxy actions
-        if (!proxyCoachId) {
-            await awardPoints(userId, 'meal_photo.logged', 50, { meal_log_id: row.id });
-        }
-        return { id: row.id, ...(row.meal_data || {}), imageUrl: `data:image/jpeg;base64,${row.image_base64}`, createdAt: row.created_at };
+        if (!proxyCoachId) await awardPoints(userId, 'meal_photo.logged', 50, { meal_log_id: row.id });
+        return { id: row.id, ...processMealDataForClient({ ...row.meal_data, imageBase64: row.image_base64 }, true), createdAt: row.created_at };
     } finally { client.release(); }
 };
 
 export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
     try {
-        // Optimization: Do NOT select image_base64 for list view. Only a boolean flag.
         const res = await client.query(`SELECT id, meal_data, (image_base64 IS NOT NULL) as "hasImage", created_at FROM meal_log_entries WHERE user_id = $1 ORDER BY created_at DESC;`, [userId]);
-        return res.rows.map(row => ({ id: row.id, ...(row.meal_data || {}), hasImage: row.hasImage, createdAt: row.created_at }));
+        return res.rows.map(row => ({ id: row.id, ...processMealDataForClient(row.meal_data || {}, false), hasImage: row.hasImage, createdAt: row.created_at }));
     } finally { client.release(); }
 };
 
@@ -236,7 +213,7 @@ export const getMealLogEntryById = async (userId, entryId) => {
         const res = await client.query(`SELECT id, meal_data, image_base64, created_at FROM meal_log_entries WHERE id = $1 AND user_id = $2`, [entryId, userId]);
         if (res.rows.length === 0) return null;
         const row = res.rows[0];
-        return { id: row.id, ...(row.meal_data || {}), imageUrl: `data:image/jpeg;base64,${row.image_base64}`, createdAt: row.created_at };
+        return { id: row.id, ...processMealDataForClient({ ...row.meal_data, imageBase64: row.image_base64 }, true), createdAt: row.created_at };
     } finally { client.release(); }
 };
 
@@ -248,9 +225,7 @@ export const saveMeal = async (userId, mealData, proxyCoachId = null) => {
         const mealDataForDb = processMealDataForSave(mealData);
         const res = await client.query(`INSERT INTO saved_meals (user_id, meal_data, created_by_proxy, proxy_action) VALUES ($1, $2, $3, $4) RETURNING id, meal_data;`, [userId, mealDataForDb, proxyCoachId, !!proxyCoachId]);
         const row = res.rows[0];
-        if (!proxyCoachId) {
-            await awardPoints(userId, 'meal.saved', 10, { saved_meal_id: row.id });
-        }
+        if (!proxyCoachId) await awardPoints(userId, 'meal.saved', 10, { saved_meal_id: row.id });
         return { id: row.id, ...processMealDataForClient(row.meal_data || {}, true) };
     } finally { client.release(); }
 };
@@ -259,7 +234,6 @@ export const getSavedMeals = async (userId) => {
     const client = await pool.connect();
     try {
         const res = await client.query(`SELECT id, meal_data FROM saved_meals WHERE user_id = $1 ORDER BY created_at DESC;`, [userId]);
-        // Optimization: includeImage = false for list view
         return res.rows.map(row => ({ id: row.id, ...processMealDataForClient(row.meal_data || {}, false) }));
     } finally { client.release(); }
 };
@@ -269,7 +243,6 @@ export const getSavedMealById = async (userId, mealId) => {
     try {
         const res = await client.query(`SELECT id, meal_data FROM saved_meals WHERE id = $1 AND user_id = $2`, [mealId, userId]);
         if (res.rows.length === 0) return null;
-        // Optimization: includeImage = true for single item fetch
         return { id: res.rows[0].id, ...processMealDataForClient(res.rows[0].meal_data || {}, true) };
     } finally { client.release(); }
 };
@@ -296,7 +269,6 @@ export const getMealPlans = async (userId) => {
         res.rows.forEach(row => {
             if (!plans.has(row.plan_id)) plans.set(row.plan_id, { id: row.plan_id, name: row.plan_name, items: [] });
             if (row.item_id) {
-                // Optimization: includeImage = false for plan lists
                 plans.get(row.plan_id).items.push({ 
                     id: row.item_id, 
                     meal: { id: row.meal_id, ...processMealDataForClient(row.meal_data || {}, false) }, 
@@ -322,7 +294,6 @@ export const addMealToPlanItem = async (userId, planId, savedMealId, proxyCoachI
         const insertRes = await client.query(`INSERT INTO meal_plan_items (user_id, meal_plan_id, saved_meal_id, created_by_proxy, proxy_action, metadata) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id;`, [userId, planId, savedMealId, proxyCoachId, !!proxyCoachId, metadata]);
         const selectRes = await client.query(`SELECT i.id, m.id as meal_id, m.meal_data FROM meal_plan_items i JOIN saved_meals m ON i.saved_meal_id = m.id WHERE i.id = $1;`, [insertRes.rows[0].id]);
         const row = selectRes.rows[0];
-        // includeImage = false here to be consistent with getMealPlans
         return { id: row.id, meal: { id: row.meal_id, ...processMealDataForClient(row.meal_data || {}, false) } };
     } finally { client.release(); }
 };
@@ -332,7 +303,7 @@ export const removeMealFromPlanItem = async (userId, planItemId) => {
     try { await client.query(`DELETE FROM meal_plan_items WHERE id = $1 AND user_id = $2;`, [planItemId, userId]); } finally { client.release(); }
 };
 
-// --- Grocery Lists ---
+// --- Grocery ---
 
 export const getGroceryLists = async (userId) => {
     const client = await pool.connect();
@@ -402,8 +373,6 @@ export const importIngredientsFromPlans = async (userId, listId, planIds) => {
     } finally { client.release(); }
 };
 
-// --- Social Hub ---
-
 export const getFriends = async (userId) => {
     const client = await pool.connect();
     try {
@@ -457,8 +426,6 @@ export const updateSocialProfile = async (userId, updates) => {
     } finally { client.release(); }
 };
 
-// --- Health Metrics ---
-
 export const getHealthMetrics = async (userId) => {
     const client = await pool.connect();
     try { 
@@ -472,11 +439,7 @@ export const syncHealthMetrics = async (userId, stats) => {
     try {
         const q = `INSERT INTO health_metrics (user_id, steps, active_calories, resting_calories, distance_miles, flights_climbed, heart_rate, last_synced)
                    VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
-                   ON CONFLICT (user_id) DO UPDATE SET 
-                        steps = GREATEST(health_metrics.steps, EXCLUDED.steps), 
-                        active_calories = GREATEST(health_metrics.active_calories, EXCLUDED.active_calories),
-                        last_synced = CURRENT_TIMESTAMP 
-                   RETURNING steps, active_calories as "activeCalories", last_synced as "lastSynced"`;
+                   ON CONFLICT (user_id) DO UPDATE SET steps = GREATEST(health_metrics.steps, EXCLUDED.steps), active_calories = GREATEST(health_metrics.active_calories, EXCLUDED.active_calories), last_synced = CURRENT_TIMESTAMP RETURNING steps, active_calories as "activeCalories", last_synced as "lastSynced"`;
         const res = await client.query(q, [userId, stats.steps || 0, stats.activeCalories || 0, stats.restingCalories || 0, stats.distanceMiles || 0, stats.flightsClimbed || 0, stats.heartRate || 0]);
         return res.rows[0];
     } finally { client.release(); }
@@ -499,8 +462,6 @@ export const saveDashboardPrefs = async (userId, prefs) => {
     const client = await pool.connect();
     try { await client.query(`UPDATE users SET dashboard_prefs = $1 WHERE id = $2`, [prefs, userId]); } finally { client.release(); }
 };
-
-// --- Assessments & Matching ---
 
 export const getAssessments = async () => [
     { id: 'daily-pulse', title: 'Daily Pulse', description: 'Clinical baseline check.', questions: [{id: 'mood', text: 'How is your mood?', type: 'scale', min: 1, max: 10}] }
