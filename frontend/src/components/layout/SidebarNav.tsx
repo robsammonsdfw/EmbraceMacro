@@ -1,11 +1,14 @@
 
 import React from 'react';
 import { HomeIcon, BookOpenIcon, UserCircleIcon, BeakerIcon, ClipboardListIcon, TrophyIcon, Squares2X2Icon, ClipboardCheckIcon, HeartIcon, PlusIcon, UserGroupIcon, UsersIcon } from '../icons';
+import { HealthJourney } from '../../types';
 
 interface SidebarNavProps {
     activeView: string;
     onNavigate: (view: string) => void;
     onLogout: () => void;
+    selectedJourney?: HealthJourney;
+    onJourneyChange?: (journey: HealthJourney) => void;
     showClientsTab?: boolean;
 }
 

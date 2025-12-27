@@ -70,7 +70,7 @@ const App: React.FC = () => {
             apiService.getSavedMeals().catch(() => []),
             apiService.getMealPlans().catch(() => []),
             apiService.getDashboardPrefs().catch(() => ({ selectedWidgets: ['steps', 'activeCalories', 'distanceMiles'], selectedJourney: 'general-health' as HealthJourney })),
-            apiService.getRewardsSummary().catch(() => ({ points_total: 0 })),
+            apiService.getRewardsSummary().catch(() => ({ points_total: 0, points_available: 0, tier: 'Bronze', history: [] })),
             apiService.getHealthStatsFromDB().catch(() => null)
         ]);
         setMealLog(log);
@@ -204,7 +204,7 @@ const App: React.FC = () => {
               );
           case 'plan': return <CoachProxyUI permission={perms.meals as any}><MealPlanManager plans={mealPlans} activePlanId={activePlanId} savedMeals={savedMeals} onPlanChange={setActivePlanId} onCreatePlan={async (name) => { const p = await apiService.createMealPlan(name); setMealPlans(prev => [...prev, p]); setActivePlanId(p.id); }} onRemoveFromPlan={async (id) => { await apiService.removeMealFromPlanItem(id); setMealPlans(prev => prev.map(p => ({ ...p, items: p.items.filter(i => i.id !== id) }))); }} onQuickAdd={async (pId, meal, day, slot) => { const item = await apiService.addMealToPlan(pId, meal.id, { day, slot }); setMealPlans(prev => prev.map(p => p.id === pId ? { ...p, items: [...p.items, item] } : p)); }} /></CoachProxyUI>;
           case 'meals': return <CoachProxyUI permission={perms.meals as any}><MealLibrary meals={savedMeals} onAdd={async (m) => { if (activePlanId) await apiService.addMealToPlan(activePlanId, m.id, {slot: 'Lunch', day: 'Monday'}); loadAllData(); }} onDelete={async (id) => { await apiService.deleteMeal(id); setSavedMeals(prev => prev.filter(m => m.id !== id)); }} /></CoachProxyUI>;
-          case 'history': return <MealHistory logEntries={mealLog} onAddToPlan={async (d) => { const s = await apiService.saveMeal(d); loadAllData(); setActiveView('plan'); }} onSaveMeal={async (d) => { await apiService.saveMeal(d); loadAllData(); }} />;
+          case 'history': return <MealHistory logEntries={mealLog} onAddToPlan={async (d) => { await apiService.saveMeal(d); loadAllData(); setActiveView('plan'); }} onSaveMeal={async (d) => { await apiService.saveMeal(d); loadAllData(); }} />;
           case 'grocery': return <CoachProxyUI permission={perms.grocery as any}><GroceryList mealPlans={mealPlans} /></CoachProxyUI>;
           case 'rewards': return <CoachProxyUI permission={perms.wallet as any} fallback={<ErrorAlert message="Coaches cannot access Rewards Wallet." />}><RewardsDashboard /></CoachProxyUI>;
           case 'social': return <CoachProxyUI permission={perms.social as any} fallback={<ErrorAlert message="Social Hub is disabled in Proxy Mode." />}><SocialManager /></CoachProxyUI>;
@@ -219,7 +219,16 @@ const App: React.FC = () => {
   if (!isAuthenticated) return <Login />;
 
   return (
-    <AppLayout activeView={activeView} onNavigate={(v) => setActiveView(v as ActiveView)} onLogout={logout} mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} selectedJourney={dashboardPrefs.selectedJourney} onJourneyChange={async j => { setDashboardPrefs(prev => ({...prev, selectedJourney: j})); await apiService.saveDashboardPrefs({...dashboardPrefs, selectedJourney: j}); }} showClientsTab={coachClients.length > 0}>
+    <AppLayout 
+        activeView={activeView} 
+        onNavigate={(v) => setActiveView(v as ActiveView)} 
+        onLogout={logout} 
+        mobileMenuOpen={mobileMenuOpen} 
+        setMobileMenuOpen={setMobileMenuOpen} 
+        selectedJourney={dashboardPrefs.selectedJourney} 
+        onJourneyChange={async j => { setDashboardPrefs(prev => ({...prev, selectedJourney: j})); await apiService.saveDashboardPrefs({...dashboardPrefs, selectedJourney: j}); }} 
+        showClientsTab={coachClients.length > 0}
+    >
         {proxyClient && <CoachProxyBanner clientName={proxyClient.name} onExit={handleExitProxy} />}
         {isCaptureOpen && <CaptureFlow onClose={() => setIsCaptureOpen(false)} onCapture={handleCaptureResult} onRepeatMeal={() => {}} onBodyScanClick={() => setActiveView('body')} />}
         {renderActiveView()}
