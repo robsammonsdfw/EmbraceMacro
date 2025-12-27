@@ -35,11 +35,9 @@ const App: React.FC = () => {
   const [isCaptureOpen, setIsCaptureOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
-  // Proxy State
-  const [proxyClient, setProxyClient] = useState<{id: string, name: string} | null>(null);
+  const [proxyClient, setProxyClient] = useState<{id: string, name: string, permissions: any} | null>(null);
   const [coachClients, setCoachClients] = useState<any[]>([]);
 
-  // Data State
   const [image, setImage] = useState<string | null>(null);
   const [nutritionData, setNutritionData] = useState<NutritionInfo | null>(null);
   const [mealLog, setMealLog] = useState<MealLogEntry[]>([]);
@@ -48,14 +46,13 @@ const App: React.FC = () => {
   const [activePlanId, setActivePlanId] = useState<number | null>(null);
   const [walletBalance, setWalletBalance] = useState<number>(0);
   const [dashboardPrefs, setDashboardPrefs] = useState<UserDashboardPrefs>({ 
-    selectedWidgets: ['steps', 'activeCalories', 'distanceMiles'],
+    selectedWidgets: ['steps', 'activeCalories'],
     selectedJourney: 'general-health'
   });
   
-  // Health State
   const [healthStats, setHealthStats] = useState<HealthStats>({ 
     steps: 0, activeCalories: 0, restingCalories: 0, distanceMiles: 0, 
-    flightsClimbed: 0, heartRate: 0, cardioScore: 0, hrv: 0, sleepMinutes: 0 
+    flightsClimbed: 0, heartRate: 0, cardioScore: 0, sleepMinutes: 0 
   });
   const [isHealthConnected, setIsHealthConnected] = useState(false);
   const [isHealthSyncing, setIsHealthSyncing] = useState(false);
@@ -70,42 +67,31 @@ const App: React.FC = () => {
             apiService.getMealLog().catch(() => []),
             apiService.getSavedMeals().catch(() => []),
             apiService.getMealPlans().catch(() => []),
-            apiService.getDashboardPrefs().catch(() => ({ selectedWidgets: ['steps', 'activeCalories', 'distanceMiles'], selectedJourney: 'general-health' as HealthJourney })),
-            apiService.getRewardsSummary().catch(() => ({ points_total: 0, points_available: 0, tier: 'Bronze', history: [] })),
+            apiService.getDashboardPrefs().catch(() => ({ selectedWidgets: ['steps', 'activeCalories'], selectedJourney: 'general-health' as HealthJourney })),
+            apiService.getRewardsSummary().catch(() => ({ points_total: 0 })),
             apiService.getHealthStatsFromDB().catch(() => null)
         ]);
-        setMealLog(log);
-        setSavedMeals(saved);
-        setMealPlans(plans);
-        setDashboardPrefs(prefs);
-        setWalletBalance(rewards.points_total);
-        if (health) {
-            setHealthStats(prev => ({ ...prev, ...health }));
-            setIsHealthConnected(true);
-        }
+        setMealLog(log); setSavedMeals(saved); setMealPlans(plans); setDashboardPrefs(prefs); setWalletBalance(rewards.points_total);
+        if (health) { setHealthStats(prev => ({ ...prev, ...health })); setIsHealthConnected(true); }
         if (plans.length > 0) setActivePlanId(plans[0].id);
     } catch (e) { console.error("Load failed", e); }
   }, [isAuthenticated]);
 
   useEffect(() => {
     loadAllData();
-    // Check for existing proxy session
     const savedProxyId = apiService.getProxyClient();
     if (savedProxyId) {
         apiService.getCoachClients().then(clients => {
             const match = clients.find(c => c.id === savedProxyId);
-            if (match) setProxyClient({ id: match.id, name: match.firstName || match.email });
+            if (match) setProxyClient({ id: match.id, name: match.firstName || match.email, permissions: match.permissions });
         });
     }
-    // Also load coach clients if user has potential
-    if (user?.role === 'coach') {
-        apiService.getCoachClients().then(setCoachClients).catch(() => {});
-    }
+    if (user?.role === 'coach') apiService.getCoachClients().then(setCoachClients).catch(() => {});
   }, [loadAllData, user?.role]);
 
   const handleEnterProxy = (client: any) => {
       apiService.setProxyClient(client.id);
-      setProxyClient({ id: client.id, name: client.firstName || client.email });
+      setProxyClient({ id: client.id, name: client.firstName || client.email, permissions: client.permissions });
       loadAllData();
       setActiveView('home');
   };
@@ -117,31 +103,11 @@ const App: React.FC = () => {
       setActiveView('home');
   };
 
-  const handleConnectHealth = async (source: 'apple' | 'fitbit' = 'apple') => {
-      setIsHealthSyncing(true);
-      try {
-          const success = await connectHealthProvider(source === 'apple' ? 'ios' : 'fitbit');
-          if (success) {
-              const stats = await syncHealthData(source);
-              await apiService.syncHealthStatsToDB(stats);
-              loadAllData();
-          }
-      } finally { setIsHealthSyncing(false); }
-  };
-
   const handleCaptureResult = useCallback(async (img: string | null, mode: any, barcode?: string) => {
-    setIsCaptureOpen(false);
-    setImage(null); setNutritionData(null); setError(null);
-    setIsProcessing(true);
+    setIsCaptureOpen(false); setImage(null); setNutritionData(null); setError(null); setIsProcessing(true);
     try {
-        if (mode === 'barcode' && barcode) {
-            const data = await getProductByBarcode(barcode);
-            setNutritionData(data);
-        } else if (img) {
-            setImage(img);
-            const result = await analyzeFoodImage(img.split(',')[1], 'image/jpeg');
-            setNutritionData(result);
-        }
+        if (mode === 'barcode' && barcode) { const data = await getProductByBarcode(barcode); setNutritionData(data); }
+        else if (img) { setImage(img); const result = await analyzeFoodImage(img.split(',')[1], 'image/jpeg'); setNutritionData(result); }
     } catch (err) { setError('Analysis failed.'); }
     finally { setIsProcessing(false); }
   }, []);
@@ -164,16 +130,20 @@ const App: React.FC = () => {
                 {image && <ImageUploader image={image} />}
                 {isProcessing && <Loader message="Analyzing..." />}
                 {error && <ErrorAlert message={error} />}
-                {nutritionData && !isProcessing && <NutritionCard data={nutritionData} onSaveToHistory={handleSaveToHistory} />}
+                {nutritionData && !isProcessing && (
+                  <CoachProxyUI permission={proxyClient ? 'read' : 'full'}>
+                    <NutritionCard data={nutritionData} onSaveToHistory={handleSaveToHistory} />
+                  </CoachProxyUI>
+                )}
                 <button onClick={() => { setImage(null); setNutritionData(null); setIsCaptureOpen(true); }} className="w-full py-4 text-emerald-600 font-black uppercase tracking-widest text-sm">Retake Photo</button>
             </div>
           );
       }
 
       // Proxy permission lookup
-      const perms = proxyClient ? {
-          journey: 'full', meals: 'full', grocery: 'full', body: 'read', assessments: 'read', blueprint: 'read', social: 'none', wallet: 'none'
-      } : { journey: 'full', meals: 'full', grocery: 'full', body: 'full', assessments: 'full', blueprint: 'full', social: 'full', wallet: 'full' };
+      const perms = proxyClient?.permissions || {
+          journey: 'full', meals: 'full', grocery: 'full', body: 'full', assessments: 'full', blueprint: 'full', social: 'full', wallet: 'full'
+      };
 
       const todayLog = mealLog.filter(e => new Date(e.createdAt).toDateString() === new Date().toDateString());
       const dailyCalories = todayLog.reduce((acc, e) => acc + e.totalCalories, 0);
@@ -183,14 +153,13 @@ const App: React.FC = () => {
           case 'home':
               return (
                 <CommandCenter 
-                    dailyCalories={dailyCalories} 
-                    dailyProtein={dailyProtein} 
-                    rewardsBalance={walletBalance} userName={user?.firstName || 'Hero'}
+                    dailyCalories={dailyCalories} dailyProtein={dailyProtein} rewardsBalance={walletBalance} userName={user?.firstName || 'Hero'}
                     healthStats={healthStats} isHealthConnected={isHealthConnected} isHealthSyncing={isHealthSyncing}
-                    onConnectHealth={handleConnectHealth} onScanClick={() => setActiveView('body')}
+                    onConnectHealth={source => {}} onScanClick={() => setActiveView('body')}
                     onCameraClick={() => setIsCaptureOpen(true)} onBarcodeClick={() => setIsCaptureOpen(true)} 
                     onPantryChefClick={() => setIsCaptureOpen(true)} onRestaurantClick={() => setIsCaptureOpen(true)}
                     onUploadClick={() => setIsCaptureOpen(true)} dashboardPrefs={dashboardPrefs}
+                    isProxy={!!proxyClient}
                 />
               );
           case 'clients':
@@ -205,17 +174,17 @@ const App: React.FC = () => {
                       ))}
                   </div>
               );
-          case 'coaching': return <CoachingHub userRole={user?.role as any} onUpgrade={async () => { await apiService.upgradeToCoach(); window.location.reload(); }} />;
-          case 'plan': return <CoachProxyUI permission={perms.meals as any}><MealPlanManager plans={mealPlans} activePlanId={activePlanId} savedMeals={savedMeals} onPlanChange={setActivePlanId} onCreatePlan={async (name) => { const p = await apiService.createMealPlan(name); setMealPlans(prev => [...prev, p]); setActivePlanId(p.id); }} onRemoveFromPlan={async (id) => { await apiService.removeMealFromPlanItem(id); setMealPlans(prev => prev.map(p => ({ ...p, items: p.items.filter(i => i.id !== id) }))); }} onQuickAdd={async (pId, meal, day, slot) => { const item = await apiService.addMealToPlan(pId, meal.id, { day, slot }); setMealPlans(prev => prev.map(p => p.id === pId ? { ...p, items: [...p.items, item] } : p)); }} /></CoachProxyUI>;
-          case 'meals': return <CoachProxyUI permission={perms.meals as any}><MealLibrary meals={savedMeals} onAdd={async (m) => { if (activePlanId) await apiService.addMealToPlan(activePlanId, m.id, {slot: 'Lunch', day: 'Monday'}); loadAllData(); }} onDelete={async (id) => { await apiService.deleteMeal(id); setSavedMeals(prev => prev.filter(m => m.id !== id)); }} /></CoachProxyUI>;
-          case 'history': return <MealHistory logEntries={mealLog} onAddToPlan={async (d) => { await apiService.saveMeal(d); loadAllData(); setActiveView('plan'); }} onSaveMeal={async (d) => { await apiService.saveMeal(d); loadAllData(); }} />;
-          case 'grocery': return <CoachProxyUI permission={perms.grocery as any}><GroceryList mealPlans={mealPlans} /></CoachProxyUI>;
-          case 'rewards': return <CoachProxyUI permission={perms.wallet as any} fallback={<ErrorAlert message="Coaches cannot access Rewards Wallet." />}><RewardsDashboard /></CoachProxyUI>;
-          case 'social': return <CoachProxyUI permission={perms.social as any} fallback={<ErrorAlert message="Social Hub is disabled in Proxy Mode." />}><SocialManager /></CoachProxyUI>;
-          case 'assessments': return <CoachProxyUI permission={perms.assessments as any}><AssessmentHub /></CoachProxyUI>;
-          case 'blueprint': return <CoachProxyUI permission={perms.blueprint as any}><PartnerBlueprint /></CoachProxyUI>;
-          case 'body': return <CoachProxyUI permission={perms.body as any}><BodyHub healthStats={healthStats} onSyncHealth={handleConnectHealth} dashboardPrefs={dashboardPrefs} onUpdatePrefs={async p => { setDashboardPrefs(p); await apiService.saveDashboardPrefs(p); }} /></CoachProxyUI>;
-          default: return <div className="p-8 text-center text-slate-400">Coming soon...</div>;
+          case 'coaching': return <CoachingHub userRole={user?.role as any} onUpgrade={() => {}} />;
+          case 'plan': return <CoachProxyUI permission={perms.meals}><MealPlanManager plans={mealPlans} activePlanId={activePlanId} savedMeals={savedMeals} onPlanChange={setActivePlanId} onCreatePlan={name => {}} onRemoveFromPlan={id => {}} onQuickAdd={(pId, meal, day, slot) => {}} /></CoachProxyUI>;
+          case 'meals': return <CoachProxyUI permission={perms.meals}><MealLibrary meals={savedMeals} onAdd={m => {}} onDelete={id => {}} /></CoachProxyUI>;
+          case 'history': return <CoachProxyUI permission={perms.meals}><MealHistory logEntries={mealLog} onAddToPlan={d => {}} onSaveMeal={d => {}} /></CoachProxyUI>;
+          case 'grocery': return <CoachProxyUI permission={perms.grocery}><GroceryList mealPlans={mealPlans} /></CoachProxyUI>;
+          case 'rewards': return <CoachProxyUI permission={proxyClient ? 'none' : 'full'} fallback={<ErrorAlert message="Restricted Module: Rewards Wallet" />}><RewardsDashboard /></CoachProxyUI>;
+          case 'social': return <CoachProxyUI permission={proxyClient ? 'none' : 'full'} fallback={<ErrorAlert message="Restricted Module: Social Hub" />}><SocialManager /></CoachProxyUI>;
+          case 'assessments': return <CoachProxyUI permission={perms.assessments}><AssessmentHub /></CoachProxyUI>;
+          case 'blueprint': return <CoachProxyUI permission={perms.blueprint}><PartnerBlueprint /></CoachProxyUI>;
+          case 'body': return <CoachProxyUI permission={perms.body}><BodyHub healthStats={healthStats} onSyncHealth={s => {}} dashboardPrefs={dashboardPrefs} onUpdatePrefs={p => {}} /></CoachProxyUI>;
+          default: return <div className="p-8 text-center text-slate-400">View Not Found</div>;
       }
   };
 
@@ -224,17 +193,13 @@ const App: React.FC = () => {
 
   return (
     <AppLayout 
-        activeView={activeView} 
-        onNavigate={(v) => setActiveView(v as ActiveView)} 
-        onLogout={logout} 
-        mobileMenuOpen={mobileMenuOpen} 
-        setMobileMenuOpen={setMobileMenuOpen} 
-        selectedJourney={dashboardPrefs.selectedJourney} 
-        onJourneyChange={async j => { setDashboardPrefs(prev => ({...prev, selectedJourney: j})); await apiService.saveDashboardPrefs({...dashboardPrefs, selectedJourney: j}); }} 
+        activeView={activeView} onNavigate={v => setActiveView(v as ActiveView)} onLogout={logout} 
+        mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} 
+        selectedJourney={dashboardPrefs.selectedJourney} onJourneyChange={j => {}} 
         showClientsTab={user?.role === 'coach'}
     >
         {proxyClient && <CoachProxyBanner clientName={proxyClient.name} onExit={handleExitProxy} />}
-        {isCaptureOpen && <CaptureFlow onClose={() => setIsCaptureOpen(false)} onCapture={handleCaptureResult} onRepeatMeal={() => {}} onBodyScanClick={() => setActiveView('body')} />}
+        {isCaptureOpen && !proxyClient && <CaptureFlow onClose={() => setIsCaptureOpen(false)} onCapture={handleCaptureResult} onRepeatMeal={() => {}} onBodyScanClick={() => setActiveView('body')} />}
         {renderActiveView()}
     </AppLayout>
   );
