@@ -208,7 +208,10 @@ export const createMealLogEntry = async (userId, mealData, imageBase64, proxyCoa
     try {
         const res = await client.query(`INSERT INTO meal_log_entries (user_id, meal_data, image_base64, created_by_proxy, proxy_action) VALUES ($1, $2, $3, $4, $5) RETURNING id, meal_data, image_base64, created_at;`, [userId, mealData, imageBase64, proxyCoachId, !!proxyCoachId]);
         const row = res.rows[0];
-        await awardPoints(userId, 'meal_photo.logged', 50, { meal_log_id: row.id });
+        // Only award points for user actions, not proxy actions
+        if (!proxyCoachId) {
+            await awardPoints(userId, 'meal_photo.logged', 50, { meal_log_id: row.id });
+        }
         return { id: row.id, ...(row.meal_data || {}), imageUrl: `data:image/jpeg;base64,${row.image_base64}`, createdAt: row.created_at };
     } finally { client.release(); }
 };
@@ -239,7 +242,9 @@ export const saveMeal = async (userId, mealData, proxyCoachId = null) => {
         const mealDataForDb = processMealDataForSave(mealData);
         const res = await client.query(`INSERT INTO saved_meals (user_id, meal_data, created_by_proxy, proxy_action) VALUES ($1, $2, $3, $4) RETURNING id, meal_data;`, [userId, mealDataForDb, proxyCoachId, !!proxyCoachId]);
         const row = res.rows[0];
-        await awardPoints(userId, 'meal.saved', 10, { saved_meal_id: row.id });
+        if (!proxyCoachId) {
+            await awardPoints(userId, 'meal.saved', 10, { saved_meal_id: row.id });
+        }
         return { id: row.id, ...processMealDataForClient(row.meal_data || {}) };
     } finally { client.release(); }
 };

@@ -57,8 +57,6 @@ const suggestionSchema = {
     }
 };
 
-const formAnalysisSchema = { type: Type.OBJECT, properties: { isCorrect: { type: Type.BOOLEAN }, feedback: { type: Type.STRING }, score: { type: Type.NUMBER } }, required: ["isCorrect", "feedback", "score"] };
-
 export const handler = async (event) => {
     const { JWT_SECRET, FRONTEND_URL, API_KEY } = process.env;
     const allowedOrigins = [FRONTEND_URL, "https://food.embracehealth.ai", "https://main.embracehealth.ai", "http://localhost:5173"].filter(Boolean);
@@ -138,7 +136,6 @@ export const handler = async (event) => {
         if (resource === 'auth' && pathParts[1] === 'role' && method === 'PATCH') {
              const { role } = JSON.parse(event.body);
              const updatedUser = await db.updateUserRole(decoded.userId, role);
-             // Re-issue token with new role
              const newToken = jwt.sign({ userId: updatedUser.id, email: updatedUser.email, role: updatedUser.role, firstName: decoded.firstName }, JWT_SECRET, { expiresIn: '7d' });
              return { statusCode: 200, headers, body: JSON.stringify({ token: newToken }) };
         }
@@ -154,7 +151,7 @@ export const handler = async (event) => {
              return { statusCode: 403, headers, body: JSON.stringify({ error: 'Report-only module' }) };
         }
 
-        const forbiddenModules = ['rewards', 'social', 'labs', 'orders', 'check-in', 'analyze-image']; // Analysis uses camera
+        const forbiddenModules = ['rewards', 'social', 'labs', 'orders', 'check-in', 'analyze-image'];
         if (proxyCoachId && forbiddenModules.includes(resource)) {
              return { statusCode: 403, headers, body: JSON.stringify({ error: 'Module access forbidden for proxy' }) };
         }
@@ -208,7 +205,7 @@ export const handler = async (event) => {
             } else {
                 if (pathParts[1] === 'items' && method === 'DELETE') { await db.removeMealFromPlanItem(currentUserId, parseInt(pathParts[2])); return { statusCode: 204, headers }; }
                 const planId = parseInt(pathParts[1]);
-                if (pathParts[2] === 'items' && method === 'POST') return { statusCode: 201, headers, body: JSON.stringify(await db.addMealToPlanItem(currentUserId, planId, JSON.parse(event.body).savedMealId, proxyCoachId)) };
+                if (pathParts[2] === 'items' && method === 'POST') return { statusCode: 201, headers, body: JSON.stringify(await db.addMealToPlanItem(currentUserId, planId, JSON.parse(event.body).savedMealId, proxyCoachId, JSON.parse(event.body).metadata)) };
             }
         }
 

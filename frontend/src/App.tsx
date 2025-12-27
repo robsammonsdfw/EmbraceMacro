@@ -140,9 +140,9 @@ const App: React.FC = () => {
           );
       }
 
-      // Proxy permission lookup
+      // Proxy permission mapping
       const perms = proxyClient?.permissions || {
-          journey: 'full', meals: 'full', grocery: 'full', body: 'full', assessments: 'full', blueprint: 'full', social: 'full', wallet: 'full'
+          journey: 'full', meals: 'full', grocery: 'full', body: 'full', assessments: 'full', blueprint: 'full'
       };
 
       const todayLog = mealLog.filter(e => new Date(e.createdAt).toDateString() === new Date().toDateString());
@@ -179,8 +179,8 @@ const App: React.FC = () => {
           case 'meals': return <CoachProxyUI permission={perms.meals}><MealLibrary meals={savedMeals} onAdd={m => {}} onDelete={id => {}} /></CoachProxyUI>;
           case 'history': return <CoachProxyUI permission={perms.meals}><MealHistory logEntries={mealLog} onAddToPlan={d => {}} onSaveMeal={d => {}} /></CoachProxyUI>;
           case 'grocery': return <CoachProxyUI permission={perms.grocery}><GroceryList mealPlans={mealPlans} /></CoachProxyUI>;
-          case 'rewards': return <CoachProxyUI permission={proxyClient ? 'none' : 'full'} fallback={<ErrorAlert message="Restricted Module: Rewards Wallet" />}><RewardsDashboard /></CoachProxyUI>;
-          case 'social': return <CoachProxyUI permission={proxyClient ? 'none' : 'full'} fallback={<ErrorAlert message="Restricted Module: Social Hub" />}><SocialManager /></CoachProxyUI>;
+          case 'rewards': return <CoachProxyUI permission={proxyClient ? 'none' : 'full'} fallback={<div className="p-12 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-3xl">Private Module: Rewards Wallet is hidden for Proxy Sessions.</div>}><RewardsDashboard /></CoachProxyUI>;
+          case 'social': return <CoachProxyUI permission={proxyClient ? 'none' : 'full'} fallback={<div className="p-12 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-3xl">Private Module: Social Hub is hidden for Proxy Sessions.</div>}><SocialManager /></CoachProxyUI>;
           case 'assessments': return <CoachProxyUI permission={perms.assessments}><AssessmentHub /></CoachProxyUI>;
           case 'blueprint': return <CoachProxyUI permission={perms.blueprint}><PartnerBlueprint /></CoachProxyUI>;
           case 'body': return <CoachProxyUI permission={perms.body}><BodyHub healthStats={healthStats} onSyncHealth={s => {}} dashboardPrefs={dashboardPrefs} onUpdatePrefs={p => {}} /></CoachProxyUI>;
