@@ -1,15 +1,11 @@
 
 import React from 'react';
-import { HomeIcon, BookOpenIcon, UserCircleIcon, BeakerIcon, ClipboardListIcon, TrophyIcon, Squares2X2Icon, ClipboardCheckIcon, HeartIcon, PlusIcon, UserGroupIcon, ActivityIcon, UsersIcon } from '../icons';
-import { HealthJourney } from '../../types';
-import { JOURNEYS } from './AppLayout';
+import { HomeIcon, BookOpenIcon, UserCircleIcon, BeakerIcon, ClipboardListIcon, TrophyIcon, Squares2X2Icon, ClipboardCheckIcon, HeartIcon, PlusIcon, UserGroupIcon, UsersIcon } from '../icons';
 
 interface SidebarNavProps {
     activeView: string;
     onNavigate: (view: string) => void;
     onLogout: () => void;
-    selectedJourney?: HealthJourney;
-    onJourneyChange: (journey: HealthJourney) => void;
     showClientsTab?: boolean;
 }
 
@@ -35,7 +31,7 @@ const NavItem: React.FC<{
     </button>
 );
 
-export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, onLogout, selectedJourney, onJourneyChange, showClientsTab }) => {
+export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, onLogout, showClientsTab }) => {
     return (
         <div className="h-full flex flex-col bg-white">
             <div className="p-6">

@@ -41,7 +41,6 @@ const callApi = async (endpoint: string, method: string, body?: any) => {
             throw new Error("Unauthorized");
         }
         if (!response.ok) {
-            const errorText = await response.text();
             throw new Error(`API failed: ${response.status}`);
         }
         return response.status === 204 ? null : response.json();

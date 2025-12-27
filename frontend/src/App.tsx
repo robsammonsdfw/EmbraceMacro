@@ -172,12 +172,16 @@ const App: React.FC = () => {
           journey: 'full', meals: 'full', grocery: 'full', body: 'read', assessments: 'read', blueprint: 'read', social: 'none', wallet: 'none'
       } : { journey: 'full', meals: 'full', grocery: 'full', body: 'full', assessments: 'full', blueprint: 'full', social: 'full', wallet: 'full' };
 
+      const todayLog = mealLog.filter(e => new Date(e.createdAt).toDateString() === new Date().toDateString());
+      const dailyCalories = todayLog.reduce((acc, e) => acc + e.totalCalories, 0);
+      const dailyProtein = todayLog.reduce((acc, e) => acc + e.totalProtein, 0);
+
       switch (activeView) {
           case 'home':
               return (
                 <CommandCenter 
-                    dailyCalories={mealLog.filter(e => new Date(e.createdAt).toDateString() === new Date().toDateString()).reduce((s, e) => s + e.totalCalories, 0)} 
-                    dailyProtein={mealLog.filter(e => new Date(e.createdAt).toDateString() === new Date().toDateString()).reduce((s, e) => s + e.totalProtein, 0)} 
+                    dailyCalories={dailyCalories} 
+                    dailyProtein={dailyProtein} 
                     rewardsBalance={walletBalance} userName={user?.firstName || 'Hero'}
                     healthStats={healthStats} isHealthConnected={isHealthConnected} isHealthSyncing={isHealthSyncing}
                     onConnectHealth={handleConnectHealth} onScanClick={() => setActiveView('body')}
