@@ -1,3 +1,4 @@
+
 export interface Ingredient {
   name: string;
   weightGrams: number;
@@ -170,6 +171,19 @@ export interface Friendship {
     email: string;
     firstName?: string;
     status: 'pending' | 'accepted';
+}
+
+export interface CoachingRelation {
+    id: string;
+    coachId: number;
+    clientId: number;
+    coachEmail?: string;
+    clientEmail?: string;
+    coachName?: string;
+    clientName?: string;
+    permissions: any;
+    status: 'pending' | 'active' | 'rejected';
+    created_at: string;
 }
 
 export interface OrderItem {

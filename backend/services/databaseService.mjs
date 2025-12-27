@@ -37,20 +37,18 @@ const processMealDataForClient = (mealData) => {
 export const ensureSchema = async () => {
     const client = await pool.connect();
     try {
-        // Correcting types to INTEGER to match users.id type
         await client.query(`
             CREATE TABLE IF NOT EXISTS coach_client_relations (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 coach_id INTEGER REFERENCES users(id),
                 client_id INTEGER REFERENCES users(id),
                 permissions JSONB DEFAULT '{"journey": "full", "meals": "full", "grocery": "full", "body": "read", "assessments": "read", "blueprint": "read"}'::JSONB,
-                status VARCHAR(20) DEFAULT 'active',
+                status VARCHAR(20) DEFAULT 'pending',
                 created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(coach_id, client_id)
             );
         `);
         
-        // Add audit columns to existing tables using INTEGER
         const tables = ['meal_log_entries', 'saved_meals', 'meal_plans', 'grocery_list_items'];
         for (const table of tables) {
             await client.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS created_by_proxy INTEGER REFERENCES users(id);`);
@@ -82,6 +80,49 @@ export const getAssignedClients = async (coachId) => {
             WHERE r.coach_id = $1 AND r.status = 'active'
         `, [coachId]);
         return res.rows;
+    } finally { client.release(); }
+};
+
+export const inviteCoachingClient = async (coachId, clientEmail) => {
+    const client = await pool.connect();
+    try {
+        const target = await client.query(`SELECT id FROM users WHERE email = $1`, [clientEmail.toLowerCase().trim()]);
+        if (target.rows.length === 0) throw new Error("Client not found in system.");
+        const clientId = target.rows[0].id;
+        if (coachId === clientId) throw new Error("You cannot coach yourself.");
+
+        const res = await client.query(`
+            INSERT INTO coach_client_relations (coach_id, client_id, status)
+            VALUES ($1, $2, 'pending')
+            ON CONFLICT (coach_id, client_id) DO UPDATE SET status = 'pending'
+            RETURNING *;
+        `, [coachId, clientId]);
+        return res.rows[0];
+    } finally { client.release(); }
+};
+
+export const getCoachingRelations = async (userId, role) => {
+    const client = await pool.connect();
+    try {
+        const query = role === 'coach' 
+            ? `SELECT r.*, u.email as "clientEmail", u.first_name as "clientName" FROM coach_client_relations r JOIN users u ON r.client_id = u.id WHERE r.coach_id = $1`
+            : `SELECT r.*, u.email as "coachEmail", u.first_name as "coachName" FROM coach_client_relations r JOIN users u ON r.coach_id = u.id WHERE r.client_id = $1`;
+        const res = await client.query(query, [userId]);
+        return res.rows;
+    } finally { client.release(); }
+};
+
+export const respondToCoachingInvite = async (userId, relationId, status) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`UPDATE coach_client_relations SET status = $1 WHERE id = $2 AND client_id = $3`, [status, relationId, userId]);
+    } finally { client.release(); }
+};
+
+export const revokeCoachingRelation = async (userId, relationId) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`DELETE FROM coach_client_relations WHERE id = $1 AND (coach_id = $2 OR client_id = $2)`, [relationId, userId]);
     } finally { client.release(); }
 };
 
@@ -122,7 +163,6 @@ export const findOrCreateUserByEmail = async (email) => {
 };
 
 const ensureRewardsTables = async (client) => {
-    // Correcting types to INTEGER to match users.id type
     await client.query(`
         CREATE TABLE IF NOT EXISTS rewards_balances (
             user_id INTEGER PRIMARY KEY REFERENCES users(id),

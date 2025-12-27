@@ -113,6 +113,27 @@ export const handler = async (event) => {
     const resource = pathParts[0];
 
     try {
+        // --- Professional Coaching Hub ---
+        if (resource === 'coaching') {
+            const sub = pathParts[1];
+            if (sub === 'invite' && method === 'POST') {
+                return { statusCode: 201, headers, body: JSON.stringify(await db.inviteCoachingClient(decoded.userId, JSON.parse(event.body).email)) };
+            }
+            if (sub === 'relations' && method === 'GET') {
+                const role = event.queryStringParameters?.role || 'client';
+                return { statusCode: 200, headers, body: JSON.stringify(await db.getCoachingRelations(decoded.userId, role)) };
+            }
+            if (sub === 'respond' && method === 'PATCH') {
+                const { relationId, status } = JSON.parse(event.body);
+                await db.respondToCoachingInvite(decoded.userId, relationId, status);
+                return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
+            }
+            if (sub === 'relations' && pathParts[2] && method === 'DELETE') {
+                await db.revokeCoachingRelation(decoded.userId, pathParts[2]);
+                return { statusCode: 204, headers };
+            }
+        }
+
         // --- Coach Feature: Client List ---
         if (resource === 'coach' && pathParts[1] === 'clients') {
             return { statusCode: 200, headers, body: JSON.stringify(await db.getAssignedClients(decoded.userId)) };

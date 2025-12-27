@@ -25,8 +25,9 @@ import { SocialManager } from './components/social/SocialManager';
 import { BodyHub } from './components/body/BodyHub';
 import { CoachProxyBanner } from './components/CoachProxyBanner';
 import { CoachProxyUI } from './components/CoachProxyUI';
+import { CoachingHub } from './components/coaching/CoachingHub';
 
-type ActiveView = 'home' | 'plan' | 'meals' | 'history' | 'grocery' | 'rewards' | 'body' | 'social' | 'assessments' | 'blueprint' | 'labs' | 'orders' | 'clients';
+type ActiveView = 'home' | 'plan' | 'meals' | 'history' | 'grocery' | 'rewards' | 'body' | 'social' | 'assessments' | 'blueprint' | 'labs' | 'orders' | 'clients' | 'coaching';
 
 const App: React.FC = () => {
   const { isAuthenticated, isLoading: isAuthLoading, logout, user } = useAuth();
@@ -202,6 +203,7 @@ const App: React.FC = () => {
                       ))}
                   </div>
               );
+          case 'coaching': return <CoachingHub />;
           case 'plan': return <CoachProxyUI permission={perms.meals as any}><MealPlanManager plans={mealPlans} activePlanId={activePlanId} savedMeals={savedMeals} onPlanChange={setActivePlanId} onCreatePlan={async (name) => { const p = await apiService.createMealPlan(name); setMealPlans(prev => [...prev, p]); setActivePlanId(p.id); }} onRemoveFromPlan={async (id) => { await apiService.removeMealFromPlanItem(id); setMealPlans(prev => prev.map(p => ({ ...p, items: p.items.filter(i => i.id !== id) }))); }} onQuickAdd={async (pId, meal, day, slot) => { const item = await apiService.addMealToPlan(pId, meal.id, { day, slot }); setMealPlans(prev => prev.map(p => p.id === pId ? { ...p, items: [...p.items, item] } : p)); }} /></CoachProxyUI>;
           case 'meals': return <CoachProxyUI permission={perms.meals as any}><MealLibrary meals={savedMeals} onAdd={async (m) => { if (activePlanId) await apiService.addMealToPlan(activePlanId, m.id, {slot: 'Lunch', day: 'Monday'}); loadAllData(); }} onDelete={async (id) => { await apiService.deleteMeal(id); setSavedMeals(prev => prev.filter(m => m.id !== id)); }} /></CoachProxyUI>;
           case 'history': return <MealHistory logEntries={mealLog} onAddToPlan={async (d) => { await apiService.saveMeal(d); loadAllData(); setActiveView('plan'); }} onSaveMeal={async (d) => { await apiService.saveMeal(d); loadAllData(); }} />;

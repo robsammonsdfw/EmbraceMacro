@@ -3,7 +3,7 @@ import type {
   NutritionInfo, SavedMeal, MealPlan, MealPlanItem, MealPlanItemMetadata, 
   GroceryList, GroceryItem, RewardsSummary, MealLogEntry, Assessment, 
   UserProfile, Friendship, ReadinessScore, FormAnalysisResult, RecoveryData,
-  AssessmentState, UserDashboardPrefs, HealthStats, Recipe, MatchProfile, PartnerBlueprint
+  AssessmentState, UserDashboardPrefs, HealthStats, Recipe, MatchProfile, PartnerBlueprint, CoachingRelation
 } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
@@ -51,6 +51,12 @@ const callApi = async (endpoint: string, method: string, body?: any) => {
 };
 
 export interface MapPlace { uri: string; title: string; }
+
+// Professional Coaching
+export const inviteClient = (email: string): Promise<CoachingRelation> => callApi('/coaching/invite', 'POST', { email });
+export const getCoachingRelations = (role: 'coach' | 'client'): Promise<CoachingRelation[]> => callApi(`/coaching/relations?role=${role}`, 'GET');
+export const respondToCoachingInvite = (relationId: string, status: 'active' | 'rejected'): Promise<void> => callApi(`/coaching/respond`, 'PATCH', { relationId, status });
+export const revokeCoachingAccess = (relationId: string): Promise<void> => callApi(`/coaching/relations/${relationId}`, 'DELETE');
 
 // Coach Actions
 export const getCoachClients = (): Promise<any[]> => callApi('/coach/clients', 'GET');

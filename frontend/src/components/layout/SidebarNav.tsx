@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { HomeIcon, BookOpenIcon, UserCircleIcon, BeakerIcon, ClipboardListIcon, TrophyIcon, Squares2X2Icon, ClipboardCheckIcon, HeartIcon, PlusIcon, UserGroupIcon, UsersIcon } from '../icons';
+import { HomeIcon, BookOpenIcon, UserCircleIcon, BeakerIcon, ClipboardListIcon, TrophyIcon, Squares2X2Icon, ClipboardCheckIcon, HeartIcon, PlusIcon, UserGroupIcon, UsersIcon, ActivityIcon } from '../icons';
 import { HealthJourney } from '../../types';
 
 interface SidebarNavProps {
@@ -50,6 +50,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
                 )}
 
                 <NavItem id="home" label="Command Center" icon={<HomeIcon />} isActive={activeView === 'home'} onClick={() => onNavigate('home')} />
+                <NavItem id="coaching" label="Coaching Hub" icon={<ActivityIcon />} isActive={activeView === 'coaching'} onClick={() => onNavigate('coaching')} />
                 <NavItem id="social" label="Social Hub" icon={<UserGroupIcon />} isActive={activeView === 'social'} onClick={() => onNavigate('social')} />
                 <NavItem id="plan" label="Meal Planner" icon={<PlusIcon />} isActive={activeView === 'plan'} onClick={() => onNavigate('plan')} />
                 <NavItem id="meals" label="My Meals" icon={<BookOpenIcon />} isActive={activeView === 'meals'} onClick={() => onNavigate('meals')} />
