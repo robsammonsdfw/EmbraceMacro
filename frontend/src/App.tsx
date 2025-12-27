@@ -3,7 +3,6 @@ import React, { useState, useCallback, useEffect } from 'react';
 import * as apiService from './services/apiService';
 import { analyzeFoodImage } from './services/geminiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
-import { connectHealthProvider, syncHealthData } from './services/healthService';
 import type { NutritionInfo, MealLogEntry, SavedMeal, MealPlan, HealthStats, UserDashboardPrefs, HealthJourney } from './types';
 import { ImageUploader } from './components/ImageUploader';
 import { NutritionCard } from './components/NutritionCard';
@@ -55,7 +54,7 @@ const App: React.FC = () => {
     flightsClimbed: 0, heartRate: 0, cardioScore: 0, sleepMinutes: 0 
   });
   const [isHealthConnected, setIsHealthConnected] = useState(false);
-  const [isHealthSyncing, setIsHealthSyncing] = useState(false);
+  const [isHealthSyncing, _setIsHealthSyncing] = useState(false);
 
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -155,7 +154,7 @@ const App: React.FC = () => {
                 <CommandCenter 
                     dailyCalories={dailyCalories} dailyProtein={dailyProtein} rewardsBalance={walletBalance} userName={user?.firstName || 'Hero'}
                     healthStats={healthStats} isHealthConnected={isHealthConnected} isHealthSyncing={isHealthSyncing}
-                    onConnectHealth={source => {}} onScanClick={() => setActiveView('body')}
+                    onConnectHealth={_source => {}} onScanClick={() => setActiveView('body')}
                     onCameraClick={() => setIsCaptureOpen(true)} onBarcodeClick={() => setIsCaptureOpen(true)} 
                     onPantryChefClick={() => setIsCaptureOpen(true)} onRestaurantClick={() => setIsCaptureOpen(true)}
                     onUploadClick={() => setIsCaptureOpen(true)} dashboardPrefs={dashboardPrefs}
@@ -175,15 +174,15 @@ const App: React.FC = () => {
                   </div>
               );
           case 'coaching': return <CoachingHub userRole={user?.role as any} onUpgrade={() => {}} />;
-          case 'plan': return <CoachProxyUI permission={perms.meals}><MealPlanManager plans={mealPlans} activePlanId={activePlanId} savedMeals={savedMeals} onPlanChange={setActivePlanId} onCreatePlan={name => {}} onRemoveFromPlan={id => {}} onQuickAdd={(pId, meal, day, slot) => {}} /></CoachProxyUI>;
-          case 'meals': return <CoachProxyUI permission={perms.meals}><MealLibrary meals={savedMeals} onAdd={m => {}} onDelete={id => {}} /></CoachProxyUI>;
-          case 'history': return <CoachProxyUI permission={perms.meals}><MealHistory logEntries={mealLog} onAddToPlan={d => {}} onSaveMeal={d => {}} /></CoachProxyUI>;
+          case 'plan': return <CoachProxyUI permission={perms.meals}><MealPlanManager plans={mealPlans} activePlanId={activePlanId} savedMeals={savedMeals} onPlanChange={setActivePlanId} onCreatePlan={_name => {}} onRemoveFromPlan={_id => {}} onQuickAdd={(_pId, _meal, _day, _slot) => {}} /></CoachProxyUI>;
+          case 'meals': return <CoachProxyUI permission={perms.meals}><MealLibrary meals={savedMeals} onAdd={_m => {}} onDelete={_id => {}} /></CoachProxyUI>;
+          case 'history': return <CoachProxyUI permission={perms.meals}><MealHistory logEntries={mealLog} onAddToPlan={_d => {}} onSaveMeal={_d => {}} /></CoachProxyUI>;
           case 'grocery': return <CoachProxyUI permission={perms.grocery}><GroceryList mealPlans={mealPlans} /></CoachProxyUI>;
           case 'rewards': return <CoachProxyUI permission={proxyClient ? 'none' : 'full'} fallback={<div className="p-12 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-3xl">Private Module: Rewards Wallet is hidden for Proxy Sessions.</div>}><RewardsDashboard /></CoachProxyUI>;
           case 'social': return <CoachProxyUI permission={proxyClient ? 'none' : 'full'} fallback={<div className="p-12 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-3xl">Private Module: Social Hub is hidden for Proxy Sessions.</div>}><SocialManager /></CoachProxyUI>;
           case 'assessments': return <CoachProxyUI permission={perms.assessments}><AssessmentHub /></CoachProxyUI>;
           case 'blueprint': return <CoachProxyUI permission={perms.blueprint}><PartnerBlueprint /></CoachProxyUI>;
-          case 'body': return <CoachProxyUI permission={perms.body}><BodyHub healthStats={healthStats} onSyncHealth={s => {}} dashboardPrefs={dashboardPrefs} onUpdatePrefs={p => {}} /></CoachProxyUI>;
+          case 'body': return <CoachProxyUI permission={perms.body}><BodyHub healthStats={healthStats} onSyncHealth={_s => {}} dashboardPrefs={dashboardPrefs} onUpdatePrefs={_p => {}} /></CoachProxyUI>;
           default: return <div className="p-8 text-center text-slate-400">View Not Found</div>;
       }
   };
@@ -195,7 +194,7 @@ const App: React.FC = () => {
     <AppLayout 
         activeView={activeView} onNavigate={v => setActiveView(v as ActiveView)} onLogout={logout} 
         mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} 
-        selectedJourney={dashboardPrefs.selectedJourney} onJourneyChange={j => {}} 
+        selectedJourney={dashboardPrefs.selectedJourney} onJourneyChange={_j => {}} 
         showClientsTab={user?.role === 'coach'}
     >
         {proxyClient && <CoachProxyBanner clientName={proxyClient.name} onExit={handleExitProxy} />}

@@ -2,10 +2,9 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { TodayStrip } from './TodayStrip';
 import { DigitalTwinPanel } from './DigitalTwinPanel';
-import { CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, ChatIcon, ThumbUpIcon, UserGroupIcon, UserCircleIcon, PlusIcon, ActivityIcon, FireIcon } from '../icons';
+import { CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, UserGroupIcon, UserCircleIcon, ActivityIcon } from '../icons';
 import type { HealthStats, Friendship, UserDashboardPrefs } from '../../types';
 import * as apiService from '../../services/apiService';
-import { CoachProxyUI } from '../CoachProxyUI';
 
 interface CommandCenterProps {
     dailyCalories: number;
@@ -47,7 +46,6 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
     dashboardPrefs, isProxy
 }) => {
     const [friends, setFriends] = useState<Friendship[]>([]);
-    const [isLoadingFriends, setIsLoadingFriends] = useState(true);
 
     const journeyLabel = useMemo(() => {
         const labels: Record<string, string> = {
@@ -62,7 +60,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
     }, [dashboardPrefs.selectedJourney]);
 
     useEffect(() => {
-        apiService.getFriends().then(setFriends).catch(() => {}).finally(() => setIsLoadingFriends(false));
+        apiService.getFriends().then(setFriends).catch(() => {});
     }, []);
 
     return (
