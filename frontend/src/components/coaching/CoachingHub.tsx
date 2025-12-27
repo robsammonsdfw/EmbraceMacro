@@ -2,15 +2,21 @@
 import React, { useState, useEffect } from 'react';
 import * as apiService from '../../services/apiService';
 import { CoachingRelation } from '../../types';
-import { UsersIcon, UserCircleIcon, PlusIcon, XIcon, ActivityIcon, CheckIcon } from '../icons';
+import { UsersIcon, UserCircleIcon, PlusIcon, XIcon, ActivityIcon, CheckIcon, TrophyIcon, BeakerIcon } from '../icons';
 
-export const CoachingHub: React.FC = () => {
+interface CoachingHubProps {
+    userRole: 'coach' | 'user';
+    onUpgrade: () => void;
+}
+
+export const CoachingHub: React.FC<CoachingHubProps> = ({ userRole, onUpgrade }) => {
     const [tab, setTab] = useState<'practice' | 'care'>('practice');
     const [clientEmail, setClientEmail] = useState('');
     const [asCoachRelations, setAsCoachRelations] = useState<CoachingRelation[]>([]);
     const [asClientRelations, setAsClientRelations] = useState<CoachingRelation[]>([]);
     const [loading, setLoading] = useState(true);
     const [isInviting, setIsInviting] = useState(false);
+    const [isUpgrading, setIsUpgrading] = useState(false);
 
     const loadData = async () => {
         setLoading(true);
@@ -29,6 +35,15 @@ export const CoachingHub: React.FC = () => {
     };
 
     useEffect(() => { loadData(); }, []);
+
+    const handleUpgrade = async () => {
+        setIsUpgrading(true);
+        try {
+            await onUpgrade();
+        } finally {
+            setIsUpgrading(false);
+        }
+    };
 
     const handleInvite = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -66,6 +81,65 @@ export const CoachingHub: React.FC = () => {
     };
 
     if (loading) return <div className="p-12 text-center text-slate-500 animate-pulse">Synchronizing professional data...</div>;
+
+    // --- Onboarding / Upgrade View for Standard Users ---
+    if (userRole !== 'coach' && tab === 'practice') {
+        return (
+            <div className="max-w-4xl mx-auto space-y-8 pb-20 animate-fade-in">
+                <div className="bg-white rounded-[3rem] p-12 shadow-2xl border border-slate-100 text-center space-y-8 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-20 opacity-5 -mr-10">
+                        <TrophyIcon className="w-64 h-64" />
+                    </div>
+                    <div className="relative z-10 space-y-6">
+                        <div className="mx-auto w-24 h-24 bg-indigo-600 rounded-3xl flex items-center justify-center text-white shadow-xl rotate-3">
+                            <ActivityIcon className="w-12 h-12" />
+                        </div>
+                        <h2 className="text-4xl font-black text-slate-900 tracking-tighter">Become a Professional Coach</h2>
+                        <p className="text-xl text-slate-500 max-w-xl mx-auto font-medium">
+                            Take control of your clients' health journeys with medical-grade proxy access, meal planning, and biometric tracking.
+                        </p>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left py-6">
+                            <div className="p-6 bg-slate-50 rounded-3xl">
+                                <BeakerIcon className="text-indigo-600 mb-3" />
+                                <h4 className="font-black text-slate-800 uppercase tracking-widest text-xs mb-2">Proxy Control</h4>
+                                <p className="text-sm text-slate-500">Act as your client to view their 3D scans and daily nutrition.</p>
+                            </div>
+                            <div className="p-6 bg-slate-50 rounded-3xl">
+                                <PlusIcon className="text-indigo-600 mb-3" />
+                                <h4 className="font-black text-slate-800 uppercase tracking-widest text-xs mb-2">Prescribed Plans</h4>
+                                <p className="text-sm text-slate-500">Remotely build meal plans and grocery lists for your roster.</p>
+                            </div>
+                            <div className="p-6 bg-slate-50 rounded-3xl">
+                                <UsersIcon className="text-indigo-600 mb-3" />
+                                <h4 className="font-black text-slate-800 uppercase tracking-widest text-xs mb-2">Roster Management</h4>
+                                <p className="text-sm text-slate-500">Manage unlimited clients and track their metabolic compliance.</p>
+                            </div>
+                        </div>
+
+                        <button 
+                            onClick={handleUpgrade}
+                            disabled={isUpgrading}
+                            className="w-full py-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[2rem] font-black uppercase tracking-widest shadow-2xl transform active:scale-95 transition-all text-lg flex items-center justify-center gap-3 disabled:opacity-50"
+                        >
+                            {isUpgrading ? 'Activating Profile...' : 'Activate Professional Profile'}
+                            <CheckIcon className="w-6 h-6" />
+                        </button>
+                        <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Limited-time Beta Access</p>
+                    </div>
+                </div>
+
+                <div className="flex justify-center">
+                    <button 
+                        onClick={() => setTab('care')}
+                        className="text-slate-400 hover:text-slate-600 font-bold text-sm uppercase tracking-widest"
+                    >
+                        Switch to "My Care Team"
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="max-w-4xl mx-auto space-y-8 pb-20 animate-fade-in">

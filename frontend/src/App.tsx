@@ -98,8 +98,10 @@ const App: React.FC = () => {
         });
     }
     // Also load coach clients if user has potential
-    apiService.getCoachClients().then(setCoachClients).catch(() => {});
-  }, [loadAllData]);
+    if (user?.role === 'coach') {
+        apiService.getCoachClients().then(setCoachClients).catch(() => {});
+    }
+  }, [loadAllData, user?.role]);
 
   const handleEnterProxy = (client: any) => {
       apiService.setProxyClient(client.id);
@@ -203,7 +205,7 @@ const App: React.FC = () => {
                       ))}
                   </div>
               );
-          case 'coaching': return <CoachingHub />;
+          case 'coaching': return <CoachingHub userRole={user?.role as any} onUpgrade={async () => { await apiService.upgradeToCoach(); window.location.reload(); }} />;
           case 'plan': return <CoachProxyUI permission={perms.meals as any}><MealPlanManager plans={mealPlans} activePlanId={activePlanId} savedMeals={savedMeals} onPlanChange={setActivePlanId} onCreatePlan={async (name) => { const p = await apiService.createMealPlan(name); setMealPlans(prev => [...prev, p]); setActivePlanId(p.id); }} onRemoveFromPlan={async (id) => { await apiService.removeMealFromPlanItem(id); setMealPlans(prev => prev.map(p => ({ ...p, items: p.items.filter(i => i.id !== id) }))); }} onQuickAdd={async (pId, meal, day, slot) => { const item = await apiService.addMealToPlan(pId, meal.id, { day, slot }); setMealPlans(prev => prev.map(p => p.id === pId ? { ...p, items: [...p.items, item] } : p)); }} /></CoachProxyUI>;
           case 'meals': return <CoachProxyUI permission={perms.meals as any}><MealLibrary meals={savedMeals} onAdd={async (m) => { if (activePlanId) await apiService.addMealToPlan(activePlanId, m.id, {slot: 'Lunch', day: 'Monday'}); loadAllData(); }} onDelete={async (id) => { await apiService.deleteMeal(id); setSavedMeals(prev => prev.filter(m => m.id !== id)); }} /></CoachProxyUI>;
           case 'history': return <MealHistory logEntries={mealLog} onAddToPlan={async (d) => { await apiService.saveMeal(d); loadAllData(); setActiveView('plan'); }} onSaveMeal={async (d) => { await apiService.saveMeal(d); loadAllData(); }} />;
@@ -229,7 +231,7 @@ const App: React.FC = () => {
         setMobileMenuOpen={setMobileMenuOpen} 
         selectedJourney={dashboardPrefs.selectedJourney} 
         onJourneyChange={async j => { setDashboardPrefs(prev => ({...prev, selectedJourney: j})); await apiService.saveDashboardPrefs({...dashboardPrefs, selectedJourney: j}); }} 
-        showClientsTab={coachClients.length > 0}
+        showClientsTab={user?.role === 'coach'}
     >
         {proxyClient && <CoachProxyBanner clientName={proxyClient.name} onExit={handleExitProxy} />}
         {isCaptureOpen && <CaptureFlow onClose={() => setIsCaptureOpen(false)} onCapture={handleCaptureResult} onRepeatMeal={() => {}} onBodyScanClick={() => setActiveView('body')} />}

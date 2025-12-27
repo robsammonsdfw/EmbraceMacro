@@ -53,6 +53,11 @@ const callApi = async (endpoint: string, method: string, body?: any) => {
 export interface MapPlace { uri: string; title: string; }
 
 // Professional Coaching
+export const upgradeToCoach = async (): Promise<{token: string}> => {
+    const res = await callApi('/auth/role', 'PATCH', { role: 'coach' });
+    if (res.token) localStorage.setItem(AUTH_TOKEN_KEY, res.token);
+    return res;
+};
 export const inviteClient = (email: string): Promise<CoachingRelation> => callApi('/coaching/invite', 'POST', { email });
 export const getCoachingRelations = (role: 'coach' | 'client'): Promise<CoachingRelation[]> => callApi(`/coaching/relations?role=${role}`, 'GET');
 export const respondToCoachingInvite = (relationId: string, status: 'active' | 'rejected'): Promise<void> => callApi(`/coaching/respond`, 'PATCH', { relationId, status });

@@ -37,6 +37,9 @@ const processMealDataForClient = (mealData) => {
 export const ensureSchema = async () => {
     const client = await pool.connect();
     try {
+        // Add role column to users if it doesn't exist
+        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'user';`);
+
         await client.query(`
             CREATE TABLE IF NOT EXISTS coach_client_relations (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -57,6 +60,14 @@ export const ensureSchema = async () => {
     } finally {
         client.release();
     }
+};
+
+export const updateUserRole = async (userId, role) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`UPDATE users SET role = $1 WHERE id = $2 RETURNING id, email, role;`, [role, userId]);
+        return res.rows[0];
+    } finally { client.release(); }
 };
 
 export const validateProxyAccess = async (coachId, clientId) => {
@@ -137,7 +148,7 @@ export const findOrCreateUserByEmail = async (email) => {
         `;
         await client.query(insertQuery, [email]);
 
-        const selectQuery = `SELECT id, email, first_name as "firstName", shopify_customer_id FROM users WHERE email = $1;`;
+        const selectQuery = `SELECT id, email, role, first_name as "firstName", shopify_customer_id FROM users WHERE email = $1;`;
         const res = await client.query(selectQuery, [email]);
         
         if (res.rows.length === 0) {

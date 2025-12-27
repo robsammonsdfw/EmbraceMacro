@@ -81,7 +81,7 @@ export const handler = async (event) => {
     if (path === '/auth/customer-login') {
         const { email } = JSON.parse(event.body);
         const user = await db.findOrCreateUserByEmail(email);
-        const token = jwt.sign({ userId: user.id, email: user.email, firstName: user.firstName }, JWT_SECRET, { expiresIn: '7d' });
+        const token = jwt.sign({ userId: user.id, email: user.email, role: user.role, firstName: user.firstName }, JWT_SECRET, { expiresIn: '7d' });
         return { statusCode: 200, headers, body: JSON.stringify({ token }) };
     }
 
@@ -132,6 +132,15 @@ export const handler = async (event) => {
                 await db.revokeCoachingRelation(decoded.userId, pathParts[2]);
                 return { statusCode: 204, headers };
             }
+        }
+
+        // --- Role Management ---
+        if (resource === 'auth' && pathParts[1] === 'role' && method === 'PATCH') {
+             const { role } = JSON.parse(event.body);
+             const updatedUser = await db.updateUserRole(decoded.userId, role);
+             // Re-issue token with new role
+             const newToken = jwt.sign({ userId: updatedUser.id, email: updatedUser.email, role: updatedUser.role, firstName: decoded.firstName }, JWT_SECRET, { expiresIn: '7d' });
+             return { statusCode: 200, headers, body: JSON.stringify({ token: newToken }) };
         }
 
         // --- Coach Feature: Client List ---
