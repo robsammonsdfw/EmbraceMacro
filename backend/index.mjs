@@ -64,6 +64,9 @@ const suggestionSchema = {
     }
 };
 
+// Optimization: Ensure schema runs only once per container instance
+let schemaEnsured = false;
+
 export const handler = async (event) => {
     const { JWT_SECRET, FRONTEND_URL, API_KEY } = process.env;
     const allowedOrigins = [FRONTEND_URL, "https://food.embracehealth.ai", "https://main.embracehealth.ai", "http://localhost:5173"].filter(Boolean);
@@ -80,11 +83,21 @@ export const handler = async (event) => {
     if (method === 'OPTIONS') return { statusCode: 200, headers };
 
     // Stage-agnostic path cleaning
-    // If path is /default/search-food, remove /default
     path = path.replace(/^\/(?:default|prod|staging|dev)\b/, '');
     if (!path.startsWith('/')) path = '/' + path;
 
     console.log(`[ROUTE] ${method} ${path}`);
+
+    // Auto-migrate database schema if columns like proxy_action are missing
+    if (!schemaEnsured) {
+        try {
+            await db.ensureSchema();
+            schemaEnsured = true;
+            console.log("[DB] Schema ensured successfully");
+        } catch (err) {
+            console.error("[DB] Schema ensure failed:", err);
+        }
+    }
 
     const pathParts = path.split('/').filter(Boolean);
     const resource = pathParts[0];
