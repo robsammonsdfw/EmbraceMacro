@@ -212,24 +212,25 @@ export const handler = async (event) => {
             const { base64Image, mimeType, condition, cuisine, query } = body;
             let prompt = ""; let schema;
             
+            // Added explicit English instruction to all prompts
             if (resource === 'analyze-image') { 
-                prompt = "Analyze the food image and identify the meal and ingredients. Explicitly provide a detailed nutritional breakdown including Calories, Protein, Carbs, Fat, and micronutrients: Potassium (mg), Magnesium (mg), Vitamin D (mcg), and Calcium (mg) for the total meal and each ingredient."; 
+                prompt = "Analyze the food image and identify the meal and ingredients. Return everything in English. Explicitly provide a detailed nutritional breakdown including Calories, Protein, Carbs, Fat, and micronutrients: Potassium (mg), Magnesium (mg), Vitamin D (mcg), and Calcium (mg) for the total meal and each ingredient."; 
                 schema = nutritionSchema; 
             }
             else if (resource === 'search-food') {
-                prompt = `Provide detailed nutritional information for the food query: "${query}". Include estimated grams, Calories, Protein, Carbs, Fat, and micronutrients: Potassium (mg), Magnesium (mg), Vitamin D (mcg), and Calcium (mg). Assume standard portions if not specified.`;
+                prompt = `Provide detailed nutritional information for the food query: "${query}". Return everything in English. Include estimated grams, Calories, Protein, Carbs, Fat, and micronutrients: Potassium (mg), Magnesium (mg), Vitamin D (mcg), and Calcium (mg). Assume standard portions if not specified.`;
                 schema = nutritionSchema;
             }
             else if (resource === 'get-meal-suggestions') { 
-                prompt = `Generate meal suggestions for ${condition} with ${cuisine} cuisine. Include micronutrient profiles where relevant.`; 
+                prompt = `Generate meal suggestions for ${condition} with ${cuisine} cuisine. Return everything in English. Include micronutrient profiles where relevant.`; 
                 schema = suggestionSchema; 
             }
             else if (resource === 'analyze-image-recipes') { 
-                prompt = "Analyze the image to identify ingredients and suggest 3 recipes."; 
+                prompt = "Analyze the image to identify ingredients and suggest 3 recipes. Return everything in English."; 
                 schema = recipeSchema; 
             }
             else if (resource === 'analyze-image-grocery') { 
-                prompt = "Analyze the image and identify grocery items that need to be purchased."; 
+                prompt = "Analyze the image and identify grocery items that need to be purchased. Return everything in English."; 
                 schema = grocerySchema; 
             }
 

@@ -26,7 +26,6 @@ import { CoachProxyBanner } from './components/CoachProxyBanner';
 import { CoachProxyUI } from './components/CoachProxyUI';
 import { CoachingHub } from './components/coaching/CoachingHub';
 import { GoalSetupWizard } from './components/GoalSetupWizard';
-// FIX: Import ActivityIcon to resolve reference error at line 231.
 import { ActivityIcon } from './components/icons';
 
 type ActiveView = 'home' | 'plan' | 'meals' | 'history' | 'grocery' | 'rewards' | 'body' | 'social' | 'assessments' | 'blueprint' | 'labs' | 'orders' | 'clients' | 'coaching';
@@ -107,18 +106,33 @@ const App: React.FC = () => {
       apiService.setProxyClient(client.id);
       setProxyClient({ id: client.id, name: client.firstName || client.email, permissions: client.permissions });
       loadAllData();
-      setActiveView('home');
+      handleNavigate('home');
   };
 
   const handleExitProxy = () => {
       apiService.setProxyClient(null);
       setProxyClient(null);
       loadAllData();
-      setActiveView('home');
+      handleNavigate('home');
+  };
+
+  const handleNavigate = (view: ActiveView) => {
+    setActiveView(view);
+    // CRITICAL: Reset analysis states when manually navigating to prevent UI freeze
+    setImage(null);
+    setNutritionData(null);
+    setError(null);
+    setIsProcessing(false);
+    setMobileMenuOpen(false);
   };
 
   const handleCaptureResult = useCallback(async (img: string | null, mode: any, barcode?: string, searchQuery?: string) => {
-    setIsCaptureOpen(false); setImage(null); setNutritionData(null); setError(null); setIsProcessing(true);
+    setIsCaptureOpen(false); 
+    setImage(null); 
+    setNutritionData(null); 
+    setError(null); 
+    setIsProcessing(true);
+    setActiveView('home'); // Ensure we are on home to see results
     try {
         if (mode === 'barcode' && barcode) { const data = await getProductByBarcode(barcode); setNutritionData(data); }
         else if (mode === 'search' && searchQuery) { const data = await searchFood(searchQuery); setNutritionData(data); }
@@ -130,16 +144,21 @@ const App: React.FC = () => {
   const handleSaveToHistory = async (updatedData: NutritionInfo) => {
     try {
       setIsProcessing(true);
-      // If we have an image, save it. If it was a text search, image is null.
+      setError(null);
       const newEntry = await apiService.createMealLogEntry(updatedData, image ? image.split(',')[1] : "");
       setMealLog(prev => [newEntry, ...prev]);
-      setImage(null); setNutritionData(null); setActiveView('home');
-    } catch (err) { setError("Failed to save."); }
+      setImage(null); 
+      setNutritionData(null); 
+      setActiveView('home');
+    } catch (err) { 
+      setError("Failed to save. This is likely a temporary server issue."); 
+    }
     finally { setIsProcessing(false); }
   };
 
   const renderActiveView = () => {
-      if (image || isProcessing || nutritionData || error) {
+      // Transient analysis/error view
+      if (activeView === 'home' && (image || isProcessing || nutritionData || error)) {
           const mealsPerm = proxyClient?.permissions?.meals || 'full';
           return (
               <div className="max-w-2xl mx-auto space-y-6">
@@ -151,7 +170,7 @@ const App: React.FC = () => {
                     <NutritionCard data={nutritionData} onSaveToHistory={handleSaveToHistory} />
                   </CoachProxyUI>
                 )}
-                <button onClick={() => { setImage(null); setNutritionData(null); setIsCaptureOpen(true); }} className="w-full py-4 text-emerald-600 font-black uppercase tracking-widest text-sm">Cancel Analysis</button>
+                <button onClick={() => { setImage(null); setNutritionData(null); setError(null); setIsCaptureOpen(true); }} className="w-full py-4 text-emerald-600 font-black uppercase tracking-widest text-sm">Cancel Analysis</button>
             </div>
           );
       }
@@ -170,7 +189,7 @@ const App: React.FC = () => {
                 <CommandCenter 
                     dailyCalories={dailyCalories} dailyProtein={dailyProtein} rewardsBalance={walletBalance} userName={user?.firstName || 'Hero'}
                     healthStats={healthStats} isHealthConnected={isHealthConnected} isHealthSyncing={isHealthSyncing}
-                    onConnectHealth={_source => {}} onScanClick={() => setActiveView('body')}
+                    onConnectHealth={_source => {}} onScanClick={() => handleNavigate('body')}
                     onCameraClick={() => setIsCaptureOpen(true)} onBarcodeClick={() => setIsCaptureOpen(true)} 
                     onPantryChefClick={() => setIsCaptureOpen(true)} onRestaurantClick={() => setIsCaptureOpen(true)}
                     onUploadClick={() => setIsCaptureOpen(true)} dashboardPrefs={dashboardPrefs}
@@ -208,14 +227,14 @@ const App: React.FC = () => {
 
   return (
     <AppLayout 
-        activeView={activeView} onNavigate={v => setActiveView(v as ActiveView)} onLogout={logout} 
+        activeView={activeView} onNavigate={v => handleNavigate(v as ActiveView)} onLogout={logout} 
         mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} 
         selectedJourney={dashboardPrefs.selectedJourney} 
         onJourneyChange={j => handleUpdateDashboardPrefs({ ...dashboardPrefs, selectedJourney: j })} 
         showClientsTab={user?.role === 'coach'}
     >
         {proxyClient && <CoachProxyBanner clientName={proxyClient.name} onExit={handleExitProxy} />}
-        {isCaptureOpen && !proxyClient && <CaptureFlow onClose={() => setIsCaptureOpen(false)} onCapture={handleCaptureResult} onRepeatMeal={() => {}} onBodyScanClick={() => setActiveView('body')} />}
+        {isCaptureOpen && !proxyClient && <CaptureFlow onClose={() => setIsCaptureOpen(false)} onCapture={handleCaptureResult} onRepeatMeal={() => {}} onBodyScanClick={() => handleNavigate('body')} />}
         {isGoalWizardOpen && (
             <GoalSetupWizard 
                 onClose={() => setIsGoalWizardOpen(false)} 
@@ -226,7 +245,7 @@ const App: React.FC = () => {
             />
         )}
         {renderActiveView()}
-        {activeView === 'home' && !nutritionData && !isProcessing && (
+        {activeView === 'home' && !nutritionData && !isProcessing && !error && !image && (
             <button 
                 onClick={() => setIsGoalWizardOpen(true)}
                 className="fixed bottom-24 right-4 bg-slate-900 text-white p-4 rounded-2xl shadow-2xl flex items-center gap-2 z-30 animate-bounce-short font-black uppercase text-[10px] tracking-widest border border-slate-700"

@@ -44,7 +44,61 @@ const processMealDataForClient = (mealData, includeImage = true) => {
 export const ensureSchema = async () => {
     const client = await pool.connect();
     try {
+        console.log("[DB] Starting schema migration...");
+        
+        // 1. Core Users Table Extensions
         await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'user';`);
+        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dashboard_prefs JSONB;`);
+        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_mode VARCHAR(20) DEFAULT 'private';`);
+        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT;`);
+        
+        // 2. Base Tables Creation (Ensure they exist before altering)
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS meal_log_entries (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id),
+                meal_data JSONB,
+                image_base64 TEXT,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS saved_meals (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id),
+                meal_data JSONB,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS meal_plans (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id),
+                name VARCHAR(255),
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS meal_plan_items (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id),
+                meal_plan_id INTEGER REFERENCES meal_plans(id) ON DELETE CASCADE,
+                saved_meal_id INTEGER REFERENCES saved_meals(id),
+                metadata JSONB,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS grocery_lists (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id),
+                name VARCHAR(255),
+                is_active BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS grocery_list_items (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id),
+                grocery_list_id INTEGER REFERENCES grocery_lists(id) ON DELETE CASCADE,
+                name VARCHAR(255),
+                checked BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        // 3. Professional & Coaching Tables
         await client.query(`
             CREATE TABLE IF NOT EXISTS coach_client_relations (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -56,12 +110,8 @@ export const ensureSchema = async () => {
                 UNIQUE(coach_id, client_id)
             );
         `);
-        const tables = ['meal_log_entries', 'saved_meals', 'meal_plans', 'meal_plan_items', 'grocery_list_items', 'grocery_lists'];
-        for (const table of tables) {
-            await client.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS created_by_proxy INTEGER REFERENCES users(id);`);
-            await client.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS proxy_action BOOLEAN DEFAULT FALSE;`);
-        }
-        await client.query(`ALTER TABLE grocery_lists ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT FALSE;`);
+
+        // 4. Rewards Tables
         await client.query(`
             CREATE TABLE IF NOT EXISTS rewards_balances (
                 user_id INTEGER PRIMARY KEY REFERENCES users(id),
@@ -79,6 +129,18 @@ export const ensureSchema = async () => {
                 metadata JSONB DEFAULT '{}'
             );
         `);
+
+        // 5. Apply Proxy Columns to All Relevant Tables
+        const tables = ['meal_log_entries', 'saved_meals', 'meal_plans', 'meal_plan_items', 'grocery_list_items', 'grocery_lists'];
+        for (const table of tables) {
+            await client.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS created_by_proxy INTEGER REFERENCES users(id);`);
+            await client.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS proxy_action BOOLEAN DEFAULT FALSE;`);
+        }
+
+        console.log("[DB] Schema migration complete.");
+    } catch (err) {
+        console.error("[DB] Migration error:", err);
+        throw err;
     } finally { client.release(); }
 };
 
@@ -228,7 +290,9 @@ export const getSavedMealById = async (userId, mealId) => {
     try {
         const res = await client.query(`SELECT id, meal_data FROM saved_meals WHERE id = $1 AND user_id = $2`, [mealId, userId]);
         if (res.rows.length === 0) return null;
-        return { id: res.rows[0].id, ...processMealDataForClient(res.rows[0].meal_data || {}, true) };
+        // FIX: Define row variable to fix line 293 ReferenceError
+        const row = res.rows[0];
+        return { id: row.id, ...processMealDataForClient(row.meal_data || {}, true) };
     } finally { client.release(); }
 };
 
