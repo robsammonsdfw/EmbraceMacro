@@ -88,6 +88,15 @@ const App: React.FC = () => {
     if (user?.role === 'coach') apiService.getCoachClients().then(setCoachClients).catch(() => {});
   }, [loadAllData, user?.role]);
 
+  const handleUpdateDashboardPrefs = async (newPrefs: UserDashboardPrefs) => {
+      setDashboardPrefs(newPrefs);
+      try {
+          await apiService.saveDashboardPrefs(newPrefs);
+      } catch (e) {
+          console.error("Failed to save dashboard preferences:", e);
+      }
+  };
+
   const handleEnterProxy = (client: any) => {
       apiService.setProxyClient(client.id);
       setProxyClient({ id: client.id, name: client.firstName || client.email, permissions: client.permissions });
@@ -124,7 +133,6 @@ const App: React.FC = () => {
 
   const renderActiveView = () => {
       if (image || isProcessing || nutritionData || error) {
-          // Dynamic permission for the capture card
           const mealsPerm = proxyClient?.permissions?.meals || 'full';
           return (
               <div className="max-w-2xl mx-auto space-y-6">
@@ -141,7 +149,6 @@ const App: React.FC = () => {
           );
       }
 
-      // Proxy permission mapping
       const perms = proxyClient?.permissions || {
           journey: 'full', meals: 'full', grocery: 'full', body: 'full', assessments: 'full', blueprint: 'full'
       };
@@ -184,7 +191,7 @@ const App: React.FC = () => {
           case 'social': return <CoachProxyUI permission={proxyClient ? 'none' : 'full'} fallback={<div className="p-12 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-3xl">Private Module: Social Hub is hidden for Proxy Sessions.</div>}><SocialManager /></CoachProxyUI>;
           case 'assessments': return <CoachProxyUI permission={perms.assessments}><AssessmentHub /></CoachProxyUI>;
           case 'blueprint': return <CoachProxyUI permission={perms.blueprint}><PartnerBlueprint /></CoachProxyUI>;
-          case 'body': return <CoachProxyUI permission={perms.body}><BodyHub healthStats={healthStats} onSyncHealth={_s => {}} dashboardPrefs={dashboardPrefs} onUpdatePrefs={_p => {}} /></CoachProxyUI>;
+          case 'body': return <CoachProxyUI permission={perms.body}><BodyHub healthStats={healthStats} onSyncHealth={_s => {}} dashboardPrefs={dashboardPrefs} onUpdatePrefs={handleUpdateDashboardPrefs} /></CoachProxyUI>;
           default: return <div className="p-8 text-center text-slate-400">View Not Found</div>;
       }
   };
@@ -196,7 +203,8 @@ const App: React.FC = () => {
     <AppLayout 
         activeView={activeView} onNavigate={v => setActiveView(v as ActiveView)} onLogout={logout} 
         mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} 
-        selectedJourney={dashboardPrefs.selectedJourney} onJourneyChange={_j => {}} 
+        selectedJourney={dashboardPrefs.selectedJourney} 
+        onJourneyChange={j => handleUpdateDashboardPrefs({ ...dashboardPrefs, selectedJourney: j })} 
         showClientsTab={user?.role === 'coach'}
     >
         {proxyClient && <CoachProxyBanner clientName={proxyClient.name} onExit={handleExitProxy} />}
