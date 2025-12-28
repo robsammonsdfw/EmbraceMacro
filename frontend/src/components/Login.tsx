@@ -17,12 +17,15 @@ export const Login: React.FC = () => {
         setError(null);
 
         try {
+            // Force lowercase to resolve account unification issues reported by users
+            const normalizedEmail = email.toLowerCase().trim();
+
             const response = await fetch(`${API_BASE_URL}/auth/customer-login`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ email, password }),
+                body: JSON.stringify({ email: normalizedEmail, password }),
             });
 
             const data = await response.json();

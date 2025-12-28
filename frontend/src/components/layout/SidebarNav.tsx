@@ -2,6 +2,7 @@
 import React from 'react';
 import { HomeIcon, BookOpenIcon, UserCircleIcon, BeakerIcon, ClipboardListIcon, TrophyIcon, Squares2X2Icon, ClipboardCheckIcon, HeartIcon, PlusIcon, UserGroupIcon, UsersIcon, ActivityIcon } from '../icons';
 import { HealthJourney } from '../../types';
+import { JOURNEYS } from './AppLayout';
 
 interface SidebarNavProps {
     activeView: string;
@@ -34,11 +35,26 @@ const NavItem: React.FC<{
     </button>
 );
 
-export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, onLogout, showClientsTab }) => {
+export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, onLogout, showClientsTab, selectedJourney, onJourneyChange }) => {
     return (
         <div className="h-full flex flex-col bg-white">
             <div className="p-6">
                 <h1 className="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500">Embrace</h1>
+                
+                {/* Restore Active Journey Selector for Mobile */}
+                {onJourneyChange && (
+                    <div className="mt-4 md:hidden">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Active Journey</label>
+                        <select 
+                            value={selectedJourney} 
+                            onChange={(e) => onJourneyChange(e.target.value as HealthJourney)}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-black text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500 transition-all appearance-none"
+                            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='currentColor'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center', backgroundSize: '1rem' }}
+                        >
+                            {JOURNEYS.map(j => (<option key={j.id} value={j.id}>{j.label}</option>))}
+                        </select>
+                    </div>
+                )}
             </div>
 
             <div className="flex-grow px-4 space-y-2 overflow-y-auto">
@@ -64,7 +80,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
             </div>
 
             <div className="p-4 border-t border-slate-100">
-                <button onClick={() => onNavigate('hub')} className="w-full flex items-center space-x-3 px-4 py-3 text-slate-500 transition-colors">
+                <button onClick={() => onNavigate('hub')} className="w-full flex items-center space-x-3 px-4 py-3 text-slate-500 transition-colors text-left">
                     <Squares2X2Icon />
                     <span className="font-medium text-sm">Switch App</span>
                 </button>

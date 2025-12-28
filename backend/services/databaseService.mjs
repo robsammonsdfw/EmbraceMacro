@@ -10,18 +10,13 @@ const pool = new Pool({
 
 /**
  * Helper function to prepare meal data for database insertion.
- * Extracts base64 from data URIs and ensures clean JSON storage.
  */
 const processMealDataForSave = (mealData) => {
     const dataForDb = { ...mealData };
-    
-    // If imageUrl is a data URI, extract base64 part
     if (typeof dataForDb.imageUrl === 'string' && dataForDb.imageUrl.startsWith('data:image')) {
         dataForDb.imageBase64 = dataForDb.imageUrl.split(',')[1];
         delete dataForDb.imageUrl;
     }
-    
-    // Cleanup standard fields that should be top-level or are auto-generated
     delete dataForDb.id;
     delete dataForDb.createdAt;
     delete dataForDb.hasImage;
@@ -30,26 +25,18 @@ const processMealDataForSave = (mealData) => {
 
 /**
  * Helper function to prepare meal data for the client.
- * Handles prefixing and ensures heavy image data isn't leaked into lists.
  */
 const processMealDataForClient = (mealData, includeImage = true) => {
     if (!mealData) return {};
     const dataForClient = { ...mealData };
-    
-    // Use either the imageBase64 key inside JSON or handle existing imageUrl
     const base64Raw = dataForClient.imageBase64;
     dataForClient.hasImage = !!base64Raw || (!!dataForClient.imageUrl && dataForClient.imageUrl.startsWith('data:image'));
-    
     if (includeImage && base64Raw) {
-        // Only prefix if not already prefixed
         const prefix = 'data:image/jpeg;base64,';
         dataForClient.imageUrl = base64Raw.startsWith('data:image') ? base64Raw : `${prefix}${base64Raw}`;
     } else if (!includeImage) {
-        // CRITICAL: Ensure NO image strings are present in list responses
         delete dataForClient.imageUrl;
     }
-    
-    // Always remove the heavy raw base64 string from the JSON object to keep payload small
     delete dataForClient.imageBase64;
     return dataForClient;
 };
@@ -95,6 +82,30 @@ export const ensureSchema = async () => {
     } finally { client.release(); }
 };
 
+export const findOrCreateUserByEmail = async (email) => {
+    const client = await pool.connect();
+    const cleanEmail = email.toLowerCase().trim();
+    try {
+        await client.query(`INSERT INTO users (email) VALUES ($1) ON CONFLICT (email) DO NOTHING;`, [cleanEmail]);
+        const res = await client.query(`SELECT id, email, role, first_name as "firstName" FROM users WHERE email = $1;`, [cleanEmail]);
+        const user = res.rows[0];
+        await client.query(`INSERT INTO rewards_balances (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`, [user.id]);
+        return user;
+    } finally { client.release(); }
+};
+
+export const inviteCoachingClient = async (coachId, clientEmail) => {
+    const client = await pool.connect();
+    const cleanEmail = clientEmail.toLowerCase().trim();
+    try {
+        const targetRes = await client.query(`SELECT id FROM users WHERE email = $1`, [cleanEmail]);
+        if (targetRes.rows.length === 0) throw new Error("Client user not found");
+        const clientId = targetRes.rows[0].id;
+        const res = await client.query(`INSERT INTO coach_client_relations (coach_id, client_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING *`, [coachId, clientId]);
+        return res.rows[0];
+    } finally { client.release(); }
+};
+
 export const awardPoints = async (userId, eventType, points, metadata = {}) => {
     const client = await pool.connect();
     try {
@@ -120,17 +131,6 @@ export const getRewardsSummary = async (userId) => {
     } finally { client.release(); }
 };
 
-export const findOrCreateUserByEmail = async (email) => {
-    const client = await pool.connect();
-    try {
-        await client.query(`INSERT INTO users (email) VALUES ($1) ON CONFLICT (email) DO NOTHING;`, [email]);
-        const res = await client.query(`SELECT id, email, role, first_name as "firstName" FROM users WHERE email = $1;`, [email]);
-        const user = res.rows[0];
-        await client.query(`INSERT INTO rewards_balances (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`, [user.id]);
-        return user;
-    } finally { client.release(); }
-};
-
 export const updateUserRole = async (userId, role) => {
     const client = await pool.connect();
     try {
@@ -144,17 +144,6 @@ export const validateProxyAccess = async (coachId, clientId) => {
     try {
         const res = await client.query(`SELECT permissions FROM coach_client_relations WHERE coach_id = $1 AND client_id = $2 AND status = 'active'`, [coachId, clientId]);
         return res.rows.length > 0 ? res.rows[0].permissions : null;
-    } finally { client.release(); }
-};
-
-export const inviteCoachingClient = async (coachId, clientEmail) => {
-    const client = await pool.connect();
-    try {
-        const targetRes = await client.query(`SELECT id FROM users WHERE email = $1`, [clientEmail.toLowerCase().trim()]);
-        if (targetRes.rows.length === 0) throw new Error("Client user not found");
-        const clientId = targetRes.rows[0].id;
-        const res = await client.query(`INSERT INTO coach_client_relations (coach_id, client_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING *`, [coachId, clientId]);
-        return res.rows[0];
     } finally { client.release(); }
 };
 
@@ -187,8 +176,6 @@ export const getAssignedClients = async (coachId) => {
     } finally { client.release(); }
 };
 
-// --- Meal Logs ---
-
 export const createMealLogEntry = async (userId, mealData, imageBase64, proxyCoachId = null) => {
     const client = await pool.connect();
     try {
@@ -216,8 +203,6 @@ export const getMealLogEntryById = async (userId, entryId) => {
         return { id: row.id, ...processMealDataForClient({ ...row.meal_data, imageBase64: row.image_base64 }, true), createdAt: row.created_at };
     } finally { client.release(); }
 };
-
-// --- Saved Meals ---
 
 export const saveMeal = async (userId, mealData, proxyCoachId = null) => {
     const client = await pool.connect();
@@ -251,8 +236,6 @@ export const deleteMeal = async (userId, mealId) => {
     const client = await pool.connect();
     try { await client.query(`DELETE FROM saved_meals WHERE id = $1 AND user_id = $2;`, [mealId, userId]); } finally { client.release(); }
 };
-
-// --- Meal Plans ---
 
 export const getMealPlans = async (userId) => {
     const client = await pool.connect();
@@ -302,8 +285,6 @@ export const removeMealFromPlanItem = async (userId, planItemId) => {
     const client = await pool.connect();
     try { await client.query(`DELETE FROM meal_plan_items WHERE id = $1 AND user_id = $2;`, [planItemId, userId]); } finally { client.release(); }
 };
-
-// --- Grocery ---
 
 export const getGroceryLists = async (userId) => {
     const client = await pool.connect();
