@@ -79,8 +79,15 @@ export const handler = async (event) => {
     let method = event.requestContext?.http?.method || event.httpMethod;
     if (method === 'OPTIONS') return { statusCode: 200, headers };
 
-    path = path.replace(/^\/default/, '').replace(/^default/, '');
+    // Stage-agnostic path cleaning
+    // If path is /default/search-food, remove /default
+    path = path.replace(/^\/(?:default|prod|staging|dev)\b/, '');
     if (!path.startsWith('/')) path = '/' + path;
+
+    console.log(`[ROUTE] ${method} ${path}`);
+
+    const pathParts = path.split('/').filter(Boolean);
+    const resource = pathParts[0];
 
     // Public Auth
     if (path === '/auth/customer-login') {
@@ -113,9 +120,6 @@ export const handler = async (event) => {
             return { statusCode: 403, headers, body: JSON.stringify({ error: 'Invalid Proxy Session' }) };
         }
     }
-
-    const pathParts = path.split('/').filter(Boolean);
-    const resource = pathParts[0];
 
     try {
         // --- Professional Coaching Hub (Non-Proxy) ---
@@ -167,11 +171,17 @@ export const handler = async (event) => {
                 'health-metrics': 'body',
                 'body': 'body',
                 'assessments': 'assessments',
-                'blueprint': 'blueprint'
+                'blueprint': 'blueprint',
+                // AI features are generally accessible to coaches for client planning
+                'analyze-image': 'meals',
+                'search-food': 'meals',
+                'get-meal-suggestions': 'meals',
+                'analyze-image-grocery': 'grocery',
+                'analyze-image-recipes': 'meals'
             };
 
             const permissionKey = moduleMap[resource];
-            const userPerm = proxyPermissions?.[permissionKey] || 'none';
+            const userPerm = proxyPermissions?.[permissionKey] || (permissionKey ? 'none' : 'full');
 
             if (userPerm === 'none') {
                  return { statusCode: 403, headers, body: JSON.stringify({ error: `Permission denied for ${resource}` }) };
@@ -179,6 +189,43 @@ export const handler = async (event) => {
             if (userPerm === 'read' && method !== 'GET') {
                  return { statusCode: 403, headers, body: JSON.stringify({ error: `Module ${resource} is Read-Only for proxy` }) };
             }
+        }
+
+        // --- AI Processing (Moved up to avoid interception) ---
+        const aiRoutes = ['analyze-image', 'analyze-image-grocery', 'analyze-image-recipes', 'get-meal-suggestions', 'search-food'];
+        if (aiRoutes.includes(resource)) {
+            const ai = new GoogleGenAI({ apiKey: API_KEY });
+            const body = JSON.parse(event.body || '{}');
+            const { base64Image, mimeType, condition, cuisine, query } = body;
+            let prompt = ""; let schema;
+            
+            if (resource === 'analyze-image') { 
+                prompt = "Analyze the food image and identify the meal and ingredients. Explicitly provide a detailed nutritional breakdown including Calories, Protein, Carbs, Fat, and micronutrients: Potassium (mg), Magnesium (mg), Vitamin D (mcg), and Calcium (mg) for the total meal and each ingredient."; 
+                schema = nutritionSchema; 
+            }
+            else if (resource === 'search-food') {
+                prompt = `Provide detailed nutritional information for the food query: "${query}". Include estimated grams, Calories, Protein, Carbs, Fat, and micronutrients: Potassium (mg), Magnesium (mg), Vitamin D (mcg), and Calcium (mg). Assume standard portions if not specified.`;
+                schema = nutritionSchema;
+            }
+            else if (resource === 'get-meal-suggestions') { 
+                prompt = `Generate meal suggestions for ${condition} with ${cuisine} cuisine. Include micronutrient profiles where relevant.`; 
+                schema = suggestionSchema; 
+            }
+            else if (resource === 'analyze-image-recipes') { 
+                prompt = "Analyze the image to identify ingredients and suggest 3 recipes."; 
+                schema = recipeSchema; 
+            }
+            else if (resource === 'analyze-image-grocery') { 
+                prompt = "Analyze the image and identify grocery items that need to be purchased."; 
+                schema = grocerySchema; 
+            }
+
+            const res = await ai.models.generateContent({ 
+                model: 'gemini-3-flash-preview', 
+                contents: [{ parts: [{inlineData: base64Image ? {data: base64Image, mimeType} : undefined}, {text: prompt}].filter(p => p.text || p.inlineData) }], 
+                config: { responseMimeType: 'application/json', responseSchema: schema } 
+            });
+            return { statusCode: 200, headers, body: res.text };
         }
 
         // --- Standard Resources ---
@@ -275,35 +322,11 @@ export const handler = async (event) => {
 
         if (resource === 'matches') return { statusCode: 200, headers, body: JSON.stringify(await db.getMatches(currentUserId)) };
 
-        // --- AI Processing ---
-        if (resource === 'analyze-image' || resource === 'analyze-image-grocery' || resource === 'analyze-image-recipes' || resource === 'get-meal-suggestions' || resource === 'search-food') {
-            const ai = new GoogleGenAI({ apiKey: API_KEY });
-            const body = JSON.parse(event.body);
-            const { base64Image, mimeType, condition, cuisine, query } = body;
-            let prompt = ""; let schema;
-            if (resource === 'analyze-image') { 
-                prompt = "Analyze the food image and identify the meal and ingredients. Explicitly provide a detailed nutritional breakdown including Calories, Protein, Carbs, Fat, and micronutrients: Potassium (mg), Magnesium (mg), Vitamin D (mcg), and Calcium (mg) for the total meal and each ingredient."; 
-                schema = nutritionSchema; 
-            }
-            else if (resource === 'search-food') {
-                prompt = `Provide detailed nutritional information for the food query: "${query}". Include estimated grams, Calories, Protein, Carbs, Fat, and micronutrients: Potassium (mg), Magnesium (mg), Vitamin D (mcg), and Calcium (mg). Assume standard portions if not specified.`;
-                schema = nutritionSchema;
-            }
-            else if (resource === 'get-meal-suggestions') { prompt = `Generate meal suggestions for ${condition} with ${cuisine} cuisine. Include micronutrient profiles where relevant.`; schema = suggestionSchema; }
-            else if (resource === 'analyze-image-recipes') { prompt = "Analyze the image to identify ingredients and suggest 3 recipes."; schema = recipeSchema; }
-            else if (resource === 'analyze-image-grocery') { prompt = "Analyze the image and identify grocery items that need to be purchased."; schema = grocerySchema; }
-
-            const res = await ai.models.generateContent({ 
-                model: 'gemini-3-flash-preview', 
-                contents: [{ parts: [{inlineData: base64Image ? {data: base64Image, mimeType} : undefined}, {text: prompt}].filter(p => p.text || p.inlineData) }], 
-                config: { responseMimeType: 'application/json', responseSchema: schema } 
-            });
-            return { statusCode: 200, headers, body: res.text };
-        }
-
     } catch (error) {
         console.error('Handler error:', error);
         return { statusCode: 500, headers, body: JSON.stringify({ error: error.message }) };
     }
+
+    console.warn(`[NOT FOUND] No route matched for resource: ${resource} (Original path: ${event.path})`);
     return { statusCode: 404, headers, body: JSON.stringify({ error: 'Not Found: ' + path }) };
 };
