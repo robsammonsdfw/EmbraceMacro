@@ -1,4 +1,3 @@
-
 export interface Ingredient {
   name: string;
   weightGrams: number;
@@ -9,6 +8,11 @@ export interface Ingredient {
   sugar?: number;
   fiber?: number;
   sodium?: number;
+  // Micronutrients
+  potassium?: number; // mg
+  magnesium?: number; // mg
+  vitaminD?: number; // mcg
+  calcium?: number; // mg
   imageUrl?: string;
 }
 
@@ -31,6 +35,11 @@ export interface NutritionInfo {
   totalSugar?: number;
   totalFiber?: number;
   totalSodium?: number;
+  // Micronutrient totals
+  totalPotassium?: number;
+  totalMagnesium?: number;
+  totalVitaminD?: number;
+  totalCalcium?: number;
   ingredients: Ingredient[];
   justification?: string;
   imageUrl?: string; 
@@ -67,6 +76,8 @@ export interface HealthStats {
 export interface UserDashboardPrefs {
   selectedWidgets: string[]; // IDs of the metrics to show on Command Center
   selectedJourney?: HealthJourney;
+  calorieGoal?: number;
+  proteinGoal?: number;
 }
 
 export interface RecoveryData {

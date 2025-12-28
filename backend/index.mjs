@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import * as db from './services/databaseService.mjs';
@@ -12,6 +11,10 @@ const nutritionSchema = {
         totalProtein: { type: Type.NUMBER },
         totalCarbs: { type: Type.NUMBER },
         totalFat: { type: Type.NUMBER },
+        totalPotassium: { type: Type.NUMBER, description: "Total potassium in mg" },
+        totalMagnesium: { type: Type.NUMBER, description: "Total magnesium in mg" },
+        totalVitaminD: { type: Type.NUMBER, description: "Total vitamin D in mcg" },
+        totalCalcium: { type: Type.NUMBER, description: "Total calcium in mg" },
         ingredients: {
             type: Type.ARRAY,
             items: {
@@ -23,6 +26,10 @@ const nutritionSchema = {
                     protein: { type: Type.NUMBER },
                     carbs: { type: Type.NUMBER },
                     fat: { type: Type.NUMBER },
+                    potassium: { type: Type.NUMBER },
+                    magnesium: { type: Type.NUMBER },
+                    vitaminD: { type: Type.NUMBER },
+                    calcium: { type: Type.NUMBER },
                 },
                 required: ["name", "weightGrams", "calories", "protein", "carbs", "fat"]
             }
@@ -269,13 +276,20 @@ export const handler = async (event) => {
         if (resource === 'matches') return { statusCode: 200, headers, body: JSON.stringify(await db.getMatches(currentUserId)) };
 
         // --- AI Processing ---
-        if (resource === 'analyze-image' || resource === 'analyze-image-grocery' || resource === 'analyze-image-recipes' || resource === 'get-meal-suggestions') {
+        if (resource === 'analyze-image' || resource === 'analyze-image-grocery' || resource === 'analyze-image-recipes' || resource === 'get-meal-suggestions' || resource === 'search-food') {
             const ai = new GoogleGenAI({ apiKey: API_KEY });
             const body = JSON.parse(event.body);
-            const { base64Image, mimeType, condition, cuisine } = body;
+            const { base64Image, mimeType, condition, cuisine, query } = body;
             let prompt = ""; let schema;
-            if (resource === 'analyze-image') { prompt = "Analyze food image and provide nutritional breakdown."; schema = nutritionSchema; }
-            else if (resource === 'get-meal-suggestions') { prompt = `Generate meal suggestions for ${condition} with ${cuisine} cuisine.`; schema = suggestionSchema; }
+            if (resource === 'analyze-image') { 
+                prompt = "Analyze the food image and identify the meal and ingredients. Explicitly provide a detailed nutritional breakdown including Calories, Protein, Carbs, Fat, and micronutrients: Potassium (mg), Magnesium (mg), Vitamin D (mcg), and Calcium (mg) for the total meal and each ingredient."; 
+                schema = nutritionSchema; 
+            }
+            else if (resource === 'search-food') {
+                prompt = `Provide detailed nutritional information for the food query: "${query}". Include estimated grams, Calories, Protein, Carbs, Fat, and micronutrients: Potassium (mg), Magnesium (mg), Vitamin D (mcg), and Calcium (mg). Assume standard portions if not specified.`;
+                schema = nutritionSchema;
+            }
+            else if (resource === 'get-meal-suggestions') { prompt = `Generate meal suggestions for ${condition} with ${cuisine} cuisine. Include micronutrient profiles where relevant.`; schema = suggestionSchema; }
             else if (resource === 'analyze-image-recipes') { prompt = "Analyze the image to identify ingredients and suggest 3 recipes."; schema = recipeSchema; }
             else if (resource === 'analyze-image-grocery') { prompt = "Analyze the image and identify grocery items that need to be purchased."; schema = grocerySchema; }
 

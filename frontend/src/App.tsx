@@ -1,7 +1,7 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import * as apiService from './services/apiService';
-import { analyzeFoodImage } from './services/geminiService';
+import { analyzeFoodImage, searchFood } from './services/geminiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
 import type { NutritionInfo, MealLogEntry, SavedMeal, MealPlan, HealthStats, UserDashboardPrefs, HealthJourney } from './types';
 import { ImageUploader } from './components/ImageUploader';
@@ -25,6 +25,9 @@ import { BodyHub } from './components/body/BodyHub';
 import { CoachProxyBanner } from './components/CoachProxyBanner';
 import { CoachProxyUI } from './components/CoachProxyUI';
 import { CoachingHub } from './components/coaching/CoachingHub';
+import { GoalSetupWizard } from './components/GoalSetupWizard';
+// FIX: Import ActivityIcon to resolve reference error at line 231.
+import { ActivityIcon } from './components/icons';
 
 type ActiveView = 'home' | 'plan' | 'meals' | 'history' | 'grocery' | 'rewards' | 'body' | 'social' | 'assessments' | 'blueprint' | 'labs' | 'orders' | 'clients' | 'coaching';
 
@@ -32,6 +35,7 @@ const App: React.FC = () => {
   const { isAuthenticated, isLoading: isAuthLoading, logout, user } = useAuth();
   const [activeView, setActiveView] = useState<ActiveView>('home');
   const [isCaptureOpen, setIsCaptureOpen] = useState(false);
+  const [isGoalWizardOpen, setIsGoalWizardOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   const [proxyClient, setProxyClient] = useState<{id: string, name: string, permissions: any} | null>(null);
@@ -46,7 +50,9 @@ const App: React.FC = () => {
   const [walletBalance, setWalletBalance] = useState<number>(0);
   const [dashboardPrefs, setDashboardPrefs] = useState<UserDashboardPrefs>({ 
     selectedWidgets: ['steps', 'activeCalories'],
-    selectedJourney: 'general-health'
+    selectedJourney: 'general-health',
+    calorieGoal: 2000,
+    proteinGoal: 150
   });
   
   const [healthStats, setHealthStats] = useState<HealthStats>({ 
@@ -70,7 +76,7 @@ const App: React.FC = () => {
             apiService.getRewardsSummary().catch(() => ({ points_total: 0 })),
             apiService.getHealthStatsFromDB().catch(() => null)
         ]);
-        setMealLog(log); setSavedMeals(saved); setMealPlans(plans); setDashboardPrefs(prefs); setWalletBalance(rewards.points_total);
+        setMealLog(log); setSavedMeals(saved); setMealPlans(plans); setDashboardPrefs(prev => ({ ...prev, ...prefs })); setWalletBalance(rewards.points_total);
         if (health) { setHealthStats(prev => ({ ...prev, ...health })); setIsHealthConnected(true); }
         if (plans.length > 0) setActivePlanId(plans[0].id);
     } catch (e) { console.error("Load failed", e); }
@@ -111,20 +117,21 @@ const App: React.FC = () => {
       setActiveView('home');
   };
 
-  const handleCaptureResult = useCallback(async (img: string | null, mode: any, barcode?: string) => {
+  const handleCaptureResult = useCallback(async (img: string | null, mode: any, barcode?: string, searchQuery?: string) => {
     setIsCaptureOpen(false); setImage(null); setNutritionData(null); setError(null); setIsProcessing(true);
     try {
         if (mode === 'barcode' && barcode) { const data = await getProductByBarcode(barcode); setNutritionData(data); }
+        else if (mode === 'search' && searchQuery) { const data = await searchFood(searchQuery); setNutritionData(data); }
         else if (img) { setImage(img); const result = await analyzeFoodImage(img.split(',')[1], 'image/jpeg'); setNutritionData(result); }
     } catch (err) { setError('Analysis failed.'); }
     finally { setIsProcessing(false); }
   }, []);
 
-  const handleSaveToHistory = async () => {
-    if (!nutritionData || !image) return;
+  const handleSaveToHistory = async (updatedData: NutritionInfo) => {
     try {
       setIsProcessing(true);
-      const newEntry = await apiService.createMealLogEntry(nutritionData, image.split(',')[1]);
+      // If we have an image, save it. If it was a text search, image is null.
+      const newEntry = await apiService.createMealLogEntry(updatedData, image ? image.split(',')[1] : "");
       setMealLog(prev => [newEntry, ...prev]);
       setImage(null); setNutritionData(null); setActiveView('home');
     } catch (err) { setError("Failed to save."); }
@@ -144,7 +151,7 @@ const App: React.FC = () => {
                     <NutritionCard data={nutritionData} onSaveToHistory={handleSaveToHistory} />
                   </CoachProxyUI>
                 )}
-                <button onClick={() => { setImage(null); setNutritionData(null); setIsCaptureOpen(true); }} className="w-full py-4 text-emerald-600 font-black uppercase tracking-widest text-sm">Retake Photo</button>
+                <button onClick={() => { setImage(null); setNutritionData(null); setIsCaptureOpen(true); }} className="w-full py-4 text-emerald-600 font-black uppercase tracking-widest text-sm">Cancel Analysis</button>
             </div>
           );
       }
@@ -209,7 +216,24 @@ const App: React.FC = () => {
     >
         {proxyClient && <CoachProxyBanner clientName={proxyClient.name} onExit={handleExitProxy} />}
         {isCaptureOpen && !proxyClient && <CaptureFlow onClose={() => setIsCaptureOpen(false)} onCapture={handleCaptureResult} onRepeatMeal={() => {}} onBodyScanClick={() => setActiveView('body')} />}
+        {isGoalWizardOpen && (
+            <GoalSetupWizard 
+                onClose={() => setIsGoalWizardOpen(false)} 
+                onSave={(cal, prot) => {
+                    handleUpdateDashboardPrefs({ ...dashboardPrefs, calorieGoal: cal, proteinGoal: prot });
+                    setIsGoalWizardOpen(false);
+                }} 
+            />
+        )}
         {renderActiveView()}
+        {activeView === 'home' && !nutritionData && !isProcessing && (
+            <button 
+                onClick={() => setIsGoalWizardOpen(true)}
+                className="fixed bottom-24 right-4 bg-slate-900 text-white p-4 rounded-2xl shadow-2xl flex items-center gap-2 z-30 animate-bounce-short font-black uppercase text-[10px] tracking-widest border border-slate-700"
+            >
+                <ActivityIcon className="w-4 h-4 text-emerald-400" /> Set Targets
+            </button>
+        )}
     </AppLayout>
   );
 };

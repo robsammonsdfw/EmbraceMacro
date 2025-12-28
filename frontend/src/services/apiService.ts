@@ -1,4 +1,3 @@
-
 import type { 
   NutritionInfo, SavedMeal, MealPlan, MealPlanItem, MealPlanItemMetadata, 
   GroceryList, GroceryItem, RewardsSummary, MealLogEntry, Assessment, 
@@ -120,6 +119,7 @@ export const analyzeImageWithGemini = (base64Image: string, mimeType: string): P
 export const getMealSuggestions = (condition: string, cuisine: string): Promise<NutritionInfo[]> => callApi('/get-meal-suggestions', 'POST', { condition, cuisine });
 export const getRecipesFromImage = (base64Image: string, mimeType: string): Promise<Recipe[]> => callApi('/analyze-image-recipes', 'POST', { base64Image, mimeType });
 export const identifyGroceryItems = (base64Image: string, mimeType: string): Promise<{ items: string[] }> => callApi('/analyze-image-grocery', 'POST', { base64Image, mimeType });
+export const searchFood = (query: string): Promise<NutritionInfo> => callApi('/search-food', 'POST', { query });
 
 // Body & Recovery
 export const calculateReadiness = (stats: RecoveryData): Promise<ReadinessScore> => callApi('/calculate-readiness', 'POST', stats);

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useMemo } from 'react';
 import { TodayStrip } from './TodayStrip';
 import { DigitalTwinPanel } from './DigitalTwinPanel';
@@ -63,6 +62,9 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
         apiService.getFriends().then(setFriends).catch(() => {});
     }, []);
 
+    const calorieGoal = dashboardPrefs.calorieGoal || 2000;
+    const proteinGoal = dashboardPrefs.proteinGoal || 150;
+
     return (
         <div className="space-y-6 animate-fade-in pb-10">
             <div className="bg-slate-900 rounded-2xl p-6 text-white shadow-lg flex flex-col md:flex-row items-center justify-between gap-4">
@@ -99,8 +101,17 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                 <div className="lg:col-span-2 space-y-6">
                     <div className="bg-gradient-to-br from-emerald-500 to-cyan-600 rounded-2xl p-6 text-white shadow-md relative overflow-hidden">
                         <div className="relative z-10">
-                            <h3 className="text-lg font-black uppercase tracking-widest mb-2">Journey Insight</h3>
-                            <p className="text-white/90 font-medium">Calibrated medical insights for your {journeyLabel} path.</p>
+                            <h3 className="text-lg font-black uppercase tracking-widest mb-2">Goal Compliance</h3>
+                            <div className="flex gap-8 mt-4">
+                                <div>
+                                    <p className="text-[10px] font-black uppercase tracking-tighter opacity-70">Calories</p>
+                                    <p className="text-2xl font-black">{Math.round(dailyCalories)} / {calorieGoal}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-black uppercase tracking-tighter opacity-70">Protein</p>
+                                    <p className="text-2xl font-black">{Math.round(dailyProtein)}g / {proteinGoal}g</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -132,7 +143,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col justify-between min-h-[250px]">
                         <h3 className="font-bold text-slate-900 uppercase tracking-widest text-xs mb-2">Body Twin</h3>
                         <div className="flex-grow flex items-center justify-center my-4">
-                             <DigitalTwinPanel calories={dailyCalories} calorieGoal={2000} protein={dailyProtein} proteinGoal={150} activityScore={0} onScanClick={onScanClick} miniMode={true} />
+                             <DigitalTwinPanel calories={dailyCalories} calorieGoal={calorieGoal} protein={dailyProtein} proteinGoal={proteinGoal} activityScore={0} onScanClick={onScanClick} miniMode={true} />
                         </div>
                         <button onClick={onScanClick} className="w-full bg-slate-900 text-white font-bold py-3 rounded-xl hover:bg-slate-800 transition-colors shadow-md text-sm">Open Body Hub</button>
                     </div>

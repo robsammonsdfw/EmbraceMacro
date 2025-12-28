@@ -1,20 +1,19 @@
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { XIcon, CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, UserCircleIcon, MapPinIcon } from './icons';
+import { XIcon, CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, UserCircleIcon, MapPinIcon, SearchIcon } from './icons';
 import { BarcodeScanner } from './BarcodeScanner';
 import type { MealLogEntry } from '../types';
 import * as apiService from '../services/apiService';
 
 interface CaptureFlowProps {
   onClose: () => void;
-  onCapture: (image: string | null, mode: 'meal' | 'barcode' | 'pantry' | 'restaurant', barcode?: string) => void;
+  onCapture: (image: string | null, mode: 'meal' | 'barcode' | 'pantry' | 'restaurant' | 'search', barcode?: string, searchQuery?: string) => void;
   lastMeal?: MealLogEntry;
   onRepeatMeal: (meal: MealLogEntry) => void;
   onBodyScanClick: () => void;
-  initialMode?: 'meal' | 'barcode' | 'pantry' | 'restaurant';
+  initialMode?: 'meal' | 'barcode' | 'pantry' | 'restaurant' | 'search';
 }
 
-type CaptureMode = 'barcode' | 'meal' | 'pantry' | 'restaurant';
+type CaptureMode = 'barcode' | 'meal' | 'pantry' | 'restaurant' | 'search';
 
 export const CaptureFlow: React.FC<CaptureFlowProps> = ({ 
   onClose, 
@@ -24,11 +23,11 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [mode, setMode] = useState<CaptureMode>(initialMode);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   
   // Restaurant Mode State
   const [nearbyPlaces, setNearbyPlaces] = useState<apiService.MapPlace[]>([]);
@@ -36,7 +35,7 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
   const [isLocating, setIsLocating] = useState(false);
 
   useEffect(() => {
-    if (mode === 'barcode') return;
+    if (mode === 'barcode' || mode === 'search') return;
     const startCamera = async () => {
       try {
         const ms = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
@@ -95,8 +94,6 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col font-sans text-white">
-      <input type="file" accept="image/*" ref={fileInputRef} className="hidden" />
-
       <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start z-20">
         <button onClick={onClose} className="p-2 bg-black/20 backdrop-blur rounded-full"><XIcon /></button>
         <button onClick={onBodyScanClick} className="p-2 bg-black/20 backdrop-blur rounded-full flex items-center gap-2">
@@ -104,9 +101,36 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
         </button>
       </div>
 
-      <div className="flex-grow relative bg-slate-900">
+      <div className="flex-grow relative bg-slate-900 flex flex-col items-center justify-center">
         {mode === 'barcode' ? (
            <BarcodeScanner onScanSuccess={(code) => onCapture(null, 'barcode', code)} onCancel={() => setMode('meal')} />
+        ) : mode === 'search' ? (
+            <div className="w-full max-w-md p-8 animate-fade-in">
+                <h3 className="text-2xl font-black mb-6 text-center">Manual Database Search</h3>
+                <div className="relative group">
+                    <input 
+                        type="text" 
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        placeholder="Search food or meal..."
+                        className="w-full p-5 bg-white/10 border-2 border-white/20 rounded-[2rem] text-xl font-medium outline-none focus:border-emerald-500 focus:bg-white/20 transition-all placeholder:text-white/30"
+                        autoFocus
+                    />
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                        <SearchIcon className="w-6 h-6 text-white/40" />
+                    </div>
+                </div>
+                <button 
+                    onClick={() => onCapture(null, 'search', undefined, searchQuery)}
+                    disabled={!searchQuery.trim()}
+                    className="w-full mt-6 py-5 bg-emerald-500 rounded-[2rem] font-black uppercase tracking-widest text-sm shadow-xl active:scale-95 transition-all disabled:opacity-30"
+                >
+                    Extract Nutrition
+                </button>
+                <p className="mt-6 text-center text-xs font-bold text-white/40 uppercase tracking-widest leading-relaxed">
+                    Enter any meal or brand name.<br/>AI will calculate macro intersection.
+                </p>
+            </div>
         ) : (
            <>
               {!capturedImage ? (
@@ -147,16 +171,19 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
 
       {!capturedImage && mode !== 'barcode' && (
         <div className="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-black to-transparent flex flex-col items-center gap-6">
-            <button onClick={takePhoto} className="w-20 h-20 bg-white rounded-full border-4 border-slate-300 active:scale-95 transition" />
-            <div className="flex gap-4 overflow-x-auto w-full justify-center no-scrollbar">
+            {mode !== 'search' && (
+                <button onClick={takePhoto} className="w-20 h-20 bg-white rounded-full border-4 border-slate-300 active:scale-95 transition" />
+            )}
+            <div className="flex gap-2 overflow-x-auto w-full justify-center no-scrollbar bg-white/10 p-2 rounded-[2rem] backdrop-blur-md">
                 {[
+                    { id: 'search', label: 'Search', icon: <SearchIcon /> },
                     { id: 'barcode', label: 'Scan', icon: <BarcodeIcon /> },
-                    { id: 'meal', label: 'Meal', icon: <CameraIcon /> },
+                    { id: 'meal', label: 'Snap', icon: <CameraIcon /> },
                     { id: 'pantry', label: 'Pantry', icon: <ChefHatIcon /> },
                     { id: 'restaurant', label: 'Dine', icon: <UtensilsIcon /> }
                 ].map(m => (
-                    <button key={m.id} onClick={() => setMode(m.id as CaptureMode)} className={`flex flex-col items-center gap-1 ${mode === m.id ? 'text-emerald-400' : 'text-slate-400'}`}>
-                        {m.icon} <span className="text-[10px] uppercase font-bold">{m.label}</span>
+                    <button key={m.id} onClick={() => setMode(m.id as CaptureMode)} className={`flex-1 py-3 px-2 flex flex-col items-center gap-1 rounded-2xl transition-all ${mode === m.id ? 'bg-white text-slate-900 shadow-xl scale-105' : 'text-white/60 hover:text-white'}`}>
+                        {m.icon} <span className="text-[8px] uppercase font-black tracking-tighter">{m.label}</span>
                     </button>
                 ))}
             </div>
@@ -165,8 +192,8 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
 
       {capturedImage && (
           <div className="absolute bottom-0 left-0 right-0 p-6 flex gap-4 bg-black/60">
-              <button onClick={() => setCapturedImage(null)} className="flex-1 py-4 bg-slate-800 rounded-xl font-bold">Retake</button>
-              <button onClick={() => onCapture(capturedImage, mode)} className="flex-1 py-4 bg-emerald-500 rounded-xl font-bold">Analyze</button>
+              <button onClick={() => setCapturedImage(null)} className="flex-1 py-5 bg-white/10 rounded-[2rem] font-black uppercase text-xs tracking-widest">Retake</button>
+              <button onClick={() => onCapture(capturedImage, mode)} className="flex-1 py-5 bg-emerald-500 rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-xl">Analyze Photo</button>
           </div>
       )}
     </div>
