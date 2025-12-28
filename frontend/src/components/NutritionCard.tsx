@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { NutritionInfo, Ingredient } from '../types';
+import type { NutritionInfo } from '../types';
 import { ArchiveIcon, CheckIcon, LightBulbIcon } from './icons';
 
 interface NutritionCardProps {

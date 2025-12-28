@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import type { GroceryItem, GroceryList as GroceryListType, MealPlan } from '../types';
 import * as apiService from '../services/apiService';
@@ -105,16 +104,6 @@ export const GroceryList: React.FC<GroceryListProps> = ({ mealPlans }) => {
   const handleExportToAmazon = () => {
       // Simplified Amazon URL simulation
       window.open(`https://www.amazon.com/afx/ingredients/export?items=${encodeURIComponent(currentItems.map(i => i.name).join(','))}`, '_blank');
-  };
-
-  const handleSetActive = async (id: number) => {
-      try {
-          await apiService.setActiveGroceryList(id);
-          setLists(prev => prev.map(l => ({ ...l, is_active: l.id === id })));
-          if (activeListId !== id) setActiveListId(id);
-      } catch (err) {
-          console.error("Failed to set active", err);
-      }
   };
 
   const handleDeleteList = async (id: number) => {
