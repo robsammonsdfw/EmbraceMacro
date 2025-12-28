@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import type { NutritionInfo } from '../types';
 import { ArchiveIcon, CheckIcon, LightBulbIcon } from './icons';
@@ -5,9 +6,10 @@ import { ArchiveIcon, CheckIcon, LightBulbIcon } from './icons';
 interface NutritionCardProps {
   data: NutritionInfo;
   onSaveToHistory: (updatedData: NutritionInfo) => void;
+  isReadOnly?: boolean;
 }
 
-export const NutritionCard: React.FC<NutritionCardProps> = ({ data, onSaveToHistory }) => {
+export const NutritionCard: React.FC<NutritionCardProps> = ({ data, onSaveToHistory, isReadOnly }) => {
   const [localData, setLocalData] = useState<NutritionInfo>(data);
   const [tweakingIdx, setTweakingIdx] = useState<number | null>(null);
   const [showMicros, setShowMicros] = useState(false);
@@ -40,12 +42,12 @@ export const NutritionCard: React.FC<NutritionCardProps> = ({ data, onSaveToHist
   }, [localData.ingredients]);
 
   const handleWeightChange = (idx: number, newWeight: number) => {
+    if (isReadOnly) return;
     const ingredients = [...localData.ingredients];
     const ing = ingredients[idx];
     const originalWeight = data.ingredients[idx].weightGrams;
     const multiplier = newWeight / originalWeight;
 
-    // Scale all macros based on new weight relative to AI estimate
     ingredients[idx] = {
       ...ing,
       weightGrams: newWeight,
@@ -91,7 +93,7 @@ export const NutritionCard: React.FC<NutritionCardProps> = ({ data, onSaveToHist
             {localData.ingredients.map((item, idx) => (
               <div key={idx} className="space-y-2">
                 <button 
-                  onClick={() => setTweakingIdx(tweakingIdx === idx ? null : idx)}
+                  onClick={() => !isReadOnly && setTweakingIdx(tweakingIdx === idx ? null : idx)}
                   className={`w-full flex justify-between items-center p-4 rounded-2xl transition-all ${tweakingIdx === idx ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-50 hover:bg-slate-100'}`}
                 >
                   <div className="text-left">
@@ -100,12 +102,14 @@ export const NutritionCard: React.FC<NutritionCardProps> = ({ data, onSaveToHist
                       {Math.round(item.weightGrams)}g • {Math.round(item.calories)} Cal
                     </p>
                   </div>
-                  <div className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase ${tweakingIdx === idx ? 'bg-white/20' : 'bg-slate-200 text-slate-500'}`}>
-                    Tweak
-                  </div>
+                  {!isReadOnly && (
+                      <div className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase ${tweakingIdx === idx ? 'bg-white/20' : 'bg-slate-200 text-slate-500'}`}>
+                        Tweak
+                      </div>
+                  )}
                 </button>
                 
-                {tweakingIdx === idx && (
+                {tweakingIdx === idx && !isReadOnly && (
                     <div className="p-4 bg-indigo-50 rounded-2xl animate-fade-in">
                         <div className="flex justify-between items-center mb-2">
                             <span className="text-[10px] font-black uppercase text-indigo-400">Weight Control</span>
@@ -128,30 +132,30 @@ export const NutritionCard: React.FC<NutritionCardProps> = ({ data, onSaveToHist
         <div className="border-t border-slate-100 pt-6">
             <button 
                 onClick={() => setShowMicros(!showMicros)}
-                className="w-full flex items-center justify-between group"
+                className="w-full flex items-center justify-between group p-2 hover:bg-slate-50 rounded-xl transition-colors"
             >
                 <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                    <LightBulbIcon className="w-3 h-3" /> Detailed Micronutrients
+                    <LightBulbIcon className="w-3 h-3 text-indigo-500" /> Detailed Micronutrients
                 </h3>
-                <span className="text-slate-300 font-black group-hover:text-slate-500 transition-colors">{showMicros ? '−' : '+'}</span>
+                <span className={`text-xl font-black transition-transform ${showMicros ? 'text-indigo-600 rotate-180' : 'text-slate-300'}`}>{showMicros ? '−' : '+'}</span>
             </button>
             
             {showMicros && (
                 <div className="grid grid-cols-2 gap-3 mt-4 animate-fade-in">
-                    <div className="bg-slate-50 p-3 rounded-xl flex justify-between items-center">
-                        <span className="text-[10px] font-bold text-slate-500">Potassium</span>
+                    <div className="bg-slate-50 p-3 rounded-xl flex justify-between items-center border border-slate-100">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase">Potassium</span>
                         <span className="text-xs font-black text-slate-700">{Math.round(localData.totalPotassium || 0)}mg</span>
                     </div>
-                    <div className="bg-slate-50 p-3 rounded-xl flex justify-between items-center">
-                        <span className="text-[10px] font-bold text-slate-500">Magnesium</span>
+                    <div className="bg-slate-50 p-3 rounded-xl flex justify-between items-center border border-slate-100">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase">Magnesium</span>
                         <span className="text-xs font-black text-slate-700">{Math.round(localData.totalMagnesium || 0)}mg</span>
                     </div>
-                    <div className="bg-slate-50 p-3 rounded-xl flex justify-between items-center">
-                        <span className="text-[10px] font-bold text-slate-500">Vitamin D</span>
+                    <div className="bg-slate-50 p-3 rounded-xl flex justify-between items-center border border-slate-100">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase">Vitamin D</span>
                         <span className="text-xs font-black text-slate-700">{Math.round(localData.totalVitaminD || 0)}µg</span>
                     </div>
-                    <div className="bg-slate-50 p-3 rounded-xl flex justify-between items-center">
-                        <span className="text-[10px] font-bold text-slate-500">Calcium</span>
+                    <div className="bg-slate-50 p-3 rounded-xl flex justify-between items-center border border-slate-100">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase">Calcium</span>
                         <span className="text-xs font-black text-slate-700">{Math.round(localData.totalCalcium || 0)}mg</span>
                     </div>
                 </div>
@@ -162,10 +166,10 @@ export const NutritionCard: React.FC<NutritionCardProps> = ({ data, onSaveToHist
       <div className="p-6 bg-slate-50 border-t border-slate-100">
         <button
           onClick={() => onSaveToHistory(localData)}
-          className="w-full bg-slate-900 text-white font-black py-5 rounded-3xl hover:bg-black transition-all flex items-center justify-center space-x-3 shadow-xl group"
+          className={`w-full font-black py-5 rounded-3xl transition-all flex items-center justify-center space-x-3 shadow-xl group ${isReadOnly ? 'bg-slate-200 text-slate-500' : 'bg-slate-900 text-white hover:bg-black'}`}
         >
           <ArchiveIcon className="group-hover:scale-110 transition-transform" />
-          <span className="tracking-widest uppercase text-sm">Commit to Log</span>
+          <span className="tracking-widest uppercase text-sm">{isReadOnly ? 'Done Viewing' : 'Commit to Log'}</span>
         </button>
       </div>
     </div>

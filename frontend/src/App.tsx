@@ -26,7 +26,7 @@ import { CoachProxyBanner } from './components/CoachProxyBanner';
 import { CoachProxyUI } from './components/CoachProxyUI';
 import { CoachingHub } from './components/coaching/CoachingHub';
 import { GoalSetupWizard } from './components/GoalSetupWizard';
-import { ActivityIcon } from './components/icons';
+import { ActivityIcon, XIcon } from './components/icons';
 
 type ActiveView = 'home' | 'plan' | 'meals' | 'history' | 'grocery' | 'rewards' | 'body' | 'social' | 'assessments' | 'blueprint' | 'labs' | 'orders' | 'clients' | 'coaching';
 
@@ -42,6 +42,8 @@ const App: React.FC = () => {
 
   const [image, setImage] = useState<string | null>(null);
   const [nutritionData, setNutritionData] = useState<NutritionInfo | null>(null);
+  const [viewingMealDetails, setViewingMealDetails] = useState<NutritionInfo | null>(null);
+  
   const [mealLog, setMealLog] = useState<MealLogEntry[]>([]);
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
@@ -118,9 +120,9 @@ const App: React.FC = () => {
 
   const handleNavigate = (view: ActiveView) => {
     setActiveView(view);
-    // CRITICAL: Reset analysis states when manually navigating to prevent UI freeze
     setImage(null);
     setNutritionData(null);
+    setViewingMealDetails(null);
     setError(null);
     setIsProcessing(false);
     setMobileMenuOpen(false);
@@ -130,9 +132,10 @@ const App: React.FC = () => {
     setIsCaptureOpen(false); 
     setImage(null); 
     setNutritionData(null); 
+    setViewingMealDetails(null);
     setError(null); 
     setIsProcessing(true);
-    setActiveView('home'); // Ensure we are on home to see results
+    setActiveView('home'); 
     try {
         if (mode === 'barcode' && barcode) { const data = await getProductByBarcode(barcode); setNutritionData(data); }
         else if (mode === 'search' && searchQuery) { const data = await searchFood(searchQuery); setNutritionData(data); }
@@ -157,7 +160,25 @@ const App: React.FC = () => {
   };
 
   const renderActiveView = () => {
-      // Transient analysis/error view
+      // 1. Detailed View Modal (Override)
+      if (viewingMealDetails) {
+          return (
+              <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
+                  <div className="flex justify-between items-center px-4">
+                      <button 
+                        onClick={() => setViewingMealDetails(null)} 
+                        className="text-slate-400 hover:text-slate-600 flex items-center gap-2 font-bold uppercase text-xs tracking-widest"
+                      >
+                         <XIcon className="w-4 h-4" /> Close Details
+                      </button>
+                      <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Saved Records</span>
+                  </div>
+                  <NutritionCard data={viewingMealDetails} isReadOnly onSaveToHistory={() => setViewingMealDetails(null)} />
+              </div>
+          );
+      }
+
+      // 2. Transient analysis/error view
       if (activeView === 'home' && (image || isProcessing || nutritionData || error)) {
           const mealsPerm = proxyClient?.permissions?.meals || 'full';
           return (
@@ -210,8 +231,8 @@ const App: React.FC = () => {
               );
           case 'coaching': return <CoachingHub userRole={user?.role as any} onUpgrade={() => {}} />;
           case 'plan': return <CoachProxyUI permission={perms.meals}><MealPlanManager plans={mealPlans} activePlanId={activePlanId} savedMeals={savedMeals} onPlanChange={setActivePlanId} onCreatePlan={_name => {}} onRemoveFromPlan={_id => {}} onQuickAdd={(_pId, _meal, _day, _slot) => {}} /></CoachProxyUI>;
-          case 'meals': return <CoachProxyUI permission={perms.meals}><MealLibrary meals={savedMeals} onAdd={_m => {}} onDelete={_id => {}} /></CoachProxyUI>;
-          case 'history': return <CoachProxyUI permission={perms.meals}><MealHistory logEntries={mealLog} onAddToPlan={_d => {}} onSaveMeal={_d => {}} /></CoachProxyUI>;
+          case 'meals': return <CoachProxyUI permission={perms.meals}><MealLibrary meals={savedMeals} onAdd={_m => {}} onDelete={_id => {}} onSelectMeal={setViewingMealDetails} /></CoachProxyUI>;
+          case 'history': return <CoachProxyUI permission={perms.meals}><MealHistory logEntries={mealLog} onAddToPlan={_d => {}} onSaveMeal={_d => {}} onSelectMeal={setViewingMealDetails} /></CoachProxyUI>;
           case 'grocery': return <CoachProxyUI permission={perms.grocery}><GroceryList mealPlans={mealPlans} /></CoachProxyUI>;
           case 'rewards': return <CoachProxyUI permission={proxyClient ? 'none' : 'full'} fallback={<div className="p-12 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-3xl">Private Module: Rewards Wallet is hidden for Proxy Sessions.</div>}><RewardsDashboard /></CoachProxyUI>;
           case 'social': return <CoachProxyUI permission={proxyClient ? 'none' : 'full'} fallback={<div className="p-12 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-3xl">Private Module: Social Hub is hidden for Proxy Sessions.</div>}><SocialManager /></CoachProxyUI>;
@@ -245,7 +266,7 @@ const App: React.FC = () => {
             />
         )}
         {renderActiveView()}
-        {activeView === 'home' && !nutritionData && !isProcessing && !error && !image && (
+        {activeView === 'home' && !nutritionData && !isProcessing && !error && !image && !viewingMealDetails && (
             <button 
                 onClick={() => setIsGoalWizardOpen(true)}
                 className="fixed bottom-24 right-4 bg-slate-900 text-white p-4 rounded-2xl shadow-2xl flex items-center gap-2 z-30 animate-bounce-short font-black uppercase text-[10px] tracking-widest border border-slate-700"

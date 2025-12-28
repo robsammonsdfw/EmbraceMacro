@@ -1,12 +1,14 @@
+
 import React, { useState } from 'react';
 import type { MealLogEntry, NutritionInfo } from '../types';
-import { PlusIcon, BookmarkIcon, ClockIcon, CameraIcon, CameraOffIcon } from './icons';
+import { PlusIcon, BookmarkIcon, ClockIcon, CameraIcon, CameraOffIcon, CheckIcon } from './icons';
 import { ImageViewModal } from './ImageViewModal';
 
 interface MealHistoryProps {
   logEntries: MealLogEntry[];
   onAddToPlan: (mealData: NutritionInfo) => void;
   onSaveMeal: (mealData: NutritionInfo) => void;
+  onSelectMeal: (meal: NutritionInfo) => void;
 }
 
 const HistoryEntryCard: React.FC<{ 
@@ -14,53 +16,58 @@ const HistoryEntryCard: React.FC<{
     onAdd: () => void; 
     onSave: () => void;
     onViewImage: () => void;
-}> = ({ entry, onAdd, onSave, onViewImage }) => {
+    onDetails: () => void;
+}> = ({ entry, onAdd, onSave, onViewImage, onDetails }) => {
     const hasImage = entry.hasImage;
 
     return (
-        <div className="bg-slate-50 p-4 rounded-lg flex flex-col sm:flex-row sm:items-center sm:justify-between hover:bg-slate-100 transition-colors">
+        <div 
+            onClick={onDetails}
+            className="bg-slate-50 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center sm:justify-between hover:bg-white hover:shadow-lg hover:ring-2 hover:ring-indigo-100 transition-all cursor-pointer group/history"
+        >
             <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-4 mb-4 sm:mb-0 w-full">
                 {/* View Image Button / No Image Indicator */}
                 {hasImage ? (
                     <button 
-                        onClick={onViewImage}
-                        className="w-full sm:w-20 h-20 bg-slate-200 rounded-md flex flex-col items-center justify-center text-slate-600 hover:bg-slate-300 transition-colors flex-shrink-0 group"
+                        onClick={(e) => { e.stopPropagation(); onViewImage(); }}
+                        className="w-full sm:w-20 h-20 bg-slate-200 rounded-xl flex flex-col items-center justify-center text-slate-600 hover:bg-slate-300 transition-colors flex-shrink-0 group"
                         title="View Meal Image"
                     >
                         <CameraIcon />
-                        <span className="text-[10px] font-bold mt-1 uppercase text-slate-500 group-hover:text-slate-700">View</span>
+                        <span className="text-[10px] font-black mt-1 uppercase text-slate-500">Photo</span>
                     </button>
                 ) : (
-                     <div className="w-full sm:w-20 h-20 bg-slate-100 rounded-md flex flex-col items-center justify-center text-slate-400 border border-slate-200 flex-shrink-0" title="No Image Available">
+                     <div className="w-full sm:w-20 h-20 bg-white rounded-xl flex flex-col items-center justify-center text-slate-300 border border-slate-100 flex-shrink-0">
                         <CameraOffIcon />
-                        <span className="text-[10px] font-bold mt-1 uppercase text-slate-400">No Image</span>
+                        <span className="text-[10px] font-bold mt-1 uppercase">No Photo</span>
                     </div>
                 )}
 
                 <div>
-                    <p className="font-bold text-slate-800">{entry.mealName}</p>
-                    <p className="text-sm text-slate-500">{Math.round(entry.totalCalories)} kcal</p>
-                    <p className="text-xs text-slate-500">
-                        P:{Math.round(entry.totalProtein)}g C:{Math.round(entry.totalCarbs)}g F:{Math.round(entry.totalFat)}g
+                    <div className="flex items-center gap-2 mb-1">
+                        <p className="font-black text-slate-800 uppercase tracking-tight text-sm group-hover/history:text-indigo-600 transition-colors">{entry.mealName}</p>
+                        <CheckIcon className="w-3 h-3 text-emerald-500" />
+                    </div>
+                    <p className="text-[10px] font-black text-emerald-600 bg-emerald-50 w-fit px-1.5 py-0.5 rounded border border-emerald-100 mb-2 uppercase tracking-widest">{Math.round(entry.totalCalories)} KCAL</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                        P:{Math.round(entry.totalProtein)}g • C:{Math.round(entry.totalCarbs)}g • F:{Math.round(entry.totalFat)}g
                     </p>
                 </div>
             </div>
             <div className="flex items-center justify-end space-x-2">
                 <button
-                    onClick={onSave}
-                    className="flex items-center space-x-1 p-2 pr-3 text-slate-500 bg-white border border-slate-300 hover:bg-slate-200 rounded-full transition-colors group"
-                    aria-label={`Save ${entry.mealName} to My Meals`}
+                    onClick={(e) => { e.stopPropagation(); onSave(); }}
+                    className="flex items-center space-x-1 p-2 pr-4 text-slate-500 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-all shadow-sm group"
                 >
-                    <BookmarkIcon />
-                    <span className="text-[9px] font-bold text-slate-400 group-hover:text-slate-600">+10 pts</span>
+                    <BookmarkIcon className="w-4 h-4" />
+                    <span className="text-[10px] font-black uppercase tracking-tighter">Save</span>
                 </button>
                 <button
-                    onClick={onAdd}
-                    className="flex items-center space-x-1 p-2 pr-3 text-emerald-500 bg-emerald-100 hover:bg-emerald-200 rounded-full transition-colors group"
-                    aria-label={`Add ${entry.mealName} to today's plan`}
+                    onClick={(e) => { e.stopPropagation(); onAdd(); }}
+                    className="flex items-center space-x-1 p-2 pr-4 text-emerald-600 bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 rounded-xl transition-all shadow-sm group"
                 >
-                    <PlusIcon />
-                     <span className="text-[9px] font-bold text-emerald-600 group-hover:text-emerald-800">+5 pts</span>
+                    <PlusIcon className="w-4 h-4" />
+                    <span className="text-[10px] font-black uppercase tracking-tighter">Plan</span>
                 </button>
             </div>
         </div>
@@ -82,14 +89,21 @@ const groupEntriesByDate = (entries: MealLogEntry[]) => {
     }, {} as Record<string, MealLogEntry[]>);
 };
 
-export const MealHistory: React.FC<MealHistoryProps> = ({ logEntries, onAddToPlan, onSaveMeal }) => {
+export const MealHistory: React.FC<MealHistoryProps> = ({ logEntries, onAddToPlan, onSaveMeal, onSelectMeal }) => {
   const groupedEntries = groupEntriesByDate(logEntries);
   const dates = Object.keys(groupedEntries);
   const [viewImageId, setViewImageId] = useState<number | null>(null);
 
   return (
-    <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200">
-      <h2 className="text-2xl font-bold text-slate-800 mb-4">Meal History</h2>
+    <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 animate-fade-in">
+      <div className="flex justify-between items-center mb-8">
+          <div>
+              <h2 className="text-2xl font-black text-slate-900 tracking-tight">Timeline</h2>
+              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Chronological Metabolism</p>
+          </div>
+          <ClockIcon className="text-slate-200 w-8 h-8" />
+      </div>
+
       {viewImageId && (
           <ImageViewModal 
             itemId={viewImageId} 
@@ -99,11 +113,14 @@ export const MealHistory: React.FC<MealHistoryProps> = ({ logEntries, onAddToPla
       )}
 
       {logEntries.length > 0 ? (
-        <div className="space-y-6">
+        <div className="space-y-10">
           {dates.map((date) => (
             <div key={date}>
-                <h3 className="font-semibold text-slate-600 mb-2 pb-1 border-b border-slate-200">{date}</h3>
-                <ul className="space-y-3">
+                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 pb-2 border-b border-slate-50 flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-200"></div>
+                    {date}
+                </h3>
+                <ul className="space-y-4">
                     {groupedEntries[date].map((entry) => (
                         <li key={entry.id}>
                             <HistoryEntryCard 
@@ -111,6 +128,7 @@ export const MealHistory: React.FC<MealHistoryProps> = ({ logEntries, onAddToPla
                                 onAdd={() => onAddToPlan(entry)} 
                                 onSave={() => onSaveMeal(entry)} 
                                 onViewImage={() => setViewImageId(entry.id)}
+                                onDetails={() => onSelectMeal(entry)}
                             />
                         </li>
                     ))}
@@ -119,12 +137,12 @@ export const MealHistory: React.FC<MealHistoryProps> = ({ logEntries, onAddToPla
           ))}
         </div>
       ) : (
-        <div className="text-center py-10 px-4 bg-slate-50 rounded-lg">
-            <div className="mx-auto bg-slate-100 text-slate-500 rounded-full w-16 h-16 flex items-center justify-center mb-4">
-                <ClockIcon />
+        <div className="text-center py-20 px-4 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200">
+            <div className="mx-auto bg-white shadow-inner text-slate-300 rounded-full w-24 h-24 flex items-center justify-center mb-6">
+                <ClockIcon className="w-10 h-10" />
             </div>
-            <h3 className="text-lg font-semibold text-slate-700 mt-2">Your meal history is empty.</h3>
-            <p className="text-slate-500 mt-1">Analyze a meal to get started. Your results will show up here.</p>
+            <h3 className="text-xl font-black text-slate-800 mb-2">Timeline Empty</h3>
+            <p className="text-slate-500 font-medium max-w-xs mx-auto">Start logging your meals to see your chronological metabolic data here.</p>
         </div>
       )}
     </div>
