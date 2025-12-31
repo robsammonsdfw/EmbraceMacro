@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { NutritionInfo } from '../types';
 import { ArchiveIcon, CheckIcon, LightBulbIcon } from './icons';
 
@@ -13,15 +13,21 @@ export const NutritionCard: React.FC<NutritionCardProps> = ({ data, onSaveToHist
   const [localData, setLocalData] = useState<NutritionInfo>(data);
   const [tweakingIdx, setTweakingIdx] = useState<number | null>(null);
   const [showMicros, setShowMicros] = useState(false);
+  
+  // Track if a manual adjustment has been made to prevent overwriting valid 
+  // top-level totals with calculated 0s on initial mount.
+  const isDirtyRef = useRef(false);
 
-  // Recalculate totals whenever ingredients change
+  // Only recalculate totals if ingredients have actually been modified by the user
   useEffect(() => {
+    if (!isDirtyRef.current) return;
+
     const ingredients = localData.ingredients;
     const totals = ingredients.reduce((acc, ing) => ({
-      calories: acc.calories + ing.calories,
-      protein: acc.protein + ing.protein,
-      carbs: acc.carbs + ing.carbs,
-      fat: acc.fat + ing.fat,
+      calories: acc.calories + (ing.calories || 0),
+      protein: acc.protein + (ing.protein || 0),
+      carbs: acc.carbs + (ing.carbs || 0),
+      fat: acc.fat + (ing.fat || 0),
       potassium: acc.potassium + (ing.potassium || 0),
       magnesium: acc.magnesium + (ing.magnesium || 0),
       vitaminD: acc.vitaminD + (ing.vitaminD || 0),
@@ -43,18 +49,24 @@ export const NutritionCard: React.FC<NutritionCardProps> = ({ data, onSaveToHist
 
   const handleWeightChange = (idx: number, newWeight: number) => {
     if (isReadOnly) return;
+    
+    // Mark as dirty so the totals useEffect knows to run
+    isDirtyRef.current = true;
+
     const ingredients = [...localData.ingredients];
     const ing = ingredients[idx];
-    const originalWeight = data.ingredients[idx].weightGrams;
+    
+    // Use the baseline weight from the original data prop to calculate accurate scaling
+    const originalWeight = data.ingredients[idx].weightGrams || 100;
     const multiplier = newWeight / originalWeight;
 
     ingredients[idx] = {
       ...ing,
       weightGrams: newWeight,
-      calories: data.ingredients[idx].calories * multiplier,
-      protein: data.ingredients[idx].protein * multiplier,
-      carbs: data.ingredients[idx].carbs * multiplier,
-      fat: data.ingredients[idx].fat * multiplier,
+      calories: (data.ingredients[idx].calories || 0) * multiplier,
+      protein: (data.ingredients[idx].protein || 0) * multiplier,
+      carbs: (data.ingredients[idx].carbs || 0) * multiplier,
+      fat: (data.ingredients[idx].fat || 0) * multiplier,
       potassium: (data.ingredients[idx].potassium || 0) * multiplier,
       magnesium: (data.ingredients[idx].magnesium || 0) * multiplier,
       vitaminD: (data.ingredients[idx].vitaminD || 0) * multiplier,
@@ -68,16 +80,16 @@ export const NutritionCard: React.FC<NutritionCardProps> = ({ data, onSaveToHist
     <div className="bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 overflow-hidden animate-fade-in mx-auto max-w-md relative">
       <div className="p-8">
         <div className="flex justify-between items-start mb-6">
-          <div>
-            <h2 className="text-3xl font-black text-slate-900 leading-tight">{localData.mealName}</h2>
+          <div className="max-w-[70%]">
+            <h2 className="text-3xl font-black text-slate-900 leading-tight break-words">{localData.mealName}</h2>
             <div className="flex items-center gap-2 mt-1">
                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded flex items-center gap-1">
                  <CheckIcon className="w-2.5 h-2.5" /> AI Verified
                </span>
             </div>
           </div>
-          <div className="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-2xl font-black text-xl">
-            {Math.round(localData.totalCalories)} <span className="text-xs uppercase">kcal</span>
+          <div className="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-2xl font-black text-xl shrink-0">
+            {Math.round(localData.totalCalories)} <span className="text-xs uppercase font-bold">kcal</span>
           </div>
         </div>
 
@@ -88,7 +100,7 @@ export const NutritionCard: React.FC<NutritionCardProps> = ({ data, onSaveToHist
         </div>
 
         <div className="space-y-4 mb-8">
-          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Adjust Quantities</h3>
+          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Portion Breakdown</h3>
           <div className="space-y-3">
             {localData.ingredients.map((item, idx) => (
               <div key={idx} className="space-y-2">
@@ -99,7 +111,7 @@ export const NutritionCard: React.FC<NutritionCardProps> = ({ data, onSaveToHist
                   <div className="text-left">
                     <p className="font-black text-sm">{item.name}</p>
                     <p className={`text-[10px] font-bold uppercase ${tweakingIdx === idx ? 'text-indigo-200' : 'text-slate-400'}`}>
-                      {Math.round(item.weightGrams)}g • {Math.round(item.calories)} Cal
+                      {Math.round(item.weightGrams)}g • {Math.round(item.calories || 0)} Cal
                     </p>
                   </div>
                   {!isReadOnly && (
@@ -110,7 +122,7 @@ export const NutritionCard: React.FC<NutritionCardProps> = ({ data, onSaveToHist
                 </button>
                 
                 {tweakingIdx === idx && !isReadOnly && (
-                    <div className="p-4 bg-indigo-50 rounded-2xl animate-fade-in">
+                    <div className="p-4 bg-indigo-50 rounded-2xl animate-fade-in border border-indigo-100 shadow-inner">
                         <div className="flex justify-between items-center mb-2">
                             <span className="text-[10px] font-black uppercase text-indigo-400">Weight Control</span>
                             <span className="text-sm font-black text-indigo-600">{Math.round(item.weightGrams)}g</span>

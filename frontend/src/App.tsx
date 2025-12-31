@@ -159,6 +159,41 @@ const App: React.FC = () => {
     finally { setIsProcessing(false); }
   };
 
+  // --- Meal Plan Handlers ---
+  const handleCreatePlan = async (name: string) => {
+      try {
+          const newPlan = await apiService.createMealPlan(name);
+          setMealPlans(prev => [...prev, newPlan]);
+          setActivePlanId(newPlan.id);
+      } catch (e) {
+          setError("Failed to create meal plan.");
+      }
+  };
+
+  const handleRemoveFromPlan = async (itemId: number) => {
+      try {
+          await apiService.removeMealFromPlanItem(itemId);
+          setMealPlans(prev => prev.map(p => ({
+              ...p,
+              items: p.items.filter(i => i.id !== itemId)
+          })));
+      } catch (e) {
+          setError("Failed to remove item from plan.");
+      }
+  };
+
+  const handleQuickAdd = async (planId: number, meal: SavedMeal, day: string, slot: string) => {
+      try {
+          const newItem = await apiService.addMealToPlan(planId, meal.id, { day, slot });
+          setMealPlans(prev => prev.map(p => p.id === planId ? { 
+              ...p, 
+              items: [...p.items, newItem] 
+          } : p));
+      } catch (e) {
+          setError("Failed to add meal to plan.");
+      }
+  };
+
   const renderActiveView = () => {
       // 1. Detailed View Modal (Override)
       if (viewingMealDetails) {
@@ -230,7 +265,20 @@ const App: React.FC = () => {
                   </div>
               );
           case 'coaching': return <CoachingHub userRole={user?.role as any} onUpgrade={() => {}} />;
-          case 'plan': return <CoachProxyUI permission={perms.meals}><MealPlanManager plans={mealPlans} activePlanId={activePlanId} savedMeals={savedMeals} onPlanChange={setActivePlanId} onCreatePlan={_name => {}} onRemoveFromPlan={_id => {}} onQuickAdd={(_pId, _meal, _day, _slot) => {}} /></CoachProxyUI>;
+          case 'plan': 
+            return (
+                <CoachProxyUI permission={perms.meals}>
+                    <MealPlanManager 
+                        plans={mealPlans} 
+                        activePlanId={activePlanId} 
+                        savedMeals={savedMeals} 
+                        onPlanChange={setActivePlanId} 
+                        onCreatePlan={handleCreatePlan} 
+                        onRemoveFromPlan={handleRemoveFromPlan} 
+                        onQuickAdd={handleQuickAdd} 
+                    />
+                </CoachProxyUI>
+            );
           case 'meals': return <CoachProxyUI permission={perms.meals}><MealLibrary meals={savedMeals} onAdd={_m => {}} onDelete={_id => {}} onSelectMeal={setViewingMealDetails} /></CoachProxyUI>;
           case 'history': return <CoachProxyUI permission={perms.meals}><MealHistory logEntries={mealLog} onAddToPlan={_d => {}} onSaveMeal={_d => {}} onSelectMeal={setViewingMealDetails} /></CoachProxyUI>;
           case 'grocery': return <CoachProxyUI permission={perms.grocery}><GroceryList mealPlans={mealPlans} /></CoachProxyUI>;
