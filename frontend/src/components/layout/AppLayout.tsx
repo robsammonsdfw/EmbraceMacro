@@ -37,7 +37,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
             <div className="md:hidden bg-white border-b border-slate-200 p-4 flex justify-between items-center sticky top-0 z-30 shadow-sm">
-                 <h1 className="text-xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500">Embrace</h1>
+                 <div className="flex items-center">
+                    <img src="/input_file_1.png" alt="EH" className="h-8 w-auto" />
+                 </div>
                 <button onClick={() => setMobileMenuOpen(true)} className="p-2 -mr-2 text-slate-600 hover:bg-slate-100 rounded-full transition-colors"><MenuIcon /></button>
             </div>
 
@@ -60,7 +62,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                     <div className="hidden md:flex bg-white border-b border-slate-200 px-8 py-3 items-center justify-between sticky top-0 z-20 shadow-sm">
                         <div className="flex items-center gap-2 text-slate-500"><ActivityIcon className="w-4 h-4" /><span className="text-xs font-bold uppercase tracking-widest">Active Journey</span></div>
                         <div className="flex items-center gap-3">
-                            <select value={selectedJourney} onChange={(e) => onJourneyChange(e.target.value as HealthJourney)} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-black text-slate-700 outline-none hover:border-emerald-500 transition-colors">
+                            <select value={selectedJourney} onChange={(e) => onJourneyChange(e.target.value as HealthJourney)} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-black text-slate-700 outline-none hover:border-indigo-500 transition-colors">
                                 {JOURNEYS.map(j => (<option key={j.id} value={j.id}>{j.label}</option>))}
                             </select>
                         </div>

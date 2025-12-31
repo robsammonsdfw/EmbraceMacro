@@ -24,14 +24,14 @@ const NavItem: React.FC<{
         onClick={onClick}
         className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
             isActive 
-            ? 'bg-emerald-50 text-emerald-700 font-bold shadow-sm' 
+            ? 'bg-indigo-50 text-indigo-700 font-bold shadow-sm' 
             : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
         }`}
     >
-        <span className={`${isActive ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-600'}`}>
+        <span className={`${isActive ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600'}`}>
             {icon}
         </span>
-        <span>{label}</span>
+        <span className="text-sm uppercase tracking-tight font-black">{label}</span>
     </button>
 );
 
@@ -39,9 +39,10 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
     return (
         <div className="h-full flex flex-col bg-white">
             <div className="p-6">
-                <h1 className="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500">Embrace</h1>
+                <div className="mb-4">
+                    <img src="/input_file_0.png" alt="EmbraceHealth AI" className="h-10 w-auto" />
+                </div>
                 
-                {/* Restore Active Journey Selector for Mobile */}
                 {onJourneyChange && (
                     <div className="mt-4 md:hidden">
                         <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Active Journey</label>
@@ -57,7 +58,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
                 )}
             </div>
 
-            <div className="flex-grow px-4 space-y-2 overflow-y-auto">
+            <div className="flex-grow px-4 space-y-1 overflow-y-auto no-scrollbar">
                 {showClientsTab && (
                     <div className="mb-4">
                         <NavItem id="clients" label="My Clients" icon={<UsersIcon />} isActive={activeView === 'clients'} onClick={() => onNavigate('clients')} />
@@ -65,26 +66,26 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
                     </div>
                 )}
 
-                <NavItem id="home" label="Command Center" icon={<HomeIcon />} isActive={activeView === 'home'} onClick={() => onNavigate('home')} />
-                <NavItem id="coaching" label="Coaching Hub" icon={<ActivityIcon />} isActive={activeView === 'coaching'} onClick={() => onNavigate('coaching')} />
-                <NavItem id="social" label="Social Hub" icon={<UserGroupIcon />} isActive={activeView === 'social'} onClick={() => onNavigate('social')} />
+                <NavItem id="home" label="Dashboard" icon={<HomeIcon />} isActive={activeView === 'home'} onClick={() => onNavigate('home')} />
+                <NavItem id="coaching" label="Coaching" icon={<ActivityIcon />} isActive={activeView === 'coaching'} onClick={() => onNavigate('coaching')} />
+                <NavItem id="social" label="Social" icon={<UserGroupIcon />} isActive={activeView === 'social'} onClick={() => onNavigate('social')} />
                 <NavItem id="plan" label="Meal Planner" icon={<PlusIcon />} isActive={activeView === 'plan'} onClick={() => onNavigate('plan')} />
-                <NavItem id="meals" label="My Meals" icon={<BookOpenIcon />} isActive={activeView === 'meals'} onClick={() => onNavigate('meals')} />
-                <NavItem id="grocery" label="Grocery List" icon={<ClipboardListIcon />} isActive={activeView === 'grocery'} onClick={() => onNavigate('grocery')} />
-                <NavItem id="body" label="My Body" icon={<UserCircleIcon />} isActive={activeView === 'body'} onClick={() => onNavigate('body')} />
-                <NavItem id="assessments" label="Assessments" icon={<ClipboardCheckIcon />} isActive={activeView === 'assessments'} onClick={() => onNavigate('assessments')} />
-                <NavItem id="blueprint" label="Blueprint & Match" icon={<HeartIcon />} isActive={activeView === 'blueprint'} onClick={() => onNavigate('blueprint')} />
+                <NavItem id="meals" label="Library" icon={<BookOpenIcon />} isActive={activeView === 'meals'} onClick={() => onNavigate('meals')} />
+                <NavItem id="grocery" label="Groceries" icon={<ClipboardListIcon />} isActive={activeView === 'grocery'} onClick={() => onNavigate('grocery')} />
+                <NavItem id="body" label="Body Hub" icon={<UserCircleIcon />} isActive={activeView === 'body'} onClick={() => onNavigate('body')} />
+                <NavItem id="assessments" label="Tests" icon={<ClipboardCheckIcon />} isActive={activeView === 'assessments'} onClick={() => onNavigate('assessments')} />
+                <NavItem id="blueprint" label="Blueprint" icon={<HeartIcon />} isActive={activeView === 'blueprint'} onClick={() => onNavigate('blueprint')} />
                 <NavItem id="labs" label="Labs" icon={<BeakerIcon />} isActive={activeView === 'labs'} onClick={() => onNavigate('labs')} />
                 <NavItem id="orders" label="Orders" icon={<ClipboardListIcon />} isActive={activeView === 'orders'} onClick={() => onNavigate('orders')} />
                 <NavItem id="rewards" label="Rewards" icon={<TrophyIcon />} isActive={activeView === 'rewards'} onClick={() => onNavigate('rewards')} />
             </div>
 
             <div className="p-4 border-t border-slate-100">
-                <button onClick={() => onNavigate('hub')} className="w-full flex items-center space-x-3 px-4 py-3 text-slate-500 transition-colors text-left">
-                    <Squares2X2Icon />
-                    <span className="font-medium text-sm">Switch App</span>
+                <button onClick={() => onNavigate('hub')} className="w-full flex items-center space-x-3 px-4 py-3 text-slate-500 transition-colors text-left group">
+                    <Squares2X2Icon className="group-hover:rotate-90 transition-transform" />
+                    <span className="font-bold text-[10px] uppercase tracking-widest">Switch App</span>
                 </button>
-                <button onClick={onLogout} className="w-full text-left px-4 py-2 text-xs font-bold text-slate-400 hover:text-red-500 mt-2 uppercase">Sign Out</button>
+                <button onClick={onLogout} className="w-full text-left px-4 py-2 text-[10px] font-black text-slate-400 hover:text-rose-500 mt-2 uppercase tracking-widest">Sign Out</button>
             </div>
         </div>
     );

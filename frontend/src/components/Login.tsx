@@ -17,7 +17,6 @@ export const Login: React.FC = () => {
         setError(null);
 
         try {
-            // Force lowercase to resolve account unification issues reported by users
             const normalizedEmail = email.toLowerCase().trim();
 
             const response = await fetch(`${API_BASE_URL}/auth/customer-login`, {
@@ -50,41 +49,38 @@ export const Login: React.FC = () => {
     return (
         <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
             <div className="max-w-md w-full p-8 bg-white rounded-xl shadow-lg border border-slate-200">
-                <header className="mb-8 text-center">
-                    <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500">
-                        EmbraceHealth
-                        <span className="block text-2xl text-slate-700 mt-1 font-bold">AI</span>
-                    </h1>
-                    <p className="text-slate-600 mt-2">Sign in to your account.</p>
+                <header className="mb-10 text-center flex flex-col items-center">
+                    <img src="/input_file_0.png" alt="EmbraceHealth AI" className="h-16 w-auto mb-4" />
+                    <p className="text-slate-500 font-medium">Sign in to your health dashboard</p>
                 </header>
 
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Email address</label>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1">Email address</label>
                         <input
                             type="email"
                             required
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none transition"
+                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white focus:outline-none transition-all font-medium"
                             placeholder="you@example.com"
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1">Password</label>
                         <input
                             type="password"
                             required
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none transition"
+                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white focus:outline-none transition-all font-medium"
                             placeholder="••••••••"
                         />
                     </div>
 
                     {error && (
-                        <div className="p-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg">
+                        <div className="p-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg font-bold">
                             {error}
                         </div>
                     )}
@@ -92,9 +88,9 @@ export const Login: React.FC = () => {
                     <button
                         type="submit"
                         disabled={isLoading}
-                        className="w-full bg-[#008060] text-white font-bold py-3 px-6 rounded-lg hover:bg-[#004c3f] transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full bg-slate-900 text-white font-black uppercase tracking-widest py-4 px-6 rounded-xl hover:bg-black transition-all shadow-lg shadow-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-95"
                     >
-                        {isLoading ? 'Signing in...' : 'Sign in'}
+                        {isLoading ? 'Authenticating...' : 'Sign in'}
                     </button>
                 </form>
             </div>
