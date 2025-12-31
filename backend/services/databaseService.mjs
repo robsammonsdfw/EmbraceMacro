@@ -290,7 +290,6 @@ export const getSavedMealById = async (userId, mealId) => {
     try {
         const res = await client.query(`SELECT id, meal_data FROM saved_meals WHERE id = $1 AND user_id = $2`, [mealId, userId]);
         if (res.rows.length === 0) return null;
-        // FIX: Define row variable to fix line 293 ReferenceError
         const row = res.rows[0];
         return { id: row.id, ...processMealDataForClient(row.meal_data || {}, true) };
     } finally { client.release(); }
@@ -339,9 +338,14 @@ export const addMealToPlanItem = async (userId, planId, savedMealId, proxyCoachI
     const client = await pool.connect();
     try {
         const insertRes = await client.query(`INSERT INTO meal_plan_items (user_id, meal_plan_id, saved_meal_id, created_by_proxy, proxy_action, metadata) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id;`, [userId, planId, savedMealId, proxyCoachId, !!proxyCoachId, metadata]);
-        const selectRes = await client.query(`SELECT i.id, m.id as meal_id, m.meal_data FROM meal_plan_items i JOIN saved_meals m ON i.saved_meal_id = m.id WHERE i.id = $1;`, [insertRes.rows[0].id]);
+        // FIX: Added i.metadata to the SELECT query to ensure the newly added item's metadata is returned to the frontend.
+        const selectRes = await client.query(`SELECT i.id, m.id as meal_id, m.meal_data, i.metadata FROM meal_plan_items i JOIN saved_meals m ON i.saved_meal_id = m.id WHERE i.id = $1;`, [insertRes.rows[0].id]);
         const row = selectRes.rows[0];
-        return { id: row.id, meal: { id: row.meal_id, ...processMealDataForClient(row.meal_data || {}, false) } };
+        return { 
+            id: row.id, 
+            meal: { id: row.meal_id, ...processMealDataForClient(row.meal_data || {}, false) },
+            metadata: row.metadata // FIX: Return the metadata object so the frontend knows which slot to update.
+        };
     } finally { client.release(); }
 };
 
