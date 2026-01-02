@@ -1,13 +1,23 @@
+
 import type { 
   NutritionInfo, SavedMeal, MealPlan, MealPlanItem, MealPlanItemMetadata, 
-  GroceryList, GroceryItem, RewardsSummary, MealLogEntry, Assessment, 
+  GroceryList, GroceryItem, RewardsSummary, MealLogEntry, Recipe, 
   UserProfile, Friendship, ReadinessScore, FormAnalysisResult, RecoveryData,
-  AssessmentState, UserDashboardPrefs, HealthStats, Recipe, MatchProfile, PartnerBlueprint, CoachingRelation
+  AssessmentState, UserDashboardPrefs, HealthStats, MatchProfile, PartnerBlueprint, CoachingRelation,
+  // FIX: Added Assessment to types imported from types.ts
+  Assessment
 } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
 const AUTH_TOKEN_KEY = 'embracehealth-api-token';
 const PROXY_CLIENT_KEY = 'embracehealth-proxy-client-id';
+
+// FIX: Exported MapPlace interface for restaurant functionality
+export interface MapPlace {
+    uri: string;
+    title: string;
+    address?: string;
+}
 
 export const setProxyClient = (id: string | null) => {
     if (id) localStorage.setItem(PROXY_CLIENT_KEY, id);
@@ -26,114 +36,85 @@ const callApi = async (endpoint: string, method: string, body?: any) => {
     if (token) headers['Authorization'] = `Bearer ${token}`;
     if (proxyClientId) headers['x-proxy-client-id'] = proxyClientId;
     
-    const config: RequestInit = { 
-        method, 
-        headers,
-        body: body ? JSON.stringify(body) : undefined 
-    };
+    const config: RequestInit = { method, headers, body: body ? JSON.stringify(body) : undefined };
 
     try {
         const response = await fetch(url, config);
-        if (response.status === 401) {
-            localStorage.removeItem(AUTH_TOKEN_KEY);
-            window.location.reload();
-            throw new Error("Unauthorized");
-        }
-        if (!response.ok) {
-            throw new Error(`API failed: ${response.status}`);
-        }
+        if (response.status === 401) { localStorage.removeItem(AUTH_TOKEN_KEY); window.location.reload(); throw new Error("Unauthorized"); }
+        if (!response.ok) throw new Error(`API failed: ${response.status}`);
         return response.status === 204 ? null : response.json();
-    } catch (error) {
-        console.error("Fetch error:", error);
-        throw error;
-    }
+    } catch (error) { console.error("Fetch error:", error); throw error; }
 };
 
-export interface MapPlace { uri: string; title: string; }
+// AI Analysis
+export const analyzeImageWithGemini = (base64Image: string, mimeType: string): Promise<NutritionInfo> => callApi('/analyze-image', 'POST', { base64Image, mimeType });
+export const analyzeRestaurantMeal = (base64Image: string, mimeType: string): Promise<Recipe> => callApi('/analyze-restaurant-meal', 'POST', { base64Image, mimeType });
+export const getRecipesFromImage = (base64Image: string, mimeType: string): Promise<Recipe[]> => callApi('/analyze-image-recipes', 'POST', { base64Image, mimeType });
+export const searchFood = (query: string): Promise<NutritionInfo> => callApi('/search-food', 'POST', { query });
+export const identifyGroceryItems = (base64Image: string, mimeType: string): Promise<{ items: string[] }> => callApi('/analyze-image-grocery', 'POST', { base64Image, mimeType });
 
-// Professional Coaching
-export const upgradeToCoach = async (): Promise<{token: string}> => {
-    const res = await callApi('/auth/role', 'PATCH', { role: 'coach' });
-    if (res.token) localStorage.setItem(AUTH_TOKEN_KEY, res.token);
-    return res;
-};
-export const inviteClient = (email: string): Promise<CoachingRelation> => callApi('/coaching/invite', 'POST', { email });
-export const getCoachingRelations = (role: 'coach' | 'client'): Promise<CoachingRelation[]> => callApi(`/coaching/relations?role=${role}`, 'GET');
-export const respondToCoachingInvite = (relationId: string, status: 'active' | 'rejected'): Promise<void> => callApi(`/coaching/respond`, 'PATCH', { relationId, status });
-export const revokeCoachingAccess = (relationId: string): Promise<void> => callApi(`/coaching/relations/${relationId}`, 'DELETE');
-
-// Coach Actions
-export const getCoachClients = (): Promise<any[]> => callApi('/coach/clients', 'GET');
-
-// Health
-export const getHealthStatsFromDB = (): Promise<HealthStats> => callApi('/health-metrics', 'GET');
-export const syncHealthStatsToDB = (stats: Partial<HealthStats>): Promise<HealthStats> => callApi('/health-metrics', 'POST', stats);
-
-// Rewards
-export const getRewardsSummary = (): Promise<RewardsSummary> => callApi('/rewards', 'GET');
-
-// Meal Log
+// Database Persistence
 export const getMealLog = (): Promise<MealLogEntry[]> => callApi('/meal-log', 'GET');
 export const getMealLogEntryById = (id: number): Promise<MealLogEntry> => callApi(`/meal-log/${id}`, 'GET');
 export const createMealLogEntry = (mealData: NutritionInfo, imageBase64: string): Promise<MealLogEntry> => callApi('/meal-log', 'POST', { mealData, imageBase64 });
-
-// Saved Meals
 export const getSavedMeals = (): Promise<SavedMeal[]> => callApi('/saved-meals', 'GET');
 export const getSavedMealById = (id: number): Promise<SavedMeal> => callApi(`/saved-meals/${id}`, 'GET');
 export const saveMeal = (mealData: NutritionInfo): Promise<SavedMeal> => callApi('/saved-meals', 'POST', mealData);
 export const deleteMeal = (id: number): Promise<void> => callApi(`/saved-meals/${id}`, 'DELETE');
 
-// Meal Plans
+// User & Health
+export const getRewardsSummary = (): Promise<RewardsSummary> => callApi('/rewards', 'GET');
+export const getDashboardPrefs = (): Promise<UserDashboardPrefs> => callApi('/body/dashboard-prefs', 'GET');
+export const saveDashboardPrefs = (prefs: UserDashboardPrefs): Promise<void> => callApi('/body/dashboard-prefs', 'POST', prefs);
+export const getHealthStatsFromDB = (): Promise<HealthStats> => callApi('/health-metrics', 'GET');
+export const syncHealthStatsToDB = (stats: Partial<HealthStats>): Promise<HealthStats> => callApi('/health-metrics', 'POST', stats);
+
+// FIX: Added missing social and coaching methods
+// Social & Coaching
+export const getSocialProfile = (): Promise<UserProfile> => callApi('/social/profile', 'GET');
+export const updateSocialProfile = (updates: Partial<UserProfile>): Promise<UserProfile> => callApi('/social/profile', 'POST', updates);
+export const getFriends = (): Promise<Friendship[]> => callApi('/social/friends', 'GET');
+export const getFriendRequests = (): Promise<any[]> => callApi('/social/requests', 'GET');
+export const sendFriendRequest = (email: string): Promise<void> => callApi('/social/requests', 'POST', { email });
+export const respondToFriendRequest = (requestId: number, status: 'accepted' | 'rejected'): Promise<void> => callApi(`/social/requests/${requestId}`, 'POST', { status });
+
+export const getCoachingRelations = (role: 'coach' | 'client'): Promise<CoachingRelation[]> => callApi(`/coaching/relations?role=${role}`, 'GET');
+export const getCoachClients = (): Promise<any[]> => callApi('/coach/clients', 'GET');
+export const inviteClient = (email: string): Promise<CoachingRelation> => callApi('/coaching/invite', 'POST', { email });
+export const respondToCoachingInvite = (id: string, status: 'active' | 'rejected'): Promise<void> => callApi(`/coaching/respond/${id}`, 'POST', { status });
+export const revokeCoachingAccess = (id: string): Promise<void> => callApi(`/coaching/revoke/${id}`, 'DELETE');
+
+// Body Intelligence
+export const calculateReadiness = (stats: RecoveryData): Promise<ReadinessScore> => callApi('/calculate-readiness', 'POST', stats);
+export const analyzeExerciseForm = (base64Image: string, exercise: string): Promise<FormAnalysisResult> => callApi('/analyze-form', 'POST', { base64Image, exercise });
+export const logRecoveryStats = (data: RecoveryData): Promise<void> => callApi('/body/log-recovery', 'POST', data);
+
+// FIX: Added missing assessment and matching methods
+// Assessments & Matching
+export const getAssessments = (): Promise<Assessment[]> => callApi('/assessments', 'GET');
+export const getAssessmentState = (): Promise<AssessmentState> => callApi('/assessments/state', 'GET');
+export const submitAssessment = (id: string, responses: any): Promise<void> => callApi(`/assessments/${id}`, 'POST', { responses });
+export const submitPassivePulseResponse = (id: string, value: any): Promise<void> => callApi(`/assessments/pulse/${id}`, 'POST', { value });
+export const getPartnerBlueprint = (): Promise<PartnerBlueprint> => callApi('/blueprint', 'GET');
+export const savePartnerBlueprint = (preferences: any): Promise<void> => callApi('/blueprint', 'POST', { preferences });
+export const getMatches = (): Promise<MatchProfile[]> => callApi('/matches', 'GET');
+
+// FIX: Added missing restaurant and map methods
+// Restaurant & Maps
+export const searchNearbyRestaurants = (lat: number, lng: number): Promise<{ places: MapPlace[] }> => callApi('/search-restaurants', 'POST', { lat, lng });
+export const checkInAtLocation = (placeName: string): Promise<void> => callApi('/check-in', 'POST', { placeName });
+
+// Grocery & Plans
 export const getMealPlans = (): Promise<MealPlan[]> => callApi('/meal-plans', 'GET');
 export const createMealPlan = (name: string): Promise<MealPlan> => callApi('/meal-plans', 'POST', { name });
 export const addMealToPlan = (planId: number, savedMealId: number, metadata: MealPlanItemMetadata): Promise<MealPlanItem> => callApi(`/meal-plans/${planId}/items`, 'POST', { savedMealId, metadata });
 export const removeMealFromPlanItem = (id: number): Promise<void> => callApi(`/meal-plans/items/${id}`, 'DELETE');
-
-// Grocery
 export const getGroceryLists = (): Promise<GroceryList[]> => callApi('/grocery-lists', 'GET');
 export const getGroceryListItems = (listId: number): Promise<GroceryItem[]> => callApi(`/grocery-lists/${listId}/items`, 'GET');
 export const createGroceryList = (name: string): Promise<GroceryList> => callApi('/grocery-lists', 'POST', { name });
 export const deleteGroceryList = (id: number): Promise<void> => callApi(`/grocery-lists/${id}`, 'DELETE');
-export const setActiveGroceryList = (id: number): Promise<void> => callApi(`/grocery-lists/${id}/active`, 'PATCH');
 export const updateGroceryItem = (itemId: number, checked: boolean): Promise<GroceryItem> => callApi(`/grocery-lists/items/${itemId}`, 'PATCH', { checked });
 export const addGroceryItem = (listId: number, name: string): Promise<GroceryItem> => callApi(`/grocery-lists/${listId}/items`, 'POST', { name });
 export const removeGroceryItem = (itemId: number): Promise<void> => callApi(`/grocery-lists/items/${itemId}`, 'DELETE');
-export const clearGroceryListItems = (listId: number, type: 'all' | 'checked'): Promise<void> => callApi(`/grocery-lists/${listId}/items`, 'DELETE', { type });
+export const clearGroceryListItems = (listId: number, type: 'all' | 'checked'): Promise<void> => callApi(`/grocery-lists/items/${listId}/items`, 'DELETE', { type });
 export const importIngredientsFromPlans = (listId: number, planIds: number[]): Promise<GroceryItem[]> => callApi(`/grocery-lists/${listId}/import`, 'POST', { planIds });
-
-// Social
-export const getFriends = (): Promise<Friendship[]> => callApi('/social/friends', 'GET');
-export const getFriendRequests = (): Promise<any[]> => callApi('/social/requests', 'GET');
-export const sendFriendRequest = (email: string): Promise<void> => callApi('/social/requests', 'POST', { email });
-export const respondToFriendRequest = (requestId: number, status: 'accepted' | 'rejected'): Promise<void> => callApi('/social/requests', 'PATCH', { requestId, status });
-export const getSocialProfile = (): Promise<UserProfile> => callApi('/social/profile', 'GET');
-export const updateSocialProfile = (updates: Partial<UserProfile>): Promise<UserProfile> => callApi('/social/profile', 'PATCH', updates);
-
-// Discovery
-export const searchNearbyRestaurants = (latitude: number, longitude: number): Promise<{ places: MapPlace[] }> => callApi('/search-nearby-restaurants', 'POST', { latitude, longitude });
-export const checkInAtLocation = (locationName: string): Promise<void> => callApi('/check-in', 'POST', { locationName });
-
-// AI Analysis
-export const analyzeExerciseForm = (base64Image: string, exercise: string): Promise<FormAnalysisResult> => callApi('/analyze-form', 'POST', { base64Image, exercise });
-export const analyzeImageWithGemini = (base64Image: string, mimeType: string): Promise<NutritionInfo> => callApi('/analyze-image', 'POST', { base64Image, mimeType });
-export const getMealSuggestions = (condition: string, cuisine: string): Promise<NutritionInfo[]> => callApi('/get-meal-suggestions', 'POST', { condition, cuisine });
-export const getRecipesFromImage = (base64Image: string, mimeType: string): Promise<Recipe[]> => callApi('/analyze-image-recipes', 'POST', { base64Image, mimeType });
-export const identifyGroceryItems = (base64Image: string, mimeType: string): Promise<{ items: string[] }> => callApi('/analyze-image-grocery', 'POST', { base64Image, mimeType });
-export const searchFood = (query: string): Promise<NutritionInfo> => callApi('/search-food', 'POST', { query });
-
-// Body & Recovery
-export const calculateReadiness = (stats: RecoveryData): Promise<ReadinessScore> => callApi('/calculate-readiness', 'POST', stats);
-export const logRecoveryStats = (data: RecoveryData): Promise<void> => callApi('/body/log-recovery', 'POST', data);
-export const getDashboardPrefs = (): Promise<UserDashboardPrefs> => callApi('/body/dashboard-prefs', 'GET');
-export const saveDashboardPrefs = (prefs: UserDashboardPrefs): Promise<void> => callApi('/body/dashboard-prefs', 'POST', prefs);
-
-// Assessments
-export const getAssessments = (): Promise<Assessment[]> => callApi('/assessments', 'GET');
-export const getAssessmentState = (): Promise<AssessmentState> => callApi('/assessments/state', 'GET');
-export const submitAssessment = (id: string, responses: any): Promise<void> => callApi(`/assessments/${id}`, 'POST', { responses });
-export const submitPassivePulseResponse = (id: string, value: any): Promise<void> => callApi(`/assessments/passive/${id}`, 'POST', { value });
-
-// Matching
-export const getPartnerBlueprint = (): Promise<PartnerBlueprint> => callApi('/blueprint', 'GET');
-export const savePartnerBlueprint = (preferences: any): Promise<void> => callApi('/blueprint', 'POST', { preferences });
-export const getMatches = (): Promise<MatchProfile[]> => callApi('/matches', 'GET');

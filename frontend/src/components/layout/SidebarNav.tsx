@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { HomeIcon, BookOpenIcon, UserCircleIcon, BeakerIcon, ClipboardListIcon, TrophyIcon, Squares2X2Icon, ClipboardCheckIcon, HeartIcon, PlusIcon, UserGroupIcon, UsersIcon, ActivityIcon } from '../icons';
 import { HealthJourney } from '../../types';
@@ -40,7 +39,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
         <div className="h-full flex flex-col bg-white">
             <div className="p-6">
                 <div className="mb-4">
-                    <img src="logo.png" alt="EmbraceHealth AI" className="h-10 w-auto" />
+                    <img src="/logo.png" alt="EmbraceHealth AI" className="h-10 w-auto" />
                 </div>
                 
                 {onJourneyChange && (

@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { XIcon, CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, UserCircleIcon, MapPinIcon, SearchIcon } from './icons';
 import { BarcodeScanner } from './BarcodeScanner';
@@ -26,13 +27,10 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [mode, setMode] = useState<CaptureMode>(initialMode);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  
-  // Restaurant Mode State
+  const [isLocating, setIsLocating] = useState(false);
   const [nearbyPlaces, setNearbyPlaces] = useState<apiService.MapPlace[]>([]);
   const [selectedPlace, setSelectedPlace] = useState<apiService.MapPlace | null>(null);
-  const [isLocating, setIsLocating] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     if (mode === 'barcode' || mode === 'search') return;
@@ -44,40 +42,24 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
       } catch (err) { console.error(err); }
     };
     startCamera();
-    return () => stream?.getTracks().forEach(t => t.stop());
+    return () => {
+        if (stream) stream.getTracks().forEach(t => t.stop());
+    };
   }, [mode]);
 
   useEffect(() => {
     if (mode === 'restaurant') {
-        findNearbyRestaurants();
+        setIsLocating(true);
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+            try {
+                const res = await apiService.searchNearbyRestaurants(pos.coords.latitude, pos.coords.longitude);
+                setNearbyPlaces(res.places || []);
+                if (res.places?.length > 0) setSelectedPlace(res.places[0]);
+            } catch (e) { console.error(e); }
+            finally { setIsLocating(false); }
+        }, () => setIsLocating(false));
     }
   }, [mode]);
-
-  const findNearbyRestaurants = () => {
-      setIsLocating(true);
-      navigator.geolocation.getCurrentPosition(async (pos) => {
-          try {
-              const res = await apiService.searchNearbyRestaurants(pos.coords.latitude, pos.coords.longitude);
-              setNearbyPlaces(res.places);
-              if (res.places.length > 0) setSelectedPlace(res.places[0]);
-          } catch (e) { console.error(e); }
-          finally { setIsLocating(false); }
-      }, (err) => { 
-          console.error(err); 
-          setIsLocating(false); 
-      });
-  };
-
-  const handleCheckIn = async () => {
-      if (!selectedPlace) return;
-      setIsAnalyzing(true);
-      try {
-          await apiService.checkInAtLocation(selectedPlace.title);
-          alert(`Checked in at ${selectedPlace.title}! Points earned.`);
-          onClose();
-      } catch (e) { alert("Check-in failed."); }
-      finally { setIsAnalyzing(false); }
-  };
 
   const takePhoto = useCallback(() => {
     if (!videoRef.current || !canvasRef.current) return;
@@ -106,30 +88,20 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
            <BarcodeScanner onScanSuccess={(code) => onCapture(null, 'barcode', code)} onCancel={() => setMode('meal')} />
         ) : mode === 'search' ? (
             <div className="w-full max-w-md p-8 animate-fade-in">
-                <h3 className="text-2xl font-black mb-6 text-center">Manual Database Search</h3>
-                <div className="relative group">
-                    <input 
-                        type="text" 
-                        value={searchQuery}
-                        onChange={e => setSearchQuery(e.target.value)}
-                        placeholder="Search food or meal..."
-                        className="w-full p-5 bg-white/10 border-2 border-white/20 rounded-[2rem] text-xl font-medium outline-none focus:border-emerald-500 focus:bg-white/20 transition-all placeholder:text-white/30"
-                        autoFocus
-                    />
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                        <SearchIcon className="w-6 h-6 text-white/40" />
-                    </div>
-                </div>
+                <h3 className="text-2xl font-black mb-6 text-center uppercase tracking-tighter">Manual Search</h3>
+                <input 
+                    type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="Search meal or ingredient..."
+                    className="w-full p-5 bg-white/10 border-2 border-white/20 rounded-[2rem] text-xl font-medium outline-none focus:border-emerald-500 focus:bg-white/20 transition-all"
+                    autoFocus
+                />
                 <button 
                     onClick={() => onCapture(null, 'search', undefined, searchQuery)}
                     disabled={!searchQuery.trim()}
-                    className="w-full mt-6 py-5 bg-emerald-500 rounded-[2rem] font-black uppercase tracking-widest text-sm shadow-xl active:scale-95 transition-all disabled:opacity-30"
+                    className="w-full mt-6 py-5 bg-emerald-500 rounded-[2rem] font-black uppercase tracking-widest shadow-xl active:scale-95 disabled:opacity-30"
                 >
-                    Extract Nutrition
+                    Analyze Text
                 </button>
-                <p className="mt-6 text-center text-xs font-bold text-white/40 uppercase tracking-widest leading-relaxed">
-                    Enter any meal or brand name.<br/>AI will calculate macro intersection.
-                </p>
             </div>
         ) : (
            <>
@@ -142,38 +114,27 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
         )}
 
         {mode === 'restaurant' && !capturedImage && (
-            <div className="absolute inset-0 bg-black/40 z-10 flex flex-col justify-end px-6 pb-40">
-                <div className="bg-white rounded-2xl p-4 text-slate-800 animate-fade-in shadow-2xl">
-                    <h3 className="font-bold text-lg mb-3 flex items-center gap-2">
-                        <MapPinIcon /> {isLocating ? 'Locating...' : 'Select Restaurant'}
+            <div className="absolute inset-x-4 bottom-40 z-10">
+                <div className="bg-white rounded-3xl p-5 text-slate-800 animate-slide-up shadow-2xl">
+                    <h3 className="font-black uppercase tracking-widest text-[10px] text-slate-400 mb-3 flex items-center gap-2">
+                        <MapPinIcon className="w-3 h-3" /> {isLocating ? 'Locating...' : 'Verify Location'}
                     </h3>
-                    <div className="space-y-2 max-h-48 overflow-y-auto">
-                        {nearbyPlaces.map((p, i) => (
-                            <button 
-                                key={i} onClick={() => setSelectedPlace(p)}
-                                className={`w-full text-left p-3 rounded-xl border transition-all ${selectedPlace?.uri === p.uri ? 'border-emerald-500 bg-emerald-50 ring-1 ring-emerald-500' : 'border-slate-100 hover:bg-slate-50'}`}
-                            >
-                                <p className="font-bold text-sm">{p.title}</p>
-                            </button>
-                        ))}
-                    </div>
-                    <button 
-                        onClick={handleCheckIn}
-                        disabled={!selectedPlace || isAnalyzing}
-                        className="w-full mt-4 bg-emerald-500 text-white font-bold py-3 rounded-xl hover:bg-emerald-600 disabled:opacity-50"
+                    <select 
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold mb-2 outline-none focus:ring-2 focus:ring-indigo-500"
+                        value={selectedPlace?.uri || ''}
+                        onChange={(e) => setSelectedPlace(nearbyPlaces.find(p => p.uri === e.target.value) || null)}
                     >
-                        {isAnalyzing ? 'Processing...' : `Check-in at ${selectedPlace?.title || '...'}`}
-                    </button>
+                        {nearbyPlaces.map((p, i) => <option key={i} value={p.uri}>{p.title}</option>)}
+                        {nearbyPlaces.length === 0 && <option>No nearby places found</option>}
+                    </select>
                 </div>
             </div>
         )}
       </div>
 
-      {!capturedImage && mode !== 'barcode' && (
+      {!capturedImage && mode !== 'barcode' && mode !== 'search' && (
         <div className="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-black to-transparent flex flex-col items-center gap-6">
-            {mode !== 'search' && (
-                <button onClick={takePhoto} className="w-20 h-20 bg-white rounded-full border-4 border-slate-300 active:scale-95 transition" />
-            )}
+            <button onClick={takePhoto} className="w-20 h-20 bg-white rounded-full border-4 border-slate-300 active:scale-95 transition" />
             <div className="flex gap-2 overflow-x-auto w-full justify-center no-scrollbar bg-white/10 p-2 rounded-[2rem] backdrop-blur-md">
                 {[
                     { id: 'search', label: 'Search', icon: <SearchIcon /> },
@@ -190,10 +151,14 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
         </div>
       )}
 
-      {capturedImage && (
-          <div className="absolute bottom-0 left-0 right-0 p-6 flex gap-4 bg-black/60">
-              <button onClick={() => setCapturedImage(null)} className="flex-1 py-5 bg-white/10 rounded-[2rem] font-black uppercase text-xs tracking-widest">Retake</button>
-              <button onClick={() => onCapture(capturedImage, mode)} className="flex-1 py-5 bg-emerald-500 rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-xl">Analyze Photo</button>
+      {(capturedImage || mode === 'barcode' || mode === 'search') && (
+          <div className="absolute bottom-0 left-0 right-0 p-6 flex gap-4 bg-black/60 backdrop-blur-md">
+              <button onClick={() => { setCapturedImage(null); setMode('meal'); }} className="flex-1 py-5 bg-white/10 rounded-[2rem] font-black uppercase text-xs tracking-widest">Back</button>
+              {capturedImage && (
+                  <button onClick={() => onCapture(capturedImage, mode)} className="flex-[2] py-5 bg-emerald-500 rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-xl">
+                      {mode === 'pantry' ? 'Find Recipes' : mode === 'restaurant' ? 'Reconstruct Meal' : 'Extract Macros'}
+                  </button>
+              )}
           </div>
       )}
     </div>
