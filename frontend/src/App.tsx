@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useEffect } from 'react';
 import * as apiService from './services/apiService';
 import { analyzeFoodImage, searchFood, analyzeRestaurantMeal, getRecipesFromImage } from './services/geminiService';
@@ -24,10 +23,8 @@ import { PartnerBlueprint } from './components/matching/PartnerBlueprint';
 import { SocialManager } from './components/social/SocialManager';
 import { BodyHub } from './components/body/BodyHub';
 import { CoachProxyBanner } from './components/CoachProxyBanner';
-import { CoachProxyUI } from './components/CoachProxyUI';
-import { CoachingHub } from './components/coaching/CoachingHub';
 import { GoalSetupWizard } from './components/GoalSetupWizard';
-import { ActivityIcon, XIcon, ChefHatIcon } from './components/icons';
+import { ActivityIcon, ChefHatIcon } from './components/icons';
 
 type ActiveView = 'home' | 'plan' | 'meals' | 'history' | 'grocery' | 'rewards' | 'body' | 'social' | 'assessments' | 'blueprint' | 'labs' | 'orders' | 'clients' | 'coaching';
 
@@ -39,7 +36,6 @@ const App: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   const [proxyClient, setProxyClient] = useState<{id: string, name: string, permissions: any} | null>(null);
-  const [coachClients, setCoachClients] = useState<any[]>([]);
 
   const [image, setImage] = useState<string | null>(null);
   const [nutritionData, setNutritionData] = useState<NutritionInfo | null>(null);
@@ -81,8 +77,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     loadAllData();
-    if (user?.role === 'coach') apiService.getCoachClients().then(setCoachClients).catch(() => {});
-  }, [loadAllData, user?.role]);
+  }, [loadAllData]);
 
   const handleCaptureResult = useCallback(async (img: string | null, mode: any, barcode?: string, searchQuery?: string) => {
     setIsCaptureOpen(false); 
@@ -94,7 +89,7 @@ const App: React.FC = () => {
         else if (mode === 'restaurant' && img) { setImage(img); const recipe = await analyzeRestaurantMeal(img.split(',')[1], 'image/jpeg'); setChefRecipes([recipe]); }
         else if (mode === 'pantry' && img) { setImage(img); const recipes = await getRecipesFromImage(img.split(',')[1], 'image/jpeg'); setChefRecipes(recipes); }
         else if (img) { setImage(img); const result = await analyzeFoodImage(img.split(',')[1], 'image/jpeg'); setNutritionData(result); }
-    } catch (err) { setError('ChefGPT analysis failed. Please try again.'); }
+    } catch (err) { setError('Analysis failed. Please try again.'); }
     finally { setIsProcessing(false); }
   }, []);
 
@@ -104,13 +99,9 @@ const App: React.FC = () => {
       const newEntry = await apiService.createMealLogEntry(updatedData, image ? image.split(',')[1] : "");
       setMealLog(prev => [newEntry, ...prev]);
       setImage(null); setNutritionData(null); setChefRecipes([]);
+      loadAllData(); // Refresh points
     } catch (err) { setError("Failed to save to history."); }
     finally { setIsProcessing(false); }
-  };
-
-  const handleAddRecipeToPlan = async (recipe: Recipe) => {
-      // Logic to convert recipe to a saved meal or nutrition item then add to plan
-      alert("Recipe analysis for macro-integration added to plan logic placeholder.");
   };
 
   const renderActiveView = () => {
@@ -120,19 +111,19 @@ const App: React.FC = () => {
           return (
               <div className="max-w-2xl mx-auto space-y-6">
                 {image && <ImageUploader image={image} />}
-                {isProcessing && <Loader message="ChefGPT is Analyzing..." />}
+                {isProcessing && <Loader message="Analyzing..." />}
                 {error && <ErrorAlert message={error} />}
                 {nutritionData && !isProcessing && <NutritionCard data={nutritionData} onSaveToHistory={handleSaveToHistory} />}
                 {chefRecipes.length > 0 && !isProcessing && (
                   <div className="space-y-6">
                       <div className="flex items-center gap-2 px-2">
                         <ChefHatIcon className="text-emerald-500" />
-                        <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">ChefGPT Culinary Analysis</h3>
+                        <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">ChefGPT Analysis</h3>
                       </div>
-                      {chefRecipes.map((r, i) => <RecipeCard key={i} recipe={r} onAddToPlan={() => handleAddRecipeToPlan(r)} />)}
+                      {chefRecipes.map((r, i) => <RecipeCard key={i} recipe={r} onAddToPlan={() => {}} />)}
                   </div>
                 )}
-                <button onClick={() => { setImage(null); setNutritionData(null); setChefRecipes([]); setError(null); setIsCaptureOpen(true); }} className="w-full py-4 text-emerald-600 font-black uppercase tracking-widest text-sm">Clear and Capture New</button>
+                <button onClick={() => { setImage(null); setNutritionData(null); setChefRecipes([]); setError(null); setIsCaptureOpen(true); }} className="w-full py-4 text-emerald-600 font-black uppercase tracking-widest text-sm">Clear and Start Over</button>
             </div>
           );
       }
@@ -152,11 +143,11 @@ const App: React.FC = () => {
           case 'assessments': return <AssessmentHub />;
           case 'blueprint': return <PartnerBlueprint />;
           case 'body': return <BodyHub healthStats={healthStats} onSyncHealth={()=>{}} dashboardPrefs={dashboardPrefs} onUpdatePrefs={p => apiService.saveDashboardPrefs(p)} />;
-          default: return <div className="p-8 text-center text-slate-400">View Not Found</div>;
+          default: return <div className="p-8 text-center text-slate-400">Module Loading...</div>;
       }
   };
 
-  if (isAuthLoading) return <div className="min-h-screen flex items-center justify-center"><Loader message="Loading..." /></div>;
+  if (isAuthLoading) return <div className="min-h-screen flex items-center justify-center"><Loader message="Authenticating..." /></div>;
   if (!isAuthenticated) return <Login />;
 
   return (
@@ -166,7 +157,7 @@ const App: React.FC = () => {
         {isGoalWizardOpen && <GoalSetupWizard onClose={() => setIsGoalWizardOpen(false)} onSave={(c, p) => apiService.saveDashboardPrefs({...dashboardPrefs, calorieGoal: c, proteinGoal: p})} />}
         {renderActiveView()}
         {activeView === 'home' && !nutritionData && chefRecipes.length === 0 && !isProcessing && !error && !image && !viewingMealDetails && (
-            <button onClick={() => setIsGoalWizardOpen(true)} className="fixed bottom-24 right-4 bg-slate-900 text-white p-4 rounded-2xl shadow-2xl flex items-center gap-2 z-30 animate-bounce-short font-black uppercase text-[10px] tracking-widest border border-slate-700"><ActivityIcon className="w-4 h-4 text-emerald-400" /> Set Targets</button>
+            <button onClick={() => setIsGoalWizardOpen(true)} className="fixed bottom-24 right-4 bg-slate-900 text-white p-4 rounded-2xl shadow-2xl flex items-center gap-2 z-30 animate-bounce-short font-black uppercase text-[10px] tracking-widest border border-slate-700"><ActivityIcon className="w-4 h-4 text-emerald-400" /> Adjust Targets</button>
         )}
     </AppLayout>
   );
