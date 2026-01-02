@@ -31,6 +31,18 @@ const nutritionSchema = {
     required: ["mealName", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "ingredients"]
 };
 
+const suggestionsSchema = {
+    type: Type.ARRAY,
+    items: {
+        ...nutritionSchema,
+        properties: {
+            ...nutritionSchema.properties,
+            justification: { type: Type.STRING, description: "Why this meal is suitable for these medical conditions." }
+        },
+        required: [...nutritionSchema.required, "justification"]
+    }
+};
+
 const recipeSchema = {
     type: Type.OBJECT,
     properties: {
@@ -102,11 +114,11 @@ export const handler = async (event) => {
     }
 
     try {
-        const aiRoutes = ['analyze-image', 'analyze-image-recipes', 'analyze-restaurant-meal', 'search-food'];
+        const aiRoutes = ['analyze-image', 'analyze-image-recipes', 'analyze-restaurant-meal', 'search-food', 'get-meal-suggestions'];
         if (aiRoutes.includes(resource)) {
             const ai = new GoogleGenAI({ apiKey: API_KEY });
             const body = JSON.parse(event.body || '{}');
-            const { base64Image, mimeType, query } = body;
+            const { base64Image, mimeType, query, conditions, cuisine } = body;
             let prompt = ""; let schema;
             
             if (resource === 'analyze-image') { 
@@ -125,6 +137,10 @@ export const handler = async (event) => {
                 prompt = `Provide clinical nutritional info for: "${query}". Return in English JSON.`;
                 schema = nutritionSchema;
             }
+            else if (resource === 'get-meal-suggestions') {
+                prompt = `Act as 'Clinical Nutritionist GPT'. Generate 3 meal ideas in ${cuisine} cuisine for a user with these conditions: ${conditions.join(', ')}. Ensure the nutritional breakdown respects all condition-specific safety guidelines (e.g. low sodium for Hypertension, low sugar for Diabetes). Provide justification. Return in English JSON.`;
+                schema = suggestionsSchema;
+            }
 
             const res = await ai.models.generateContent({ 
                 model: 'gemini-3-flash-preview', 
@@ -139,9 +155,6 @@ export const handler = async (event) => {
             if (method === 'POST') return { statusCode: 201, headers, body: JSON.stringify(await db.createMealLogEntry(currentUserId, JSON.parse(event.body).mealData, JSON.parse(event.body).imageBase64, proxyCoachId)) };
         }
         
-        // General fallback for resources handled by the db layer
-        // (Assuming standard db calls for rewards, saved-meals, meal-plans, health-metrics, coaching, etc)
-
     } catch (error) {
         console.error('Handler error:', error);
         return { statusCode: 500, headers, body: JSON.stringify({ error: error.message }) };

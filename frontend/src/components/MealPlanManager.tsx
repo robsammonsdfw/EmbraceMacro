@@ -1,7 +1,6 @@
 
 import React, { useState } from 'react';
 import type { MealPlan, SavedMeal } from '../types';
-// FIX: Added UtensilsIcon to the import list.
 import { BeakerIcon, PlusIcon, TrashIcon, BookOpenIcon, CameraOffIcon, SearchIcon, XIcon, UtensilsIcon } from './icons';
 import { MedicalPlannerModal } from './MedicalPlannerModal';
 
@@ -13,13 +12,16 @@ interface MealPlanManagerProps {
     onCreatePlan: (name: string) => void;
     onRemoveFromPlan: (itemId: number) => void;
     onQuickAdd: (planId: number, meal: SavedMeal, day: string, slot: string) => void;
+    onGenerateMedical: (diseases: any[], cuisine: string, duration: 'day' | 'week') => Promise<void>;
+    medicalPlannerState: { isLoading: boolean; progress: number; status: string };
 }
 
 const FIXED_SLOTS = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 export const MealPlanManager: React.FC<MealPlanManagerProps> = ({ 
-    plans, activePlanId, savedMeals, onPlanChange, onCreatePlan, onRemoveFromPlan, onQuickAdd
+    plans, activePlanId, savedMeals, onPlanChange, onCreatePlan, onRemoveFromPlan, onQuickAdd,
+    onGenerateMedical, medicalPlannerState
 }) => {
     const [isMedicalModalOpen, setIsMedicalModalOpen] = useState(false);
     const [newPlanName, setNewPlanName] = useState('');
@@ -32,12 +34,10 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
 
     const activePlan = plans.find(p => p.id === activePlanId);
 
-    // Filter meals for sidebar/drawer
     const filteredSavedMeals = savedMeals.filter(m => 
         m.mealName.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    // -- Drag & Drop Handlers (Desktop) --
     const handleDragStart = (e: React.DragEvent, meal: SavedMeal) => {
         setDraggingMealId(meal.id);
         e.dataTransfer.setData('mealId', meal.id.toString());
@@ -63,9 +63,7 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
         setDraggingMealId(null);
     };
 
-    // -- Tap Handlers (Mobile/Hybrid) --
     const handleSlotClick = (slot: string, hasItem: boolean) => {
-        // If clicking an empty slot or explicitly clicking the "add" area
         if (!hasItem) {
             setPendingSlot(slot);
             setIsMobileLibraryOpen(true);
@@ -87,6 +85,11 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
             setNewPlanName('');
             setIsCreatingPlan(false);
         }
+    };
+
+    const handleDoMedicalGeneration = async (diseases: any[], cuisine: string, duration: 'day' | 'week') => {
+        await onGenerateMedical(diseases, cuisine, duration);
+        setIsMedicalModalOpen(false);
     };
 
     const LibraryContent = (
@@ -150,12 +153,6 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                         </div>
                     </div>
                 ))}
-                {filteredSavedMeals.length === 0 && (
-                    <div className="text-center py-10">
-                        <BookOpenIcon className="w-10 h-10 text-slate-100 mx-auto mb-2" />
-                        <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">No matching meals</p>
-                    </div>
-                )}
             </div>
         </div>
     );
@@ -165,36 +162,24 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
             {isMedicalModalOpen && (
                 <MedicalPlannerModal 
                     onClose={() => setIsMedicalModalOpen(false)}
-                    onGenerate={() => {}} 
-                    isLoading={false}
+                    onGenerate={handleDoMedicalGeneration} 
+                    isLoading={medicalPlannerState.isLoading}
+                    progress={medicalPlannerState.progress}
+                    status={medicalPlannerState.status}
                 />
             )}
 
-            {/* MOBILE SLIDE-OUT DRAWER */}
-            <div 
-                className={`fixed inset-y-0 right-0 z-50 w-72 bg-white shadow-2xl transform transition-transform duration-300 ease-in-out border-l border-slate-200 lg:hidden ${
-                    isMobileLibraryOpen ? 'translate-x-0' : 'translate-x-full'
-                }`}
-            >
+            <div className={`fixed inset-y-0 right-0 z-50 w-72 bg-white shadow-2xl transform transition-transform duration-300 ease-in-out border-l border-slate-200 lg:hidden ${isMobileLibraryOpen ? 'translate-x-0' : 'translate-x-full'}`}>
                 {LibraryContent}
             </div>
 
-            {/* Backdrop for mobile drawer */}
-            {isMobileLibraryOpen && (
-                <div 
-                    className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 lg:hidden"
-                    onClick={() => { setIsMobileLibraryOpen(false); setPendingSlot(null); }}
-                />
-            )}
+            {isMobileLibraryOpen && <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 lg:hidden" onClick={() => { setIsMobileLibraryOpen(false); setPendingSlot(null); }} />}
 
-            {/* DESKTOP SIDEBAR (Persistent) */}
             <div className="hidden lg:flex w-1/3 flex-col bg-white border border-slate-200 rounded-[2rem] shadow-sm overflow-hidden">
                 {LibraryContent}
             </div>
 
-            {/* MAIN PLAN AREA */}
             <div className="w-full lg:w-2/3 flex flex-col">
-                {/* Header & Controls */}
                 <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm mb-4">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                         <div>
@@ -204,149 +189,49 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                         <div className="flex items-center gap-2 w-full sm:w-auto">
                             {isCreatingPlan ? (
                                 <form onSubmit={handleCreatePlanSubmit} className="flex gap-2 w-full sm:w-auto animate-fade-in">
-                                    <input 
-                                        type="text" 
-                                        value={newPlanName}
-                                        onChange={(e) => setNewPlanName(e.target.value)}
-                                        placeholder="Plan Name" 
-                                        className="border-2 border-indigo-100 rounded-xl px-4 py-2.5 text-sm font-bold w-full focus:border-indigo-500 outline-none"
-                                        autoFocus
-                                    />
+                                    <input type="text" value={newPlanName} onChange={(e) => setNewPlanName(e.target.value)} placeholder="Plan Name" className="border-2 border-indigo-100 rounded-xl px-4 py-2.5 text-sm font-bold w-full focus:border-indigo-500 outline-none" autoFocus />
                                     <button type="submit" className="bg-indigo-600 text-white px-4 rounded-xl text-xs font-black uppercase tracking-widest">Save</button>
                                     <button type="button" onClick={() => setIsCreatingPlan(false)} className="bg-slate-100 text-slate-400 px-3 rounded-xl hover:bg-slate-200 transition-colors">X</button>
                                 </form>
                             ) : (
                                 <div className="flex gap-2 w-full">
-                                    <select 
-                                        className="border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-tighter bg-slate-50 text-slate-700 flex-grow sm:flex-grow-0 outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-                                        value={activePlanId || ''}
-                                        onChange={(e) => onPlanChange(Number(e.target.value))}
-                                    >
+                                    <select className="border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-tighter bg-slate-50 text-slate-700 flex-grow sm:flex-grow-0 outline-none focus:ring-2 focus:ring-indigo-500 transition-all" value={activePlanId || ''} onChange={(e) => onPlanChange(Number(e.target.value))}>
                                         {plans.length === 0 && <option value="">No Active Plans</option>}
-                                        {plans.map(p => (
-                                            <option key={p.id} value={p.id}>{p.name}</option>
-                                        ))}
+                                        {plans.map(p => (<option key={p.id} value={p.id}>{p.name}</option>))}
                                     </select>
-                                    <button 
-                                        onClick={() => setIsCreatingPlan(true)}
-                                        className="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 hover:bg-black transition-all shadow-md active:scale-95"
-                                    >
-                                        <PlusIcon className="w-4 h-4" /> New
-                                    </button>
+                                    <button onClick={() => setIsCreatingPlan(true)} className="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 hover:bg-black transition-all shadow-md active:scale-95"><PlusIcon className="w-4 h-4" /> New</button>
                                 </div>
                             )}
                         </div>
                     </div>
-
-                    {/* Day Selector */}
                     <div className="flex overflow-x-auto no-scrollbar gap-2 pb-2">
-                        {DAYS.map(day => (
-                            <button
-                                key={day}
-                                onClick={() => setSelectedDay(day)}
-                                className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all border-2 ${
-                                    selectedDay === day 
-                                    ? 'bg-emerald-50 border-emerald-500 text-emerald-700 shadow-sm' 
-                                    : 'border-transparent text-slate-400 hover:bg-slate-50'
-                                }`}
-                            >
-                                {day}
-                            </button>
-                        ))}
+                        {DAYS.map(day => (<button key={day} onClick={() => setSelectedDay(day)} className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all border-2 ${selectedDay === day ? 'bg-emerald-50 border-emerald-500 text-emerald-700 shadow-sm' : 'border-transparent text-slate-400 hover:bg-slate-50'}`}>{day}</button>))}
                     </div>
                 </div>
 
-                {/* Drop Zones */}
                 <div className="flex-grow space-y-4 overflow-y-auto pr-1 pb-24 lg:pb-10 no-scrollbar">
                     {FIXED_SLOTS.map((slot) => {
                         const slotItem = activePlan?.items.find(item => item.metadata?.slot === slot && item.metadata?.day === selectedDay);
                         const isPending = pendingSlot === slot;
-
                         return (
-                            <div 
-                                key={slot}
-                                onDragOver={handleDragOver}
-                                onDrop={(e) => handleDrop(e, slot)}
-                                onClick={() => handleSlotClick(slot, !!slotItem)}
-                                className={`
-                                    relative p-5 rounded-3xl border-2 transition-all min-h-[140px] flex flex-col justify-center cursor-pointer shadow-sm
-                                    ${draggingMealId && !slotItem ? 'border-dashed border-indigo-400 bg-indigo-50/50' : ''}
-                                    ${!slotItem && isPending ? 'border-emerald-500 ring-4 ring-emerald-50 bg-emerald-50/20' : 'border-slate-100 bg-white'}
-                                    ${!slotItem && !isPending ? 'hover:border-indigo-200 hover:bg-slate-50 group' : ''}
-                                    ${slotItem ? 'bg-slate-50 border-transparent shadow-none' : ''}
-                                `}
-                            >
+                            <div key={slot} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, slot)} onClick={() => handleSlotClick(slot, !!slotItem)} className={`relative p-5 rounded-3xl border-2 transition-all min-h-[140px] flex flex-col justify-center cursor-pointer shadow-sm ${draggingMealId && !slotItem ? 'border-dashed border-indigo-400 bg-indigo-50/50' : ''} ${!slotItem && isPending ? 'border-emerald-500 ring-4 ring-emerald-50 bg-emerald-50/20' : 'border-slate-100 bg-white'} ${!slotItem && !isPending ? 'hover:border-indigo-200 hover:bg-slate-50 group' : ''} ${slotItem ? 'bg-slate-50 border-transparent shadow-none' : ''}`}>
                                 <div className="absolute top-4 left-6 flex items-center gap-2 pointer-events-none">
-                                    <span className={`text-[10px] font-black uppercase tracking-[0.2em] transition-colors ${isPending ? 'text-emerald-600' : 'text-slate-400'}`}>
-                                        {slot}
-                                    </span>
+                                    <span className={`text-[10px] font-black uppercase tracking-[0.2em] transition-colors ${isPending ? 'text-emerald-600' : 'text-slate-400'}`}>{slot}</span>
                                     {slotItem && <span className="bg-emerald-50 text-emerald-600 text-[8px] font-black px-1.5 py-0.5 rounded border border-emerald-100 uppercase">Tracked</span>}
                                 </div>
-
                                 {slotItem ? (
                                     <div className="flex items-center justify-between mt-5 animate-fade-in">
                                         <div className="flex items-center gap-5">
-                                            <div className="w-16 h-16 rounded-2xl bg-white overflow-hidden flex-shrink-0 shadow-sm border border-slate-100">
-                                                {slotItem.meal.imageUrl ? (
-                                                    <img src={slotItem.meal.imageUrl} alt="" className="w-full h-full object-cover" />
-                                                ) : (
-                                                    <div className="flex items-center justify-center h-full text-slate-200"><UtensilsIcon className="w-6 h-6" /></div>
-                                                )}
-                                            </div>
-                                            <div>
-                                                <h4 className="font-black text-slate-800 text-sm uppercase tracking-tight leading-tight">{slotItem.meal.mealName}</h4>
-                                                <div className="flex items-center gap-3 mt-1.5">
-                                                    <span className="text-emerald-600 font-black text-xs">{Math.round(slotItem.meal.totalCalories)} KCAL</span>
-                                                    <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{Math.round(slotItem.meal.totalProtein)}g Pro</span>
-                                                </div>
-                                            </div>
+                                            <div className="w-16 h-16 rounded-2xl bg-white overflow-hidden flex-shrink-0 shadow-sm border border-slate-100">{slotItem.meal.imageUrl ? (<img src={slotItem.meal.imageUrl} alt="" className="w-full h-full object-cover" />) : (<div className="flex items-center justify-center h-full text-slate-200"><UtensilsIcon className="w-6 h-6" /></div>)}</div>
+                                            <div><h4 className="font-black text-slate-800 text-sm uppercase tracking-tight leading-tight">{slotItem.meal.mealName}</h4><div className="flex items-center gap-3 mt-1.5"><span className="text-emerald-600 font-black text-xs">{Math.round(slotItem.meal.totalCalories)} KCAL</span><span className="w-1 h-1 rounded-full bg-slate-300"></span><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{Math.round(slotItem.meal.totalProtein)}g Pro</span></div></div>
                                         </div>
-                                        <button 
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                onRemoveFromPlan(slotItem.id);
-                                            }}
-                                            className="p-3 text-slate-300 hover:text-rose-500 hover:bg-white rounded-2xl transition-all shadow-none hover:shadow-sm"
-                                        >
-                                            <TrashIcon className="w-5 h-5" />
-                                        </button>
+                                        <button onClick={(e) => { e.stopPropagation(); onRemoveFromPlan(slotItem.id); }} className="p-3 text-slate-300 hover:text-rose-500 hover:bg-white rounded-2xl transition-all shadow-none hover:shadow-sm"><TrashIcon className="w-5 h-5" /></button>
                                     </div>
-                                ) : (
-                                    <div className="flex flex-col items-center justify-center text-slate-400 mt-5 pointer-events-none">
-                                        {draggingMealId ? (
-                                            <div className="flex flex-col items-center gap-2 animate-bounce">
-                                                <PlusIcon className="w-8 h-8 text-indigo-500" />
-                                                <span className="text-indigo-600 font-black uppercase text-[10px] tracking-widest">Drop Meal Here</span>
-                                            </div>
-                                        ) : (
-                                            <div className="flex flex-col items-center gap-2">
-                                                <div className={`p-4 rounded-2xl transition-all ${isPending ? 'bg-emerald-500 text-white shadow-xl shadow-emerald-200 animate-pulse' : 'bg-slate-50 text-slate-300 group-hover:text-indigo-500 group-hover:bg-indigo-50'}`}>
-                                                    <PlusIcon className="w-6 h-6" />
-                                                </div>
-                                                <span className={`text-[10px] font-black uppercase tracking-widest mt-2 ${isPending ? 'text-emerald-700' : 'text-slate-300'}`}>
-                                                    {isPending ? 'Select from Library' : 'Empty Slot'}
-                                                </span>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                                
-                                {!slotItem && !draggingMealId && (
-                                    <div className={`absolute top-4 right-6 transition-all ${isPending ? 'scale-110' : 'scale-100'}`}>
-                                         <BookOpenIcon className={`w-5 h-5 ${isPending ? 'text-emerald-500' : 'text-slate-200 group-hover:text-indigo-200'}`} />
-                                    </div>
-                                )}
+                                ) : (<div className="flex flex-col items-center justify-center text-slate-400 mt-5 pointer-events-none">{draggingMealId ? (<div className="flex flex-col items-center gap-2 animate-bounce"><PlusIcon className="w-8 h-8 text-indigo-500" /><span className="text-indigo-600 font-black uppercase text-[10px] tracking-widest">Drop Meal Here</span></div>) : (<div className="flex flex-col items-center gap-2"><div className={`p-4 rounded-2xl transition-all ${isPending ? 'bg-emerald-500 text-white shadow-xl shadow-emerald-200 animate-pulse' : 'bg-slate-50 text-slate-300 group-hover:text-indigo-500 group-hover:bg-indigo-50'}`}><PlusIcon className="w-6 h-6" /></div><span className={`text-[10px] font-black uppercase tracking-widest mt-2 ${isPending ? 'text-emerald-700' : 'text-slate-300'}`}>{isPending ? 'Select from Library' : 'Empty Slot'}</span></div>)}</div>)}
                             </div>
                         );
                     })}
-
-                    <button 
-                        onClick={() => setIsMedicalModalOpen(true)}
-                        className="w-full py-6 mt-8 border-4 border-dashed border-indigo-100 bg-indigo-50/20 rounded-[2.5rem] text-indigo-500 font-black uppercase tracking-[0.2em] text-[10px] hover:bg-indigo-50 hover:border-indigo-200 transition-all flex items-center justify-center gap-3 shadow-sm"
-                    >
-                        <BeakerIcon className="w-5 h-5" /> Generate AI Plan
-                    </button>
+                    <button onClick={() => setIsMedicalModalOpen(true)} className="w-full py-6 mt-8 border-4 border-dashed border-indigo-100 bg-indigo-50/20 rounded-[2.5rem] text-indigo-500 font-black uppercase tracking-[0.2em] text-[10px] hover:bg-indigo-50 hover:border-indigo-200 transition-all flex items-center justify-center gap-3 shadow-sm"><BeakerIcon className="w-5 h-5" /> Generate AI Plan</button>
                 </div>
             </div>
         </div>

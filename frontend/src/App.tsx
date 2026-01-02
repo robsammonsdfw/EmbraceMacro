@@ -1,6 +1,7 @@
+
 import React, { useState, useCallback, useEffect } from 'react';
 import * as apiService from './services/apiService';
-import { analyzeFoodImage, searchFood, analyzeRestaurantMeal, getRecipesFromImage } from './services/geminiService';
+import { analyzeFoodImage, searchFood, analyzeRestaurantMeal, getRecipesFromImage, getMealSuggestions } from './services/geminiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
 import type { NutritionInfo, MealLogEntry, SavedMeal, MealPlan, HealthStats, UserDashboardPrefs, Recipe } from './types';
 import { ImageUploader } from './components/ImageUploader';
@@ -57,6 +58,7 @@ const App: React.FC = () => {
   const [isHealthConnected, setIsHealthConnected] = useState(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [medicalPlannerState, setMedicalPlannerState] = useState({ isLoading: false, progress: 0, status: '' });
 
   const loadAllData = useCallback(async () => {
     if (!isAuthenticated) return;
@@ -92,6 +94,28 @@ const App: React.FC = () => {
     } catch (err) { setError('Analysis failed. Please try again.'); }
     finally { setIsProcessing(false); }
   }, []);
+
+  const handleMedicalGeneration = async (diseases: any[], cuisine: string, duration: 'day' | 'week') => {
+    setMedicalPlannerState({ isLoading: true, progress: 20, status: 'Initializing Clinical Engine...' });
+    try {
+        const conditions = diseases.map(d => d.name);
+        setMedicalPlannerState(prev => ({ ...prev, progress: 45, status: `Applying constraints for: ${conditions.join(', ')}` }));
+        const suggestions = await getMealSuggestions(conditions, cuisine);
+        
+        setMedicalPlannerState(prev => ({ ...prev, progress: 85, status: 'Finalizing meal selections...' }));
+        // Save these suggestions as permanent meals for the user to select in the planner
+        for (const meal of suggestions) {
+            await apiService.saveMeal(meal);
+        }
+        await loadAllData();
+        setActiveView('plan');
+        alert(`Successfully generated ${suggestions.length} clinical meal ideas and added them to your Library.`);
+    } catch (err) {
+        alert("Failed to generate clinical plan. Check your connection.");
+    } finally {
+        setMedicalPlannerState({ isLoading: false, progress: 0, status: '' });
+    }
+  };
 
   const handleSaveToHistory = async (updatedData: NutritionInfo) => {
     try {
@@ -134,7 +158,7 @@ const App: React.FC = () => {
 
       switch (activeView) {
           case 'home': return <CommandCenter dailyCalories={dailyCalories} dailyProtein={dailyProtein} rewardsBalance={walletBalance} userName={user?.firstName || 'Hero'} healthStats={healthStats} isHealthConnected={isHealthConnected} isHealthSyncing={false} onConnectHealth={()=>{}} onScanClick={() => setActiveView('body')} onCameraClick={() => setIsCaptureOpen(true)} onBarcodeClick={() => setIsCaptureOpen(true)} onPantryChefClick={() => setIsCaptureOpen(true)} onRestaurantClick={() => setIsCaptureOpen(true)} onUploadClick={() => setIsCaptureOpen(true)} dashboardPrefs={dashboardPrefs} />;
-          case 'plan': return <MealPlanManager plans={mealPlans} activePlanId={activePlanId} savedMeals={savedMeals} onPlanChange={setActivePlanId} onCreatePlan={name => apiService.createMealPlan(name).then(p => setMealPlans([...mealPlans, p]))} onRemoveFromPlan={id => apiService.removeMealFromPlanItem(id)} onQuickAdd={(pid, m, d, s) => apiService.addMealToPlan(pid, m.id, {day: d, slot: s})} />;
+          case 'plan': return <MealPlanManager plans={mealPlans} activePlanId={activePlanId} savedMeals={savedMeals} onPlanChange={setActivePlanId} onCreatePlan={name => apiService.createMealPlan(name).then(p => setMealPlans([...mealPlans, p]))} onRemoveFromPlan={id => apiService.removeMealFromPlanItem(id)} onQuickAdd={(pid, m, d, s) => apiService.addMealToPlan(pid, m.id, {day: d, slot: s})} onGenerateMedical={handleMedicalGeneration} medicalPlannerState={medicalPlannerState} />;
           case 'meals': return <MealLibrary meals={savedMeals} onAdd={() => {}} onDelete={id => apiService.deleteMeal(id)} onSelectMeal={setViewingMealDetails} />;
           case 'history': return <MealHistory logEntries={mealLog} onAddToPlan={() => {}} onSaveMeal={() => {}} onSelectMeal={setViewingMealDetails} />;
           case 'grocery': return <GroceryList mealPlans={mealPlans} />;

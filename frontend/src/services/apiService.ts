@@ -4,7 +4,6 @@ import type {
   GroceryList, GroceryItem, RewardsSummary, MealLogEntry, Recipe, 
   UserProfile, Friendship, ReadinessScore, FormAnalysisResult, RecoveryData,
   AssessmentState, UserDashboardPrefs, HealthStats, MatchProfile, PartnerBlueprint, CoachingRelation,
-  // FIX: Added Assessment to types imported from types.ts
   Assessment
 } from '../types';
 
@@ -12,7 +11,6 @@ const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws
 const AUTH_TOKEN_KEY = 'embracehealth-api-token';
 const PROXY_CLIENT_KEY = 'embracehealth-proxy-client-id';
 
-// FIX: Exported MapPlace interface for restaurant functionality
 export interface MapPlace {
     uri: string;
     title: string;
@@ -52,6 +50,7 @@ export const analyzeRestaurantMeal = (base64Image: string, mimeType: string): Pr
 export const getRecipesFromImage = (base64Image: string, mimeType: string): Promise<Recipe[]> => callApi('/analyze-image-recipes', 'POST', { base64Image, mimeType });
 export const searchFood = (query: string): Promise<NutritionInfo> => callApi('/search-food', 'POST', { query });
 export const identifyGroceryItems = (base64Image: string, mimeType: string): Promise<{ items: string[] }> => callApi('/analyze-image-grocery', 'POST', { base64Image, mimeType });
+export const getMealSuggestions = (conditions: string[], cuisine: string): Promise<NutritionInfo[]> => callApi('/get-meal-suggestions', 'POST', { conditions, cuisine });
 
 // Database Persistence
 export const getMealLog = (): Promise<MealLogEntry[]> => callApi('/meal-log', 'GET');
@@ -69,7 +68,6 @@ export const saveDashboardPrefs = (prefs: UserDashboardPrefs): Promise<void> => 
 export const getHealthStatsFromDB = (): Promise<HealthStats> => callApi('/health-metrics', 'GET');
 export const syncHealthStatsToDB = (stats: Partial<HealthStats>): Promise<HealthStats> => callApi('/health-metrics', 'POST', stats);
 
-// FIX: Added missing social and coaching methods
 // Social & Coaching
 export const getSocialProfile = (): Promise<UserProfile> => callApi('/social/profile', 'GET');
 export const updateSocialProfile = (updates: Partial<UserProfile>): Promise<UserProfile> => callApi('/social/profile', 'POST', updates);
@@ -89,7 +87,6 @@ export const calculateReadiness = (stats: RecoveryData): Promise<ReadinessScore>
 export const analyzeExerciseForm = (base64Image: string, exercise: string): Promise<FormAnalysisResult> => callApi('/analyze-form', 'POST', { base64Image, exercise });
 export const logRecoveryStats = (data: RecoveryData): Promise<void> => callApi('/body/log-recovery', 'POST', data);
 
-// FIX: Added missing assessment and matching methods
 // Assessments & Matching
 export const getAssessments = (): Promise<Assessment[]> => callApi('/assessments', 'GET');
 export const getAssessmentState = (): Promise<AssessmentState> => callApi('/assessments/state', 'GET');
@@ -99,7 +96,6 @@ export const getPartnerBlueprint = (): Promise<PartnerBlueprint> => callApi('/bl
 export const savePartnerBlueprint = (preferences: any): Promise<void> => callApi('/blueprint', 'POST', { preferences });
 export const getMatches = (): Promise<MatchProfile[]> => callApi('/matches', 'GET');
 
-// FIX: Added missing restaurant and map methods
 // Restaurant & Maps
 export const searchNearbyRestaurants = (lat: number, lng: number): Promise<{ places: MapPlace[] }> => callApi('/search-restaurants', 'POST', { lat, lng });
 export const checkInAtLocation = (placeName: string): Promise<void> => callApi('/check-in', 'POST', { placeName });
