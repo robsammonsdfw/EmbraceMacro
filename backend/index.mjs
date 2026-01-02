@@ -118,7 +118,7 @@ export const handler = async (event) => {
         if (aiRoutes.includes(resource)) {
             const ai = new GoogleGenAI({ apiKey: API_KEY });
             const body = JSON.parse(event.body || '{}');
-            const { base64Image, mimeType, query, conditions, cuisine } = body;
+            const { base64Image, mimeType, query, conditions, cuisine, duration } = body;
             let prompt = ""; let schema;
             
             if (resource === 'analyze-image') { 
@@ -138,7 +138,8 @@ export const handler = async (event) => {
                 schema = nutritionSchema;
             }
             else if (resource === 'get-meal-suggestions') {
-                prompt = `Act as 'Clinical Nutritionist GPT'. Generate 3 meal ideas in ${cuisine} cuisine for a user with these conditions: ${conditions.join(', ')}. Ensure the nutritional breakdown respects all condition-specific safety guidelines (e.g. low sodium for Hypertension, low sugar for Diabetes). Provide justification. Return in English JSON.`;
+                const mealCount = duration === 'week' ? 7 : 3;
+                prompt = `Act as 'Clinical Nutritionist GPT'. Generate ${mealCount} meal ideas in ${cuisine} cuisine for a user with these conditions: ${conditions.join(', ')}. The plan is for one ${duration}. Ensure the nutritional breakdown respects all condition-specific safety guidelines (e.g. low sodium for Hypertension, low sugar for Diabetes). Provide justification. Return in English JSON.`;
                 schema = suggestionsSchema;
             }
 

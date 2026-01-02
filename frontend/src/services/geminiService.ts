@@ -18,7 +18,7 @@ export const searchFood = async (query: string): Promise<NutritionInfo> => {
     return apiService.searchFood(query);
 };
 
-export const getMealSuggestions = async (conditions: string[], cuisine: string): Promise<NutritionInfo[]> => {
-    // Correctly using conditions and cuisine to fetch clinical meal ideas
-    return apiService.getMealSuggestions(conditions, cuisine);
+export const getMealSuggestions = async (conditions: string[], cuisine: string, duration: 'day' | 'week'): Promise<NutritionInfo[]> => {
+    // Correctly using conditions, cuisine, and duration to fetch clinical meal ideas
+    return apiService.getMealSuggestions(conditions, cuisine, duration);
 };

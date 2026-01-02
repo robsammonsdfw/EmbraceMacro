@@ -50,7 +50,7 @@ export const analyzeRestaurantMeal = (base64Image: string, mimeType: string): Pr
 export const getRecipesFromImage = (base64Image: string, mimeType: string): Promise<Recipe[]> => callApi('/analyze-image-recipes', 'POST', { base64Image, mimeType });
 export const searchFood = (query: string): Promise<NutritionInfo> => callApi('/search-food', 'POST', { query });
 export const identifyGroceryItems = (base64Image: string, mimeType: string): Promise<{ items: string[] }> => callApi('/analyze-image-grocery', 'POST', { base64Image, mimeType });
-export const getMealSuggestions = (conditions: string[], cuisine: string): Promise<NutritionInfo[]> => callApi('/get-meal-suggestions', 'POST', { conditions, cuisine });
+export const getMealSuggestions = (conditions: string[], cuisine: string, duration: 'day' | 'week'): Promise<NutritionInfo[]> => callApi('/get-meal-suggestions', 'POST', { conditions, cuisine, duration });
 
 // Database Persistence
 export const getMealLog = (): Promise<MealLogEntry[]> => callApi('/meal-log', 'GET');
@@ -110,7 +110,7 @@ export const getGroceryListItems = (listId: number): Promise<GroceryItem[]> => c
 export const createGroceryList = (name: string): Promise<GroceryList> => callApi('/grocery-lists', 'POST', { name });
 export const deleteGroceryList = (id: number): Promise<void> => callApi(`/grocery-lists/${id}`, 'DELETE');
 export const updateGroceryItem = (itemId: number, checked: boolean): Promise<GroceryItem> => callApi(`/grocery-lists/items/${itemId}`, 'PATCH', { checked });
-export const addGroceryItem = (listId: number, name: string): Promise<GroceryItem> => callApi(`/grocery-lists/${listId}/items`, 'POST', { name });
+export const addGroceryItem = (listId: number, name: string): Promise<GroceryItem> => callApi(`/grocery-lists/items/${listId}/items`, 'POST', { name });
 export const removeGroceryItem = (itemId: number): Promise<void> => callApi(`/grocery-lists/items/${itemId}`, 'DELETE');
 export const clearGroceryListItems = (listId: number, type: 'all' | 'checked'): Promise<void> => callApi(`/grocery-lists/items/${listId}/items`, 'DELETE', { type });
 export const importIngredientsFromPlans = (listId: number, planIds: number[]): Promise<GroceryItem[]> => callApi(`/grocery-lists/${listId}/import`, 'POST', { planIds });

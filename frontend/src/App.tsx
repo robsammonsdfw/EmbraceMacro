@@ -99,8 +99,8 @@ const App: React.FC = () => {
     setMedicalPlannerState({ isLoading: true, progress: 20, status: 'Initializing Clinical Engine...' });
     try {
         const conditions = diseases.map(d => d.name);
-        setMedicalPlannerState(prev => ({ ...prev, progress: 45, status: `Applying constraints for: ${conditions.join(', ')}` }));
-        const suggestions = await getMealSuggestions(conditions, cuisine);
+        setMedicalPlannerState(prev => ({ ...prev, progress: 45, status: `Applying constraints for ${duration}: ${conditions.join(', ')}` }));
+        const suggestions = await getMealSuggestions(conditions, cuisine, duration);
         
         setMedicalPlannerState(prev => ({ ...prev, progress: 85, status: 'Finalizing meal selections...' }));
         // Save these suggestions as permanent meals for the user to select in the planner
