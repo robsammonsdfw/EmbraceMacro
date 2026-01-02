@@ -1,4 +1,3 @@
-
 import type { 
   NutritionInfo, SavedMeal, MealPlan, MealPlanItem, MealPlanItemMetadata, 
   GroceryList, GroceryItem, RewardsSummary, MealLogEntry, Recipe, 
@@ -44,7 +43,6 @@ const callApi = async (endpoint: string, method: string, body?: any) => {
     } catch (error) { console.error("Fetch error:", error); throw error; }
 };
 
-// AI Analysis
 export const analyzeImageWithGemini = (base64Image: string, mimeType: string): Promise<NutritionInfo> => callApi('/analyze-image', 'POST', { base64Image, mimeType });
 export const analyzeRestaurantMeal = (base64Image: string, mimeType: string): Promise<Recipe> => callApi('/analyze-restaurant-meal', 'POST', { base64Image, mimeType });
 export const getRecipesFromImage = (base64Image: string, mimeType: string): Promise<Recipe[]> => callApi('/analyze-image-recipes', 'POST', { base64Image, mimeType });
@@ -52,7 +50,6 @@ export const searchFood = (query: string): Promise<NutritionInfo> => callApi('/s
 export const identifyGroceryItems = (base64Image: string, mimeType: string): Promise<{ items: string[] }> => callApi('/analyze-image-grocery', 'POST', { base64Image, mimeType });
 export const getMealSuggestions = (conditions: string[], cuisine: string, duration: 'day' | 'week'): Promise<NutritionInfo[]> => callApi('/get-meal-suggestions', 'POST', { conditions, cuisine, duration });
 
-// Database Persistence
 export const getMealLog = (): Promise<MealLogEntry[]> => callApi('/meal-log', 'GET');
 export const getMealLogEntryById = (id: number): Promise<MealLogEntry> => callApi(`/meal-log/${id}`, 'GET');
 export const createMealLogEntry = (mealData: NutritionInfo, imageBase64: string): Promise<MealLogEntry> => callApi('/meal-log', 'POST', { mealData, imageBase64 });
@@ -61,14 +58,12 @@ export const getSavedMealById = (id: number): Promise<SavedMeal> => callApi(`/sa
 export const saveMeal = (mealData: NutritionInfo): Promise<SavedMeal> => callApi('/saved-meals', 'POST', mealData);
 export const deleteMeal = (id: number): Promise<void> => callApi(`/saved-meals/${id}`, 'DELETE');
 
-// User & Health
 export const getRewardsSummary = (): Promise<RewardsSummary> => callApi('/rewards', 'GET');
 export const getDashboardPrefs = (): Promise<UserDashboardPrefs> => callApi('/body/dashboard-prefs', 'GET');
 export const saveDashboardPrefs = (prefs: UserDashboardPrefs): Promise<void> => callApi('/body/dashboard-prefs', 'POST', prefs);
 export const getHealthStatsFromDB = (): Promise<HealthStats> => callApi('/health-metrics', 'GET');
 export const syncHealthStatsToDB = (stats: Partial<HealthStats>): Promise<HealthStats> => callApi('/health-metrics', 'POST', stats);
 
-// Social & Coaching
 export const getSocialProfile = (): Promise<UserProfile> => callApi('/social/profile', 'GET');
 export const updateSocialProfile = (updates: Partial<UserProfile>): Promise<UserProfile> => callApi('/social/profile', 'POST', updates);
 export const getFriends = (): Promise<Friendship[]> => callApi('/social/friends', 'GET');
@@ -82,12 +77,10 @@ export const inviteClient = (email: string): Promise<CoachingRelation> => callAp
 export const respondToCoachingInvite = (id: string, status: 'active' | 'rejected'): Promise<void> => callApi(`/coaching/respond/${id}`, 'POST', { status });
 export const revokeCoachingAccess = (id: string): Promise<void> => callApi(`/coaching/revoke/${id}`, 'DELETE');
 
-// Body Intelligence
 export const calculateReadiness = (stats: RecoveryData): Promise<ReadinessScore> => callApi('/calculate-readiness', 'POST', stats);
 export const analyzeExerciseForm = (base64Image: string, exercise: string): Promise<FormAnalysisResult> => callApi('/analyze-form', 'POST', { base64Image, exercise });
 export const logRecoveryStats = (data: RecoveryData): Promise<void> => callApi('/body/log-recovery', 'POST', data);
 
-// Assessments & Matching
 export const getAssessments = (): Promise<Assessment[]> => callApi('/assessments', 'GET');
 export const getAssessmentState = (): Promise<AssessmentState> => callApi('/assessments/state', 'GET');
 export const submitAssessment = (id: string, responses: any): Promise<void> => callApi(`/assessments/${id}`, 'POST', { responses });
@@ -96,11 +89,9 @@ export const getPartnerBlueprint = (): Promise<PartnerBlueprint> => callApi('/bl
 export const savePartnerBlueprint = (preferences: any): Promise<void> => callApi('/blueprint', 'POST', { preferences });
 export const getMatches = (): Promise<MatchProfile[]> => callApi('/matches', 'GET');
 
-// Restaurant & Maps
 export const searchNearbyRestaurants = (lat: number, lng: number): Promise<{ places: MapPlace[] }> => callApi('/search-restaurants', 'POST', { lat, lng });
 export const checkInAtLocation = (placeName: string): Promise<void> => callApi('/check-in', 'POST', { placeName });
 
-// Grocery & Plans
 export const getMealPlans = (): Promise<MealPlan[]> => callApi('/meal-plans', 'GET');
 export const createMealPlan = (name: string): Promise<MealPlan> => callApi('/meal-plans', 'POST', { name });
 export const addMealToPlan = (planId: number, savedMealId: number, metadata: MealPlanItemMetadata): Promise<MealPlanItem> => callApi(`/meal-plans/${planId}/items`, 'POST', { savedMealId, metadata });

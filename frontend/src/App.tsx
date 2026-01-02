@@ -95,21 +95,19 @@ const App: React.FC = () => {
   }, []);
 
   const handleMedicalGeneration = async (diseases: any[], cuisine: string, duration: 'day' | 'week') => {
-    setMedicalPlannerState({ isLoading: true, progress: 20, status: 'Initializing Clinical Engine...' });
+    setMedicalPlannerState({ isLoading: true, progress: 20, status: `Initializing clinical engine for your ${duration} plan...` });
     try {
         const conditions = diseases.map(d => d.name);
-        // Using 'duration' in status message and API call to ensure parameter is read by the compiler
-        setMedicalPlannerState(prev => ({ ...prev, progress: 45, status: `Applying constraints for ${duration}: ${conditions.join(', ')}` }));
+        setMedicalPlannerState(prev => ({ ...prev, progress: 45, status: `Applying constraints for: ${conditions.join(', ')}` }));
         const suggestions = await getMealSuggestions(conditions, cuisine, duration);
         
-        setMedicalPlannerState(prev => ({ ...prev, progress: 85, status: 'Finalizing meal selections...' }));
-        // Save these suggestions as permanent meals for the user to select in the planner
+        setMedicalPlannerState(prev => ({ ...prev, progress: 85, status: `Finalizing ${duration} meal selections...` }));
         for (const meal of suggestions) {
             await apiService.saveMeal(meal);
         }
         await loadAllData();
         setActiveView('plan');
-        alert(`Successfully generated ${suggestions.length} clinical meal ideas for your ${duration} and added them to your Library.`);
+        alert(`Successfully generated ${suggestions.length} clinical meal ideas and added them to your Library.`);
     } catch (err) {
         alert("Failed to generate clinical plan. Check your connection.");
     } finally {
@@ -123,7 +121,7 @@ const App: React.FC = () => {
       const newEntry = await apiService.createMealLogEntry(updatedData, image ? image.split(',')[1] : "");
       setMealLog(prev => [newEntry, ...prev]);
       setImage(null); setNutritionData(null); setChefRecipes([]);
-      loadAllData(); // Refresh points
+      loadAllData();
     } catch (err) { setError("Failed to save to history."); }
     finally { setIsProcessing(false); }
   };
@@ -157,7 +155,7 @@ const App: React.FC = () => {
       const dailyProtein = todayLog.reduce((acc, e) => acc + e.totalProtein, 0);
 
       switch (activeView) {
-          case 'home': return <CommandCenter dailyCalories={dailyCalories} dailyProtein={dailyProtein} rewardsBalance={walletBalance} userName={user?.firstName || 'Hero'} healthStats={healthStats} isHealthConnected={isHealthConnected} isHealthSyncing={false} onConnectHealth={()=>{}} onScanClick={() => setActiveView('body')} onCameraClick={() => setIsCaptureOpen(true)} onBarcodeClick={() => setIsCaptureOpen(true)} onPantryChefClick={() => setIsCaptureOpen(true)} onRestaurantClick={() => setIsCaptureOpen(true)} onUploadClick={() => setIsCaptureOpen(true)} dashboardPrefs={dashboardPrefs} isProxy={!!proxyClient} />;
+          case 'home': return <CommandCenter dailyCalories={dailyCalories} dailyProtein={dailyProtein} rewardsBalance={walletBalance} userName={user?.firstName || 'Hero'} healthStats={healthStats} isHealthConnected={isHealthConnected} isHealthSyncing={false} onConnectHealth={()=>{}} onScanClick={() => setActiveView('body')} onCameraClick={() => setIsCaptureOpen(true)} onBarcodeClick={() => setIsCaptureOpen(true)} onPantryChefClick={() => setIsCaptureOpen(true)} onRestaurantClick={() => setIsCaptureOpen(true)} onUploadClick={() => setIsCaptureOpen(true)} dashboardPrefs={dashboardPrefs} />;
           case 'plan': return <MealPlanManager plans={mealPlans} activePlanId={activePlanId} savedMeals={savedMeals} onPlanChange={setActivePlanId} onCreatePlan={name => apiService.createMealPlan(name).then(p => setMealPlans([...mealPlans, p]))} onRemoveFromPlan={id => apiService.removeMealFromPlanItem(id)} onQuickAdd={(pid, m, d, s) => apiService.addMealToPlan(pid, m.id, {day: d, slot: s})} onGenerateMedical={handleMedicalGeneration} medicalPlannerState={medicalPlannerState} />;
           case 'meals': return <MealLibrary meals={savedMeals} onAdd={() => {}} onDelete={id => apiService.deleteMeal(id)} onSelectMeal={setViewingMealDetails} />;
           case 'history': return <MealHistory logEntries={mealLog} onAddToPlan={() => {}} onSaveMeal={() => {}} onSelectMeal={setViewingMealDetails} />;
