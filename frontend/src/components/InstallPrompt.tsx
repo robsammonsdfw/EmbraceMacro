@@ -25,7 +25,7 @@ export const InstallPrompt: React.FC = () => {
             <div className="flex justify-between items-start">
                 <div className="flex gap-4">
                     <div className="bg-white p-2 rounded-2xl h-12 w-12 flex items-center justify-center shadow-lg">
-                        <img src="/input_file_1.png" alt="EmbraceHealth" className="w-8 h-8" />
+                        <img src="icon.png" alt="EmbraceHealth" className="w-8 h-8" />
                     </div>
                     <div>
                         <h4 className="font-black uppercase tracking-tight text-emerald-400">Install Digital Twin</h4>

@@ -40,7 +40,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
         <div className="h-full flex flex-col bg-white">
             <div className="p-6">
                 <div className="mb-4">
-                    <img src="/input_file_0.png" alt="EmbraceHealth AI" className="h-10 w-auto" />
+                    <img src="logo.png" alt="EmbraceHealth AI" className="h-10 w-auto" />
                 </div>
                 
                 {onJourneyChange && (
