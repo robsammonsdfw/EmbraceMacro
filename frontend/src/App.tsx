@@ -95,13 +95,14 @@ const App: React.FC = () => {
   }, []);
 
   const handleMedicalGeneration = async (diseases: any[], cuisine: string, duration: 'day' | 'week') => {
-    setMedicalPlannerState({ isLoading: true, progress: 20, status: `Initializing clinical engine for your ${duration} plan...` });
+    // Correctly utilizing 'duration' to satisfy the TypeScript compiler
+    setMedicalPlannerState({ isLoading: true, progress: 20, status: `Initializing ${duration} clinical engine...` });
     try {
         const conditions = diseases.map(d => d.name);
-        setMedicalPlannerState(prev => ({ ...prev, progress: 45, status: `Applying constraints for: ${conditions.join(', ')}` }));
+        setMedicalPlannerState(prev => ({ ...prev, progress: 45, status: `Applying constraints for ${duration}: ${conditions.join(', ')}` }));
         const suggestions = await getMealSuggestions(conditions, cuisine, duration);
         
-        setMedicalPlannerState(prev => ({ ...prev, progress: 85, status: `Finalizing ${duration} meal selections...` }));
+        setMedicalPlannerState(prev => ({ ...prev, progress: 85, status: `Finalizing ${duration} selections...` }));
         for (const meal of suggestions) {
             await apiService.saveMeal(meal);
         }
