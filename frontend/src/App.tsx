@@ -32,7 +32,6 @@ type ActiveView = 'hub' | 'home' | 'plan' | 'meals' | 'history' | 'grocery' | 'r
 
 const App: React.FC = () => {
   const { isAuthenticated, isLoading: isAuthLoading, logout, user } = useAuth();
-  // Start at 'hub' (the 3-button main menu) instead of 'home'
   const [activeView, setActiveView] = useState<ActiveView>('hub');
   const [isCaptureOpen, setIsCaptureOpen] = useState(false);
   const [isGoalWizardOpen, setIsGoalWizardOpen] = useState(false);
@@ -75,9 +74,9 @@ const App: React.FC = () => {
         ]);
         setMealLog(log); setSavedMeals(saved); setMealPlans(plans); setDashboardPrefs(prev => ({ ...prev, ...prefs })); setWalletBalance(rewards.points_total);
         if (health) { setHealthStats(prev => ({ ...prev, ...health })); setIsHealthConnected(true); }
-        if (plans.length > 0) setActivePlanId(plans[0].id);
+        if (plans.length > 0 && activePlanId === null) setActivePlanId(plans[0].id);
     } catch (e) { console.error("Load failed", e); }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, activePlanId]);
 
   useEffect(() => {
     loadAllData();
@@ -110,7 +109,7 @@ const App: React.FC = () => {
         }
         await loadAllData();
         setActiveView('plan');
-        alert(`Successfully generated ${suggestions.length} clinical meal ideas for your ${duration} and added them to your Library.`);
+        alert(`Successfully generated ${suggestions.length} clinical meal ideas and added them to your Library.`);
     } catch (err) {
         alert("Failed to generate clinical plan. Check your connection.");
     } finally {
@@ -127,6 +126,24 @@ const App: React.FC = () => {
       loadAllData();
     } catch (err) { setError("Failed to save to history."); }
     finally { setIsProcessing(false); }
+  };
+
+  const handleQuickAddMeal = async (pid: number, mid: number, day: string, slot: string) => {
+      try {
+          await apiService.addMealToPlan(pid, mid, { day, slot });
+          await loadAllData();
+      } catch (err) {
+          alert("Failed to add meal to plan.");
+      }
+  };
+
+  const handleRemoveMeal = async (id: number) => {
+      try {
+          await apiService.removeMealFromPlanItem(id);
+          await loadAllData();
+      } catch (err) {
+          alert("Failed to remove meal.");
+      }
   };
 
   const renderActiveView = () => {
@@ -159,8 +176,8 @@ const App: React.FC = () => {
 
       switch (activeView) {
           case 'home': return <CommandCenter dailyCalories={dailyCalories} dailyProtein={dailyProtein} rewardsBalance={walletBalance} userName={user?.firstName || 'Hero'} healthStats={healthStats} isHealthConnected={isHealthConnected} isHealthSyncing={false} onConnectHealth={()=>{}} onScanClick={() => setActiveView('body')} onCameraClick={() => setIsCaptureOpen(true)} onBarcodeClick={() => setIsCaptureOpen(true)} onPantryChefClick={() => setIsCaptureOpen(true)} onRestaurantClick={() => setIsCaptureOpen(true)} onUploadClick={() => setIsCaptureOpen(true)} dashboardPrefs={dashboardPrefs} isProxy={!!proxyClient} />;
-          case 'plan': return <MealPlanManager plans={mealPlans} activePlanId={activePlanId} savedMeals={savedMeals} onPlanChange={setActivePlanId} onCreatePlan={name => apiService.createMealPlan(name).then(p => setMealPlans([...mealPlans, p]))} onRemoveFromPlan={id => apiService.removeMealFromPlanItem(id)} onQuickAdd={(pid, m, d, s) => apiService.addMealToPlan(pid, m.id, {day: d, slot: s})} onGenerateMedical={handleMedicalGeneration} medicalPlannerState={medicalPlannerState} />;
-          case 'meals': return <MealLibrary meals={savedMeals} onAdd={() => {}} onDelete={id => apiService.deleteMeal(id)} onSelectMeal={setViewingMealDetails} />;
+          case 'plan': return <MealPlanManager plans={mealPlans} activePlanId={activePlanId} savedMeals={savedMeals} onPlanChange={setActivePlanId} onCreatePlan={name => apiService.createMealPlan(name).then(() => loadAllData())} onRemoveFromPlan={handleRemoveMeal} onQuickAdd={(pid, m, d, s) => handleQuickAddMeal(pid, m.id, d, s)} onGenerateMedical={handleMedicalGeneration} medicalPlannerState={medicalPlannerState} />;
+          case 'meals': return <MealLibrary meals={savedMeals} onAdd={() => {}} onDelete={id => apiService.deleteMeal(id).then(loadAllData)} onSelectMeal={setViewingMealDetails} />;
           case 'history': return <MealHistory logEntries={mealLog} onAddToPlan={() => {}} onSaveMeal={() => {}} onSelectMeal={setViewingMealDetails} />;
           case 'grocery': return <GroceryList mealPlans={mealPlans} />;
           case 'rewards': return <RewardsDashboard />;
@@ -176,7 +193,6 @@ const App: React.FC = () => {
   if (isAuthLoading) return <div className="min-h-screen flex items-center justify-center"><Loader message="Authenticating..." /></div>;
   if (!isAuthenticated) return <Login />;
 
-  // Hub is full screen outside the Sidebar Layout
   if (activeView === 'hub') {
     return <Hub onEnterMeals={() => setActiveView('home')} onLogout={logout} />;
   }
