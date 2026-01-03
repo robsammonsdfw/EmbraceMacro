@@ -60,7 +60,6 @@ export const Hub: React.FC<HubProps> = ({ onEnterMeals, onLogout }) => {
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
                      <div className="flex items-center gap-2">
                         <img src="/logo.png" alt="EH" className="h-8 w-auto" />
-                        <span className="hidden sm:block text-xl font-black text-slate-900 tracking-tighter">EmbraceHealth AI</span>
                      </div>
                     <button 
                         onClick={onLogout}

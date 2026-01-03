@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import * as db from './services/databaseService.mjs';
@@ -139,7 +138,7 @@ export const handler = async (event) => {
             }
             else if (resource === 'get-meal-suggestions') {
                 const mealCount = duration === 'week' ? 7 : 3;
-                prompt = `Act as 'Clinical Nutritionist GPT'. Generate ${mealCount} meal ideas in ${cuisine} cuisine for a user with these conditions: ${conditions.join(', ')}. The plan is for one ${duration}. Ensure the nutritional breakdown respects all condition-specific safety guidelines (e.g. low sodium for Hypertension, low sugar for Diabetes). Provide justification. Return in English JSON.`;
+                prompt = `Act as 'Clinical Nutritionist GPT'. Generate ${mealCount} meal ideas in ${cuisine} cuisine for a user with these conditions: ${conditions.join(', ')}. The plan is for one ${duration}. Ensure the nutritional breakdown respects all condition-specific safety guidelines. Return in English JSON.`;
                 schema = suggestionsSchema;
             }
 
@@ -151,11 +150,73 @@ export const handler = async (event) => {
             return { statusCode: 200, headers, body: res.text };
         }
 
+        // --- Meal Log ---
         if (resource === 'meal-log') {
             if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await db.getMealLogEntries(currentUserId)) };
             if (method === 'POST') return { statusCode: 201, headers, body: JSON.stringify(await db.createMealLogEntry(currentUserId, JSON.parse(event.body).mealData, JSON.parse(event.body).imageBase64, proxyCoachId)) };
         }
-        
+
+        // --- Saved Meals ---
+        if (resource === 'saved-meals') {
+            if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await db.getSavedMeals(currentUserId)) };
+            if (method === 'POST') return { statusCode: 201, headers, body: JSON.stringify(await db.saveMeal(currentUserId, JSON.parse(event.body), proxyCoachId)) };
+            if (method === 'DELETE') {
+                const mealId = pathParts[1];
+                await db.deleteMeal(currentUserId, mealId);
+                return { statusCode: 204, headers };
+            }
+        }
+
+        // --- Meal Plans ---
+        if (resource === 'meal-plans') {
+            // Nested items handling
+            if (pathParts[1] === 'items' && method === 'DELETE') {
+                await db.removeMealFromPlanItem(currentUserId, pathParts[2]);
+                return { statusCode: 204, headers };
+            }
+            if (pathParts[2] === 'items' && method === 'POST') {
+                const { savedMealId, metadata } = JSON.parse(event.body);
+                const res = await db.addMealToPlanItem(currentUserId, pathParts[1], savedMealId, proxyCoachId, metadata);
+                return { statusCode: 201, headers, body: JSON.stringify(res) };
+            }
+            // Base plans handling
+            if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await db.getMealPlans(currentUserId)) };
+            if (method === 'POST') return { statusCode: 201, headers, body: JSON.stringify(await db.createMealPlan(currentUserId, JSON.parse(event.body).name, proxyCoachId)) };
+        }
+
+        // --- Grocery Lists ---
+        if (resource === 'grocery-lists') {
+            if (pathParts[1] === 'items' && method === 'PATCH') {
+                const res = await db.updateGroceryItem(currentUserId, pathParts[2], JSON.parse(event.body).checked);
+                return { statusCode: 200, headers, body: JSON.stringify(res) };
+            }
+            if (pathParts[1] === 'items' && method === 'DELETE') {
+                await db.removeGroceryItem(currentUserId, pathParts[2]);
+                return { statusCode: 204, headers };
+            }
+            if (pathParts[2] === 'items') {
+                if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await db.getGroceryListItems(currentUserId, pathParts[1])) };
+                if (method === 'POST') return { statusCode: 201, headers, body: JSON.stringify(await db.addGroceryItem(currentUserId, pathParts[1], JSON.parse(event.body).name, proxyCoachId)) };
+            }
+            if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await db.getGroceryLists(currentUserId)) };
+            if (method === 'POST') return { statusCode: 201, headers, body: JSON.stringify(await db.createGroceryList(currentUserId, JSON.parse(event.body).name, proxyCoachId)) };
+        }
+
+        // --- Rewards ---
+        if (resource === 'rewards') {
+            return { statusCode: 200, headers, body: JSON.stringify(await db.getRewardsSummary(currentUserId)) };
+        }
+
+        // --- Health & Prefs ---
+        if (resource === 'health-metrics') {
+            if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await db.getHealthMetrics(currentUserId)) };
+            if (method === 'POST') return { statusCode: 200, headers, body: JSON.stringify(await db.syncHealthMetrics(currentUserId, JSON.parse(event.body))) };
+        }
+        if (resource === 'body' && pathParts[1] === 'dashboard-prefs') {
+            if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await db.getDashboardPrefs(currentUserId)) };
+            if (method === 'POST') { await db.saveDashboardPrefs(currentUserId, JSON.parse(event.body)); return { statusCode: 204, headers }; }
+        }
+
     } catch (error) {
         console.error('Handler error:', error);
         return { statusCode: 500, headers, body: JSON.stringify({ error: error.message }) };
