@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { UserCircleIcon, GlobeAltIcon, UtensilsIcon } from './icons';
 
@@ -27,11 +26,11 @@ const MenuCard: React.FC<{
         </>
     );
 
-    const baseClasses = "flex flex-col items-center text-center p-6 bg-white rounded-xl shadow-md border border-slate-200 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 h-full cursor-pointer group";
+    const baseClasses = "flex flex-col items-center text-center p-6 bg-white rounded-[2rem] shadow-lg border border-slate-100 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 h-full cursor-pointer group";
 
     if (href) {
         return (
-            <a href={href} className={baseClasses}>
+            <a href={href} target="_blank" rel="noopener noreferrer" className={baseClasses}>
                 {Content}
             </a>
         );
@@ -57,49 +56,54 @@ export const Hub: React.FC<HubProps> = ({ onEnterMeals, onLogout }) => {
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-             <header className="bg-white border-b border-slate-200 shadow-sm">
+             <header className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-50">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-                     <span className="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-cyan-500">
-                        EmbraceHealth AI
-                    </span>
+                     <div className="flex items-center gap-2">
+                        <img src="/logo.png" alt="EH" className="h-8 w-auto" />
+                        <span className="hidden sm:block text-xl font-black text-slate-900 tracking-tighter">EmbraceHealth AI</span>
+                     </div>
                     <button 
                         onClick={onLogout}
-                        className="text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors"
+                        className="text-xs font-black uppercase tracking-widest text-slate-400 hover:text-rose-500 transition-colors"
                     >
-                        Logout
+                        Sign Out
                     </button>
                 </div>
             </header>
 
-            <main className="flex-grow flex items-center justify-center p-4">
-                <div className="max-w-4xl w-full">
-                    <div className="text-center mb-10">
-                        <h1 className="text-3xl md:text-4xl font-bold text-slate-800 mb-2">Welcome Back</h1>
-                        <p className="text-slate-600 text-lg">Choose a service to continue.</p>
+            <main className="flex-grow flex items-center justify-center p-4 md:p-8">
+                <div className="max-w-5xl w-full">
+                    <div className="text-center mb-12">
+                        <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tighter mb-4">Central Intelligence</h1>
+                        <p className="text-slate-500 text-lg font-medium">Select a metabolic domain to manage your digital twin.</p>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                         <MenuCard 
-                            title="Body Scan" 
-                            description="View your biometric reports and scan results."
-                            icon={<UserCircleIcon />}
+                            title="Prism 3D Body" 
+                            description="Access clinical biometric reports and scan results."
+                            icon={<UserCircleIcon className="w-8 h-8" />}
                             colorClass="bg-indigo-500 text-indigo-500"
                             onClick={handleGoToScanner}
                         />
                         <MenuCard 
-                            title="Meal Planning" 
-                            description="Plan your nutrition, analyze meals, and get recipes."
-                            icon={<UtensilsIcon />}
+                            title="MacroVision Meals" 
+                            description="Plan clinical nutrition, analyze meals, and generate AI recipes."
+                            icon={<UtensilsIcon className="w-8 h-8" />}
                             colorClass="bg-emerald-500 text-emerald-500"
                             onClick={onEnterMeals}
                         />
                          <MenuCard 
-                            title="Other" 
-                            description="Visit our main website to learn more about us."
-                            icon={<GlobeAltIcon />}
+                            title="Main Website" 
+                            description="Visit our homepage to learn about the health methodology."
+                            icon={<GlobeAltIcon className="w-8 h-8" />}
                             colorClass="bg-cyan-500 text-cyan-500"
                             href="https://www.embracehealth.ai"
                         />
+                    </div>
+                    
+                    <div className="mt-16 text-center">
+                        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-300">EmbraceHealth AI • Connected Living</p>
                     </div>
                 </div>
             </main>

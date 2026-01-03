@@ -22,15 +22,18 @@ import { AssessmentHub } from './components/tests/AssessmentHub';
 import { PartnerBlueprint } from './components/matching/PartnerBlueprint';
 import { SocialManager } from './components/social/SocialManager';
 import { BodyHub } from './components/body/BodyHub';
+import { CoachingHub } from './components/coaching/CoachingHub';
+import { Hub } from './components/Hub';
 import { CoachProxyBanner } from './components/CoachProxyBanner';
 import { GoalSetupWizard } from './components/GoalSetupWizard';
 import { ActivityIcon, ChefHatIcon } from './components/icons';
 
-type ActiveView = 'home' | 'plan' | 'meals' | 'history' | 'grocery' | 'rewards' | 'body' | 'social' | 'assessments' | 'blueprint' | 'labs' | 'orders' | 'clients' | 'coaching';
+type ActiveView = 'hub' | 'home' | 'plan' | 'meals' | 'history' | 'grocery' | 'rewards' | 'body' | 'social' | 'assessments' | 'blueprint' | 'labs' | 'orders' | 'clients' | 'coaching';
 
 const App: React.FC = () => {
   const { isAuthenticated, isLoading: isAuthLoading, logout, user } = useAuth();
-  const [activeView, setActiveView] = useState<ActiveView>('home');
+  // Start at 'hub' (the 3-button main menu) instead of 'home'
+  const [activeView, setActiveView] = useState<ActiveView>('hub');
   const [isCaptureOpen, setIsCaptureOpen] = useState(false);
   const [isGoalWizardOpen, setIsGoalWizardOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -95,7 +98,6 @@ const App: React.FC = () => {
   }, []);
 
   const handleMedicalGeneration = async (diseases: any[], cuisine: string, duration: 'day' | 'week') => {
-    // Explicitly utilizing 'duration' in the status message to satisfy TS compiler
     setMedicalPlannerState({ isLoading: true, progress: 20, status: `Initializing clinical engine for your ${duration} plan...` });
     try {
         const conditions = diseases.map(d => d.name);
@@ -166,12 +168,18 @@ const App: React.FC = () => {
           case 'assessments': return <AssessmentHub />;
           case 'blueprint': return <PartnerBlueprint />;
           case 'body': return <BodyHub healthStats={healthStats} onSyncHealth={()=>{}} dashboardPrefs={dashboardPrefs} onUpdatePrefs={p => apiService.saveDashboardPrefs(p)} />;
+          case 'coaching': return <CoachingHub userRole={user?.role as 'coach' | 'user' || 'user'} onUpgrade={() => apiService.syncHealthStatsToDB({}).then(loadAllData)} />;
           default: return <div className="p-8 text-center text-slate-400">Module Loading...</div>;
       }
   };
 
   if (isAuthLoading) return <div className="min-h-screen flex items-center justify-center"><Loader message="Authenticating..." /></div>;
   if (!isAuthenticated) return <Login />;
+
+  // Hub is full screen outside the Sidebar Layout
+  if (activeView === 'hub') {
+    return <Hub onEnterMeals={() => setActiveView('home')} onLogout={logout} />;
+  }
 
   return (
     <AppLayout activeView={activeView} onNavigate={v => setActiveView(v as ActiveView)} onLogout={logout} mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} selectedJourney={dashboardPrefs.selectedJourney} onJourneyChange={j => apiService.saveDashboardPrefs({...dashboardPrefs, selectedJourney: j})} showClientsTab={user?.role === 'coach'}>
