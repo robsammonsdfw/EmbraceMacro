@@ -60,6 +60,7 @@ export const Hub: React.FC<HubProps> = ({ onEnterMeals, onLogout }) => {
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
                      <div className="flex items-center gap-2">
                         <img src="/logo.png" alt="EH" className="h-8 w-auto" />
+                        {/* Verbiage removed to prevent clutter as the logo is present */}
                      </div>
                     <button 
                         onClick={onLogout}
@@ -79,21 +80,21 @@ export const Hub: React.FC<HubProps> = ({ onEnterMeals, onLogout }) => {
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                         <MenuCard 
-                            title="Prism 3D Body" 
+                            title="EmbraceHealth 3D Body" 
                             description="Access clinical biometric reports and scan results."
                             icon={<UserCircleIcon className="w-8 h-8" />}
                             colorClass="bg-indigo-500 text-indigo-500"
                             onClick={handleGoToScanner}
                         />
                         <MenuCard 
-                            title="MacroVision Meals" 
+                            title="EmbraceHealth Meals" 
                             description="Plan clinical nutrition, analyze meals, and generate AI recipes."
                             icon={<UtensilsIcon className="w-8 h-8" />}
                             colorClass="bg-emerald-500 text-emerald-500"
                             onClick={onEnterMeals}
                         />
                          <MenuCard 
-                            title="Main Website" 
+                            title="EmbraceHealth Main Website" 
                             description="Visit our homepage to learn about the health methodology."
                             icon={<GlobeAltIcon className="w-8 h-8" />}
                             colorClass="bg-cyan-500 text-cyan-500"

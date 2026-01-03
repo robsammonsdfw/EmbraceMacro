@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import type { MealPlan, SavedMeal } from '../types';
 import { BeakerIcon, PlusIcon, TrashIcon, BookOpenIcon, CameraOffIcon, SearchIcon, XIcon, UtensilsIcon } from './icons';
@@ -28,7 +27,7 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
     const [isCreatingPlan, setIsCreatingPlan] = useState(false);
     const [draggingMealId, setDraggingMealId] = useState<number | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
-    const [selectedDay, setSelectedDay] = useState<string>('Monday');
+    const [selectedDay, setSelectedDay] = useState<string>(DAYS[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1]);
     const [isMobileLibraryOpen, setIsMobileLibraryOpen] = useState(false);
     const [pendingSlot, setPendingSlot] = useState<string | null>(null);
 
@@ -204,8 +203,21 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                             )}
                         </div>
                     </div>
+                    {/* Day Picker with better feedback */}
                     <div className="flex overflow-x-auto no-scrollbar gap-2 pb-2">
-                        {DAYS.map(day => (<button key={day} onClick={() => setSelectedDay(day)} className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all border-2 ${selectedDay === day ? 'bg-emerald-50 border-emerald-500 text-emerald-700 shadow-sm' : 'border-transparent text-slate-400 hover:bg-slate-50'}`}>{day}</button>))}
+                        {DAYS.map(day => (
+                            <button 
+                                key={day} 
+                                onClick={() => setSelectedDay(day)} 
+                                className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all border-2 active:scale-95 ${
+                                    selectedDay === day 
+                                    ? 'bg-emerald-500 border-emerald-600 text-white shadow-lg shadow-emerald-100' 
+                                    : 'bg-white border-slate-100 text-slate-400 hover:border-slate-200 hover:bg-slate-50'
+                                }`}
+                            >
+                                {day}
+                            </button>
+                        ))}
                     </div>
                 </div>
 
@@ -216,7 +228,7 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                         return (
                             <div key={slot} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, slot)} onClick={() => handleSlotClick(slot, !!slotItem)} className={`relative p-5 rounded-3xl border-2 transition-all min-h-[140px] flex flex-col justify-center cursor-pointer shadow-sm ${draggingMealId && !slotItem ? 'border-dashed border-indigo-400 bg-indigo-50/50' : ''} ${!slotItem && isPending ? 'border-emerald-500 ring-4 ring-emerald-50 bg-emerald-50/20' : 'border-slate-100 bg-white'} ${!slotItem && !isPending ? 'hover:border-indigo-200 hover:bg-slate-50 group' : ''} ${slotItem ? 'bg-slate-50 border-transparent shadow-none' : ''}`}>
                                 <div className="absolute top-4 left-6 flex items-center gap-2 pointer-events-none">
-                                    <span className={`text-[10px] font-black uppercase tracking-[0.2em] transition-colors ${isPending ? 'text-emerald-600' : 'text-slate-400'}`}>{slot}</span>
+                                    <span className={`text-[10px] font-black uppercase tracking-[0.2em] transition-colors ${isPending ? 'text-emerald-600 font-bold' : 'text-slate-400'}`}>{slot}</span>
                                     {slotItem && <span className="bg-emerald-50 text-emerald-600 text-[8px] font-black px-1.5 py-0.5 rounded border border-emerald-100 uppercase">Tracked</span>}
                                 </div>
                                 {slotItem ? (
