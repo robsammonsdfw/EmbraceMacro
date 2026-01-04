@@ -58,9 +58,8 @@ export const Hub: React.FC<HubProps> = ({ onEnterMeals, onLogout }) => {
         <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
              <header className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-50">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-                     <div className="flex items-center gap-2">
+                     <div className="flex items-center">
                         <img src="/logo.png" alt="EH" className="h-8 w-auto" />
-                        {/* Verbiage removed to prevent clutter as the logo is present */}
                      </div>
                     <button 
                         onClick={onLogout}
