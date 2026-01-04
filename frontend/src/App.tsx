@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect } from 'react';
 import * as apiService from './services/apiService';
 import { analyzeFoodImage, searchFood, analyzeRestaurantMeal, getRecipesFromImage, getMealSuggestions } from './services/geminiService';
@@ -146,6 +147,15 @@ const App: React.FC = () => {
       }
   };
 
+  const handleUpdatePrefs = async (newPrefs: UserDashboardPrefs) => {
+      setDashboardPrefs(newPrefs); // Immediate UI update
+      try {
+          await apiService.saveDashboardPrefs(newPrefs);
+      } catch (err) {
+          console.error("Failed to persist prefs", err);
+      }
+  };
+
   const renderActiveView = () => {
       if (viewingMealDetails) return <div className="max-w-2xl mx-auto space-y-6"><NutritionCard data={viewingMealDetails} isReadOnly onSaveToHistory={() => setViewingMealDetails(null)} /></div>;
 
@@ -184,7 +194,7 @@ const App: React.FC = () => {
           case 'social': return <SocialManager />;
           case 'assessments': return <AssessmentHub />;
           case 'blueprint': return <PartnerBlueprint />;
-          case 'body': return <BodyHub healthStats={healthStats} onSyncHealth={()=>{}} dashboardPrefs={dashboardPrefs} onUpdatePrefs={p => apiService.saveDashboardPrefs(p)} />;
+          case 'body': return <BodyHub healthStats={healthStats} onSyncHealth={()=>{}} dashboardPrefs={dashboardPrefs} onUpdatePrefs={handleUpdatePrefs} />;
           case 'coaching': return <CoachingHub userRole={user?.role as 'coach' | 'user' || 'user'} onUpgrade={() => apiService.syncHealthStatsToDB({}).then(loadAllData)} />;
           default: return <div className="p-8 text-center text-slate-400">Module Loading...</div>;
       }
@@ -198,10 +208,19 @@ const App: React.FC = () => {
   }
 
   return (
-    <AppLayout activeView={activeView} onNavigate={v => setActiveView(v as ActiveView)} onLogout={logout} mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} selectedJourney={dashboardPrefs.selectedJourney} onJourneyChange={j => apiService.saveDashboardPrefs({...dashboardPrefs, selectedJourney: j})} showClientsTab={user?.role === 'coach'}>
+    <AppLayout 
+        activeView={activeView} 
+        onNavigate={v => setActiveView(v as ActiveView)} 
+        onLogout={logout} 
+        mobileMenuOpen={mobileMenuOpen} 
+        setMobileMenuOpen={setMobileMenuOpen} 
+        selectedJourney={dashboardPrefs.selectedJourney} 
+        onJourneyChange={j => handleUpdatePrefs({...dashboardPrefs, selectedJourney: j})} 
+        showClientsTab={user?.role === 'coach'}
+    >
         {proxyClient && <CoachProxyBanner clientName={proxyClient.name} onExit={() => setProxyClient(null)} />}
         {isCaptureOpen && <CaptureFlow onClose={() => setIsCaptureOpen(false)} onCapture={handleCaptureResult} onRepeatMeal={() => {}} onBodyScanClick={() => setActiveView('body')} />}
-        {isGoalWizardOpen && <GoalSetupWizard onClose={() => setIsGoalWizardOpen(false)} onSave={(c, p) => apiService.saveDashboardPrefs({...dashboardPrefs, calorieGoal: c, proteinGoal: p})} />}
+        {isGoalWizardOpen && <GoalSetupWizard onClose={() => setIsGoalWizardOpen(false)} onSave={(c, p) => handleUpdatePrefs({...dashboardPrefs, calorieGoal: c, proteinGoal: p})} />}
         {renderActiveView()}
         {activeView === 'home' && !nutritionData && chefRecipes.length === 0 && !isProcessing && !error && !image && !viewingMealDetails && (
             <button onClick={() => setIsGoalWizardOpen(true)} className="fixed bottom-24 right-4 bg-slate-900 text-white p-4 rounded-2xl shadow-2xl flex items-center gap-2 z-30 animate-bounce-short font-black uppercase text-[10px] tracking-widest border border-slate-700"><ActivityIcon className="w-4 h-4 text-emerald-400" /> Adjust Targets</button>
