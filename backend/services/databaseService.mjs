@@ -52,7 +52,7 @@ export const ensureSchema = async () => {
         await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_mode VARCHAR(20) DEFAULT 'private';`);
         await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT;`);
         
-        // 2. Base Tables Creation (Ensure they exist before altering)
+        // 2. Base Tables Creation
         await client.query(`
             CREATE TABLE IF NOT EXISTS meal_log_entries (
                 id SERIAL PRIMARY KEY,
@@ -98,7 +98,28 @@ export const ensureSchema = async () => {
             );
         `);
 
-        // 3. Professional & Coaching Tables
+        // 3. Health & Biometrics Tables
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS health_metrics (
+                user_id INTEGER PRIMARY KEY REFERENCES users(id),
+                steps INTEGER DEFAULT 0,
+                active_calories FLOAT DEFAULT 0,
+                resting_calories FLOAT DEFAULT 0,
+                distance_miles FLOAT DEFAULT 0,
+                flights_climbed INTEGER DEFAULT 0,
+                heart_rate INTEGER DEFAULT 0,
+                last_synced TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS sleep_records (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id),
+                duration_minutes INTEGER,
+                quality_score INTEGER,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        // 4. Professional & Social Tables
         await client.query(`
             CREATE TABLE IF NOT EXISTS coach_client_relations (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -109,9 +130,17 @@ export const ensureSchema = async () => {
                 created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(coach_id, client_id)
             );
+            CREATE TABLE IF NOT EXISTS friendships (
+                id SERIAL PRIMARY KEY,
+                requester_id INTEGER REFERENCES users(id),
+                receiver_id INTEGER REFERENCES users(id),
+                status VARCHAR(20) DEFAULT 'pending',
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(requester_id, receiver_id)
+            );
         `);
 
-        // 4. Rewards Tables
+        // 5. Rewards Tables
         await client.query(`
             CREATE TABLE IF NOT EXISTS rewards_balances (
                 user_id INTEGER PRIMARY KEY REFERENCES users(id),
@@ -130,7 +159,7 @@ export const ensureSchema = async () => {
             );
         `);
 
-        // 5. Apply Proxy Columns to All Relevant Tables
+        // 6. Apply Proxy Columns to All Relevant Tables
         const tables = ['meal_log_entries', 'saved_meals', 'meal_plans', 'meal_plan_items', 'grocery_list_items', 'grocery_lists'];
         for (const table of tables) {
             await client.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS created_by_proxy INTEGER REFERENCES users(id);`);
@@ -228,14 +257,6 @@ export const respondToCoachingInvite = async (userId, relationId, status) => {
 export const revokeCoachingRelation = async (userId, relationId) => {
     const client = await pool.connect();
     try { await client.query(`DELETE FROM coach_client_relations WHERE id = $1 AND (coach_id = $2 OR client_id = $2)`, [relationId, userId]); } finally { client.release(); }
-};
-
-export const getAssignedClients = async (coachId) => {
-    const client = await pool.connect();
-    try {
-        const res = await client.query(`SELECT u.id, u.email, u.first_name as "firstName", r.permissions FROM users u JOIN coach_client_relations r ON u.id = r.client_id WHERE r.coach_id = $1 AND r.status = 'active'`, [coachId]);
-        return res.rows;
-    } finally { client.release(); }
 };
 
 export const createMealLogEntry = async (userId, mealData, imageBase64, proxyCoachId = null) => {
@@ -338,13 +359,12 @@ export const addMealToPlanItem = async (userId, planId, savedMealId, proxyCoachI
     const client = await pool.connect();
     try {
         const insertRes = await client.query(`INSERT INTO meal_plan_items (user_id, meal_plan_id, saved_meal_id, created_by_proxy, proxy_action, metadata) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id;`, [userId, planId, savedMealId, proxyCoachId, !!proxyCoachId, metadata]);
-        // FIX: Added i.metadata to the SELECT query to ensure the newly added item's metadata is returned to the frontend.
         const selectRes = await client.query(`SELECT i.id, m.id as meal_id, m.meal_data, i.metadata FROM meal_plan_items i JOIN saved_meals m ON i.saved_meal_id = m.id WHERE i.id = $1;`, [insertRes.rows[0].id]);
         const row = selectRes.rows[0];
         return { 
             id: row.id, 
             meal: { id: row.meal_id, ...processMealDataForClient(row.meal_data || {}, false) },
-            metadata: row.metadata // FIX: Return the metadata object so the frontend knows which slot to update.
+            metadata: row.metadata
         };
     } finally { client.release(); }
 };
@@ -397,16 +417,6 @@ export const clearGroceryListItems = async (userId, listId, type) => {
     try {
         const q = type === 'checked' ? `DELETE FROM grocery_list_items WHERE grocery_list_id = $1 AND user_id = $2 AND checked = TRUE` : `DELETE FROM grocery_list_items WHERE grocery_list_id = $1 AND user_id = $2`;
         await client.query(q, [listId, userId]);
-    } finally { client.release(); }
-};
-
-export const setActiveGroceryList = async (userId, listId) => {
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-        await client.query(`UPDATE grocery_lists SET is_active = FALSE WHERE user_id = $1`, [userId]);
-        await client.query(`UPDATE grocery_lists SET is_active = TRUE WHERE id = $1 AND user_id = $2`, [listId, userId]);
-        await client.query('COMMIT');
     } finally { client.release(); }
 };
 
@@ -488,17 +498,17 @@ export const syncHealthMetrics = async (userId, stats) => {
     try {
         const q = `INSERT INTO health_metrics (user_id, steps, active_calories, resting_calories, distance_miles, flights_climbed, heart_rate, last_synced)
                    VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
-                   ON CONFLICT (user_id) DO UPDATE SET steps = GREATEST(health_metrics.steps, EXCLUDED.steps), active_calories = GREATEST(health_metrics.active_calories, EXCLUDED.active_calories), last_synced = CURRENT_TIMESTAMP RETURNING steps, active_calories as "activeCalories", last_synced as "lastSynced"`;
+                   ON CONFLICT (user_id) DO UPDATE SET 
+                        steps = GREATEST(health_metrics.steps, EXCLUDED.steps), 
+                        active_calories = GREATEST(health_metrics.active_calories, EXCLUDED.active_calories),
+                        resting_calories = GREATEST(health_metrics.resting_calories, EXCLUDED.resting_calories),
+                        distance_miles = GREATEST(health_metrics.distance_miles, EXCLUDED.distance_miles),
+                        flights_climbed = GREATEST(health_metrics.flights_climbed, EXCLUDED.flights_climbed),
+                        heart_rate = EXCLUDED.heart_rate,
+                        last_synced = CURRENT_TIMESTAMP 
+                   RETURNING steps, active_calories as "activeCalories", last_synced as "lastSynced"`;
         const res = await client.query(q, [userId, stats.steps || 0, stats.activeCalories || 0, stats.restingCalories || 0, stats.distanceMiles || 0, stats.flightsClimbed || 0, stats.heartRate || 0]);
         return res.rows[0];
-    } finally { client.release(); }
-};
-
-export const logRecoveryStats = async (userId, data) => {
-    const client = await pool.connect();
-    try {
-        await client.query(`INSERT INTO sleep_records (user_id, duration_minutes, quality_score) VALUES ($1, $2, $3)`, [userId, data.sleepMinutes, data.sleepQuality]);
-        await awardPoints(userId, 'recovery.logged', 20);
     } finally { client.release(); }
 };
 
@@ -512,12 +522,15 @@ export const saveDashboardPrefs = async (userId, prefs) => {
     try { await client.query(`UPDATE users SET dashboard_prefs = $1 WHERE id = $2`, [prefs, userId]); } finally { client.release(); }
 };
 
-export const getAssessments = async () => [
-    { id: 'daily-pulse', title: 'Daily Pulse', description: 'Clinical baseline check.', questions: [{id: 'mood', text: 'How is your mood?', type: 'scale', min: 1, max: 10}] }
-];
 export const getAssessmentState = async (userId) => ({ lastUpdated: {}, passivePrompt: { id: 'p1', category: 'EatingHabits', question: 'Did you eat enough protein today?', type: 'scale' } });
 export const submitAssessment = async (userId, id, resp) => { await awardPoints(userId, 'assessment.complete', 50, { assessmentId: id }); };
 export const submitPassivePulseResponse = async (userId, id, val) => { await awardPoints(userId, 'pulse.complete', 15); };
 export const getPartnerBlueprint = async (userId) => ({ preferences: {} });
 export const savePartnerBlueprint = async (userId, prefs) => {};
 export const getMatches = async (userId) => [];
+export const getAssessments = async () => [
+    { id: 'daily-pulse', title: 'Daily Pulse', description: 'Clinical baseline check.', questions: [{id: 'mood', text: 'How is your mood?', type: 'scale', min: 1, max: 10}] }
+];
+export const calculateReadiness = async (data) => ({ score: 85, label: "Peak Performance", reasoning: "Sleep and HRV are optimal." });
+export const logRecoveryStats = async (userId, data) => { await awardPoints(userId, 'recovery.logged', 20); };
+export const analyzeExerciseForm = async (base64, exercise) => ({ isCorrect: true, feedback: "Keep it up!", score: 92 });

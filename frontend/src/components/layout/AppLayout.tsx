@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { SidebarNav } from './SidebarNav';
 import { MenuIcon, XIcon, ActivityIcon } from '../icons';
@@ -52,7 +53,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                 </div>
             )}
 
-            <div className="hidden md:block w-64 flex-shrink-0 h-screen sticky top-0 border-r border-slate-200 bg-white z-30">
+            <div className="hidden md:block w-72 flex-shrink-0 h-screen sticky top-0 border-r border-slate-200 bg-white z-30">
                 <SidebarNav activeView={activeView} onNavigate={onNavigate} onLogout={onLogout} selectedJourney={selectedJourney} onJourneyChange={onJourneyChange} showClientsTab={showClientsTab} />
             </div>
 
