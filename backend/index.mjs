@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import * as db from './services/databaseService.mjs';
@@ -121,24 +122,24 @@ export const handler = async (event) => {
             let prompt = ""; let schema;
             
             if (resource === 'analyze-image') { 
-                prompt = "Analyze this food image for NUTRITION. Identify the dish and individual ingredients. Provide Calories, Protein, Carbs, Fat for the total meal and per ingredient. Return in English JSON."; 
+                prompt = "Act as 'MacrosChef GPT'. Analyze this food image with high clinical accuracy. Identify the dish and EVERY individual ingredient. Estimate serving weights in grams. Provide Calories, Protein, Carbs, and Fat totals. Return in JSON."; 
                 schema = nutritionSchema; 
             }
             else if (resource === 'analyze-restaurant-meal') {
-                prompt = "Act as 'Restaurant Chef GPT'. 1. Identify the cooked dish. 2. Deconstruct it into ingredients. 3. RECONSTRUCT THE RECIPE: Provide clear cooking steps for this dish. 4. Estimate nutrition. Return in English JSON.";
+                prompt = "Act as 'MasterChef GPT'. 1. Identify the cooked restaurant dish. 2. Reverse-engineer the recipe. 3. Provide professional cooking instructions. 4. Estimate full nutritional macros. Return in JSON.";
                 schema = recipeSchema;
             }
             else if (resource === 'analyze-image-recipes') { 
-                prompt = "Act as 'Pantry Chef GPT'. Identify raw ingredients. Suggest 3 diverse recipes that use these items plus basic staples. Return in English JSON."; 
+                prompt = "Act as 'PantryChef GPT'. Identify all raw ingredients/staples visible in this photo. Suggest 3 diverse, high-protein recipes that can be made using these items plus standard oil/salt/pepper. Return in JSON."; 
                 schema = recipesSchema; 
             }
             else if (resource === 'search-food') {
-                prompt = `Provide clinical nutritional info for: "${query}". Return in English JSON.`;
+                prompt = `Act as 'MacrosChef GPT'. Provide comprehensive nutritional breakdown for: "${query}". Return in JSON.`;
                 schema = nutritionSchema;
             }
             else if (resource === 'get-meal-suggestions') {
                 const mealCount = duration === 'week' ? 7 : 3;
-                prompt = `Act as 'Clinical Nutritionist GPT'. Generate ${mealCount} meal ideas in ${cuisine} cuisine for a user with these conditions: ${conditions.join(', ')}. The plan is for one ${duration}. Ensure the nutritional breakdown respects all condition-specific safety guidelines. Return in English JSON.`;
+                prompt = `Act as 'MealPlanChef GPT'. Generate ${mealCount} clinical meal ideas in ${cuisine} cuisine for a user with: ${conditions.join(', ')}. Ensure safety regarding medical restrictions. Return in JSON.`;
                 schema = suggestionsSchema;
             }
 
@@ -169,7 +170,6 @@ export const handler = async (event) => {
 
         // --- Meal Plans ---
         if (resource === 'meal-plans') {
-            // Nested items handling
             if (pathParts[1] === 'items' && method === 'DELETE') {
                 await db.removeMealFromPlanItem(currentUserId, pathParts[2]);
                 return { statusCode: 204, headers };
@@ -179,7 +179,6 @@ export const handler = async (event) => {
                 const res = await db.addMealToPlanItem(currentUserId, pathParts[1], savedMealId, proxyCoachId, metadata);
                 return { statusCode: 201, headers, body: JSON.stringify(res) };
             }
-            // Base plans handling
             if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await db.getMealPlans(currentUserId)) };
             if (method === 'POST') return { statusCode: 201, headers, body: JSON.stringify(await db.createMealPlan(currentUserId, JSON.parse(event.body).name, proxyCoachId)) };
         }
