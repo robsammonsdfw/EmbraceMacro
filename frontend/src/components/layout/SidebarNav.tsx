@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { HomeIcon, BookOpenIcon, UserCircleIcon, BeakerIcon, ClipboardListIcon, TrophyIcon, Squares2X2Icon, ClipboardCheckIcon, HeartIcon, PlusIcon, UserGroupIcon, UsersIcon, ActivityIcon } from '../icons';
+import { HomeIcon, BookOpenIcon, UserCircleIcon, BeakerIcon, ClipboardListIcon, TrophyIcon, Squares2X2Icon, ClipboardCheckIcon, HeartIcon, PlusIcon, UserGroupIcon, UsersIcon, ActivityIcon, LightBulbIcon } from '../icons';
 import { HealthJourney } from '../../types';
 import { JOURNEYS } from './AppLayout';
 
@@ -71,6 +71,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
                 <NavItem id="social" label="Social" icon={<UserGroupIcon />} isActive={activeView === 'social'} onClick={() => onNavigate('social')} />
                 <NavItem id="plan" label="Meal Planner" icon={<PlusIcon />} isActive={activeView === 'plan'} onClick={() => onNavigate('plan')} />
                 <NavItem id="meals" label="Library" icon={<BookOpenIcon />} isActive={activeView === 'meals'} onClick={() => onNavigate('meals')} />
+                <NavItem id="suggestions" label="AI Ideas" icon={<LightBulbIcon />} isActive={activeView === 'suggestions'} onClick={() => onNavigate('suggestions')} />
                 <NavItem id="grocery" label="Groceries" icon={<ClipboardListIcon />} isActive={activeView === 'grocery'} onClick={() => onNavigate('grocery')} />
                 <NavItem id="body" label="Body Hub" icon={<UserCircleIcon />} isActive={activeView === 'body'} onClick={() => onNavigate('body')} />
                 <NavItem id="assessments" label="Tests" icon={<ClipboardCheckIcon />} isActive={activeView === 'assessments'} onClick={() => onNavigate('assessments')} />
@@ -89,4 +90,3 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
             </div>
         </div>
     );
-};

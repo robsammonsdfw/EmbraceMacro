@@ -3,7 +3,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import * as apiService from './services/apiService';
 import { analyzeFoodImage, searchFood, analyzeRestaurantMeal, getRecipesFromImage, getMealSuggestions } from './services/geminiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
-import type { NutritionInfo, MealLogEntry, SavedMeal, MealPlan, HealthStats, UserDashboardPrefs, Recipe } from './types';
+import type { NutritionInfo, MealLogEntry, SavedMeal, MealPlan, HealthStats, UserDashboardPrefs, Recipe, MealPlanItemMetadata } from './types';
 import { ImageUploader } from './components/ImageUploader';
 import { NutritionCard } from './components/NutritionCard';
 import { RecipeCard } from './components/RecipeCard';
@@ -28,8 +28,10 @@ import { Hub } from './components/Hub';
 import { CoachProxyBanner } from './components/CoachProxyBanner';
 import { GoalSetupWizard } from './components/GoalSetupWizard';
 import { ActivityIcon, ChefHatIcon } from './components/icons';
+import { MealSuggester } from './components/MealSuggester';
+import { AddToPlanModal } from './components/AddToPlanModal';
 
-type ActiveView = 'hub' | 'home' | 'plan' | 'meals' | 'history' | 'grocery' | 'rewards' | 'body' | 'social' | 'assessments' | 'blueprint' | 'labs' | 'orders' | 'clients' | 'coaching';
+type ActiveView = 'hub' | 'home' | 'plan' | 'meals' | 'history' | 'grocery' | 'rewards' | 'body' | 'social' | 'assessments' | 'blueprint' | 'labs' | 'orders' | 'clients' | 'coaching' | 'suggestions';
 type CaptureMode = 'meal' | 'barcode' | 'pantry' | 'restaurant' | 'search';
 
 const App: React.FC = () => {
@@ -63,6 +65,15 @@ const App: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [medicalPlannerState, setMedicalPlannerState] = useState({ isLoading: false, progress: 0, status: '' });
+
+  // Suggestion State
+  const [suggestions, setSuggestions] = useState<NutritionInfo[] | null>(null);
+  const [isSuggesting, setIsSuggesting] = useState<boolean>(false);
+  const [suggestionError, setSuggestionError] = useState<string | null>(null);
+
+  // Add To Plan State
+  const [isAddToPlanModalOpen, setIsAddToPlanModalOpen] = useState(false);
+  const [mealToAdd, setMealToAdd] = useState<NutritionInfo | null>(null);
 
   const loadAllData = useCallback(async () => {
     if (!isAuthenticated) return;
@@ -125,6 +136,19 @@ const App: React.FC = () => {
     }
   };
 
+  const handleGetSuggestions = useCallback(async (condition: string, cuisine: string) => {
+    setIsSuggesting(true);
+    setSuggestionError(null);
+    try {
+        const results = await getMealSuggestions([condition], cuisine, 'day');
+        setSuggestions(results);
+    } catch (err) {
+        setSuggestionError("Failed to fetch suggestions.");
+    } finally {
+        setIsSuggesting(false);
+    }
+  }, []);
+
   const handleSaveToHistory = async (updatedData: NutritionInfo) => {
     try {
       setIsProcessing(true);
@@ -154,6 +178,33 @@ const App: React.FC = () => {
       }
   };
 
+  const handleOpenAddToPlanModal = (meal: NutritionInfo) => {
+      setMealToAdd(meal);
+      setIsAddToPlanModalOpen(true);
+  };
+
+  const handleCommitAddToPlan = async (planId: number, metadata: MealPlanItemMetadata) => {
+      if (!mealToAdd) return;
+      try {
+          let savedMealId = (mealToAdd as SavedMeal).id;
+          // If the meal doesn't have an ID, save it first
+          if (!savedMealId) {
+              const saved = await apiService.saveMeal(mealToAdd);
+              savedMealId = saved.id;
+              // Update state locally so UI reflects save
+              setSavedMeals(prev => [saved, ...prev]); 
+          }
+          await apiService.addMealToPlan(planId, savedMealId, metadata);
+          await loadAllData(); // Refresh all data to sync plan items
+          setIsAddToPlanModalOpen(false);
+          setMealToAdd(null);
+          alert("Meal added to plan successfully.");
+      } catch (err) {
+          console.error(err);
+          alert("Failed to add meal to plan.");
+      }
+  };
+
   const handleUpdatePrefs = async (newPrefs: UserDashboardPrefs) => {
       setDashboardPrefs(newPrefs); // Immediate UI update
       try {
@@ -164,7 +215,7 @@ const App: React.FC = () => {
   };
 
   const renderActiveView = () => {
-      if (viewingMealDetails) return <div className="max-w-2xl mx-auto space-y-6"><NutritionCard data={viewingMealDetails} isReadOnly onSaveToHistory={() => setViewingMealDetails(null)} /></div>;
+      if (viewingMealDetails) return <div className="max-w-2xl mx-auto space-y-6"><NutritionCard data={viewingMealDetails} onSaveToHistory={() => setViewingMealDetails(null)} isReadOnly /></div>;
 
       if (activeView === 'home' && (image || isProcessing || nutritionData || chefRecipes.length > 0 || error)) {
           return (
@@ -192,11 +243,10 @@ const App: React.FC = () => {
       const dailyProtein = todayLog.reduce((acc, e) => acc + e.totalProtein, 0);
 
       switch (activeView) {
-          /* FIX: Removed the non-existent 'onUploadClick' prop from 'CommandCenter' to fix TypeScript error. */
           case 'home': return <CommandCenter dailyCalories={dailyCalories} dailyProtein={dailyProtein} rewardsBalance={walletBalance} userName={user?.firstName || 'Hero'} healthStats={healthStats} isHealthConnected={isHealthConnected} isHealthSyncing={false} onConnectHealth={()=>{}} onScanClick={() => setActiveView('body')} onCameraClick={handleOpenCapture} dashboardPrefs={dashboardPrefs} />;
           case 'plan': return <MealPlanManager plans={mealPlans} activePlanId={activePlanId} savedMeals={savedMeals} onPlanChange={setActivePlanId} onCreatePlan={name => apiService.createMealPlan(name).then(() => loadAllData())} onRemoveFromPlan={handleRemoveMeal} onQuickAdd={(pid, m, d, s) => handleQuickAddMeal(pid, m.id, d, s)} onGenerateMedical={handleMedicalGeneration} medicalPlannerState={medicalPlannerState} />;
-          case 'meals': return <MealLibrary meals={savedMeals} onAdd={() => {}} onDelete={id => apiService.deleteMeal(id).then(loadAllData)} onSelectMeal={setViewingMealDetails} />;
-          case 'history': return <MealHistory logEntries={mealLog} onAddToPlan={() => {}} onSaveMeal={() => {}} onSelectMeal={setViewingMealDetails} />;
+          case 'meals': return <MealLibrary meals={savedMeals} onAdd={handleOpenAddToPlanModal} onDelete={id => apiService.deleteMeal(id).then(loadAllData)} onSelectMeal={setViewingMealDetails} />;
+          case 'history': return <MealHistory logEntries={mealLog} onAddToPlan={handleOpenAddToPlanModal} onSaveMeal={(m) => apiService.saveMeal(m).then(() => loadAllData())} onSelectMeal={setViewingMealDetails} />;
           case 'grocery': return <GroceryList mealPlans={mealPlans} />;
           case 'rewards': return <RewardsDashboard />;
           case 'social': return <SocialManager />;
@@ -204,6 +254,7 @@ const App: React.FC = () => {
           case 'blueprint': return <PartnerBlueprint />;
           case 'body': return <BodyHub healthStats={healthStats} onSyncHealth={()=>{}} dashboardPrefs={dashboardPrefs} onUpdatePrefs={handleUpdatePrefs} />;
           case 'coaching': return <CoachingHub userRole={user?.role as 'coach' | 'user' || 'user'} onUpgrade={() => apiService.syncHealthStatsToDB({}).then(loadAllData)} />;
+          case 'suggestions': return <MealSuggester onGetSuggestions={handleGetSuggestions} suggestions={suggestions} isLoading={isSuggesting} error={suggestionError} onAddToPlan={handleOpenAddToPlanModal} onSaveMeal={apiService.saveMeal} />;
           default: return <div className="p-8 text-center text-slate-400">Module Loading...</div>;
       }
   };
@@ -229,7 +280,10 @@ const App: React.FC = () => {
         {proxyClient && <CoachProxyBanner clientName={proxyClient.name} onExit={() => setProxyClient(null)} />}
         {isCaptureOpen && <CaptureFlow onClose={() => setIsCaptureOpen(false)} onCapture={handleCaptureResult} onRepeatMeal={() => {}} onBodyScanClick={() => setActiveView('body')} initialMode={captureMode} />}
         {isGoalWizardOpen && <GoalSetupWizard onClose={() => setIsGoalWizardOpen(false)} onSave={(c, p) => handleUpdatePrefs({...dashboardPrefs, calorieGoal: c, proteinGoal: p})} />}
+        {isAddToPlanModalOpen && <AddToPlanModal plans={mealPlans} onSelectPlan={handleCommitAddToPlan} onClose={() => { setIsAddToPlanModalOpen(false); setMealToAdd(null); }} />}
+        
         {renderActiveView()}
+        
         {activeView === 'home' && !nutritionData && chefRecipes.length === 0 && !isProcessing && !error && !image && !viewingMealDetails && (
             <button onClick={() => setIsGoalWizardOpen(true)} className="fixed bottom-24 right-4 bg-slate-900 text-white p-4 rounded-2xl shadow-2xl flex items-center gap-2 z-30 animate-bounce-short font-black uppercase text-[10px] tracking-widest border border-slate-700"><ActivityIcon className="w-4 h-4 text-emerald-400" /> Adjust Targets</button>
         )}
