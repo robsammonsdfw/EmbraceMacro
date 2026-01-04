@@ -90,3 +90,4 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
             </div>
         </div>
     );
+};
