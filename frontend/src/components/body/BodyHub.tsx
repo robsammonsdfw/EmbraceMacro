@@ -70,7 +70,7 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth, das
             alert("You can only select up to 3 widgets for the dashboard.");
             return;
         }
-        onUpdatePrefs({ selectedWidgets: newList });
+        onUpdatePrefs({ ...dashboardPrefs, selectedWidgets: newList });
     };
 
     const handleStartBodyScan = () => {
@@ -86,7 +86,8 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth, das
         { id: 'activeCalories', label: 'Active Energy', value: `${Math.round(healthStats.activeCalories)} kcal`, icon: <FireIcon /> },
         { id: 'restingCalories', label: 'Resting Energy', value: `${Math.round(healthStats.restingCalories)} kcal`, icon: <TrophyIcon /> },
         { id: 'distanceMiles', label: 'Distance', value: `${healthStats.distanceMiles.toFixed(2)} mi`, icon: <GlobeAltIcon /> },
-        { id: 'flightsClimbed', label: 'Flights', value: `${healthStats.flightsClimbed} floors`, icon: <ActivityIcon /> }
+        { id: 'flightsClimbed', label: 'Flights', value: `${healthStats.flightsClimbed} floors`, icon: <ActivityIcon /> },
+        { id: 'heartRate', label: 'Heart Rate', value: `${healthStats.heartRate || '--'} bpm`, icon: <HeartIcon /> }
     ];
 
     return (
@@ -119,7 +120,7 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth, das
                 <section className="bg-emerald-50 border border-emerald-100 p-6 rounded-3xl animate-fade-in space-y-4">
                     <h3 className="font-black text-emerald-800 uppercase tracking-widest text-sm">Command Center Setup</h3>
                     <p className="text-emerald-700 text-sm">Choose up to 3 stats to display as widgets on your main dashboard.</p>
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                         {widgetOptions.map(opt => (
                             <button
                                 key={opt.id}
@@ -149,7 +150,7 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth, das
             )}
 
             {/* Full Metrics Display */}
-            <section className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <section className="grid grid-cols-2 md:grid-cols-6 gap-4">
                  {widgetOptions.map(opt => (
                     <div key={opt.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center text-center">
                         <div className="text-slate-400 mb-2">{opt.icon}</div>
