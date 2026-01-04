@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { TodayStrip } from './TodayStrip';
 import { DigitalTwinPanel } from './DigitalTwinPanel';
-import { CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, UserGroupIcon, UserCircleIcon, ActivityIcon, PhotoIcon } from '../icons';
+import { CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, UserGroupIcon, ActivityIcon } from '../icons';
 import type { HealthStats, Friendship, UserDashboardPrefs } from '../../types';
 import * as apiService from '../../services/apiService';
 
@@ -16,16 +16,10 @@ interface CommandCenterProps {
     isHealthSyncing: boolean;
     onConnectHealth: (source?: 'apple' | 'fitbit') => void;
     onScanClick: () => void;
-    onCameraClick: (mode?: any) => void;
-    onBarcodeClick: () => void;
-    onPantryChefClick: () => void;
-    onRestaurantClick: () => void;
-    onUploadClick: () => void;
+    onCameraClick: (mode: 'meal' | 'barcode' | 'pantry' | 'restaurant' | 'search') => void;
     dashboardPrefs: UserDashboardPrefs;
-    isProxy?: boolean;
 }
 
-/* Added SocialFeedItem helper component */
 const SocialFeedItem: React.FC<{ name: string; action: string; time: string; color: string }> = ({ name, action, time, color }) => (
     <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-100/50">
         <div className={`w-10 h-10 rounded-xl ${color} flex-shrink-0 flex items-center justify-center font-black text-white text-xs`}>
@@ -46,7 +40,7 @@ const ChefGPTCard: React.FC<{
     icon: React.ReactNode; 
     color: string; 
     onClick: () => void; 
- }> = ({ title, subtitle, icon, color, onClick }) => (
+}> = ({ title, subtitle, icon, color, onClick }) => (
     <button 
         onClick={onClick}
         className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300 flex items-center gap-4 text-left group active:scale-95"
@@ -63,9 +57,8 @@ const ChefGPTCard: React.FC<{
 
 export const CommandCenter: React.FC<CommandCenterProps> = ({ 
     dailyCalories, dailyProtein, rewardsBalance, onScanClick,
-    onCameraClick, onBarcodeClick, onPantryChefClick, onRestaurantClick,
-    healthStats, isHealthSyncing, isHealthConnected, onConnectHealth,
-    dashboardPrefs, isProxy
+    onCameraClick, healthStats, isHealthSyncing, isHealthConnected, 
+    onConnectHealth, dashboardPrefs
 }) => {
     const [friends, setFriends] = useState<Friendship[]>([]);
 
@@ -157,7 +150,6 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 space-y-6">
-                    {/* Progress Rings Replacement / Compact View */}
                     <div className="bg-white rounded-[2rem] p-8 border border-slate-100 shadow-sm">
                         <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-6 flex items-center gap-2">
                              Metabolic Compliance

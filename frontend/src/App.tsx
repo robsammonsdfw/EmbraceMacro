@@ -30,11 +30,13 @@ import { GoalSetupWizard } from './components/GoalSetupWizard';
 import { ActivityIcon, ChefHatIcon } from './components/icons';
 
 type ActiveView = 'hub' | 'home' | 'plan' | 'meals' | 'history' | 'grocery' | 'rewards' | 'body' | 'social' | 'assessments' | 'blueprint' | 'labs' | 'orders' | 'clients' | 'coaching';
+type CaptureMode = 'meal' | 'barcode' | 'pantry' | 'restaurant' | 'search';
 
 const App: React.FC = () => {
   const { isAuthenticated, isLoading: isAuthLoading, logout, user } = useAuth();
   const [activeView, setActiveView] = useState<ActiveView>('hub');
   const [isCaptureOpen, setIsCaptureOpen] = useState(false);
+  const [captureMode, setCaptureMode] = useState<CaptureMode>('meal');
   const [isGoalWizardOpen, setIsGoalWizardOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
@@ -96,6 +98,11 @@ const App: React.FC = () => {
     } catch (err) { setError('Analysis failed. Please try again.'); }
     finally { setIsProcessing(false); }
   }, []);
+
+  const handleOpenCapture = (mode: CaptureMode = 'meal') => {
+      setCaptureMode(mode);
+      setIsCaptureOpen(true);
+  };
 
   const handleMedicalGeneration = async (diseases: any[], cuisine: string, duration: 'day' | 'week') => {
     setMedicalPlannerState({ isLoading: true, progress: 20, status: `Initializing clinical engine for your ${duration} plan...` });
@@ -175,7 +182,7 @@ const App: React.FC = () => {
                       {chefRecipes.map((r, i) => <RecipeCard key={i} recipe={r} onAddToPlan={() => {}} />)}
                   </div>
                 )}
-                <button onClick={() => { setImage(null); setNutritionData(null); setChefRecipes([]); setError(null); setIsCaptureOpen(true); }} className="w-full py-4 text-emerald-600 font-black uppercase tracking-widest text-sm">Clear and Start Over</button>
+                <button onClick={() => { setImage(null); setNutritionData(null); setChefRecipes([]); setError(null); handleOpenCapture('meal'); }} className="w-full py-4 text-emerald-600 font-black uppercase tracking-widest text-sm">Clear and Start Over</button>
             </div>
           );
       }
@@ -185,7 +192,8 @@ const App: React.FC = () => {
       const dailyProtein = todayLog.reduce((acc, e) => acc + e.totalProtein, 0);
 
       switch (activeView) {
-          case 'home': return <CommandCenter dailyCalories={dailyCalories} dailyProtein={dailyProtein} rewardsBalance={walletBalance} userName={user?.firstName || 'Hero'} healthStats={healthStats} isHealthConnected={isHealthConnected} isHealthSyncing={false} onConnectHealth={()=>{}} onScanClick={() => setActiveView('body')} onCameraClick={() => setIsCaptureOpen(true)} onBarcodeClick={() => setIsCaptureOpen(true)} onPantryChefClick={() => setIsCaptureOpen(true)} onRestaurantClick={() => setIsCaptureOpen(true)} onUploadClick={() => setIsCaptureOpen(true)} dashboardPrefs={dashboardPrefs} isProxy={!!proxyClient} />;
+          /* FIX: Removed the non-existent 'onUploadClick' prop from 'CommandCenter' to fix TypeScript error. */
+          case 'home': return <CommandCenter dailyCalories={dailyCalories} dailyProtein={dailyProtein} rewardsBalance={walletBalance} userName={user?.firstName || 'Hero'} healthStats={healthStats} isHealthConnected={isHealthConnected} isHealthSyncing={false} onConnectHealth={()=>{}} onScanClick={() => setActiveView('body')} onCameraClick={handleOpenCapture} dashboardPrefs={dashboardPrefs} />;
           case 'plan': return <MealPlanManager plans={mealPlans} activePlanId={activePlanId} savedMeals={savedMeals} onPlanChange={setActivePlanId} onCreatePlan={name => apiService.createMealPlan(name).then(() => loadAllData())} onRemoveFromPlan={handleRemoveMeal} onQuickAdd={(pid, m, d, s) => handleQuickAddMeal(pid, m.id, d, s)} onGenerateMedical={handleMedicalGeneration} medicalPlannerState={medicalPlannerState} />;
           case 'meals': return <MealLibrary meals={savedMeals} onAdd={() => {}} onDelete={id => apiService.deleteMeal(id).then(loadAllData)} onSelectMeal={setViewingMealDetails} />;
           case 'history': return <MealHistory logEntries={mealLog} onAddToPlan={() => {}} onSaveMeal={() => {}} onSelectMeal={setViewingMealDetails} />;
@@ -219,7 +227,7 @@ const App: React.FC = () => {
         showClientsTab={user?.role === 'coach'}
     >
         {proxyClient && <CoachProxyBanner clientName={proxyClient.name} onExit={() => setProxyClient(null)} />}
-        {isCaptureOpen && <CaptureFlow onClose={() => setIsCaptureOpen(false)} onCapture={handleCaptureResult} onRepeatMeal={() => {}} onBodyScanClick={() => setActiveView('body')} />}
+        {isCaptureOpen && <CaptureFlow onClose={() => setIsCaptureOpen(false)} onCapture={handleCaptureResult} onRepeatMeal={() => {}} onBodyScanClick={() => setActiveView('body')} initialMode={captureMode} />}
         {isGoalWizardOpen && <GoalSetupWizard onClose={() => setIsGoalWizardOpen(false)} onSave={(c, p) => handleUpdatePrefs({...dashboardPrefs, calorieGoal: c, proteinGoal: p})} />}
         {renderActiveView()}
         {activeView === 'home' && !nutritionData && chefRecipes.length === 0 && !isProcessing && !error && !image && !viewingMealDetails && (
