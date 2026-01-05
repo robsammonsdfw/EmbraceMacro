@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import type { MealPlan, SavedMeal } from '../types';
 import { BeakerIcon, PlusIcon, TrashIcon, BookOpenIcon, CameraOffIcon, SearchIcon, XIcon, UtensilsIcon } from './icons';
@@ -96,7 +97,7 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
             <div className="p-4 border-b border-slate-200 bg-slate-50">
                 <div className="flex justify-between items-center mb-3 lg:block">
                     <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                        <BookOpenIcon className="text-indigo-600" /> My Library
+                        <BookOpenIcon className="text-indigo-600 w-5 h-5" /> My Library
                     </h3>
                     <button 
                         onClick={() => { setIsMobileLibraryOpen(false); setPendingSlot(null); }}

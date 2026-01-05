@@ -156,7 +156,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
             {/* Footer */}
             <div className="p-4 border-t border-slate-100 bg-slate-50/50">
                 <button onClick={() => onNavigate('hub')} className="w-full flex items-center space-x-3 px-4 py-3 text-slate-500 transition-colors text-left group hover:bg-white rounded-xl">
-                    <Squares2X2Icon className="group-hover:rotate-90 transition-transform text-slate-400" />
+                    <Squares2X2Icon className="group-hover:rotate-90 transition-transform text-slate-400 w-5 h-5" />
                     <span className="font-bold text-[10px] uppercase tracking-widest">Switch App</span>
                 </button>
                 <button onClick={onLogout} className="w-full text-left px-8 py-2 text-[10px] font-black text-slate-400 hover:text-rose-500 mt-1 uppercase tracking-widest">Sign Out</button>

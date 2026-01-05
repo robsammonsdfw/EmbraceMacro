@@ -101,17 +101,17 @@ export const CoachingHub: React.FC<CoachingHubProps> = ({ userRole, onUpgrade })
                         
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left py-6">
                             <div className="p-6 bg-slate-50 rounded-3xl">
-                                <BeakerIcon className="text-indigo-600 mb-3" />
+                                <BeakerIcon className="text-indigo-600 mb-3 w-8 h-8" />
                                 <h4 className="font-black text-slate-800 uppercase tracking-widest text-xs mb-2">Proxy Control</h4>
                                 <p className="text-sm text-slate-500">Act as your client to view their 3D scans and daily nutrition.</p>
                             </div>
                             <div className="p-6 bg-slate-50 rounded-3xl">
-                                <PlusIcon className="text-indigo-600 mb-3" />
+                                <PlusIcon className="text-indigo-600 mb-3 w-8 h-8" />
                                 <h4 className="font-black text-slate-800 uppercase tracking-widest text-xs mb-2">Prescribed Plans</h4>
                                 <p className="text-sm text-slate-500">Remotely build meal plans and grocery lists for your roster.</p>
                             </div>
                             <div className="p-6 bg-slate-50 rounded-3xl">
-                                <UsersIcon className="text-indigo-600 mb-3" />
+                                <UsersIcon className="text-indigo-600 mb-3 w-8 h-8" />
                                 <h4 className="font-black text-slate-800 uppercase tracking-widest text-xs mb-2">Roster Management</h4>
                                 <p className="text-sm text-slate-500">Manage unlimited clients and track their metabolic compliance.</p>
                             </div>
