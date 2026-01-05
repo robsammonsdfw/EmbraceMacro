@@ -301,6 +301,22 @@ export interface AssessmentState {
   passivePrompt?: PassivePrompt;
 }
 
+export interface RestaurantActivity {
+    friendName: string;
+    friendInitial: string;
+    mealName: string;
+    rating: number;
+    date: string;
+    imageUrl?: string;
+}
+
+export interface RestaurantPlace {
+    uri: string;
+    title: string;
+    address?: string;
+    activity?: RestaurantActivity[];
+}
+
 export type ActiveView = 
   | 'home' 
   | 'physical.fuel' 

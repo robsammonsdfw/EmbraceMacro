@@ -1,9 +1,10 @@
+
 import type { 
   NutritionInfo, SavedMeal, MealPlan, MealPlanItem, MealPlanItemMetadata, 
   GroceryList, GroceryItem, RewardsSummary, MealLogEntry, Recipe, 
   UserProfile, Friendship, ReadinessScore, FormAnalysisResult, RecoveryData,
   AssessmentState, UserDashboardPrefs, HealthStats, MatchProfile, PartnerBlueprint, CoachingRelation,
-  Assessment
+  Assessment, RestaurantActivity
 } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
@@ -91,6 +92,19 @@ export const getMatches = (): Promise<MatchProfile[]> => callApi('/matches', 'GE
 
 export const searchNearbyRestaurants = (lat: number, lng: number): Promise<{ places: MapPlace[] }> => callApi('/search-restaurants', 'POST', { lat, lng });
 export const checkInAtLocation = (placeName: string): Promise<void> => callApi('/check-in', 'POST', { placeName });
+
+// Simulated function for "Friends who ate here"
+export const getRestaurantActivity = async (placeUri: string): Promise<RestaurantActivity[]> => {
+    // In a real app, this would query the backend DB for check-ins at this Place ID.
+    // Simulating delay
+    await new Promise(r => setTimeout(r, 800));
+    
+    // Mock data based on the complaint requirements
+    return [
+        { friendName: 'Sarah', friendInitial: 'S', mealName: 'Grilled Salmon Salad', rating: 5, date: '2 days ago', imageUrl: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=200' },
+        { friendName: 'Mike', friendInitial: 'M', mealName: 'Protein Bowl', rating: 4, date: 'Last week' }
+    ];
+};
 
 export const getMealPlans = (): Promise<MealPlan[]> => callApi('/meal-plans', 'GET');
 export const createMealPlan = (name: string): Promise<MealPlan> => callApi('/meal-plans', 'POST', { name });

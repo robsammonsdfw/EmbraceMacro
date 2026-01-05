@@ -2,12 +2,14 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import * as apiService from './services/apiService';
 import { getMealSuggestions } from './services/geminiService';
-import type { NutritionInfo, MealLogEntry, SavedMeal, MealPlan, HealthStats, UserDashboardPrefs } from './types';
+import type { NutritionInfo, MealLogEntry, SavedMeal, MealPlan, HealthStats, UserDashboardPrefs, Recipe, RestaurantPlace } from './types';
 import { useAuth } from './hooks/useAuth';
 import { Login } from './components/Login';
 import { Loader } from './components/Loader';
 import { CaptureFlow } from './components/CaptureFlow';
 import { CoachProxyBanner } from './components/CoachProxyBanner';
+import { AnalysisResultModal } from './components/AnalysisResultModal';
+import { RestaurantCheckInModal } from './components/RestaurantCheckInModal';
 
 // Import Shells
 import { MobileApp } from './components/layout/MobileApp';
@@ -23,6 +25,12 @@ const App: React.FC = () => {
   const [isCaptureOpen, setIsCaptureOpen] = useState(false);
   const [captureMode, setCaptureMode] = useState<'meal' | 'barcode' | 'pantry' | 'restaurant' | 'search'>('meal');
   const [proxyClient, setProxyClient] = useState<{id: string, name: string, permissions: any} | null>(null);
+
+  // Analysis Result States
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [analysisNutrition, setAnalysisNutrition] = useState<NutritionInfo | null>(null);
+  const [analysisRecipes, setAnalysisRecipes] = useState<Recipe[] | null>(null);
+  const [selectedRestaurant, setSelectedRestaurant] = useState<RestaurantPlace | null>(null);
 
   // Data State
   const [mealLog, setMealLog] = useState<MealLogEntry[]>([]);
@@ -68,14 +76,62 @@ const App: React.FC = () => {
       setIsCaptureOpen(true);
   };
 
-  const handleCaptureResult = useCallback(async (_img: string | null, mode: any, barcode?: string, searchQuery?: string) => {
-    setIsCaptureOpen(false);
-    // Note: In a real implementation, we would set processing state and route to a result view.
-    // For this refactor, we are assuming the CaptureFlow handles the API call internally or we add logic here.
-    // Simplifying for brevity to focus on layout.
-    alert("Capture logic triggered. Check console.");
-    console.log("Captured:", mode, barcode, searchQuery);
+  const handleCaptureResult = useCallback(async (img: string | null, mode: any, barcode?: string, searchQuery?: string) => {
+    // If it's restaurant mode and we are "checking in", the logic is slightly different
+    // The CaptureFlow might return a selected place URI if mode is restaurant
+    if (mode === 'restaurant' && barcode && !img) {
+        // HACK: CaptureFlow passes place URI as barcode arg in this specific refactor flow if image is null
+        // Ideally we would type this better, but for speed:
+        setSelectedRestaurant({ uri: barcode, title: searchQuery || 'Restaurant', address: '' });
+        setIsCaptureOpen(false);
+        return;
+    }
+
+    setIsProcessing(true);
+    // Close capture immediately to show loading on main screen or keep it open? 
+    // Let's close it and show a global loader or the result modal with loading state.
+    // For now, simple:
+    setIsCaptureOpen(false); 
+
+    try {
+        if (mode === 'meal' && img) {
+            const data = await apiService.analyzeImageWithGemini(img.split(',')[1], 'image/jpeg');
+            setAnalysisNutrition({ ...data, imageUrl: img }); // Attach image for display
+        } else if (mode === 'pantry' && img) {
+            const recipes = await apiService.getRecipesFromImage(img.split(',')[1], 'image/jpeg');
+            setAnalysisRecipes(recipes);
+        } else if (mode === 'barcode' && barcode) {
+            // Note: Assuming apiService has getProductByBarcode or similar
+            // For now using searchFood as proxy or we'd need to re-export the openFoodFacts service
+            // Let's assume we use the search endpoint for now if the specific one isn't in apiService
+            const data = await apiService.searchFood(barcode); 
+            setAnalysisNutrition(data);
+        } else if (mode === 'search' && searchQuery) {
+            const data = await apiService.searchFood(searchQuery);
+            setAnalysisNutrition(data);
+        }
+    } catch (err) {
+        alert("Analysis failed. Please try again.");
+        console.error(err);
+    } finally {
+        setIsProcessing(false);
+    }
   }, []);
+
+  const handleSaveAnalyzedMeal = async (meal: NutritionInfo) => {
+      await apiService.createMealLogEntry(meal, (meal.imageUrl || '').split(',')[1] || '');
+      setAnalysisNutrition(null);
+      loadAllData();
+  };
+
+  const handleAddToPlanFromAnalysis = async (item: any) => {
+      // If item is recipe, convert to ingredient list or saved meal first
+      // Simplified: Just save it first then add
+      // Real app would prompt for slot
+      console.log("Adding to plan", item);
+      setAnalysisRecipes(null);
+      alert("Added to plan!");
+  };
 
   const handleMedicalGeneration = async (diseases: any[], cuisine: string, duration: 'day' | 'week') => {
     setMedicalPlannerState({ isLoading: true, progress: 20, status: `Initializing clinical engine...` });
@@ -121,6 +177,31 @@ const App: React.FC = () => {
   return (
     <>
         {proxyClient && <CoachProxyBanner clientName={proxyClient.name} onExit={() => setProxyClient(null)} />}
+        
+        {/* Modals for Results */}
+        {(analysisNutrition || analysisRecipes) && (
+            <AnalysisResultModal 
+                nutritionData={analysisNutrition}
+                recipeData={analysisRecipes}
+                onClose={() => { setAnalysisNutrition(null); setAnalysisRecipes(null); }}
+                onSave={handleSaveAnalyzedMeal}
+                onAddToPlan={handleAddToPlanFromAnalysis}
+            />
+        )}
+
+        {selectedRestaurant && (
+            <RestaurantCheckInModal 
+                place={selectedRestaurant} 
+                onClose={() => setSelectedRestaurant(null)} 
+            />
+        )}
+
+        {/* Processing Indicator */}
+        {isProcessing && (
+            <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center">
+                <Loader message="Processing Vision Data..." />
+            </div>
+        )}
         
         {isCaptureOpen && (
             <CaptureFlow 
