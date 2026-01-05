@@ -1,9 +1,8 @@
 
 import React, { useState } from 'react';
 import { 
-    HomeIcon, DumbbellIcon, BrainIcon, SparklesIcon, 
-    UsersIcon, BeakerIcon, ActivityIcon, PlusIcon, 
-    BookOpenIcon, ClipboardListIcon, UtensilsIcon,
+    HomeIcon, DumbbellIcon, BrainIcon, UserGroupIcon, 
+    UsersIcon, ActivityIcon, UtensilsIcon,
     UserCircleIcon, TrophyIcon, HeartIcon
 } from '../icons';
 import type { HealthStats, UserDashboardPrefs } from '../../types';
@@ -14,6 +13,7 @@ import { BodyHub } from '../body/BodyHub';
 import { CoachingHub } from '../coaching/CoachingHub';
 import { SocialManager } from '../social/SocialManager';
 import { RewardsDashboard } from '../RewardsDashboard';
+import { JourneyView } from '../sections/JourneyView';
 import { LabsCard } from '../dashboard/LabsCard';
 import { MealPlanManager } from '../MealPlanManager'; // Direct use for right pane
 
@@ -27,13 +27,17 @@ interface DesktopAppProps {
     user?: any;
 }
 
-type Module = 'dashboard' | 'physical' | 'mental' | 'spiritual' | 'clients';
+type Module = 'dashboard' | 'physical' | 'mental' | 'social' | 'clients';
 
 export const DesktopApp: React.FC<DesktopAppProps> = ({ 
     healthStats, dashboardPrefs, fuelProps, bodyProps, userRole, onLogout, user
 }) => {
     const [activeModule, setActiveModule] = useState<Module>('dashboard');
     const [rightPaneMode, setRightPaneMode] = useState<'planner' | 'config'>('planner');
+    
+    // Module Internal Tabs
+    const [physicalTab, setPhysicalTab] = useState<'nutrition' | 'body'>('nutrition');
+    const [socialTab, setSocialTab] = useState<'community' | 'journey' | 'rewards'>('community');
 
     const SidebarItem = ({ id, icon, label }: { id: Module, icon: React.ReactNode, label: string }) => (
         <button 
@@ -106,8 +110,12 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
 
         if (activeModule === 'physical') {
             return (
-                <div className="h-full overflow-y-auto p-4 desktop-density">
-                    <FuelSection {...fuelProps} />
+                <div className="h-full overflow-y-auto p-4 desktop-density flex flex-col">
+                    <div className="flex gap-4 mb-4 border-b border-slate-200 pb-2">
+                        <button onClick={() => setPhysicalTab('nutrition')} className={`text-sm font-bold pb-2 ${physicalTab === 'nutrition' ? 'text-emerald-600 border-b-2 border-emerald-600' : 'text-slate-400'}`}>Nutrition & Fuel</button>
+                        <button onClick={() => setPhysicalTab('body')} className={`text-sm font-bold pb-2 ${physicalTab === 'body' ? 'text-emerald-600 border-b-2 border-emerald-600' : 'text-slate-400'}`}>Body & Movement</button>
+                    </div>
+                    {physicalTab === 'nutrition' ? <FuelSection {...fuelProps} /> : <BodyHub {...bodyProps} />}
                 </div>
             );
         }
@@ -135,6 +143,21 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             );
         }
 
+        if (activeModule === 'social') {
+            return (
+                <div className="h-full overflow-y-auto p-4 desktop-density flex flex-col">
+                    <div className="flex gap-4 mb-4 border-b border-slate-200 pb-2">
+                        <button onClick={() => setSocialTab('community')} className={`text-sm font-bold pb-2 ${socialTab === 'community' ? 'text-amber-600 border-b-2 border-amber-600' : 'text-slate-400'}`}>Community</button>
+                        <button onClick={() => setSocialTab('journey')} className={`text-sm font-bold pb-2 ${socialTab === 'journey' ? 'text-amber-600 border-b-2 border-amber-600' : 'text-slate-400'}`}>Journey</button>
+                        <button onClick={() => setSocialTab('rewards')} className={`text-sm font-bold pb-2 ${socialTab === 'rewards' ? 'text-amber-600 border-b-2 border-amber-600' : 'text-slate-400'}`}>Rewards</button>
+                    </div>
+                    {socialTab === 'community' && <SocialManager />}
+                    {socialTab === 'journey' && <JourneyView dashboardPrefs={dashboardPrefs} onOpenWizard={() => {}} />}
+                    {socialTab === 'rewards' && <RewardsDashboard />}
+                </div>
+            );
+        }
+
         if (activeModule === 'clients') {
             return (
                 <div className="h-full overflow-y-auto p-4 desktop-density">
@@ -157,7 +180,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
                     <SidebarItem id="dashboard" icon={<HomeIcon />} label="Home" />
                     <SidebarItem id="physical" icon={<DumbbellIcon />} label="Phys" />
                     <SidebarItem id="mental" icon={<BrainIcon />} label="Ment" />
-                    <SidebarItem id="spiritual" icon={<SparklesIcon />} label="Spirit" />
+                    <SidebarItem id="social" icon={<UserGroupIcon />} label="Social" />
                     {userRole === 'coach' && <SidebarItem id="clients" icon={<UsersIcon />} label="CRM" />}
                 </nav>
                 <button onClick={onLogout} className="mt-auto text-slate-500 hover:text-rose-500 p-2">

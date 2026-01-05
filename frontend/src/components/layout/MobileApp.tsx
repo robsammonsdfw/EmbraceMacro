@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { 
-    ActivityIcon, CameraIcon, DumbbellIcon, BrainIcon, SparklesIcon, 
+    ActivityIcon, CameraIcon, DumbbellIcon, BrainIcon, UserGroupIcon, 
     UserCircleIcon, HomeIcon, MenuIcon, XIcon, PlusIcon 
 } from '../icons';
 import type { HealthStats, UserDashboardPrefs, ActiveView } from '../../types';
@@ -29,7 +29,7 @@ interface MobileAppProps {
     user?: any;
 }
 
-type StackLevel = 'home' | 'physical' | 'mental' | 'spiritual' | 'config';
+type StackLevel = 'home' | 'physical' | 'mental' | 'social' | 'config';
 
 const VitalsStrip: React.FC<{ stats: HealthStats; prefs: UserDashboardPrefs }> = ({ stats, prefs }) => {
     // Helper to render enabled stats
@@ -118,12 +118,12 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                 <div 
                     className="mobile-hero-card h-[160px] text-xl relative overflow-hidden"
                     style={{backgroundImage: 'url(https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&q=80&w=600)'}}
-                    onClick={() => navigateTo('spiritual')}
+                    onClick={() => navigateTo('social')}
                 >
                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"></div>
                     <div className="relative z-10 flex items-center gap-2">
-                        <SparklesIcon className="w-6 h-6 text-amber-400" />
-                        <span>Spiritual</span>
+                        <UserGroupIcon className="w-6 h-6 text-amber-400" />
+                        <span>Social</span>
                     </div>
                 </div>
             </div>
@@ -201,8 +201,8 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                 { id: 'care', label: 'Care Team', desc: 'Coaches & Doctors' }
             ]);
         }
-        if (stack === 'spiritual') {
-            return renderSubLevelMenu('Spiritual', [
+        if (stack === 'social') {
+            return renderSubLevelMenu('Social', [
                 { id: 'community', label: 'Community', desc: 'Friends & Groups' },
                 { id: 'journey', label: 'My Journey', desc: 'Goals & Milestones' },
                 { id: 'rewards', label: 'Rewards', desc: 'Health Wallet' }

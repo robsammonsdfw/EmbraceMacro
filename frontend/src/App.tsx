@@ -1,9 +1,8 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import * as apiService from './services/apiService';
-import { getProductByBarcode } from './services/openFoodFactsService';
-import { analyzeFoodImage, analyzeRestaurantMeal, getRecipesFromImage, searchFood, getMealSuggestions } from './services/geminiService';
-import type { NutritionInfo, MealLogEntry, SavedMeal, MealPlan, HealthStats, UserDashboardPrefs, Recipe } from './types';
+import { getMealSuggestions } from './services/geminiService';
+import type { NutritionInfo, MealLogEntry, SavedMeal, MealPlan, HealthStats, UserDashboardPrefs } from './types';
 import { useAuth } from './hooks/useAuth';
 import { Login } from './components/Login';
 import { Loader } from './components/Loader';
@@ -97,6 +96,7 @@ const App: React.FC = () => {
       plans: mealPlans,
       activePlanId: activePlanId,
       savedMeals: savedMeals,
+      mealLog: mealLog, // Passed to enable History view
       onPlanChange: setActivePlanId,
       onCreatePlan: (name: string) => apiService.createMealPlan(name).then(() => loadAllData()),
       onRemoveFromPlan: (id: number) => apiService.removeMealFromPlanItem(id).then(loadAllData),

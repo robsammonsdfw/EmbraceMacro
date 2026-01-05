@@ -3,40 +3,45 @@ import React, { useState } from 'react';
 import { MealPlanManager } from '../MealPlanManager';
 import { MealLibrary } from '../MealLibrary';
 import { GroceryList } from '../GroceryList';
-import type { MealPlan, SavedMeal, NutritionInfo } from '../../types';
-import { PlusIcon, BookOpenIcon, ClipboardListIcon } from '../icons';
+import { MealHistory } from '../MealHistory';
+import type { MealPlan, SavedMeal, NutritionInfo, MealLogEntry } from '../../types';
+import { PlusIcon, BookOpenIcon, ClipboardListIcon, ClockIcon } from '../icons';
 
 interface FuelSectionProps {
     plans: MealPlan[];
     activePlanId: number | null;
     savedMeals: SavedMeal[];
+    mealLog: MealLogEntry[];
     onPlanChange: (id: number) => void;
     onCreatePlan: (name: string) => void;
     onRemoveFromPlan: (itemId: number) => void;
     onQuickAdd: (planId: number, meal: SavedMeal, day: string, slot: string) => void;
     onGenerateMedical: (diseases: any[], cuisine: string, duration: 'day' | 'week') => Promise<void>;
     medicalPlannerState: { isLoading: boolean; progress: number; status: string };
-    onAddMealToLibrary: (meal: NutritionInfo) => void; // Usually opens modal
+    onAddMealToLibrary: (meal: NutritionInfo) => void; 
     onDeleteMeal: (id: number) => void;
     onSelectMeal: (meal: NutritionInfo) => void;
 }
 
 export const FuelSection: React.FC<FuelSectionProps> = ({
-    plans, activePlanId, savedMeals, onPlanChange, onCreatePlan, onRemoveFromPlan, 
+    plans, activePlanId, savedMeals, mealLog, onPlanChange, onCreatePlan, onRemoveFromPlan, 
     onQuickAdd, onGenerateMedical, medicalPlannerState, onAddMealToLibrary, onDeleteMeal, onSelectMeal
 }) => {
-    const [activeTab, setActiveTab] = useState<'plan' | 'library' | 'grocery'>('plan');
+    const [activeTab, setActiveTab] = useState<'plan' | 'library' | 'grocery' | 'history'>('plan');
 
-    // Helper for library to adapt type
-    const handleLibraryAdd = (meal: SavedMeal) => {
-        // Just open the modal for logging, cast appropriately
-        onAddMealToLibrary(meal);
-    }
+    const handleHistoryAdd = (mealData: NutritionInfo) => {
+        // Logic to add to plan from history
+        if (activePlanId) {
+            // Defaulting to today/lunch if added from history without drag/drop
+            // Ideally we show a modal, but for now we can just log it or auto-add
+            console.log("Add from history", mealData);
+        }
+    };
 
     return (
         <div className="space-y-6 animate-fade-in pb-20">
             {/* Sub-navigation Tabs */}
-            <div className="flex p-1 bg-slate-200 rounded-xl w-full md:w-fit mx-auto md:mx-0">
+            <div className="flex p-1 bg-slate-200 rounded-xl w-full md:w-fit mx-auto md:mx-0 overflow-x-auto">
                 <button 
                     onClick={() => setActiveTab('plan')}
                     className={`flex-1 md:flex-none px-6 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
@@ -52,6 +57,14 @@ export const FuelSection: React.FC<FuelSectionProps> = ({
                     }`}
                 >
                     <BookOpenIcon className="w-4 h-4" /> Library
+                </button>
+                <button 
+                    onClick={() => setActiveTab('history')}
+                    className={`flex-1 md:flex-none px-6 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
+                        activeTab === 'history' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                >
+                    <ClockIcon className="w-4 h-4" /> History
                 </button>
                 <button 
                     onClick={() => setActiveTab('grocery')}
@@ -81,8 +94,16 @@ export const FuelSection: React.FC<FuelSectionProps> = ({
                 {activeTab === 'library' && (
                     <MealLibrary 
                         meals={savedMeals}
-                        onAdd={handleLibraryAdd}
+                        onAdd={onAddMealToLibrary} // This actually saves to library, reusing prop for now
                         onDelete={onDeleteMeal}
+                        onSelectMeal={onSelectMeal}
+                    />
+                )}
+                {activeTab === 'history' && (
+                    <MealHistory 
+                        logEntries={mealLog}
+                        onAddToPlan={handleHistoryAdd}
+                        onSaveMeal={onAddMealToLibrary}
                         onSelectMeal={onSelectMeal}
                     />
                 )}

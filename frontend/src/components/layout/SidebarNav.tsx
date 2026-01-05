@@ -65,10 +65,10 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
     const [openCategories, setOpenCategories] = useState({
         physical: true,
         mental: true,
-        spiritual: true
+        social: true
     });
 
-    const toggleCategory = (cat: 'physical' | 'mental' | 'spiritual') => {
+    const toggleCategory = (cat: 'physical' | 'mental' | 'social') => {
         setOpenCategories(prev => ({ ...prev, [cat]: !prev[cat] }));
     };
 
@@ -136,19 +136,19 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
                     </div>
                 )}
 
-                {/* SPIRITUAL HUB */}
+                {/* SOCIAL HUB */}
                 <CategoryHeader 
-                    label="Spiritual" 
+                    label="Social" 
                     color="text-amber-500" 
-                    icon={<SparklesIcon />} 
-                    isOpen={openCategories.spiritual} 
-                    onClick={() => toggleCategory('spiritual')} 
+                    icon={<UserGroupIcon />} 
+                    isOpen={openCategories.social} 
+                    onClick={() => toggleCategory('social')} 
                 />
-                {openCategories.spiritual && (
+                {openCategories.social && (
                     <div className="space-y-1 animate-fade-in">
-                        <NavItem indent label="Community" icon={<UserGroupIcon />} isActive={activeView === 'spiritual.community'} onClick={() => onNavigate('spiritual.community')} />
-                        <NavItem indent label="My Journey" icon={<HeartIcon />} isActive={activeView === 'spiritual.journey'} onClick={() => onNavigate('spiritual.journey')} />
-                        <NavItem indent label="Rewards" icon={<TrophyIcon />} isActive={activeView === 'spiritual.rewards'} onClick={() => onNavigate('spiritual.rewards')} />
+                        <NavItem indent label="Community" icon={<UserGroupIcon />} isActive={activeView === 'social.community'} onClick={() => onNavigate('social.community')} />
+                        <NavItem indent label="My Journey" icon={<HeartIcon />} isActive={activeView === 'social.journey'} onClick={() => onNavigate('social.journey')} />
+                        <NavItem indent label="Rewards" icon={<TrophyIcon />} isActive={activeView === 'social.rewards'} onClick={() => onNavigate('social.rewards')} />
                     </div>
                 )}
             </div>
