@@ -1,12 +1,18 @@
 
-import React from 'react';
-import { HomeIcon, BookOpenIcon, UserCircleIcon, BeakerIcon, ClipboardListIcon, TrophyIcon, Squares2X2Icon, ClipboardCheckIcon, HeartIcon, PlusIcon, UserGroupIcon, UsersIcon, ActivityIcon, LightBulbIcon } from '../icons';
-import { HealthJourney } from '../../types';
+import React, { useState } from 'react';
+import { 
+    HomeIcon, DumbbellIcon, BrainIcon, SparklesIcon, 
+    UtensilsIcon, UserCircleIcon, BeakerIcon, 
+    ActivityIcon, ClipboardCheckIcon, UsersIcon, 
+    UserGroupIcon, HeartIcon, TrophyIcon, 
+    Squares2X2Icon, PlusIcon
+} from '../icons';
+import { HealthJourney, ActiveView } from '../../types';
 import { JOURNEYS } from './AppLayout';
 
 interface SidebarNavProps {
-    activeView: string;
-    onNavigate: (view: string) => void;
+    activeView: ActiveView;
+    onNavigate: (view: ActiveView) => void;
     onLogout: () => void;
     selectedJourney?: HealthJourney;
     onJourneyChange?: (journey: HealthJourney) => void;
@@ -14,32 +20,63 @@ interface SidebarNavProps {
 }
 
 const NavItem: React.FC<{ 
-    id: string; 
     label: string; 
     icon: React.ReactNode; 
     isActive: boolean; 
     onClick: () => void;
-}> = ({ label, icon, isActive, onClick }) => (
+    indent?: boolean;
+}> = ({ label, icon, isActive, onClick, indent }) => (
     <button
         onClick={onClick}
         className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
             isActive 
-            ? 'bg-indigo-50 text-indigo-700 font-bold shadow-sm' 
+            ? 'bg-slate-900 text-white font-bold shadow-md' 
             : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-        }`}
+        } ${indent ? 'ml-4 w-[calc(100%-1rem)] text-xs' : ''}`}
     >
-        <span className={`${isActive ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600'}`}>
+        <span className={`${isActive ? 'text-emerald-400' : 'text-slate-400 group-hover:text-slate-600'} ${indent ? 'scale-90' : ''}`}>
             {icon}
         </span>
-        <span className="text-sm uppercase tracking-tight font-black">{label}</span>
+        <span className={`${indent ? 'font-bold tracking-wide' : 'text-sm font-black uppercase tracking-tight'}`}>{label}</span>
+    </button>
+);
+
+const CategoryHeader: React.FC<{
+    label: string;
+    color: string;
+    icon: React.ReactNode;
+    isOpen: boolean;
+    onClick: () => void;
+}> = ({ label, color, icon, isOpen, onClick }) => (
+    <button 
+        onClick={onClick}
+        className="w-full flex items-center justify-between px-4 py-3 mt-4 mb-1 text-left hover:bg-slate-50 rounded-xl transition-colors group"
+    >
+        <div className="flex items-center gap-3">
+            <span className={`${color}`}>{icon}</span>
+            <span className="text-xs font-black uppercase tracking-widest text-slate-400 group-hover:text-slate-600">{label}</span>
+        </div>
+        <span className={`text-slate-300 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>▼</span>
     </button>
 );
 
 export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, onLogout, showClientsTab, selectedJourney, onJourneyChange }) => {
+    // Categories state
+    const [openCategories, setOpenCategories] = useState({
+        physical: true,
+        mental: true,
+        spiritual: true
+    });
+
+    const toggleCategory = (cat: 'physical' | 'mental' | 'spiritual') => {
+        setOpenCategories(prev => ({ ...prev, [cat]: !prev[cat] }));
+    };
+
     return (
-        <div className="h-full flex flex-col bg-white">
+        <div className="h-full flex flex-col bg-white border-r border-slate-200">
+            {/* Header / Logo */}
             <div className="p-6 pt-8">
-                <div className="mb-6 flex justify-start">
+                <div className="mb-6 flex justify-start cursor-pointer" onClick={() => onNavigate('home')}>
                     <img src="/logo.png" alt="EmbraceHealth AI" className="max-w-full h-auto max-h-12 object-contain" />
                 </div>
                 
@@ -50,7 +87,6 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
                             value={selectedJourney} 
                             onChange={(e) => onJourneyChange(e.target.value as HealthJourney)}
                             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-black text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500 transition-all appearance-none"
-                            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='currentColor'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center', backgroundSize: '1rem' }}
                         >
                             {JOURNEYS.map(j => (<option key={j.id} value={j.id}>{j.label}</option>))}
                         </select>
@@ -58,35 +94,72 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
                 )}
             </div>
 
-            <div className="flex-grow px-4 space-y-1 overflow-y-auto no-scrollbar">
+            {/* Navigation Content */}
+            <div className="flex-grow px-4 space-y-1 overflow-y-auto no-scrollbar pb-10">
+                <NavItem label="Command Center" icon={<HomeIcon />} isActive={activeView === 'home'} onClick={() => onNavigate('home')} />
+
                 {showClientsTab && (
-                    <div className="mb-4">
-                        <NavItem id="clients" label="My Clients" icon={<UsersIcon />} isActive={activeView === 'clients'} onClick={() => onNavigate('clients')} />
-                        <div className="h-px bg-slate-100 my-4"></div>
+                    <div className="mt-4">
+                        <NavItem label="My Clients" icon={<UsersIcon />} isActive={activeView === 'clients'} onClick={() => onNavigate('clients')} />
                     </div>
                 )}
 
-                <NavItem id="home" label="Dashboard" icon={<HomeIcon />} isActive={activeView === 'home'} onClick={() => onNavigate('home')} />
-                <NavItem id="coaching" label="Coaching" icon={<ActivityIcon />} isActive={activeView === 'coaching'} onClick={() => onNavigate('coaching')} />
-                <NavItem id="social" label="Social" icon={<UserGroupIcon />} isActive={activeView === 'social'} onClick={() => onNavigate('social')} />
-                <NavItem id="plan" label="Meal Planner" icon={<PlusIcon />} isActive={activeView === 'plan'} onClick={() => onNavigate('plan')} />
-                <NavItem id="meals" label="Library" icon={<BookOpenIcon />} isActive={activeView === 'meals'} onClick={() => onNavigate('meals')} />
-                <NavItem id="suggestions" label="AI Ideas" icon={<LightBulbIcon />} isActive={activeView === 'suggestions'} onClick={() => onNavigate('suggestions')} />
-                <NavItem id="grocery" label="Groceries" icon={<ClipboardListIcon />} isActive={activeView === 'grocery'} onClick={() => onNavigate('grocery')} />
-                <NavItem id="body" label="Body Hub" icon={<UserCircleIcon />} isActive={activeView === 'body'} onClick={() => onNavigate('body')} />
-                <NavItem id="assessments" label="Tests" icon={<ClipboardCheckIcon />} isActive={activeView === 'assessments'} onClick={() => onNavigate('assessments')} />
-                <NavItem id="blueprint" label="Blueprint" icon={<HeartIcon />} isActive={activeView === 'blueprint'} onClick={() => onNavigate('blueprint')} />
-                <NavItem id="labs" label="Labs" icon={<BeakerIcon />} isActive={activeView === 'labs'} onClick={() => onNavigate('labs')} />
-                <NavItem id="orders" label="Orders" icon={<ClipboardListIcon />} isActive={activeView === 'orders'} onClick={() => onNavigate('orders')} />
-                <NavItem id="rewards" label="Rewards" icon={<TrophyIcon />} isActive={activeView === 'rewards'} onClick={() => onNavigate('rewards')} />
+                {/* PHYSICAL HUB */}
+                <CategoryHeader 
+                    label="Physical" 
+                    color="text-emerald-500" 
+                    icon={<DumbbellIcon />} 
+                    isOpen={openCategories.physical} 
+                    onClick={() => toggleCategory('physical')} 
+                />
+                {openCategories.physical && (
+                    <div className="space-y-1 animate-fade-in">
+                        <NavItem indent label="Fuel & Nutrition" icon={<UtensilsIcon />} isActive={activeView === 'physical.fuel'} onClick={() => onNavigate('physical.fuel')} />
+                        <NavItem indent label="Body & Movement" icon={<UserCircleIcon />} isActive={activeView === 'physical.body'} onClick={() => onNavigate('physical.body')} />
+                        <NavItem indent label="Health Reports" icon={<BeakerIcon />} isActive={activeView === 'physical.reports'} onClick={() => onNavigate('physical.reports')} />
+                    </div>
+                )}
+
+                {/* MENTAL HUB */}
+                <CategoryHeader 
+                    label="Mental" 
+                    color="text-indigo-500" 
+                    icon={<BrainIcon />} 
+                    isOpen={openCategories.mental} 
+                    onClick={() => toggleCategory('mental')} 
+                />
+                {openCategories.mental && (
+                    <div className="space-y-1 animate-fade-in">
+                        <NavItem indent label="Daily Readiness" icon={<ActivityIcon />} isActive={activeView === 'mental.readiness'} onClick={() => onNavigate('mental.readiness')} />
+                        <NavItem indent label="Assessments" icon={<ClipboardCheckIcon />} isActive={activeView === 'mental.assessments'} onClick={() => onNavigate('mental.assessments')} />
+                        <NavItem indent label="Care Team" icon={<UsersIcon />} isActive={activeView === 'mental.care'} onClick={() => onNavigate('mental.care')} />
+                    </div>
+                )}
+
+                {/* SPIRITUAL HUB */}
+                <CategoryHeader 
+                    label="Spiritual" 
+                    color="text-amber-500" 
+                    icon={<SparklesIcon />} 
+                    isOpen={openCategories.spiritual} 
+                    onClick={() => toggleCategory('spiritual')} 
+                />
+                {openCategories.spiritual && (
+                    <div className="space-y-1 animate-fade-in">
+                        <NavItem indent label="Community" icon={<UserGroupIcon />} isActive={activeView === 'spiritual.community'} onClick={() => onNavigate('spiritual.community')} />
+                        <NavItem indent label="My Journey" icon={<HeartIcon />} isActive={activeView === 'spiritual.journey'} onClick={() => onNavigate('spiritual.journey')} />
+                        <NavItem indent label="Rewards" icon={<TrophyIcon />} isActive={activeView === 'spiritual.rewards'} onClick={() => onNavigate('spiritual.rewards')} />
+                    </div>
+                )}
             </div>
 
-            <div className="p-4 border-t border-slate-100">
-                <button onClick={() => onNavigate('hub')} className="w-full flex items-center space-x-3 px-4 py-3 text-slate-500 transition-colors text-left group">
-                    <Squares2X2Icon className="group-hover:rotate-90 transition-transform" />
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-100 bg-slate-50/50">
+                <button onClick={() => onNavigate('hub')} className="w-full flex items-center space-x-3 px-4 py-3 text-slate-500 transition-colors text-left group hover:bg-white rounded-xl">
+                    <Squares2X2Icon className="group-hover:rotate-90 transition-transform text-slate-400" />
                     <span className="font-bold text-[10px] uppercase tracking-widest">Switch App</span>
                 </button>
-                <button onClick={onLogout} className="w-full text-left px-4 py-2 text-[10px] font-black text-slate-400 hover:text-rose-500 mt-2 uppercase tracking-widest">Sign Out</button>
+                <button onClick={onLogout} className="w-full text-left px-8 py-2 text-[10px] font-black text-slate-400 hover:text-rose-500 mt-1 uppercase tracking-widest">Sign Out</button>
             </div>
         </div>
     );

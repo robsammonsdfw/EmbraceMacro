@@ -1,3 +1,28 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  /* Trinity Theme Colors */
+  --color-physical: #10b981; /* Emerald-500 */
+  --color-physical-bg: #ecfdf5; /* Emerald-50 */
+  --color-physical-text: #047857; /* Emerald-700 */
+
+  --color-mental: #6366f1; /* Indigo-500 */
+  --color-mental-bg: #eef2ff; /* Indigo-50 */
+  --color-mental-text: #4338ca; /* Indigo-700 */
+
+  --color-spiritual: #f59e0b; /* Amber-500 */
+  --color-spiritual-bg: #fffbeb; /* Amber-50 */
+  --color-spiritual-text: #b45309; /* Amber-700 */
+}
+
+/* Scrollbar Hiding Utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

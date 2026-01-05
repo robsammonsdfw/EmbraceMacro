@@ -3,7 +3,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import * as apiService from './services/apiService';
 import { analyzeFoodImage, searchFood, analyzeRestaurantMeal, getRecipesFromImage, getMealSuggestions } from './services/geminiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
-import type { NutritionInfo, MealLogEntry, SavedMeal, MealPlan, HealthStats, UserDashboardPrefs, Recipe, MealPlanItemMetadata } from './types';
+import type { NutritionInfo, MealLogEntry, SavedMeal, MealPlan, HealthStats, UserDashboardPrefs, Recipe, MealPlanItemMetadata, ActiveView } from './types';
 import { ImageUploader } from './components/ImageUploader';
 import { NutritionCard } from './components/NutritionCard';
 import { RecipeCard } from './components/RecipeCard';
@@ -14,13 +14,9 @@ import { Login } from './components/Login';
 import { AppLayout } from './components/layout/AppLayout';
 import { CommandCenter } from './components/dashboard/CommandCenter';
 import { CaptureFlow } from './components/CaptureFlow';
-import { MealPlanManager } from './components/MealPlanManager';
-import { MealLibrary } from './components/MealLibrary';
 import { MealHistory } from './components/MealHistory';
-import { GroceryList } from './components/GroceryList';
 import { RewardsDashboard } from './components/RewardsDashboard';
 import { AssessmentHub } from './components/tests/AssessmentHub';
-import { PartnerBlueprint } from './components/matching/PartnerBlueprint';
 import { SocialManager } from './components/social/SocialManager';
 import { BodyHub } from './components/body/BodyHub';
 import { CoachingHub } from './components/coaching/CoachingHub';
@@ -31,7 +27,12 @@ import { ActivityIcon, ChefHatIcon } from './components/icons';
 import { MealSuggester } from './components/MealSuggester';
 import { AddToPlanModal } from './components/AddToPlanModal';
 
-type ActiveView = 'hub' | 'home' | 'plan' | 'meals' | 'history' | 'grocery' | 'rewards' | 'body' | 'social' | 'assessments' | 'blueprint' | 'labs' | 'orders' | 'clients' | 'coaching' | 'suggestions';
+// Trinity Hub Wrappers
+import { FuelSection } from './components/sections/FuelSection';
+import { HealthReportsView } from './components/sections/HealthReportsView';
+import { JourneyView } from './components/sections/JourneyView';
+import { ReadinessView } from './components/sections/ReadinessView';
+
 type CaptureMode = 'meal' | 'barcode' | 'pantry' | 'restaurant' | 'search';
 
 const App: React.FC = () => {
@@ -100,6 +101,8 @@ const App: React.FC = () => {
     setIsCaptureOpen(false); 
     setImage(null); setNutritionData(null); setChefRecipes([]); setError(null); 
     setIsProcessing(true);
+    // Force switch to home to show result if not already there
+    setActiveView('home'); 
     try {
         if (mode === 'barcode' && barcode) { const data = await getProductByBarcode(barcode); setNutritionData(data); }
         else if (mode === 'search' && searchQuery) { const data = await searchFood(searchQuery); setNutritionData(data); }
@@ -127,7 +130,7 @@ const App: React.FC = () => {
             await apiService.saveMeal(meal);
         }
         await loadAllData();
-        setActiveView('plan');
+        setActiveView('physical.fuel');
         alert(`Successfully generated ${suggestions.length} clinical meal ideas and added them to your Library.`);
     } catch (err) {
         alert("Failed to generate clinical plan. Check your connection.");
@@ -215,8 +218,10 @@ const App: React.FC = () => {
   };
 
   const renderActiveView = () => {
+      // Global Detail View Override
       if (viewingMealDetails) return <div className="max-w-2xl mx-auto space-y-6"><NutritionCard data={viewingMealDetails} onSaveToHistory={() => setViewingMealDetails(null)} isReadOnly /></div>;
 
+      // Global Analysis/Capture Result Override (Shown on Home)
       if (activeView === 'home' && (image || isProcessing || nutritionData || chefRecipes.length > 0 || error)) {
           return (
               <div className="max-w-2xl mx-auto space-y-6">
@@ -243,19 +248,29 @@ const App: React.FC = () => {
       const dailyProtein = todayLog.reduce((acc, e) => acc + e.totalProtein, 0);
 
       switch (activeView) {
-          case 'home': return <CommandCenter dailyCalories={dailyCalories} dailyProtein={dailyProtein} rewardsBalance={walletBalance} userName={user?.firstName || 'Hero'} healthStats={healthStats} isHealthConnected={isHealthConnected} isHealthSyncing={false} onConnectHealth={()=>{}} onScanClick={() => setActiveView('body')} onCameraClick={handleOpenCapture} dashboardPrefs={dashboardPrefs} />;
-          case 'plan': return <MealPlanManager plans={mealPlans} activePlanId={activePlanId} savedMeals={savedMeals} onPlanChange={setActivePlanId} onCreatePlan={name => apiService.createMealPlan(name).then(() => loadAllData())} onRemoveFromPlan={handleRemoveMeal} onQuickAdd={(pid, m, d, s) => handleQuickAddMeal(pid, m.id, d, s)} onGenerateMedical={handleMedicalGeneration} medicalPlannerState={medicalPlannerState} />;
-          case 'meals': return <MealLibrary meals={savedMeals} onAdd={handleOpenAddToPlanModal} onDelete={id => apiService.deleteMeal(id).then(loadAllData)} onSelectMeal={setViewingMealDetails} />;
+          case 'home': return <CommandCenter dailyCalories={dailyCalories} dailyProtein={dailyProtein} rewardsBalance={walletBalance} userName={user?.firstName || 'Hero'} healthStats={healthStats} isHealthConnected={isHealthConnected} isHealthSyncing={false} onConnectHealth={()=>{}} onScanClick={() => setActiveView('physical.body')} onCameraClick={handleOpenCapture} dashboardPrefs={dashboardPrefs} />;
+          
+          // PHYSICAL HUB
+          case 'physical.fuel': return <FuelSection plans={mealPlans} activePlanId={activePlanId} savedMeals={savedMeals} onPlanChange={setActivePlanId} onCreatePlan={name => apiService.createMealPlan(name).then(() => loadAllData())} onRemoveFromPlan={handleRemoveMeal} onQuickAdd={(pid, m, d, s) => handleQuickAddMeal(pid, m.id, d, s)} onGenerateMedical={handleMedicalGeneration} medicalPlannerState={medicalPlannerState} onAddMealToLibrary={handleOpenAddToPlanModal} onDeleteMeal={id => apiService.deleteMeal(id).then(loadAllData)} onSelectMeal={setViewingMealDetails} />;
+          case 'physical.body': return <BodyHub healthStats={healthStats} onSyncHealth={()=>{}} dashboardPrefs={dashboardPrefs} onUpdatePrefs={handleUpdatePrefs} />;
+          case 'physical.reports': return <HealthReportsView />;
+
+          // MENTAL HUB
+          case 'mental.readiness': return <ReadinessView />;
+          case 'mental.assessments': return <AssessmentHub />;
+          case 'mental.care': return <CoachingHub userRole={user?.role as 'coach' | 'user' || 'user'} onUpgrade={() => apiService.syncHealthStatsToDB({}).then(loadAllData)} />;
+
+          // SPIRITUAL HUB
+          case 'spiritual.community': return <SocialManager />;
+          case 'spiritual.journey': return <JourneyView dashboardPrefs={dashboardPrefs} onOpenWizard={() => setIsGoalWizardOpen(true)} />;
+          case 'spiritual.rewards': return <RewardsDashboard />;
+
+          // Legacy/Direct Routes
           case 'history': return <MealHistory logEntries={mealLog} onAddToPlan={handleOpenAddToPlanModal} onSaveMeal={(m) => apiService.saveMeal(m).then(() => loadAllData())} onSelectMeal={setViewingMealDetails} />;
-          case 'grocery': return <GroceryList mealPlans={mealPlans} />;
-          case 'rewards': return <RewardsDashboard />;
-          case 'social': return <SocialManager />;
-          case 'assessments': return <AssessmentHub />;
-          case 'blueprint': return <PartnerBlueprint />;
-          case 'body': return <BodyHub healthStats={healthStats} onSyncHealth={()=>{}} dashboardPrefs={dashboardPrefs} onUpdatePrefs={handleUpdatePrefs} />;
-          case 'coaching': return <CoachingHub userRole={user?.role as 'coach' | 'user' || 'user'} onUpgrade={() => apiService.syncHealthStatsToDB({}).then(loadAllData)} />;
           case 'suggestions': return <MealSuggester onGetSuggestions={handleGetSuggestions} suggestions={suggestions} isLoading={isSuggesting} error={suggestionError} onAddToPlan={handleOpenAddToPlanModal} onSaveMeal={apiService.saveMeal} />;
-          default: return <div className="p-8 text-center text-slate-400">Module Loading...</div>;
+          case 'clients': return <CoachingHub userRole={user?.role as 'coach' | 'user' || 'user'} onUpgrade={() => {}} />; // Reuse Hub
+
+          default: return <div className="p-8 text-center text-slate-400">Loading Module...</div>;
       }
   };
 
@@ -269,7 +284,7 @@ const App: React.FC = () => {
   return (
     <AppLayout 
         activeView={activeView} 
-        onNavigate={v => setActiveView(v as ActiveView)} 
+        onNavigate={setActiveView} 
         onLogout={logout} 
         mobileMenuOpen={mobileMenuOpen} 
         setMobileMenuOpen={setMobileMenuOpen} 
@@ -278,7 +293,7 @@ const App: React.FC = () => {
         showClientsTab={user?.role === 'coach'}
     >
         {proxyClient && <CoachProxyBanner clientName={proxyClient.name} onExit={() => setProxyClient(null)} />}
-        {isCaptureOpen && <CaptureFlow onClose={() => setIsCaptureOpen(false)} onCapture={handleCaptureResult} onRepeatMeal={() => {}} onBodyScanClick={() => setActiveView('body')} initialMode={captureMode} />}
+        {isCaptureOpen && <CaptureFlow onClose={() => setIsCaptureOpen(false)} onCapture={handleCaptureResult} onRepeatMeal={() => {}} onBodyScanClick={() => setActiveView('physical.body')} initialMode={captureMode} />}
         {isGoalWizardOpen && <GoalSetupWizard onClose={() => setIsGoalWizardOpen(false)} onSave={(c, p) => handleUpdatePrefs({...dashboardPrefs, calorieGoal: c, proteinGoal: p})} />}
         {isAddToPlanModalOpen && <AddToPlanModal plans={mealPlans} onSelectPlan={handleCommitAddToPlan} onClose={() => { setIsAddToPlanModalOpen(false); setMealToAdd(null); }} />}
         

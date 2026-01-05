@@ -1,3 +1,4 @@
+
 export interface Ingredient {
   name: string;
   weightGrams: number;
@@ -299,3 +300,19 @@ export interface AssessmentState {
   lastUpdated: Record<string, string>;
   passivePrompt?: PassivePrompt;
 }
+
+export type ActiveView = 
+  | 'home' 
+  | 'physical.fuel' 
+  | 'physical.body' 
+  | 'physical.reports'
+  | 'mental.readiness' 
+  | 'mental.assessments' 
+  | 'mental.care'
+  | 'spiritual.community' 
+  | 'spiritual.journey' 
+  | 'spiritual.rewards'
+  | 'hub' 
+  | 'history'
+  | 'suggestions'
+  | 'clients';
