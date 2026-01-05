@@ -38,7 +38,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
             <div className="md:hidden bg-white border-b border-slate-200 p-4 flex justify-between items-center sticky top-0 z-30 shadow-sm">
                  <div className="flex items-center">
-                    <img src="/logo.png" alt="EH" className="h-8 w-auto" />
+                    <img src="/logo.png" alt="EH" className="max-w-full h-auto max-h-8 object-contain" />
                  </div>
                 <button onClick={() => setMobileMenuOpen(true)} className="p-2 -mr-2 text-slate-600 hover:bg-slate-100 rounded-full transition-colors"><MenuIcon /></button>
             </div>

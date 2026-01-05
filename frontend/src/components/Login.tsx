@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 
@@ -49,7 +50,7 @@ export const Login: React.FC = () => {
         <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
             <div className="max-w-md w-full p-8 bg-white rounded-xl shadow-lg border border-slate-200">
                 <header className="mb-10 text-center flex flex-col items-center">
-                    <img src="/logo.png" alt="EmbraceHealth AI" className="h-16 w-auto mb-4" />
+                    <img src="/logo.png" alt="EmbraceHealth AI" className="max-w-[80%] h-auto max-h-20 object-contain mb-4" />
                     <p className="text-slate-500 font-medium">Sign in to your health dashboard</p>
                 </header>
 
