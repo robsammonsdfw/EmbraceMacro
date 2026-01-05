@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { 
-    HomeIcon, DumbbellIcon, BrainIcon, SparklesIcon, 
+    HomeIcon, DumbbellIcon, BrainIcon, 
     UtensilsIcon, UserCircleIcon, BeakerIcon, 
     ActivityIcon, ClipboardCheckIcon, UsersIcon, 
     UserGroupIcon, HeartIcon, TrophyIcon, 

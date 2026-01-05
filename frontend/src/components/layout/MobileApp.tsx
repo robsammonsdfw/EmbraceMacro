@@ -2,9 +2,9 @@
 import React, { useState } from 'react';
 import { 
     ActivityIcon, CameraIcon, DumbbellIcon, BrainIcon, UserGroupIcon, 
-    UserCircleIcon, HomeIcon, MenuIcon, XIcon, PlusIcon 
+    UserCircleIcon, XIcon, PlusIcon 
 } from '../icons';
-import type { HealthStats, UserDashboardPrefs, ActiveView } from '../../types';
+import type { HealthStats, UserDashboardPrefs } from '../../types';
 
 // Import Views
 import { FuelSection } from '../sections/FuelSection';

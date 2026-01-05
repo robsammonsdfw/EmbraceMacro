@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { 
     HomeIcon, DumbbellIcon, BrainIcon, UserGroupIcon, 
     UsersIcon, ActivityIcon, UtensilsIcon,
-    UserCircleIcon, TrophyIcon, HeartIcon
+    UserCircleIcon
 } from '../icons';
 import type { HealthStats, UserDashboardPrefs } from '../../types';
 
@@ -30,7 +30,7 @@ interface DesktopAppProps {
 type Module = 'dashboard' | 'physical' | 'mental' | 'social' | 'clients';
 
 export const DesktopApp: React.FC<DesktopAppProps> = ({ 
-    healthStats, dashboardPrefs, fuelProps, bodyProps, userRole, onLogout, user
+    dashboardPrefs, fuelProps, bodyProps, userRole, onLogout
 }) => {
     const [activeModule, setActiveModule] = useState<Module>('dashboard');
     const [rightPaneMode, setRightPaneMode] = useState<'planner' | 'config'>('planner');

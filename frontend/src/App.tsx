@@ -68,7 +68,7 @@ const App: React.FC = () => {
       setIsCaptureOpen(true);
   };
 
-  const handleCaptureResult = useCallback(async (img: string | null, mode: any, barcode?: string, searchQuery?: string) => {
+  const handleCaptureResult = useCallback(async (_img: string | null, mode: any, barcode?: string, searchQuery?: string) => {
     setIsCaptureOpen(false);
     // Note: In a real implementation, we would set processing state and route to a result view.
     // For this refactor, we are assuming the CaptureFlow handles the API call internally or we add logic here.
