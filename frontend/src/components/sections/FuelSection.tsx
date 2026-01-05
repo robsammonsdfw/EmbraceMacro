@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { MealPlanManager } from '../MealPlanManager';
 import { MealLibrary } from '../MealLibrary';
 import { GroceryList } from '../GroceryList';
-import type { MealPlan, SavedMeal, NutritionInfo, MealPlanItemMetadata } from '../../types';
+import type { MealPlan, SavedMeal, NutritionInfo } from '../../types';
 import { PlusIcon, BookOpenIcon, ClipboardListIcon } from '../icons';
 
 interface FuelSectionProps {

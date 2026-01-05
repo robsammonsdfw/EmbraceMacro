@@ -5,7 +5,7 @@ import {
     UtensilsIcon, UserCircleIcon, BeakerIcon, 
     ActivityIcon, ClipboardCheckIcon, UsersIcon, 
     UserGroupIcon, HeartIcon, TrophyIcon, 
-    Squares2X2Icon, PlusIcon
+    Squares2X2Icon
 } from '../icons';
 import { HealthJourney, ActiveView } from '../../types';
 import { JOURNEYS } from './AppLayout';
