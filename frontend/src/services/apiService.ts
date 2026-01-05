@@ -95,6 +95,7 @@ export const checkInAtLocation = (placeName: string): Promise<void> => callApi('
 
 // Simulated function for "Friends who ate here"
 export const getRestaurantActivity = async (placeUri: string): Promise<RestaurantActivity[]> => {
+    console.debug(`Fetching restaurant activity for ${placeUri}`);
     // In a real app, this would query the backend DB for check-ins at this Place ID.
     // Simulating delay
     await new Promise(r => setTimeout(r, 800));

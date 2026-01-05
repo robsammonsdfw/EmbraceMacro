@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { XIcon } from './icons';
-import type { NutritionInfo, Recipe, SavedMeal } from '../types';
+import type { NutritionInfo, Recipe } from '../types';
 import { NutritionCard } from './NutritionCard';
 import { RecipeCard } from './RecipeCard';
 
