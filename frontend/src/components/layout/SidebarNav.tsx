@@ -77,7 +77,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
             {/* Header / Logo */}
             <div className="p-6 pt-8">
                 <div className="mb-6 flex justify-start cursor-pointer" onClick={() => onNavigate('home')}>
-                    <img src="/logo.png" alt="EmbraceHealth AI" className="max-w-full h-auto max-h-12 object-contain" />
+                    <img src="/logo.png" alt="EmbraceHealth AI" className="w-auto h-8 object-contain" />
                 </div>
                 
                 {onJourneyChange && (

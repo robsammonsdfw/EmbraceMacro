@@ -222,6 +222,7 @@ const App: React.FC = () => {
                 userRole={user?.role || 'user'}
                 onLogout={logout}
                 user={user}
+                onCameraClick={handleOpenCapture}
             />
         ) : (
             <MobileApp 
