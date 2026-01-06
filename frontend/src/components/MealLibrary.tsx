@@ -9,6 +9,8 @@ interface MealLibraryProps {
   onAdd: (meal: SavedMeal) => void;
   onDelete: (id: number) => void;
   onSelectMeal: (meal: NutritionInfo) => void;
+  onManualLibraryAdd?: (query: string) => void;
+  onScanClick?: () => void;
 }
 
 const MealCard: React.FC<{ 
@@ -81,10 +83,19 @@ const MealCard: React.FC<{
     );
 };
 
-export const MealLibrary: React.FC<MealLibraryProps> = ({ meals, onAdd, onDelete, onSelectMeal }) => {
+export const MealLibrary: React.FC<MealLibraryProps> = ({ meals, onAdd, onDelete, onSelectMeal, onManualLibraryAdd, onScanClick }) => {
   const [viewImageId, setViewImageId] = useState<number | null>(null);
   const [search, setSearch] = useState('');
+  const [manualInput, setManualInput] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'high-protein' | 'low-carb'>('all');
+
+  const handleManualAddSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (manualInput.trim() && onManualLibraryAdd) {
+          onManualLibraryAdd(manualInput);
+          setManualInput('');
+      }
+  };
 
   const filteredMeals = useMemo(() => {
       let result = meals;
@@ -170,13 +181,38 @@ export const MealLibrary: React.FC<MealLibraryProps> = ({ meals, onAdd, onDelete
         {/* Main Grid */}
         <div className="flex-grow">
             <div className="bg-white p-6 rounded-[2.5rem] shadow-xl border border-slate-100 min-h-full">
-                <div className="flex justify-between items-center mb-8 px-2">
+                <div className="flex justify-between items-center mb-6 px-2">
                     <div>
                         <h2 className="text-2xl font-black text-slate-900 tracking-tight">Kitchen Library</h2>
                         <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">{filteredMeals.length} Verified Entries</p>
                     </div>
                     <BookOpenIcon className="text-slate-200 w-8 h-8" />
                 </div>
+
+                {/* Add New Bar */}
+                <form onSubmit={handleManualAddSubmit} className="flex gap-2 mb-8 bg-slate-50 p-2 rounded-2xl border border-slate-200">
+                    <button 
+                        type="button" 
+                        onClick={onScanClick}
+                        className="bg-white text-emerald-500 p-3 rounded-xl shadow-sm hover:scale-105 transition-transform"
+                    >
+                        <CameraIcon className="w-5 h-5" />
+                    </button>
+                    <input 
+                        type="text" 
+                        placeholder="Add new meal by name..." 
+                        value={manualInput}
+                        onChange={e => setManualInput(e.target.value)}
+                        className="flex-grow bg-transparent outline-none font-bold text-slate-700 px-2"
+                    />
+                    <button 
+                        type="submit" 
+                        disabled={!manualInput.trim()}
+                        className="bg-slate-900 text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-black transition-colors disabled:opacity-50"
+                    >
+                        Add
+                    </button>
+                </form>
 
                 {viewImageId && (
                     <ImageViewModal 
@@ -205,7 +241,7 @@ export const MealLibrary: React.FC<MealLibraryProps> = ({ meals, onAdd, onDelete
                             <BookOpenIcon className="w-10 h-10" />
                         </div>
                         <h3 className="text-xl font-black text-slate-800 mb-2">No meals in this collection</h3>
-                        <p className="text-slate-500 font-medium max-w-xs mx-auto">Analyze a fresh meal on your dashboard to save it to your permanent library.</p>
+                        <p className="text-slate-500 font-medium max-w-xs mx-auto">Use the bar above or the camera to populate your library.</p>
                     </div>
                 )}
             </div>

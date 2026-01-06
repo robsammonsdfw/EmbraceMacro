@@ -100,7 +100,6 @@ const App: React.FC = () => {
             const recipes = await apiService.getRecipesFromImage(img.split(',')[1], 'image/jpeg');
             setAnalysisRecipes(recipes);
         } else if (mode === 'barcode' && barcode) {
-            // Placeholder: Barcode could also return unified info in future, but for now standard search
             const data = await apiService.searchFood(barcode); 
             setAnalysisNutrition(data);
         } else if (mode === 'search' && searchQuery) {
@@ -116,15 +115,45 @@ const App: React.FC = () => {
   }, []);
 
   const handleSaveAnalyzedMeal = async (meal: NutritionInfo) => {
-      await apiService.createMealLogEntry(meal, (meal.imageUrl || '').split(',')[1] || '');
-      setAnalysisNutrition(null);
-      loadAllData();
+      try {
+          // Robust base64 extraction to handle data URIs or plain strings
+          const imageBase64 = meal.imageUrl?.includes(',') 
+                ? meal.imageUrl.split(',')[1] 
+                : (meal.imageUrl || '');
+          
+          await apiService.createMealLogEntry(meal, imageBase64);
+          setAnalysisNutrition(null);
+          await loadAllData();
+          alert("Meal committed to living log!");
+      } catch (err) {
+          console.error("Save failed:", err);
+          alert("Failed to save meal. The image might be too large or the connection is unstable.");
+      }
+  };
+
+  // Generic Search Handlers used by components to "Add" via text or scan
+  const handleManualSearch = async (query: string, type: 'save' | 'log') => {
+      setIsProcessing(true);
+      try {
+          const data = await apiService.searchFood(query);
+          if (type === 'save') {
+              await apiService.saveMeal(data);
+              alert("Meal added to library!");
+          } else {
+              await apiService.createMealLogEntry(data, '');
+              alert("Meal logged to history!");
+          }
+          await loadAllData();
+      } catch (e) {
+          alert("Could not find food.");
+      } finally {
+          setIsProcessing(false);
+      }
   };
 
   const handleAddToPlanFromAnalysis = async (_item: any) => {
       // If item is unified NutritionInfo, it acts as a saved meal. 
       // If it's a standalone Recipe (PantryChef), we'd need conversion logic, but usually it's just 'save first' logic.
-      // For now, prompt:
       alert("Meal added to plan queue!");
       setAnalysisRecipes(null);
       setAnalysisNutrition(null);
@@ -158,7 +187,11 @@ const App: React.FC = () => {
       medicalPlannerState: medicalPlannerState,
       onAddMealToLibrary: (m: NutritionInfo) => apiService.saveMeal(m).then(loadAllData),
       onDeleteMeal: (id: number) => apiService.deleteMeal(id).then(loadAllData),
-      onSelectMeal: (m: NutritionInfo) => console.log("Select", m)
+      onSelectMeal: (m: NutritionInfo) => console.log("Select", m),
+      // New Manual Entry Props
+      onManualLibraryAdd: (q: string) => handleManualSearch(q, 'save'),
+      onManualLogAdd: (q: string) => handleManualSearch(q, 'log'),
+      onScanClick: () => handleOpenCapture('meal')
   };
 
   const bodyProps = {

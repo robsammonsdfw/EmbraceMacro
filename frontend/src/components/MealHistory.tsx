@@ -9,6 +9,8 @@ interface MealHistoryProps {
   onAddToPlan: (mealData: NutritionInfo) => void;
   onSaveMeal: (mealData: NutritionInfo) => void;
   onSelectMeal: (meal: NutritionInfo) => void;
+  onManualLogAdd?: (query: string) => void;
+  onScanClick?: () => void;
 }
 
 const HistoryEntryCard: React.FC<{ 
@@ -89,20 +91,54 @@ const groupEntriesByDate = (entries: MealLogEntry[]) => {
     }, {} as Record<string, MealLogEntry[]>);
 };
 
-export const MealHistory: React.FC<MealHistoryProps> = ({ logEntries, onAddToPlan, onSaveMeal, onSelectMeal }) => {
+export const MealHistory: React.FC<MealHistoryProps> = ({ logEntries, onAddToPlan, onSaveMeal, onSelectMeal, onManualLogAdd, onScanClick }) => {
   const groupedEntries = groupEntriesByDate(logEntries);
   const dates = Object.keys(groupedEntries);
   const [viewImageId, setViewImageId] = useState<number | null>(null);
+  const [manualInput, setManualInput] = useState('');
+
+  const handleManualLogSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (manualInput.trim() && onManualLogAdd) {
+          onManualLogAdd(manualInput);
+          setManualInput('');
+      }
+  };
 
   return (
     <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 animate-fade-in">
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex justify-between items-center mb-6">
           <div>
               <h2 className="text-2xl font-black text-slate-900 tracking-tight">Timeline</h2>
               <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Chronological Metabolism</p>
           </div>
           <ClockIcon className="text-slate-200 w-8 h-8" />
       </div>
+
+      {/* Manual Log Bar */}
+      <form onSubmit={handleManualLogSubmit} className="flex gap-2 mb-10 bg-slate-50 p-2 rounded-2xl border border-slate-200">
+            <button 
+                type="button" 
+                onClick={onScanClick}
+                className="bg-white text-emerald-500 p-3 rounded-xl shadow-sm hover:scale-105 transition-transform"
+            >
+                <CameraIcon className="w-5 h-5" />
+            </button>
+            <input 
+                type="text" 
+                placeholder="Log a meal by name..." 
+                value={manualInput}
+                onChange={e => setManualInput(e.target.value)}
+                className="flex-grow bg-transparent outline-none font-bold text-slate-700 px-2"
+            />
+            <button 
+                type="submit" 
+                disabled={!manualInput.trim()}
+                className="bg-slate-900 text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-black transition-colors disabled:opacity-50"
+            >
+                Log
+            </button>
+      </form>
 
       {viewImageId && (
           <ImageViewModal 
@@ -142,7 +178,7 @@ export const MealHistory: React.FC<MealHistoryProps> = ({ logEntries, onAddToPla
                 <ClockIcon className="w-10 h-10" />
             </div>
             <h3 className="text-xl font-black text-slate-800 mb-2">Timeline Empty</h3>
-            <p className="text-slate-500 font-medium max-w-xs mx-auto">Start logging your meals to see your chronological metabolic data here.</p>
+            <p className="text-slate-500 font-medium max-w-xs mx-auto">Start logging your meals using the bar above or the main camera.</p>
         </div>
       )}
     </div>

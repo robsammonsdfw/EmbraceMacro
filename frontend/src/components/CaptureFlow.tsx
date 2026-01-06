@@ -92,11 +92,29 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
     if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    
+    // Resize logic to prevent large payloads (max 1024px)
+    const maxDim = 1024;
+    let w = video.videoWidth;
+    let h = video.videoHeight;
+    
+    if (w > maxDim || h > maxDim) {
+        const ratio = w / h;
+        if (w > h) {
+            w = maxDim;
+            h = maxDim / ratio;
+        } else {
+            h = maxDim;
+            w = maxDim * ratio;
+        }
+    }
+
+    canvas.width = w;
+    canvas.height = h;
+    
     const context = canvas.getContext('2d');
     if (context) {
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      context.drawImage(video, 0, 0, w, h);
       setCapturedImage(canvas.toDataURL('image/jpeg', 0.8));
       stopStream();
     }
@@ -105,10 +123,34 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
+      
       const reader = new FileReader();
-      reader.onloadend = () => {
-          setCapturedImage(reader.result as string);
-          stopStream();
+      reader.onload = (readerEvent) => {
+          const img = new Image();
+          img.onload = () => {
+              // Resize uploaded image as well
+              const canvas = document.createElement('canvas');
+              const maxDim = 1024;
+              let w = img.width;
+              let h = img.height;
+
+              if (w > maxDim || h > maxDim) {
+                  const ratio = w / h;
+                  if (w > h) { w = maxDim; h = maxDim / ratio; }
+                  else { h = maxDim; w = maxDim * ratio; }
+              }
+
+              canvas.width = w;
+              canvas.height = h;
+              const ctx = canvas.getContext('2d');
+              ctx?.drawImage(img, 0, 0, w, h);
+              
+              setCapturedImage(canvas.toDataURL('image/jpeg', 0.8));
+              stopStream();
+          };
+          if (readerEvent.target?.result) {
+              img.src = readerEvent.target.result as string;
+          }
       };
       reader.readAsDataURL(file);
   };

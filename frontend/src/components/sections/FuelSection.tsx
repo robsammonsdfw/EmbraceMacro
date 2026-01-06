@@ -21,11 +21,15 @@ interface FuelSectionProps {
     onAddMealToLibrary: (meal: NutritionInfo) => void; 
     onDeleteMeal: (id: number) => void;
     onSelectMeal: (meal: NutritionInfo) => void;
+    onManualLibraryAdd?: (query: string) => void;
+    onManualLogAdd?: (query: string) => void;
+    onScanClick?: () => void;
 }
 
 export const FuelSection: React.FC<FuelSectionProps> = ({
     plans, activePlanId, savedMeals, mealLog, onPlanChange, onCreatePlan, onRemoveFromPlan, 
-    onQuickAdd, onGenerateMedical, medicalPlannerState, onAddMealToLibrary, onDeleteMeal, onSelectMeal
+    onQuickAdd, onGenerateMedical, medicalPlannerState, onAddMealToLibrary, onDeleteMeal, onSelectMeal,
+    onManualLibraryAdd, onManualLogAdd, onScanClick
 }) => {
     const [activeTab, setActiveTab] = useState<'plan' | 'library' | 'grocery' | 'history'>('plan');
 
@@ -33,7 +37,6 @@ export const FuelSection: React.FC<FuelSectionProps> = ({
         // Logic to add to plan from history
         if (activePlanId) {
             // Defaulting to today/lunch if added from history without drag/drop
-            // Ideally we show a modal, but for now we can just log it or auto-add
             console.log("Add from history", mealData);
         }
     };
@@ -94,9 +97,11 @@ export const FuelSection: React.FC<FuelSectionProps> = ({
                 {activeTab === 'library' && (
                     <MealLibrary 
                         meals={savedMeals}
-                        onAdd={onAddMealToLibrary} // This actually saves to library, reusing prop for now
+                        onAdd={onAddMealToLibrary}
                         onDelete={onDeleteMeal}
                         onSelectMeal={onSelectMeal}
+                        onManualLibraryAdd={onManualLibraryAdd}
+                        onScanClick={onScanClick}
                     />
                 )}
                 {activeTab === 'history' && (
@@ -105,6 +110,8 @@ export const FuelSection: React.FC<FuelSectionProps> = ({
                         onAddToPlan={handleHistoryAdd}
                         onSaveMeal={onAddMealToLibrary}
                         onSelectMeal={onSelectMeal}
+                        onManualLogAdd={onManualLogAdd}
+                        onScanClick={onScanClick}
                     />
                 )}
                 {activeTab === 'grocery' && (
