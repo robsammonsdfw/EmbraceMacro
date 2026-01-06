@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { 
     ActivityIcon, CameraIcon, DumbbellIcon, BrainIcon, UserGroupIcon, 
-    UserCircleIcon, XIcon, PlusIcon 
+    UserCircleIcon, XIcon, PlusIcon, HeartIcon, TrophyIcon
 } from '../icons';
 import type { HealthStats, UserDashboardPrefs } from '../../types';
 
@@ -57,6 +57,44 @@ const VitalsStrip: React.FC<{ stats: HealthStats; prefs: UserDashboardPrefs }> =
     );
 };
 
+// New Hub Button Component matching the requested design
+const HubButton: React.FC<{
+    label: string;
+    icon: React.ReactNode;
+    onClick: () => void;
+    // Styling props to match the image provided
+    gradientFrom: string;
+    gradientTo: string;
+    iconColor: string;
+    glowColor: string;
+    image?: string; // Optional image prop if user uploads assets
+}> = ({ label, icon, onClick, gradientFrom, gradientTo, iconColor, glowColor, image }) => (
+    <button 
+        onClick={onClick}
+        className="relative flex flex-col items-center justify-center h-48 w-full rounded-[2rem] overflow-hidden shadow-xl transition-transform active:scale-95 group border border-white/5"
+    >
+        {/* Dynamic Background */}
+        <div className={`absolute inset-0 bg-gradient-to-b ${gradientFrom} ${gradientTo}`}></div>
+        
+        {/* Optional Image Overlay (if assets exist) */}
+        {image && <div className="absolute inset-0 bg-cover bg-center opacity-50 mix-blend-overlay" style={{backgroundImage: `url(${image})`}}></div>}
+
+        {/* Neon Glow Circle */}
+        <div className={`w-20 h-20 rounded-full border-2 ${iconColor} flex items-center justify-center mb-4 relative z-10 shadow-[0_0_15px_rgba(0,0,0,0.5)] bg-white/5 backdrop-blur-sm`}>
+            <div className={`absolute inset-0 rounded-full ${glowColor} opacity-20 blur-md`}></div>
+            <span className={`${iconColor} drop-shadow-md`}>
+                {React.cloneElement(icon as React.ReactElement<any>, { className: "w-8 h-8" })}
+            </span>
+        </div>
+
+        {/* Label */}
+        <span className={`text-base font-black tracking-wider uppercase text-white z-10`}>{label}</span>
+        
+        {/* Subtle Bottom Fade */}
+        <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-black/60 to-transparent pointer-events-none"></div>
+    </button>
+);
+
 export const MobileApp: React.FC<MobileAppProps> = ({ 
     healthStats, dashboardPrefs, onCameraClick, fuelProps, bodyProps, userRole, onLogout, user
 }) => {
@@ -79,8 +117,8 @@ export const MobileApp: React.FC<MobileAppProps> = ({
     };
 
     const renderHome = () => (
-        <div className="p-4 space-y-4 pb-24 animate-fade-in">
-            <header className="flex justify-between items-center mb-2 px-2">
+        <div className="p-4 space-y-6 pb-24 animate-fade-in">
+            <header className="flex justify-between items-center px-2">
                 <div>
                     <h1 className="text-2xl font-black text-slate-900">Hello, {user?.firstName || 'Hero'}</h1>
                     <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Your Utility Hub</p>
@@ -90,60 +128,67 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                 </button>
             </header>
 
-            {/* Giant Action Grid */}
-            <div 
-                className="mobile-hero-card relative overflow-hidden group"
-                style={{backgroundImage: 'url(https://images.unsplash.com/photo-1540420772988-4c38dbdd8018?auto=format&fit=crop&q=80&w=800)'}}
-                onClick={() => navigateTo('physical')}
-            >
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
-                <div className="relative z-10 flex items-center gap-3">
-                    <DumbbellIcon className="w-8 h-8 text-emerald-400" />
-                    <span>Physical</span>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-                <div 
-                    className="mobile-hero-card h-[160px] text-xl relative overflow-hidden"
-                    style={{backgroundImage: 'url(https://images.unsplash.com/photo-1544367563-12123d8965cd?auto=format&fit=crop&q=80&w=600)'}}
+            {/* Hubs Grid - Matching the requested design */}
+            <div className="grid grid-cols-3 gap-3">
+                <HubButton 
+                    label="Physical"
+                    icon={<DumbbellIcon />}
+                    gradientFrom="from-[#0f172a]" // Dark Navy
+                    gradientTo="to-[#064e3b]"     // Dark Emerald
+                    iconColor="text-emerald-400"
+                    glowColor="bg-emerald-400"
+                    onClick={() => navigateTo('physical')}
+                    // image="/assets/physical-hub.png" // User can place image here
+                />
+                <HubButton 
+                    label="Mental"
+                    icon={<BrainIcon />}
+                    gradientFrom="from-[#1e1b4b]" // Dark Indigo
+                    gradientTo="to-[#4c1d95]"     // Dark Violet
+                    iconColor="text-purple-400"
+                    glowColor="bg-purple-400"
                     onClick={() => navigateTo('mental')}
-                >
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"></div>
-                    <div className="relative z-10 flex items-center gap-2">
-                        <BrainIcon className="w-6 h-6 text-indigo-400" />
-                        <span>Mental</span>
-                    </div>
-                </div>
-                <div 
-                    className="mobile-hero-card h-[160px] text-xl relative overflow-hidden"
-                    style={{backgroundImage: 'url(https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&q=80&w=600)'}}
+                    // image="/assets/mental-hub.png" // User can place image here
+                />
+                <HubButton 
+                    label="Social"
+                    icon={<UserGroupIcon />}
+                    gradientFrom="from-[#2e1065]" // Dark Purple
+                    gradientTo="to-[#9a3412]"     // Dark Orange
+                    iconColor="text-orange-400"
+                    glowColor="bg-orange-400"
                     onClick={() => navigateTo('social')}
-                >
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"></div>
-                    <div className="relative z-10 flex items-center gap-2">
-                        <UserGroupIcon className="w-6 h-6 text-amber-400" />
-                        <span>Social</span>
-                    </div>
-                </div>
+                    // image="/assets/social-hub.png" // User can place image here
+                />
             </div>
 
-            {/* Quick Camera Action */}
-            <button 
-                onClick={onCameraClick}
-                className="w-full bg-slate-900 rounded-[2rem] p-6 flex items-center justify-between text-white shadow-xl active:scale-95 transition-transform"
-            >
-                <div className="flex items-center gap-4">
-                    <div className="bg-emerald-500 p-3 rounded-full text-white">
-                        <CameraIcon className="w-6 h-6" />
+            {/* Secondary Actions */}
+            <div className="grid grid-cols-2 gap-3">
+                <button 
+                    onClick={onCameraClick}
+                    className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-slate-100 flex items-center gap-3 active:scale-95 transition-transform"
+                >
+                    <div className="bg-slate-100 p-3 rounded-full text-slate-600">
+                        <CameraIcon className="w-5 h-5" />
                     </div>
                     <div className="text-left">
-                        <h3 className="font-black text-lg uppercase tracking-tight">Quick Scan</h3>
-                        <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Log Meal or Body</p>
+                        <span className="block text-xs font-bold text-slate-400 uppercase tracking-wider">Quick</span>
+                        <span className="block text-sm font-black text-slate-800">Scan Meal</span>
                     </div>
-                </div>
-                <PlusIcon className="w-6 h-6" />
-            </button>
+                </button>
+                <button 
+                    onClick={() => navigateTo('social', 'rewards')}
+                    className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-slate-100 flex items-center gap-3 active:scale-95 transition-transform"
+                >
+                    <div className="bg-amber-100 p-3 rounded-full text-amber-600">
+                        <TrophyIcon className="w-5 h-5" />
+                    </div>
+                    <div className="text-left">
+                        <span className="block text-xs font-bold text-slate-400 uppercase tracking-wider">Wallet</span>
+                        <span className="block text-sm font-black text-slate-800">Redeem</span>
+                    </div>
+                </button>
+            </div>
         </div>
     );
 
