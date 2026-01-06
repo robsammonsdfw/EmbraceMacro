@@ -83,7 +83,7 @@ const HubButton: React.FC<{
         <div className={`w-20 h-20 rounded-full border-2 ${iconColor} flex items-center justify-center mb-4 relative z-10 shadow-[0_0_15px_rgba(0,0,0,0.5)] bg-white/5 backdrop-blur-sm`}>
             <div className={`absolute inset-0 rounded-full ${glowColor} opacity-20 blur-md`}></div>
             <span className={`${iconColor} drop-shadow-md`}>
-                {React.cloneElement(icon as React.ReactElement, { className: "w-8 h-8" })}
+                {React.cloneElement(icon as React.ReactElement<{ className?: string }>, { className: "w-8 h-8" })}
             </span>
         </div>
 

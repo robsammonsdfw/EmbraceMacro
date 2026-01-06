@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect } from 'react';
-import { ActivityIcon, FireIcon, HeartIcon, ClockIcon, PlusIcon, CameraIcon, UserCircleIcon, GlobeAltIcon, TrophyIcon } from '../icons';
+import React, { useState, useEffect, useRef } from 'react';
+import { ActivityIcon, FireIcon, HeartIcon, ClockIcon, PlusIcon, CameraIcon, UserCircleIcon, GlobeAltIcon, TrophyIcon, PhotoIcon, XIcon } from '../icons';
 import * as apiService from '../../services/apiService';
-import type { HealthStats, ReadinessScore, RecoveryData, UserDashboardPrefs } from '../../types';
+import type { HealthStats, ReadinessScore, RecoveryData, UserDashboardPrefs, BodyPhoto } from '../../types';
 import { FormAnalysis } from './FormAnalysis';
 
 interface BodyHubProps {
@@ -12,6 +12,8 @@ interface BodyHubProps {
     onUpdatePrefs: (prefs: UserDashboardPrefs) => void;
 }
 
+const BODY_CATEGORIES = ['All', 'General', 'Front', 'Back', 'Side', 'Left Arm', 'Right Arm', 'Left Leg', 'Right Leg'];
+
 export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth, dashboardPrefs, onUpdatePrefs }) => {
     const [readiness, setReadiness] = useState<ReadinessScore | null>(null);
     const [isCalculating, setIsCalculating] = useState(false);
@@ -19,6 +21,14 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth, das
     const [isFormCheckOpen, setIsFormCheckOpen] = useState(false);
     const [showWidgetConfig, setShowWidgetConfig] = useState(false);
     
+    // Gallery States
+    const [photos, setPhotos] = useState<BodyPhoto[]>([]);
+    const [selectedCategory, setSelectedCategory] = useState('All');
+    const [uploadImage, setUploadImage] = useState<string | null>(null); // For modal preview
+    const [uploadCategory, setUploadCategory] = useState('General');
+    const [isUploading, setIsUploading] = useState(false);
+    const galleryInputRef = useRef<HTMLInputElement>(null);
+
     const [logForm, setLogForm] = useState<RecoveryData>({
         sleepMinutes: healthStats.sleepMinutes || 420,
         sleepQuality: 80,
@@ -39,10 +49,20 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth, das
         }
     };
 
+    const loadPhotos = async () => {
+        try {
+            const data = await apiService.getBodyPhotos();
+            setPhotos(data);
+        } catch (e) {
+            console.error("Failed to load body photos", e);
+        }
+    };
+
     useEffect(() => {
         if (healthStats.hrv) {
             getReadiness();
         }
+        loadPhotos();
     }, [healthStats.hrv]);
 
     const handleLogSubmit = async (e: React.FormEvent) => {
@@ -81,6 +101,33 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth, das
         window.open(url, '_blank');
     };
 
+    // Gallery Handlers
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setUploadImage(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+        e.target.value = ''; // Reset input
+    };
+
+    const handleConfirmUpload = async () => {
+        if (!uploadImage) return;
+        setIsUploading(true);
+        try {
+            await apiService.uploadBodyPhoto(uploadImage, uploadCategory);
+            setUploadImage(null);
+            setUploadCategory('General');
+            loadPhotos();
+        } catch (e) {
+            alert("Failed to upload photo.");
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
     const widgetOptions = [
         { id: 'steps', label: 'Steps', value: healthStats.steps.toLocaleString(), icon: <ActivityIcon /> },
         { id: 'activeCalories', label: 'Active Energy', value: `${Math.round(healthStats.activeCalories)} kcal`, icon: <FireIcon /> },
@@ -90,9 +137,53 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth, das
         { id: 'heartRate', label: 'Heart Rate', value: `${healthStats.heartRate || '--'} bpm`, icon: <HeartIcon /> }
     ];
 
+    const filteredPhotos = selectedCategory === 'All' 
+        ? photos 
+        : photos.filter(p => p.category === selectedCategory);
+
     return (
         <div className="space-y-6 animate-fade-in pb-20 max-w-5xl mx-auto">
             {isFormCheckOpen && <FormAnalysis onClose={() => setIsFormCheckOpen(false)} />}
+
+            {/* Upload Modal */}
+            {uploadImage && (
+                <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-[2rem] p-6 w-full max-w-sm animate-slide-up shadow-2xl">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-black text-slate-800 text-lg">Categorize Photo</h3>
+                            <button onClick={() => setUploadImage(null)} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200">
+                                <XIcon />
+                            </button>
+                        </div>
+                        <img src={uploadImage} alt="Preview" className="w-full h-64 object-cover rounded-2xl mb-4 border border-slate-200" />
+                        
+                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Select Angle / Type</label>
+                        <div className="grid grid-cols-2 gap-2 mb-6">
+                            {BODY_CATEGORIES.slice(1).map(cat => (
+                                <button
+                                    key={cat}
+                                    onClick={() => setUploadCategory(cat)}
+                                    className={`py-2 px-3 rounded-xl text-xs font-bold transition-all ${
+                                        uploadCategory === cat 
+                                        ? 'bg-indigo-600 text-white shadow-md' 
+                                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                                    }`}
+                                >
+                                    {cat}
+                                </button>
+                            ))}
+                        </div>
+
+                        <button 
+                            onClick={handleConfirmUpload} 
+                            disabled={isUploading}
+                            className="w-full bg-emerald-500 text-white font-black uppercase tracking-widest py-4 rounded-2xl shadow-lg active:scale-95 disabled:opacity-50"
+                        >
+                            {isUploading ? 'Uploading...' : 'Save to Gallery'}
+                        </button>
+                    </div>
+                </div>
+            )}
 
             <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
@@ -336,6 +427,62 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth, das
                         </div>
                     </div>
                 </div>
+            </div>
+
+            {/* --- NEW: Body Progress Gallery --- */}
+            <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-xl mt-8">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                    <div>
+                        <h3 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+                            <PhotoIcon className="w-6 h-6 text-indigo-500" /> Progress Gallery
+                        </h3>
+                        <p className="text-sm text-slate-500 font-medium mt-1">Visual timeline of your transformation.</p>
+                    </div>
+                    <button 
+                        onClick={() => galleryInputRef.current?.click()}
+                        className="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg hover:bg-indigo-700 active:scale-95 transition-all flex items-center gap-2"
+                    >
+                        <PlusIcon className="w-4 h-4" /> Upload Photo
+                    </button>
+                    <input type="file" accept="image/*" ref={galleryInputRef} onChange={handleFileSelect} className="hidden" />
+                </div>
+
+                {/* Filters */}
+                <div className="flex gap-2 overflow-x-auto no-scrollbar pb-4">
+                    {BODY_CATEGORIES.map(cat => (
+                        <button
+                            key={cat}
+                            onClick={() => setSelectedCategory(cat)}
+                            className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all border-2 ${
+                                selectedCategory === cat 
+                                ? 'bg-indigo-50 border-indigo-500 text-indigo-700' 
+                                : 'bg-white border-slate-100 text-slate-400 hover:border-slate-300'
+                            }`}
+                        >
+                            {cat}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Grid */}
+                {filteredPhotos.length > 0 ? (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {filteredPhotos.map(photo => (
+                            <div key={photo.id} className="relative group rounded-2xl overflow-hidden shadow-sm aspect-[3/4]">
+                                <img src={photo.imageUrl} alt={photo.category} className="w-full h-full object-cover" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
+                                    <span className="text-white font-bold text-sm">{photo.category}</span>
+                                    <span className="text-white/70 text-xs font-medium">{new Date(photo.createdAt).toLocaleDateString()}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="text-center py-16 bg-slate-50 rounded-[2.5rem] border border-dashed border-slate-200">
+                        <PhotoIcon className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                        <p className="text-slate-400 font-bold text-sm">No photos in this category yet.</p>
+                    </div>
+                )}
             </div>
         </div>
     );

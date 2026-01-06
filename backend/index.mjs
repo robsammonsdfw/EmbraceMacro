@@ -326,6 +326,14 @@ export const handler = async (event) => {
                 await db.logRecoveryStats(currentUserId, JSON.parse(event.body));
                 return { statusCode: 200, headers, body: "{}" };
             }
+            // NEW: Body Photos
+            if (pathParts[1] === 'photos') {
+                if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await db.getBodyPhotos(currentUserId)) };
+                if (method === 'POST') {
+                    const { base64, category } = JSON.parse(event.body);
+                    return { statusCode: 201, headers, body: JSON.stringify(await db.saveBodyPhoto(currentUserId, base64, category)) };
+                }
+            }
         }
         if (resource === 'calculate-readiness') {
             return { statusCode: 200, headers, body: JSON.stringify(await db.calculateReadiness(JSON.parse(event.body))) };

@@ -4,7 +4,7 @@ import type {
   GroceryList, GroceryItem, RewardsSummary, MealLogEntry, Recipe, 
   UserProfile, Friendship, ReadinessScore, FormAnalysisResult, RecoveryData,
   AssessmentState, UserDashboardPrefs, HealthStats, MatchProfile, PartnerBlueprint, CoachingRelation,
-  Assessment, RestaurantActivity
+  Assessment, RestaurantActivity, BodyPhoto
 } from '../types';
 
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
@@ -81,6 +81,8 @@ export const revokeCoachingAccess = (id: string): Promise<void> => callApi(`/coa
 export const calculateReadiness = (stats: RecoveryData): Promise<ReadinessScore> => callApi('/calculate-readiness', 'POST', stats);
 export const analyzeExerciseForm = (base64Image: string, exercise: string): Promise<FormAnalysisResult> => callApi('/analyze-form', 'POST', { base64Image, exercise });
 export const logRecoveryStats = (data: RecoveryData): Promise<void> => callApi('/body/log-recovery', 'POST', data);
+export const getBodyPhotos = (): Promise<BodyPhoto[]> => callApi('/body/photos', 'GET');
+export const uploadBodyPhoto = (base64: string, category: string): Promise<BodyPhoto> => callApi('/body/photos', 'POST', { base64, category });
 
 export const getAssessments = (): Promise<Assessment[]> => callApi('/assessments', 'GET');
 export const getAssessmentState = (): Promise<AssessmentState> => callApi('/assessments/state', 'GET');

@@ -317,6 +317,13 @@ export interface RestaurantPlace {
     activity?: RestaurantActivity[];
 }
 
+export interface BodyPhoto {
+    id: number;
+    imageUrl: string;
+    category: string;
+    createdAt: string;
+}
+
 export type ActiveView = 
   | 'home' 
   | 'physical.fuel' 
