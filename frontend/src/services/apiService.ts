@@ -82,6 +82,7 @@ export const calculateReadiness = (stats: RecoveryData): Promise<ReadinessScore>
 export const analyzeExerciseForm = (base64Image: string, exercise: string): Promise<FormAnalysisResult> => callApi('/analyze-form', 'POST', { base64Image, exercise });
 export const logRecoveryStats = (data: RecoveryData): Promise<void> => callApi('/body/log-recovery', 'POST', data);
 export const getBodyPhotos = (): Promise<BodyPhoto[]> => callApi('/body/photos', 'GET');
+export const getBodyPhotoById = (id: number): Promise<{ imageUrl: string }> => callApi(`/body/photos/${id}`, 'GET');
 export const uploadBodyPhoto = (base64: string, category: string): Promise<BodyPhoto> => callApi('/body/photos', 'POST', { base64, category });
 
 export const getAssessments = (): Promise<Assessment[]> => callApi('/assessments', 'GET');

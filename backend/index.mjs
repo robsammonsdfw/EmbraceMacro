@@ -328,6 +328,11 @@ export const handler = async (event) => {
             }
             // NEW: Body Photos
             if (pathParts[1] === 'photos') {
+                // If ID is provided, fetch detail
+                if (pathParts[2]) {
+                    return { statusCode: 200, headers, body: JSON.stringify(await db.getBodyPhotoById(currentUserId, pathParts[2])) };
+                }
+                // List view
                 if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await db.getBodyPhotos(currentUserId)) };
                 if (method === 'POST') {
                     const { base64, category } = JSON.parse(event.body);

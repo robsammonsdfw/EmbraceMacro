@@ -420,6 +420,8 @@ export const createMealLogEntry = async (userId, mealData, imageBase64, proxyCoa
 export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
     try {
+        // Optimizing payload: Don't fetch image_base64 for list view if it causes memory issues, 
+        // but existing structure relies on it. For Body Photos, we strictly separate them.
         const query = `
             SELECT id, meal_data, image_base64, created_at 
             FROM meal_log_entries
@@ -1090,11 +1092,12 @@ export const saveBodyPhoto = async (userId, base64, category) => {
     } finally { client.release(); }
 };
 
+// MODIFIED: Exclude image_base64 from list view to prevent payload size errors
 export const getBodyPhotos = async (userId) => {
     const client = await pool.connect();
     try {
         const res = await client.query(`
-            SELECT id, image_base64, category, created_at 
+            SELECT id, category, created_at 
             FROM body_progress_photos 
             WHERE user_id = $1 
             ORDER BY created_at DESC
@@ -1103,7 +1106,26 @@ export const getBodyPhotos = async (userId) => {
             id: row.id,
             category: row.category,
             createdAt: row.created_at,
-            imageUrl: `data:image/jpeg;base64,${row.image_base64}`
+            // Don't send image data here. Client must fetch individually.
         }));
+    } finally { client.release(); }
+};
+
+// NEW: Fetch specific photo detail
+export const getBodyPhotoById = async (userId, photoId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`
+            SELECT id, image_base64 
+            FROM body_progress_photos 
+            WHERE id = $1 AND user_id = $2
+        `, [photoId, userId]);
+        
+        if (!res.rows[0]) return null;
+        
+        return {
+            id: res.rows[0].id,
+            imageUrl: `data:image/jpeg;base64,${res.rows[0].image_base64}`
+        };
     } finally { client.release(); }
 };

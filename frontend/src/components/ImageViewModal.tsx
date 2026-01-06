@@ -5,7 +5,7 @@ import * as apiService from '../services/apiService';
 
 interface ImageViewModalProps {
     itemId: number;
-    type: 'history' | 'saved';
+    type: 'history' | 'saved' | 'body';
     onClose: () => void;
 }
 
@@ -22,8 +22,10 @@ export const ImageViewModal: React.FC<ImageViewModalProps> = ({ itemId, type, on
                 let data;
                 if (type === 'history') {
                     data = await apiService.getMealLogEntryById(itemId);
-                } else {
+                } else if (type === 'saved') {
                     data = await apiService.getSavedMealById(itemId);
+                } else if (type === 'body') {
+                    data = await apiService.getBodyPhotoById(itemId);
                 }
                 
                 if (isMounted) {
@@ -78,7 +80,7 @@ export const ImageViewModal: React.FC<ImageViewModalProps> = ({ itemId, type, on
                 {!loading && !error && imageUrl && (
                     <img 
                         src={imageUrl} 
-                        alt="Meal Evidence" 
+                        alt="Evidence" 
                         className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/10" 
                         onError={() => setError("Image data is corrupted or blocked by the browser.")}
                     />

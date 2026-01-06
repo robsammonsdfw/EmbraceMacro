@@ -4,6 +4,7 @@ import { ActivityIcon, FireIcon, HeartIcon, ClockIcon, PlusIcon, CameraIcon, Use
 import * as apiService from '../../services/apiService';
 import type { HealthStats, ReadinessScore, RecoveryData, UserDashboardPrefs, BodyPhoto } from '../../types';
 import { FormAnalysis } from './FormAnalysis';
+import { ImageViewModal } from '../ImageViewModal';
 
 interface BodyHubProps {
     healthStats: HealthStats;
@@ -27,6 +28,7 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth, das
     const [uploadImage, setUploadImage] = useState<string | null>(null); // For modal preview
     const [uploadCategory, setUploadCategory] = useState('General');
     const [isUploading, setIsUploading] = useState(false);
+    const [viewPhotoId, setViewPhotoId] = useState<number | null>(null);
     const galleryInputRef = useRef<HTMLInputElement>(null);
 
     const [logForm, setLogForm] = useState<RecoveryData>({
@@ -144,6 +146,14 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth, das
     return (
         <div className="space-y-6 animate-fade-in pb-20 max-w-5xl mx-auto">
             {isFormCheckOpen && <FormAnalysis onClose={() => setIsFormCheckOpen(false)} />}
+            
+            {viewPhotoId && (
+                <ImageViewModal 
+                    itemId={viewPhotoId} 
+                    type="body" 
+                    onClose={() => setViewPhotoId(null)} 
+                />
+            )}
 
             {/* Upload Modal */}
             {uploadImage && (
@@ -468,13 +478,21 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth, das
                 {filteredPhotos.length > 0 ? (
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         {filteredPhotos.map(photo => (
-                            <div key={photo.id} className="relative group rounded-2xl overflow-hidden shadow-sm aspect-[3/4]">
-                                <img src={photo.imageUrl} alt={photo.category} className="w-full h-full object-cover" />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
-                                    <span className="text-white font-bold text-sm">{photo.category}</span>
-                                    <span className="text-white/70 text-xs font-medium">{new Date(photo.createdAt).toLocaleDateString()}</span>
+                            <button 
+                                key={photo.id} 
+                                onClick={() => setViewPhotoId(photo.id)}
+                                className="relative group rounded-2xl overflow-hidden shadow-sm aspect-[3/4] bg-slate-100 flex flex-col items-center justify-center p-4 transition-all hover:scale-[1.02] active:scale-95 border border-slate-200"
+                            >
+                                {/* Placeholder Visual since we lazy load the actual image */}
+                                <div className="bg-white p-3 rounded-full shadow-sm mb-3">
+                                    <CameraIcon className="w-6 h-6 text-slate-300" />
                                 </div>
-                            </div>
+                                <span className="font-black text-slate-700 text-sm uppercase">{photo.category}</span>
+                                <span className="text-slate-400 text-xs font-bold mt-1">{new Date(photo.createdAt).toLocaleDateString()}</span>
+                                <span className="absolute bottom-2 text-[9px] font-black uppercase text-indigo-500 tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+                                    Tap to View
+                                </span>
+                            </button>
                         ))}
                     </div>
                 ) : (
