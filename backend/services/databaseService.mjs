@@ -388,12 +388,18 @@ export const getRewardsSummary = async (userId) => {
 export const createMealLogEntry = async (userId, mealData, imageBase64, proxyCoachId = null) => {
     const client = await pool.connect();
     try {
+        // Strip heavy image data from the JSON blob to avoid duplication and bloat
+        // The image is stored in the dedicated 'image_base64' column
+        const cleanMealData = { ...mealData };
+        if (cleanMealData.imageUrl) delete cleanMealData.imageUrl;
+        if (cleanMealData.imageBase64) delete cleanMealData.imageBase64;
+
         const query = `
             INSERT INTO meal_log_entries (user_id, meal_data, image_base64, proxy_coach_id)
             VALUES ($1, $2, $3, $4)
             RETURNING id, meal_data, image_base64, created_at;
         `;
-        const res = await client.query(query, [userId, mealData, imageBase64, proxyCoachId]);
+        const res = await client.query(query, [userId, cleanMealData, imageBase64, proxyCoachId]);
         const row = res.rows[0];
         
         // Only award points if not a proxy action (or maybe award to user anyway?)
@@ -420,10 +426,10 @@ export const createMealLogEntry = async (userId, mealData, imageBase64, proxyCoa
 export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
     try {
-        // Optimizing payload: Don't fetch image_base64 for list view if it causes memory issues, 
-        // but existing structure relies on it. For Body Photos, we strictly separate them.
+        // Optimizing payload: Don't fetch image_base64 for list view.
+        // Return a flag indicating if an image exists.
         const query = `
-            SELECT id, meal_data, image_base64, created_at 
+            SELECT id, meal_data, created_at, (image_base64 IS NOT NULL AND image_base64 != '') as has_image
             FROM meal_log_entries
             WHERE user_id = $1 
             ORDER BY created_at DESC;
@@ -434,7 +440,8 @@ export const getMealLogEntries = async (userId) => {
             return {
                 id: row.id,
                 ...mealData,
-                imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
+                // Do NOT include full imageUrl here to save bandwidth
+                hasImage: row.has_image, 
                 createdAt: row.created_at,
             };
         });
@@ -460,6 +467,7 @@ export const getMealLogEntryById = async (userId, entryId) => {
             id: row.id,
             ...mealData,
             imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
+            hasImage: !!row.image_base64,
             createdAt: row.created_at
         };
     } finally { client.release(); }
@@ -470,15 +478,21 @@ export const getMealLogEntryById = async (userId, entryId) => {
 export const getSavedMeals = async (userId) => {
     const client = await pool.connect();
     try {
+        // Use Postgres JSONB operator '-' to remove imageBase64 key from result
         const query = `
-            SELECT id, meal_data FROM saved_meals 
+            SELECT id, meal_data - 'imageBase64' as meal_data, (meal_data ? 'imageBase64') as has_image
+            FROM saved_meals 
             WHERE user_id = $1 
             ORDER BY created_at DESC;
         `;
         const res = await client.query(query, [userId]);
         return res.rows.map(row => {
             const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
-            return { id: row.id, ...processMealDataForClient(mealData) };
+            return { 
+                id: row.id, 
+                ...processMealDataForClient(mealData),
+                hasImage: row.has_image
+            };
         });
     } catch (err) {
         console.error('Database error in getSavedMeals:', err);
@@ -495,7 +509,12 @@ export const getSavedMealById = async (userId, mealId) => {
         if (!res.rows[0]) return null;
         const row = res.rows[0];
         const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
-        return { id: row.id, ...processMealDataForClient(mealData) };
+        const processed = processMealDataForClient(mealData);
+        return { 
+            id: row.id, 
+            ...processed,
+            hasImage: !!processed.imageUrl
+        };
     } finally { client.release(); }
 };
 
@@ -516,8 +535,13 @@ export const saveMeal = async (userId, mealData, proxyCoachId = null) => {
         }
         
         const mealDataFromDb = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
+        const processed = processMealDataForClient(mealDataFromDb);
 
-        return { id: row.id, ...processMealDataForClient(mealDataFromDb) };
+        return { 
+            id: row.id, 
+            ...processed,
+            hasImage: !!processed.imageUrl
+        };
     } catch (err) {
         console.error('Database error in saveMeal:', err);
         throw new Error('Could not save meal.');
@@ -547,7 +571,7 @@ export const getMealPlans = async (userId) => {
             SELECT 
                 p.id as plan_id, p.name as plan_name,
                 i.id as item_id,
-                sm.id as meal_id, sm.meal_data,
+                sm.id as meal_id, sm.meal_data - 'imageBase64' as meal_data, (sm.meal_data ? 'imageBase64') as has_image,
                 i.metadata
             FROM meal_plans p
             LEFT JOIN meal_plan_items i ON p.id = i.meal_plan_id
@@ -572,7 +596,8 @@ export const getMealPlans = async (userId) => {
                     id: row.item_id,
                     meal: {
                         id: row.meal_id,
-                        ...processMealDataForClient(mealData)
+                        ...processMealDataForClient(mealData),
+                        hasImage: row.has_image
                     },
                     metadata: row.metadata || {}
                 });
@@ -641,7 +666,7 @@ export const addMealToPlanItem = async (userId, planId, savedMealId, proxyCoachI
             SELECT 
                 i.id,
                 m.id as meal_id,
-                m.meal_data
+                m.meal_data - 'imageBase64' as meal_data, (m.meal_data ? 'imageBase64') as has_image
             FROM meal_plan_items i
             JOIN saved_meals m ON i.saved_meal_id = m.id
             WHERE i.id = $1;
@@ -651,7 +676,11 @@ export const addMealToPlanItem = async (userId, planId, savedMealId, proxyCoachI
         const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
         return {
             id: row.id,
-            meal: { id: row.meal_id, ...processMealDataForClient(mealData) }
+            meal: { 
+                id: row.meal_id, 
+                ...processMealDataForClient(mealData),
+                hasImage: row.has_image
+            }
         };
 
     } catch (err) {
