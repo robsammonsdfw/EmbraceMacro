@@ -121,7 +121,7 @@ const App: React.FC = () => {
       loadAllData();
   };
 
-  const handleAddToPlanFromAnalysis = async (item: any) => {
+  const handleAddToPlanFromAnalysis = async (_item: any) => {
       // If item is unified NutritionInfo, it acts as a saved meal. 
       // If it's a standalone Recipe (PantryChef), we'd need conversion logic, but usually it's just 'save first' logic.
       // For now, prompt:
