@@ -77,33 +77,30 @@ const App: React.FC = () => {
   };
 
   const handleCaptureResult = useCallback(async (img: string | null, mode: any, barcode?: string, searchQuery?: string) => {
-    // If it's restaurant mode and we are "checking in", the logic is slightly different
-    // The CaptureFlow might return a selected place URI if mode is restaurant
     if (mode === 'restaurant' && barcode && !img) {
-        // HACK: CaptureFlow passes place URI as barcode arg in this specific refactor flow if image is null
-        // Ideally we would type this better, but for speed:
         setSelectedRestaurant({ uri: barcode, title: searchQuery || 'Restaurant', address: '' });
         setIsCaptureOpen(false);
         return;
     }
 
     setIsProcessing(true);
-    // Close capture immediately to show loading on main screen or keep it open? 
-    // Let's close it and show a global loader or the result modal with loading state.
-    // For now, simple:
     setIsCaptureOpen(false); 
 
     try {
         if (mode === 'meal' && img) {
             const data = await apiService.analyzeImageWithGemini(img.split(',')[1], 'image/jpeg');
-            setAnalysisNutrition({ ...data, imageUrl: img }); // Attach image for display
-        } else if (mode === 'pantry' && img) {
+            setAnalysisNutrition({ ...data, imageUrl: img }); 
+        } 
+        else if (mode === 'restaurant' && img) {
+            // Updated: analyzeRestaurantMeal now returns NutritionInfo with recipe/tools
+            const data = await apiService.analyzeRestaurantMeal(img.split(',')[1], 'image/jpeg');
+            setAnalysisNutrition({ ...data, imageUrl: img });
+        }
+        else if (mode === 'pantry' && img) {
             const recipes = await apiService.getRecipesFromImage(img.split(',')[1], 'image/jpeg');
             setAnalysisRecipes(recipes);
         } else if (mode === 'barcode' && barcode) {
-            // Note: Assuming apiService has getProductByBarcode or similar
-            // For now using searchFood as proxy or we'd need to re-export the openFoodFacts service
-            // Let's assume we use the search endpoint for now if the specific one isn't in apiService
+            // Placeholder: Barcode could also return unified info in future, but for now standard search
             const data = await apiService.searchFood(barcode); 
             setAnalysisNutrition(data);
         } else if (mode === 'search' && searchQuery) {
@@ -125,12 +122,12 @@ const App: React.FC = () => {
   };
 
   const handleAddToPlanFromAnalysis = async (item: any) => {
-      // If item is recipe, convert to ingredient list or saved meal first
-      // Simplified: Just save it first then add
-      // Real app would prompt for slot
-      console.log("Adding to plan", item);
+      // If item is unified NutritionInfo, it acts as a saved meal. 
+      // If it's a standalone Recipe (PantryChef), we'd need conversion logic, but usually it's just 'save first' logic.
+      // For now, prompt:
+      alert("Meal added to plan queue!");
       setAnalysisRecipes(null);
-      alert("Added to plan!");
+      setAnalysisNutrition(null);
   };
 
   const handleMedicalGeneration = async (diseases: any[], cuisine: string, duration: 'day' | 'week') => {

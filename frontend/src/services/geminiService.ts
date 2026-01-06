@@ -6,7 +6,7 @@ export const analyzeFoodImage = async (base64Data: string, mimeType: string): Pr
   return apiService.analyzeImageWithGemini(base64Data, mimeType);
 };
 
-export const analyzeRestaurantMeal = async (base64Data: string, mimeType: string): Promise<Recipe> => {
+export const analyzeRestaurantMeal = async (base64Data: string, mimeType: string): Promise<NutritionInfo> => {
     return apiService.analyzeRestaurantMeal(base64Data, mimeType);
 };
 

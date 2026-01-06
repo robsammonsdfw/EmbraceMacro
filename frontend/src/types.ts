@@ -27,6 +27,30 @@ export type HealthJourney =
   | 'blood-pressure'
   | 'general-health';
 
+export interface KitchenTool {
+  name: string;
+  use: string; // e.g., "Blending ingredients"
+  essential: boolean;
+}
+
+export interface Recipe {
+  recipeName: string;
+  description: string;
+  ingredients: {
+    name: string;
+    quantity: string;
+  }[];
+  instructions: string[];
+  nutrition: {
+    totalCalories: number;
+    totalProtein: number;
+    totalCarbs: number;
+    totalFat: number;
+  };
+  prepTimeMinutes?: number;
+  cookTimeMinutes?: number;
+}
+
 export interface NutritionInfo {
   mealName: string;
   totalCalories: number;
@@ -50,6 +74,10 @@ export interface NutritionInfo {
   allergens?: string[];
   source?: 'user' | 'coach' | 'community' | 'medical-ai'; 
   visibility?: VisibilityMode;
+  
+  // 3-Tab Intelligence Extensions
+  recipe?: Recipe;
+  kitchenTools?: KitchenTool[];
 }
 
 export interface SavedMeal extends NutritionInfo {
@@ -120,22 +148,6 @@ export interface MealPlan {
   name: string;
   items: MealPlanItem[];
   visibility?: VisibilityMode;
-}
-
-export interface Recipe {
-  recipeName: string;
-  description: string;
-  ingredients: {
-    name: string;
-    quantity: string;
-  }[];
-  instructions: string[];
-  nutrition: {
-    totalCalories: number;
-    totalProtein: number;
-    totalCarbs: number;
-    totalFat: number;
-  };
 }
 
 export interface GroceryItem {

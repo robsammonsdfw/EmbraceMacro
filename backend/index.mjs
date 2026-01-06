@@ -4,9 +4,50 @@ import jwt from 'jsonwebtoken';
 import * as db from './services/databaseService.mjs';
 
 // --- Shared AI Schemas ---
-const nutritionSchema = {
+
+// Standard components for re-use
+const ingredientItemSchema = {
     type: Type.OBJECT,
     properties: {
+        name: { type: Type.STRING },
+        weightGrams: { type: Type.NUMBER },
+        calories: { type: Type.NUMBER },
+        protein: { type: Type.NUMBER },
+        carbs: { type: Type.NUMBER },
+        fat: { type: Type.NUMBER }
+    },
+    required: ["name", "weightGrams", "calories", "protein", "carbs", "fat"]
+};
+
+const recipeObjectSchema = {
+    type: Type.OBJECT,
+    properties: {
+        recipeName: { type: Type.STRING },
+        description: { type: Type.STRING },
+        ingredients: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, quantity: { type: Type.STRING } }, required: ["name", "quantity"] } },
+        instructions: { type: Type.ARRAY, items: { type: Type.STRING } },
+        nutrition: { type: Type.OBJECT, properties: { totalCalories: { type: Type.NUMBER }, totalProtein: { type: Type.NUMBER }, totalCarbs: { type: Type.NUMBER }, totalFat: { type: Type.NUMBER } }, required: ["totalCalories", "totalProtein", "totalCarbs", "totalFat"] },
+        prepTimeMinutes: { type: Type.NUMBER },
+        cookTimeMinutes: { type: Type.NUMBER }
+    },
+    required: ["recipeName", "description", "ingredients", "instructions", "nutrition"]
+};
+
+const toolObjectSchema = {
+    type: Type.OBJECT,
+    properties: {
+        name: { type: Type.STRING, description: "Name of the tool, e.g., 'Blender'." },
+        use: { type: Type.STRING, description: "How it is used in this recipe." },
+        essential: { type: Type.BOOLEAN, description: "Is it strictly required?" }
+    },
+    required: ["name", "use", "essential"]
+};
+
+// 3-Tab Intelligence Schema (Unified)
+const comprehensiveFoodAnalysisSchema = {
+    type: Type.OBJECT,
+    properties: {
+        // Tab 1: Nutrition (The Root)
         mealName: { type: Type.STRING },
         totalCalories: { type: Type.NUMBER },
         totalProtein: { type: Type.NUMBER },
@@ -14,50 +55,40 @@ const nutritionSchema = {
         totalFat: { type: Type.NUMBER },
         ingredients: {
             type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    name: { type: Type.STRING },
-                    weightGrams: { type: Type.NUMBER },
-                    calories: { type: Type.NUMBER },
-                    protein: { type: Type.NUMBER },
-                    carbs: { type: Type.NUMBER },
-                    fat: { type: Type.NUMBER }
-                },
-                required: ["name", "weightGrams", "calories", "protein", "carbs", "fat"]
-            }
+            items: ingredientItemSchema
+        },
+        // Tab 2: Recipe
+        recipe: recipeObjectSchema,
+        // Tab 3: Tools
+        kitchenTools: {
+            type: Type.ARRAY,
+            items: toolObjectSchema
         }
     },
-    required: ["mealName", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "ingredients"]
+    required: ["mealName", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "ingredients", "recipe", "kitchenTools"]
 };
 
+// ... other schemas for non-vision tasks ...
 const suggestionsSchema = {
     type: Type.ARRAY,
     items: {
-        ...nutritionSchema,
+        type: Type.OBJECT,
         properties: {
-            ...nutritionSchema.properties,
+            mealName: { type: Type.STRING },
+            totalCalories: { type: Type.NUMBER },
+            totalProtein: { type: Type.NUMBER },
+            totalCarbs: { type: Type.NUMBER },
+            totalFat: { type: Type.NUMBER },
+            ingredients: { type: Type.ARRAY, items: ingredientItemSchema },
             justification: { type: Type.STRING, description: "Why this meal is suitable for these medical conditions." }
         },
-        required: [...nutritionSchema.required, "justification"]
+        required: ["mealName", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "ingredients", "justification"]
     }
-};
-
-const recipeSchema = {
-    type: Type.OBJECT,
-    properties: {
-        recipeName: { type: Type.STRING },
-        description: { type: Type.STRING },
-        ingredients: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, quantity: { type: Type.STRING } }, required: ["name", "quantity"] } },
-        instructions: { type: Type.ARRAY, items: { type: Type.STRING } },
-        nutrition: { type: Type.OBJECT, properties: { totalCalories: { type: Type.NUMBER }, totalProtein: { type: Type.NUMBER }, totalCarbs: { type: Type.NUMBER }, totalFat: { type: Type.NUMBER } }, required: ["totalCalories", "totalProtein", "totalCarbs", "totalFat"] }
-    },
-    required: ["recipeName", "description", "ingredients", "instructions", "nutrition"]
 };
 
 const recipesSchema = {
     type: Type.ARRAY,
-    items: recipeSchema
+    items: recipeObjectSchema
 };
 
 const grocerySchema = {
@@ -148,21 +179,23 @@ export const handler = async (event) => {
             let tools = [];
             let toolConfig = {};
 
-            if (resource === 'analyze-image') { 
-                prompt = "Act as 'MacrosChef AI'. Analyze this food image with high clinical accuracy. Identify the dish and EVERY individual ingredient. Estimate serving weights in grams. Provide Calories, Protein, Carbs, and Fat totals. Return in JSON."; 
-                schema = nutritionSchema; 
+            // --- 3-Tab Intelligence Logic (Shared for MacrosChef & MasterChef) ---
+            if (resource === 'analyze-image' || resource === 'analyze-restaurant-meal') { 
+                prompt = "Act as 'Kitchen AI'. Analyze this food image completely. 1. Identify the dish and ingredients with macros (Tab 1). 2. Reverse-engineer the full recipe instructions (Tab 2). 3. List all kitchen equipment/tools needed to prepare it (Tab 3). Return everything in the specified unified JSON format."; 
+                schema = comprehensiveFoodAnalysisSchema; 
             }
-            else if (resource === 'analyze-restaurant-meal') {
-                prompt = "Act as 'MasterChef AI'. 1. Identify the cooked restaurant dish. 2. Reverse-engineer the recipe. 3. Provide professional cooking instructions. 4. Estimate full nutritional macros. Return in JSON.";
-                schema = recipeSchema;
-            }
+            // --- End 3-Tab Logic ---
+
             else if (resource === 'analyze-image-recipes') { 
                 prompt = "Act as 'PantryChef AI'. Identify all raw ingredients/staples visible in this photo. Suggest 3 diverse, high-protein recipes that can be made using these items plus standard oil/salt/pepper. Return in JSON."; 
                 schema = recipesSchema; 
             }
             else if (resource === 'search-food') {
                 prompt = `Act as 'MacrosChef AI'. Provide comprehensive nutritional breakdown for: "${query}". Return in JSON.`;
-                schema = nutritionSchema;
+                // Search might behave differently, let's keep it simple for now or upgrade it too?
+                // Request asked for photo capture upgrades primarily. Let's keep search simple for now to avoid breaking it if no image provided.
+                schema = comprehensiveFoodAnalysisSchema; // We can use the same schema for structure consistency
+                // Note: Tools might be generic for search
             }
             else if (resource === 'get-meal-suggestions') {
                 const mealCount = duration === 'week' ? 7 : 3;
@@ -326,13 +359,11 @@ export const handler = async (event) => {
                 await db.logRecoveryStats(currentUserId, JSON.parse(event.body));
                 return { statusCode: 200, headers, body: "{}" };
             }
-            // NEW: Body Photos
+            // Body Photos
             if (pathParts[1] === 'photos') {
-                // If ID is provided, fetch detail
                 if (pathParts[2]) {
                     return { statusCode: 200, headers, body: JSON.stringify(await db.getBodyPhotoById(currentUserId, pathParts[2])) };
                 }
-                // List view
                 if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await db.getBodyPhotos(currentUserId)) };
                 if (method === 'POST') {
                     const { base64, category } = JSON.parse(event.body);

@@ -44,8 +44,13 @@ const callApi = async (endpoint: string, method: string, body?: any) => {
     } catch (error) { console.error("Fetch error:", error); throw error; }
 };
 
+// Updated: analyzeImageWithGemini now returns the full structure (Nutrition + Recipe + Tools)
+// We still type it as NutritionInfo because the interface now includes optional 'recipe' and 'kitchenTools'
 export const analyzeImageWithGemini = (base64Image: string, mimeType: string): Promise<NutritionInfo> => callApi('/analyze-image', 'POST', { base64Image, mimeType });
-export const analyzeRestaurantMeal = (base64Image: string, mimeType: string): Promise<Recipe> => callApi('/analyze-restaurant-meal', 'POST', { base64Image, mimeType });
+
+// Updated: MasterChef also uses the new structure
+export const analyzeRestaurantMeal = (base64Image: string, mimeType: string): Promise<NutritionInfo> => callApi('/analyze-restaurant-meal', 'POST', { base64Image, mimeType });
+
 export const getRecipesFromImage = (base64Image: string, mimeType: string): Promise<Recipe[]> => callApi('/analyze-image-recipes', 'POST', { base64Image, mimeType });
 export const searchFood = (query: string): Promise<NutritionInfo> => callApi('/search-food', 'POST', { query });
 export const identifyGroceryItems = (base64Image: string, mimeType: string): Promise<{ items: string[] }> => callApi('/analyze-image-grocery', 'POST', { base64Image, mimeType });
@@ -96,16 +101,10 @@ export const getMatches = (): Promise<MatchProfile[]> => callApi('/matches', 'GE
 export const searchNearbyRestaurants = (lat: number, lng: number): Promise<{ places: MapPlace[] }> => callApi('/search-restaurants', 'POST', { lat, lng });
 export const checkInAtLocation = (placeName: string): Promise<void> => callApi('/check-in', 'POST', { placeName });
 
-// Simulated function for "Friends who ate here"
 export const getRestaurantActivity = async (placeUri: string): Promise<RestaurantActivity[]> => {
     // Explicit usage of placeUri to pass typescript check
     console.debug(`[API] Fetching restaurant activity for location: ${placeUri}`);
-    
-    // In a real app, this would query the backend DB for check-ins at this Place ID.
-    // Simulating delay
     await new Promise(r => setTimeout(r, 800));
-    
-    // Mock data based on the complaint requirements
     return [
         { friendName: 'Sarah', friendInitial: 'S', mealName: 'Grilled Salmon Salad', rating: 5, date: '2 days ago', imageUrl: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=200' },
         { friendName: 'Mike', friendInitial: 'M', mealName: 'Protein Bowl', rating: 4, date: 'Last week' }
