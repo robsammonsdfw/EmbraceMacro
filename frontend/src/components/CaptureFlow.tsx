@@ -120,7 +120,7 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
           case 'restaurant': return 'MasterChef';
           case 'barcode': return 'Barcode Engine';
           case 'search': return 'Manual Search';
-          default: return 'ChefGPT';
+          default: return 'Kitchen AI';
       }
   };
 
@@ -145,7 +145,7 @@ export const CaptureFlow: React.FC<CaptureFlowProps> = ({
            <BarcodeScanner onScanSuccess={(code) => onCapture(null, 'barcode', code)} onCancel={() => setMode('meal')} />
         ) : mode === 'search' ? (
             <div className="w-full max-w-md p-8 animate-fade-in">
-                <h3 className="text-3xl font-black mb-8 text-center uppercase tracking-tighter">Query ChefGPT</h3>
+                <h3 className="text-3xl font-black mb-8 text-center uppercase tracking-tighter">Query Kitchen AI</h3>
                 <div className="relative group">
                     <input 
                         type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}

@@ -149,24 +149,24 @@ export const handler = async (event) => {
             let toolConfig = {};
 
             if (resource === 'analyze-image') { 
-                prompt = "Act as 'MacrosChef GPT'. Analyze this food image with high clinical accuracy. Identify the dish and EVERY individual ingredient. Estimate serving weights in grams. Provide Calories, Protein, Carbs, and Fat totals. Return in JSON."; 
+                prompt = "Act as 'MacrosChef AI'. Analyze this food image with high clinical accuracy. Identify the dish and EVERY individual ingredient. Estimate serving weights in grams. Provide Calories, Protein, Carbs, and Fat totals. Return in JSON."; 
                 schema = nutritionSchema; 
             }
             else if (resource === 'analyze-restaurant-meal') {
-                prompt = "Act as 'MasterChef GPT'. 1. Identify the cooked restaurant dish. 2. Reverse-engineer the recipe. 3. Provide professional cooking instructions. 4. Estimate full nutritional macros. Return in JSON.";
+                prompt = "Act as 'MasterChef AI'. 1. Identify the cooked restaurant dish. 2. Reverse-engineer the recipe. 3. Provide professional cooking instructions. 4. Estimate full nutritional macros. Return in JSON.";
                 schema = recipeSchema;
             }
             else if (resource === 'analyze-image-recipes') { 
-                prompt = "Act as 'PantryChef GPT'. Identify all raw ingredients/staples visible in this photo. Suggest 3 diverse, high-protein recipes that can be made using these items plus standard oil/salt/pepper. Return in JSON."; 
+                prompt = "Act as 'PantryChef AI'. Identify all raw ingredients/staples visible in this photo. Suggest 3 diverse, high-protein recipes that can be made using these items plus standard oil/salt/pepper. Return in JSON."; 
                 schema = recipesSchema; 
             }
             else if (resource === 'search-food') {
-                prompt = `Act as 'MacrosChef GPT'. Provide comprehensive nutritional breakdown for: "${query}". Return in JSON.`;
+                prompt = `Act as 'MacrosChef AI'. Provide comprehensive nutritional breakdown for: "${query}". Return in JSON.`;
                 schema = nutritionSchema;
             }
             else if (resource === 'get-meal-suggestions') {
                 const mealCount = duration === 'week' ? 7 : 3;
-                prompt = `Act as 'MealPlanChef GPT'. Generate ${mealCount} clinical meal ideas in ${cuisine} cuisine for a user with: ${conditions.join(', ')}. Ensure safety regarding medical restrictions. Return in JSON.`;
+                prompt = `Act as 'MealPlanChef AI'. Generate ${mealCount} clinical meal ideas in ${cuisine} cuisine for a user with: ${conditions.join(', ')}. Ensure safety regarding medical restrictions. Return in JSON.`;
                 schema = suggestionsSchema;
             }
             else if (resource === 'analyze-image-grocery') {

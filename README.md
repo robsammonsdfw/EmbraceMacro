@@ -1,9 +1,10 @@
+
 # EmbraceHealth AI - Platform Documentation
 
 ## I. System Inventory (Current Active Modules)
 1. **MacroVision Core**: Vision-based nutrient extraction (Calories, Protein, Carbs, Fat, Micros).
-2. **ChefGPT: Restaurant Mode**: Deconstructs cooked meals into culinary recipes.
-3. **ChefGPT: Pantry Mode**: Identifies raw ingredients and suggests 3 diverse recipes.
+2. **MasterChef AI (Restaurant Mode)**: Deconstructs cooked meals into culinary recipes.
+3. **PantryChef AI (Pantry Mode)**: Identifies raw ingredients and suggests 3 diverse recipes.
 4. **ChefGPT: Cook Mode**: Full-screen, high-readability step-by-step guidance.
 5. **Medical AI Planner**: Condition-specific (Diabetes, Hypertension, etc.) meal plan consolidation.
 6. **Prism 3D Body Hub**: Readiness scores, HRV sync, and AI-powered exercise form analysis.

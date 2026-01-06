@@ -102,10 +102,10 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                 </div>
             </div>
 
-            {/* ChefGPT Feature Matrix */}
+            {/* Kitchen Intelligence Feature Matrix */}
             <section className="space-y-4">
                 <div className="flex items-center gap-2 px-1">
-                    <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter">ChefGPT Intelligence</h2>
+                    <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Kitchen Intelligence</h2>
                     <div className="h-px flex-grow bg-slate-100"></div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -167,7 +167,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                             <div>
                                 <div className="flex justify-between mb-2">
                                     <span className="font-black uppercase text-[10px] tracking-widest text-slate-600">Protein (Grams)</span>
-                                    <span className="font-black text-slate-900">{Math.round(dailyProtein)}g / {proteinGoal}g</span>
+                                    <span className="font-black text-slate-900">{Math.round(dailyProtein)} / {proteinGoal}g</span>
                                 </div>
                                 <div className="h-3 bg-slate-100 rounded-full overflow-hidden shadow-inner">
                                     <div className="h-full bg-indigo-500 rounded-full transition-all duration-1000 shadow-lg" style={{ width: `${Math.min(100, (dailyProtein / proteinGoal) * 100)}%` }}></div>
