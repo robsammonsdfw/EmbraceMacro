@@ -97,7 +97,7 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth, das
             <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h2 className="text-3xl font-black text-slate-900 tracking-tight">Body Intelligence</h2>
-                    <p className="text-slate-500 font-medium">Predictive recovery & Prism 3D biometrics.</p>
+                    <p className="text-slate-500 font-medium">Predictive recovery & EmbraceHealth 3D biometrics.</p>
                 </div>
                 <div className="flex gap-2">
                     <button 
@@ -160,18 +160,18 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth, das
                  ))}
             </section>
 
-            {/* Prism Scanner CTA */}
+            {/* Prism Scanner CTA - Renamed to EmbraceHealth 3D */}
             <section className="bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-950 rounded-[2rem] p-8 text-white shadow-2xl relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-12 opacity-10 group-hover:scale-110 transition-transform duration-700 pointer-events-none">
                     <UserCircleIcon className="w-64 h-64" />
                 </div>
                 <div className="relative z-10 max-w-lg">
                     <div className="inline-flex items-center gap-2 bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-4 border border-indigo-500/30">
-                        <ActivityIcon className="w-3 h-3" /> Prism 3D Scanner
+                        <ActivityIcon className="w-3 h-3" /> EmbraceHealth 3D Scanner
                     </div>
-                    <h3 className="text-3xl font-black mb-3">Sync Your Prism Scan</h3>
+                    <h3 className="text-3xl font-black mb-3">Sync Your EmbraceHealth Scan</h3>
                     <p className="text-indigo-100/70 text-lg font-medium leading-relaxed mb-8">
-                        The Prism scanner creates a clinical 3D avatar of your body, tracking muscle gain, body fat percentage, and posture alignment with medical precision.
+                        The EmbraceHealth scanner creates a clinical 3D avatar of your body, tracking muscle gain, body fat percentage, and posture alignment with medical precision.
                     </p>
                     <button 
                         onClick={handleStartBodyScan}

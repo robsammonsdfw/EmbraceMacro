@@ -197,7 +197,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                 <div className="space-y-6">
                     <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-8 flex flex-col justify-between min-h-[300px]">
                         <div>
-                            <h3 className="font-black text-slate-800 uppercase tracking-widest text-xs mb-6">Prism 3D Body</h3>
+                            <h3 className="font-black text-slate-800 uppercase tracking-widest text-xs mb-6">EmbraceHealth 3D Body</h3>
                             <div className="flex justify-center mb-8">
                                 <DigitalTwinPanel calories={dailyCalories} calorieGoal={calorieGoal} protein={dailyProtein} proteinGoal={proteinGoal} activityScore={0} onScanClick={onScanClick} miniMode={true} />
                             </div>
