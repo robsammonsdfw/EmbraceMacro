@@ -160,6 +160,10 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
                 return <PlaceholderPage title="Union Portal" description="Member benefits management." />;
             case 'roles.payor': 
                 return <PlaceholderPage title="Payor Portal" description="Insurance integration." />;
+            case 'roles.government':
+                return <PlaceholderPage title="Government Portal" description="Public sector health management." />;
+            case 'roles.health_systems':
+                return <PlaceholderPage title="Health Systems" description="Hospital and clinic integration." />;
 
             // --- 6. REWARDS & HISTORY ---
             case 'rewards': 

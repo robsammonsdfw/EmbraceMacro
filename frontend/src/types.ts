@@ -369,6 +369,8 @@ export type ActiveView =
   | 'roles.employer'
   | 'roles.union'
   | 'roles.payor'
+  | 'roles.government'
+  | 'roles.health_systems'
   // Rewards/History
   | 'rewards'
   | 'history';

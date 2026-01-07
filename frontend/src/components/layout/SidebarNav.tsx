@@ -7,7 +7,7 @@ import {
     UserGroupIcon, HeartIcon, TrophyIcon, 
     Squares2X2Icon, CogIcon, PillIcon, RunningIcon, 
     VideoIcon, BriefcaseIcon, BadgeCheckIcon, ClockIcon,
-    ClipboardListIcon, BookOpenIcon, BarcodeIcon
+    ClipboardListIcon, BookOpenIcon, BarcodeIcon, GlobeAltIcon
 } from '../icons';
 import { HealthJourney, ActiveView } from '../../types';
 import { JOURNEYS } from './AppLayout';
@@ -154,7 +154,9 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
                         <NavItem indent label="For Influencers" icon={<BadgeCheckIcon />} isActive={activeView === 'roles.influencer'} onClick={() => onNavigate('roles.influencer')} />
                         <NavItem indent label="For Employers" icon={<BriefcaseIcon />} isActive={activeView === 'roles.employer'} onClick={() => onNavigate('roles.employer')} />
                         <NavItem indent label="For Unions" icon={<UserGroupIcon />} isActive={activeView === 'roles.union'} onClick={() => onNavigate('roles.union')} />
-                        <NavItem indent label="For Payors" icon={<ClipboardCheckIcon />} isActive={activeView === 'roles.payor'} onClick={() => onNavigate('roles.payor')} />
+                        <NavItem indent label="For Government" icon={<GlobeAltIcon />} isActive={activeView === 'roles.government'} onClick={() => onNavigate('roles.government')} />
+                        <NavItem indent label="Payers / Insurers" icon={<ClipboardCheckIcon />} isActive={activeView === 'roles.payor'} onClick={() => onNavigate('roles.payor')} />
+                        <NavItem indent label="For Health Systems" icon={<HeartIcon />} isActive={activeView === 'roles.health_systems'} onClick={() => onNavigate('roles.health_systems')} />
                     </div>
                 )}
 

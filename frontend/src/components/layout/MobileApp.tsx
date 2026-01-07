@@ -272,6 +272,8 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                 case 'roles.employer': return <div className="pt-16 px-2"><PlaceholderPage title="Employer Portal" /></div>;
                 case 'roles.union': return <div className="pt-16 px-2"><PlaceholderPage title="Union Portal" /></div>;
                 case 'roles.payor': return <div className="pt-16 px-2"><PlaceholderPage title="Payor Portal" /></div>;
+                case 'roles.government': return <div className="pt-16 px-2"><PlaceholderPage title="Government Portal" /></div>;
+                case 'roles.health_systems': return <div className="pt-16 px-2"><PlaceholderPage title="Health Systems" /></div>;
 
                 // --- Rewards ---
                 case 'rewards': return <div className="pt-16 px-2"><RewardsDashboard /></div>;
@@ -315,7 +317,9 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                 { id: 'roles.influencer', label: 'For Influencers', desc: 'Brand tools' },
                 { id: 'roles.employer', label: 'For Employers', desc: 'Corporate wellness' },
                 { id: 'roles.union', label: 'For Unions', desc: 'Member benefits' },
-                { id: 'roles.payor', label: 'For Payors', desc: 'Insurance claims' }
+                { id: 'roles.government', label: 'For Government', desc: 'Public health initiatives' },
+                { id: 'roles.payor', label: 'Payers / Insurers', desc: 'Insurance claims' },
+                { id: 'roles.health_systems', label: 'For Health Systems', desc: 'Clinical integration' }
             ]);
             case 'rewards': return renderSubLevelMenu('Rewards', [
                 { id: 'rewards', label: 'My Rewards', desc: 'Health wallet' },
