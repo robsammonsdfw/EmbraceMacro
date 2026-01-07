@@ -17,6 +17,11 @@ export interface MapPlace {
     address?: string;
 }
 
+export interface JudgeResult {
+    score: number;
+    feedback: string;
+}
+
 export const setProxyClient = (id: string | null) => {
     if (id) localStorage.setItem(PROXY_CLIENT_KEY, id);
     else localStorage.removeItem(PROXY_CLIENT_KEY);
@@ -45,7 +50,6 @@ const callApi = async (endpoint: string, method: string, body?: any) => {
 };
 
 // Updated: analyzeImageWithGemini now returns the full structure (Nutrition + Recipe + Tools)
-// We still type it as NutritionInfo because the interface now includes optional 'recipe' and 'kitchenTools'
 export const analyzeImageWithGemini = (base64Image: string, mimeType: string): Promise<NutritionInfo> => callApi('/analyze-image', 'POST', { base64Image, mimeType });
 
 // Updated: MasterChef also uses the new structure
@@ -55,6 +59,9 @@ export const getRecipesFromImage = (base64Image: string, mimeType: string): Prom
 export const searchFood = (query: string): Promise<NutritionInfo> => callApi('/search-food', 'POST', { query });
 export const identifyGroceryItems = (base64Image: string, mimeType: string): Promise<{ items: string[] }> => callApi('/analyze-image-grocery', 'POST', { base64Image, mimeType });
 export const getMealSuggestions = (conditions: string[], cuisine: string, duration: 'day' | 'week'): Promise<NutritionInfo[]> => callApi('/get-meal-suggestions', 'POST', { conditions, cuisine, duration });
+
+// NEW: Judge Logic
+export const judgeRecipeAttempt = (imageBase64: string, recipeContext: string, recipeId: number): Promise<JudgeResult> => callApi('/social/judge-attempt', 'POST', { imageBase64, recipeContext, recipeId });
 
 export const getMealLog = (): Promise<MealLogEntry[]> => callApi('/meal-log', 'GET');
 export const getMealLogEntryById = (id: number): Promise<MealLogEntry> => callApi(`/meal-log/${id}`, 'GET');

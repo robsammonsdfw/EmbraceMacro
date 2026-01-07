@@ -1,8 +1,9 @@
 
 import React, { useState } from 'react';
 import type { Recipe } from '../types';
-import { PlusIcon, UtensilsIcon } from './icons';
+import { PlusIcon, UtensilsIcon, FireIcon } from './icons';
 import { CookModeModal } from './CookModeModal';
+import { CookOffModal } from './CookOffModal';
 
 const MacroPill: React.FC<{ label: string; value: number; unit: string; color: string }> = ({ label, value, unit, color }) => (
   <div className={`text-center p-2 rounded-lg ${color}`}>
@@ -13,22 +14,39 @@ const MacroPill: React.FC<{ label: string; value: number; unit: string; color: s
 
 export const RecipeCard: React.FC<{ recipe: Recipe; onAddToPlan: () => void; }> = ({ recipe, onAddToPlan }) => {
   const [isCookMode, setIsCookMode] = useState(false);
+  const [isCookOff, setIsCookOff] = useState(false);
 
   return (
     <>
         {isCookMode && <CookModeModal recipe={recipe} onClose={() => setIsCookMode(false)} />}
+        {isCookOff && (
+            <CookOffModal 
+                recipeContext={`Recipe Name: ${recipe.recipeName}. Ingredients: ${JSON.stringify(recipe.ingredients)}. Instructions: ${JSON.stringify(recipe.instructions)}`} 
+                recipeId={999} // Placeholder ID until connected to a real SavedMeal ID
+                onClose={() => setIsCookOff(false)} 
+            />
+        )}
         
         <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden animate-fade-in flex flex-col h-full">
           <div className="p-6 flex-grow">
             <div className="flex justify-between items-start mb-2">
                 <h3 className="text-2xl font-bold text-slate-800 leading-tight">{recipe.recipeName}</h3>
-                <button 
-                    onClick={() => setIsCookMode(true)}
-                    className="text-indigo-600 hover:text-indigo-800 bg-indigo-50 p-2 rounded-lg transition-colors"
-                    title="Enter Cook Mode"
-                >
-                    <UtensilsIcon />
-                </button>
+                <div className="flex gap-2">
+                    <button 
+                        onClick={() => setIsCookOff(true)}
+                        className="text-orange-500 hover:text-orange-600 bg-orange-50 p-2 rounded-lg transition-colors group"
+                        title="Join Cook-Off"
+                    >
+                        <FireIcon className="group-hover:scale-110 transition-transform" />
+                    </button>
+                    <button 
+                        onClick={() => setIsCookMode(true)}
+                        className="text-indigo-600 hover:text-indigo-800 bg-indigo-50 p-2 rounded-lg transition-colors"
+                        title="Enter Cook Mode"
+                    >
+                        <UtensilsIcon />
+                    </button>
+                </div>
             </div>
             
             <p className="text-slate-600 mt-1 mb-4 line-clamp-3">{recipe.description}</p>

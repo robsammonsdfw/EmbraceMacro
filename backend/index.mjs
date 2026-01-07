@@ -68,7 +68,6 @@ const comprehensiveFoodAnalysisSchema = {
     required: ["mealName", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "ingredients", "recipe", "kitchenTools"]
 };
 
-// ... other schemas for non-vision tasks ...
 const suggestionsSchema = {
     type: Type.ARRAY,
     items: {
@@ -111,6 +110,16 @@ const formAnalysisSchema = {
         feedback: { type: Type.STRING, description: "Detailed feedback on posture and form." }
     },
     required: ["isCorrect", "score", "feedback"]
+};
+
+// NEW: Judge Schema
+const judgeSchema = {
+    type: Type.OBJECT,
+    properties: {
+        score: { type: Type.NUMBER, description: "Score from 0-100 based on similarity to target recipe." },
+        feedback: { type: Type.STRING, description: "A witty, 1-sentence critique comparing the attempt to the original." }
+    },
+    required: ["score", "feedback"]
 };
 
 let schemaEnsured = false;
@@ -169,6 +178,29 @@ export const handler = async (event) => {
     try {
         const aiRoutes = ['analyze-image', 'analyze-image-recipes', 'analyze-restaurant-meal', 'search-food', 'get-meal-suggestions', 'analyze-image-grocery', 'analyze-form', 'search-restaurants'];
         
+        // Handle Judge separately or include in list
+        if (resource === 'social' && pathParts[1] === 'judge-attempt') {
+            const ai = new GoogleGenAI({ apiKey: API_KEY });
+            const body = JSON.parse(event.body || '{}');
+            const { imageBase64, recipeContext, recipeId } = body;
+            
+            const prompt = `Act as 'MasterChef Judge AI'. Compare this user's photo of their cooked meal to the original recipe description: "${recipeContext}". Rate the visual execution from 0-100 and provide brief, constructive feedback. Return in JSON.`;
+            
+            const req = {
+                model: 'gemini-3-flash-preview',
+                contents: [{ parts: [{inlineData: {data: imageBase64, mimeType: 'image/jpeg'}}, {text: prompt}] }],
+                config: { responseMimeType: 'application/json', responseSchema: judgeSchema }
+            };
+            
+            const res = await ai.models.generateContent(req);
+            const judgeResult = JSON.parse(res.text);
+            
+            // Save to DB
+            const attempt = await db.saveRecipeAttempt(currentUserId, recipeId, imageBase64, judgeResult.score, judgeResult.feedback);
+            
+            return { statusCode: 200, headers, body: JSON.stringify({ ...attempt, ...judgeResult }) };
+        }
+
         if (aiRoutes.includes(resource)) {
             const ai = new GoogleGenAI({ apiKey: API_KEY });
             const body = JSON.parse(event.body || '{}');
@@ -192,10 +224,7 @@ export const handler = async (event) => {
             }
             else if (resource === 'search-food') {
                 prompt = `Act as 'MacrosChef AI'. Provide comprehensive nutritional breakdown for: "${query}". Return in JSON.`;
-                // Search might behave differently, let's keep it simple for now or upgrade it too?
-                // Request asked for photo capture upgrades primarily. Let's keep search simple for now to avoid breaking it if no image provided.
-                schema = comprehensiveFoodAnalysisSchema; // We can use the same schema for structure consistency
-                // Note: Tools might be generic for search
+                schema = comprehensiveFoodAnalysisSchema; 
             }
             else if (resource === 'get-meal-suggestions') {
                 const mealCount = duration === 'week' ? 7 : 3;
@@ -217,7 +246,6 @@ export const handler = async (event) => {
                 if (lat && lng) {
                     toolConfig = { retrievalConfig: { latLng: { latitude: lat, longitude: lng } } };
                 }
-                // Note: Response Schema is not allowed with Google Maps tool
                 schema = undefined;
             }
 
@@ -235,7 +263,6 @@ export const handler = async (event) => {
             const res = await ai.models.generateContent(req);
             
             if (resource === 'search-restaurants') {
-                // Extract grounding metadata for maps
                 const places = res.candidates?.[0]?.groundingMetadata?.groundingChunks
                     ?.filter(c => c.maps?.uri)
                     .map(c => ({ uri: c.maps.uri, title: c.maps.title })) || [];

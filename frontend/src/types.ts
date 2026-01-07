@@ -337,17 +337,38 @@ export interface BodyPhoto {
 }
 
 export type ActiveView = 
-  | 'home' 
-  | 'physical.fuel' 
-  | 'physical.body' 
-  | 'physical.reports'
-  | 'mental.readiness' 
-  | 'mental.assessments' 
-  | 'mental.care'
-  | 'social.community' 
-  | 'social.journey' 
-  | 'social.rewards'
+  // Core
+  | 'home'
   | 'hub' 
-  | 'history'
-  | 'suggestions'
-  | 'clients';
+  // Account
+  | 'account.setup'
+  | 'account.widgets'
+  | 'account.sync'
+  | 'account.pharmacy'
+  // Physical
+  | 'physical.scan'
+  | 'physical.workout_log'
+  | 'physical.plans'
+  | 'physical.form_check'
+  | 'physical.run'
+  // Nutrition
+  | 'nutrition.planner'
+  | 'nutrition.pantry'
+  | 'nutrition.dining'
+  | 'nutrition.library'
+  | 'nutrition.videos'
+  // Mental
+  | 'mental.sleep'
+  | 'mental.readiness'
+  | 'mental.assessments'
+  | 'mental.labs'
+  | 'mental.store'
+  // Roles
+  | 'roles.coach'
+  | 'roles.influencer'
+  | 'roles.employer'
+  | 'roles.union'
+  | 'roles.payor'
+  // Rewards/History
+  | 'rewards'
+  | 'history';

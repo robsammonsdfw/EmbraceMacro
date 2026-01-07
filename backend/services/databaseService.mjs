@@ -100,6 +100,19 @@ export const ensureSchema = async () => {
             );
         `);
 
+        // NEW: Recipe Challenges & Attempts (The Judge Agent Storage)
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS recipe_attempts (
+                id SERIAL PRIMARY KEY,
+                user_id VARCHAR(255) NOT NULL,
+                recipe_source_id INT, -- Links to a saved_meal ID that served as the challenge
+                image_base64 TEXT,
+                ai_score INT,
+                ai_feedback TEXT,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
         // Grocery
         await client.query(`
             CREATE TABLE IF NOT EXISTS grocery_lists (
@@ -242,6 +255,31 @@ export const validateProxyAccess = async (coachId, clientId) => {
             WHERE coach_id = $1 AND client_id = $2 AND status = 'active'
         `, [coachId, clientId]);
         return res.rows[0]?.permissions || null;
+    } finally {
+        client.release();
+    }
+};
+
+// --- Cooking Challenge Logic ---
+
+export const saveRecipeAttempt = async (userId, recipeId, imageBase64, aiScore, aiFeedback) => {
+    const client = await pool.connect();
+    try {
+        // Strip prefix for storage
+        const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+        
+        const query = `
+            INSERT INTO recipe_attempts (user_id, recipe_source_id, image_base64, ai_score, ai_feedback)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id, ai_score, ai_feedback, created_at
+        `;
+        const res = await client.query(query, [userId, recipeId, cleanBase64, aiScore, aiFeedback]);
+        
+        // Award points based on score
+        const points = Math.round(aiScore / 2); // Up to 50 points
+        await awardPoints(userId, 'recipe.challenge', points, { score: aiScore });
+
+        return res.rows[0];
     } finally {
         client.release();
     }

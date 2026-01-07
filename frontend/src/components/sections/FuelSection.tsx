@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MealPlanManager } from '../MealPlanManager';
 import { MealLibrary } from '../MealLibrary';
 import { GroceryList } from '../GroceryList';
@@ -24,19 +24,26 @@ interface FuelSectionProps {
     onManualLibraryAdd?: (query: string) => void;
     onManualLogAdd?: (query: string) => void;
     onScanClick?: () => void;
+    defaultTab?: 'plan' | 'library' | 'grocery' | 'history';
 }
 
 export const FuelSection: React.FC<FuelSectionProps> = ({
     plans, activePlanId, savedMeals, mealLog, onPlanChange, onCreatePlan, onRemoveFromPlan, 
     onQuickAdd, onGenerateMedical, medicalPlannerState, onAddMealToLibrary, onDeleteMeal, onSelectMeal,
-    onManualLibraryAdd, onManualLogAdd, onScanClick
+    onManualLibraryAdd, onManualLogAdd, onScanClick, defaultTab
 }) => {
     const [activeTab, setActiveTab] = useState<'plan' | 'library' | 'grocery' | 'history'>('plan');
+
+    // Sync defaultTab prop to local state when it changes
+    useEffect(() => {
+        if (defaultTab) {
+            setActiveTab(defaultTab);
+        }
+    }, [defaultTab]);
 
     const handleHistoryAdd = (mealData: NutritionInfo) => {
         // Logic to add to plan from history
         if (activePlanId) {
-            // Defaulting to today/lunch if added from history without drag/drop
             console.log("Add from history", mealData);
         }
     };

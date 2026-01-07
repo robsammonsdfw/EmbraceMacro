@@ -5,7 +5,9 @@ import {
     UtensilsIcon, UserCircleIcon, BeakerIcon, 
     ActivityIcon, ClipboardCheckIcon, UsersIcon, 
     UserGroupIcon, HeartIcon, TrophyIcon, 
-    Squares2X2Icon
+    Squares2X2Icon, CogIcon, PillIcon, RunningIcon, 
+    VideoIcon, BriefcaseIcon, BadgeCheckIcon, ClockIcon,
+    ClipboardListIcon, BookOpenIcon, BarcodeIcon
 } from '../icons';
 import { HealthJourney, ActiveView } from '../../types';
 import { JOURNEYS } from './AppLayout';
@@ -28,11 +30,11 @@ const NavItem: React.FC<{
 }> = ({ label, icon, isActive, onClick, indent }) => (
     <button
         onClick={onClick}
-        className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
+        className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-all duration-200 group ${
             isActive 
             ? 'bg-slate-900 text-white font-bold shadow-md' 
             : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-        } ${indent ? 'ml-4 w-[calc(100%-1rem)] text-xs' : ''}`}
+        } ${indent ? 'ml-2 w-[calc(100%-0.5rem)] text-xs' : ''}`}
     >
         <span className={`${isActive ? 'text-emerald-400' : 'text-slate-400 group-hover:text-slate-600'} ${indent ? 'scale-90' : ''}`}>
             {icon}
@@ -44,31 +46,30 @@ const NavItem: React.FC<{
 const CategoryHeader: React.FC<{
     label: string;
     color: string;
-    icon: React.ReactNode;
     isOpen: boolean;
     onClick: () => void;
-}> = ({ label, color, icon, isOpen, onClick }) => (
+}> = ({ label, color, isOpen, onClick }) => (
     <button 
         onClick={onClick}
-        className="w-full flex items-center justify-between px-4 py-3 mt-4 mb-1 text-left hover:bg-slate-50 rounded-xl transition-colors group"
+        className="w-full flex items-center justify-between px-4 py-2 mt-4 mb-1 text-left hover:bg-slate-50 rounded-lg transition-colors group"
     >
-        <div className="flex items-center gap-3">
-            <span className={`${color}`}>{icon}</span>
-            <span className="text-xs font-black uppercase tracking-widest text-slate-400 group-hover:text-slate-600">{label}</span>
-        </div>
-        <span className={`text-slate-300 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>▼</span>
+        <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${color} group-hover:opacity-100 opacity-80`}>{label}</span>
+        <span className={`text-slate-300 text-[10px] transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>▼</span>
     </button>
 );
 
-export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, onLogout, showClientsTab, selectedJourney, onJourneyChange }) => {
+export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, onLogout, selectedJourney, onJourneyChange }) => {
     // Categories state
     const [openCategories, setOpenCategories] = useState({
+        account: true,
         physical: true,
+        nutrition: true,
         mental: true,
-        social: true
+        roles: true,
+        rewards: true
     });
 
-    const toggleCategory = (cat: 'physical' | 'mental' | 'social') => {
+    const toggleCategory = (cat: keyof typeof openCategories) => {
         setOpenCategories(prev => ({ ...prev, [cat]: !prev[cat] }));
     };
 
@@ -95,60 +96,74 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
             </div>
 
             {/* Navigation Content */}
-            <div className="flex-grow px-4 space-y-1 overflow-y-auto no-scrollbar pb-10">
-                <NavItem label="Command Center" icon={<HomeIcon />} isActive={activeView === 'home'} onClick={() => onNavigate('home')} />
+            <div className="flex-grow px-3 space-y-1 overflow-y-auto no-scrollbar pb-10">
+                <NavItem label="Dashboard" icon={<HomeIcon />} isActive={activeView === 'home'} onClick={() => onNavigate('home')} />
 
-                {showClientsTab && (
-                    <div className="mt-4">
-                        <NavItem label="My Clients" icon={<UsersIcon />} isActive={activeView === 'clients'} onClick={() => onNavigate('clients')} />
+                {/* 1. MY ACCOUNT */}
+                <CategoryHeader label="My Account" color="text-slate-500" isOpen={openCategories.account} onClick={() => toggleCategory('account')} />
+                {openCategories.account && (
+                    <div className="space-y-0.5 animate-fade-in pl-2 border-l border-slate-100 ml-4">
+                        <NavItem indent label="Personalize / Setup" icon={<CogIcon />} isActive={activeView === 'account.setup'} onClick={() => onNavigate('account.setup')} />
+                        <NavItem indent label="My Widgets" icon={<Squares2X2Icon />} isActive={activeView === 'account.widgets'} onClick={() => onNavigate('account.widgets')} />
+                        <NavItem indent label="Device Sync" icon={<ActivityIcon />} isActive={activeView === 'account.sync'} onClick={() => onNavigate('account.sync')} />
+                        <NavItem indent label="Order Meds / History" icon={<PillIcon />} isActive={activeView === 'account.pharmacy'} onClick={() => onNavigate('account.pharmacy')} />
                     </div>
                 )}
 
-                {/* PHYSICAL HUB */}
-                <CategoryHeader 
-                    label="Physical" 
-                    color="text-emerald-500" 
-                    icon={<DumbbellIcon />} 
-                    isOpen={openCategories.physical} 
-                    onClick={() => toggleCategory('physical')} 
-                />
+                {/* 2. PHYSICAL */}
+                <CategoryHeader label="Physical" color="text-emerald-500" isOpen={openCategories.physical} onClick={() => toggleCategory('physical')} />
                 {openCategories.physical && (
-                    <div className="space-y-1 animate-fade-in">
-                        <NavItem indent label="Fuel & Nutrition" icon={<UtensilsIcon />} isActive={activeView === 'physical.fuel'} onClick={() => onNavigate('physical.fuel')} />
-                        <NavItem indent label="Body & Movement" icon={<UserCircleIcon />} isActive={activeView === 'physical.body'} onClick={() => onNavigate('physical.body')} />
-                        <NavItem indent label="Health Reports" icon={<BeakerIcon />} isActive={activeView === 'physical.reports'} onClick={() => onNavigate('physical.reports')} />
+                    <div className="space-y-0.5 animate-fade-in pl-2 border-l border-emerald-100 ml-4">
+                        <NavItem indent label="3D Body Scan" icon={<UserCircleIcon />} isActive={activeView === 'physical.scan'} onClick={() => onNavigate('physical.scan')} />
+                        <NavItem indent label="Workout Log" icon={<DumbbellIcon />} isActive={activeView === 'physical.workout_log'} onClick={() => onNavigate('physical.workout_log')} />
+                        <NavItem indent label="Exercise Plans" icon={<ClipboardCheckIcon />} isActive={activeView === 'physical.plans'} onClick={() => onNavigate('physical.plans')} />
+                        <NavItem indent label="Form Checker" icon={<ActivityIcon />} isActive={activeView === 'physical.form_check'} onClick={() => onNavigate('physical.form_check')} />
+                        <NavItem indent label="Running App" icon={<RunningIcon />} isActive={activeView === 'physical.run'} onClick={() => onNavigate('physical.run')} />
                     </div>
                 )}
 
-                {/* MENTAL HUB */}
-                <CategoryHeader 
-                    label="Mental" 
-                    color="text-indigo-500" 
-                    icon={<BrainIcon />} 
-                    isOpen={openCategories.mental} 
-                    onClick={() => toggleCategory('mental')} 
-                />
+                {/* 3. NUTRITION */}
+                <CategoryHeader label="Nutrition" color="text-amber-500" isOpen={openCategories.nutrition} onClick={() => toggleCategory('nutrition')} />
+                {openCategories.nutrition && (
+                    <div className="space-y-0.5 animate-fade-in pl-2 border-l border-amber-100 ml-4">
+                        <NavItem indent label="Meal Plans" icon={<UtensilsIcon />} isActive={activeView === 'nutrition.planner'} onClick={() => onNavigate('nutrition.planner')} />
+                        <NavItem indent label="My Pantry" icon={<ClipboardListIcon />} isActive={activeView === 'nutrition.pantry'} onClick={() => onNavigate('nutrition.pantry')} />
+                        <NavItem indent label="Dining Out / Replicator" icon={<BarcodeIcon />} isActive={activeView === 'nutrition.dining'} onClick={() => onNavigate('nutrition.dining')} />
+                        <NavItem indent label="Saved Recipes" icon={<BookOpenIcon />} isActive={activeView === 'nutrition.library'} onClick={() => onNavigate('nutrition.library')} />
+                        <NavItem indent label="Meal Prep Vids" icon={<VideoIcon />} isActive={activeView === 'nutrition.videos'} onClick={() => onNavigate('nutrition.videos')} />
+                    </div>
+                )}
+
+                {/* 4. MENTAL & LABS */}
+                <CategoryHeader label="Mental & Labs" color="text-indigo-500" isOpen={openCategories.mental} onClick={() => toggleCategory('mental')} />
                 {openCategories.mental && (
-                    <div className="space-y-1 animate-fade-in">
-                        <NavItem indent label="Daily Readiness" icon={<ActivityIcon />} isActive={activeView === 'mental.readiness'} onClick={() => onNavigate('mental.readiness')} />
-                        <NavItem indent label="Assessments" icon={<ClipboardCheckIcon />} isActive={activeView === 'mental.assessments'} onClick={() => onNavigate('mental.assessments')} />
-                        <NavItem indent label="Care Team" icon={<UsersIcon />} isActive={activeView === 'mental.care'} onClick={() => onNavigate('mental.care')} />
+                    <div className="space-y-0.5 animate-fade-in pl-2 border-l border-indigo-100 ml-4">
+                        <NavItem indent label="Sleep Log" icon={<HeartIcon />} isActive={activeView === 'mental.sleep'} onClick={() => onNavigate('mental.sleep')} />
+                        <NavItem indent label="Readiness Score" icon={<ActivityIcon />} isActive={activeView === 'mental.readiness'} onClick={() => onNavigate('mental.readiness')} />
+                        <NavItem indent label="Psychological Quizzes" icon={<BrainIcon />} isActive={activeView === 'mental.assessments'} onClick={() => onNavigate('mental.assessments')} />
+                        <NavItem indent label="Labs" icon={<BeakerIcon />} isActive={activeView === 'mental.labs'} onClick={() => onNavigate('mental.labs')} />
+                        <NavItem indent label="Buy Test Kits" icon={<BeakerIcon />} isActive={activeView === 'mental.store'} onClick={() => onNavigate('mental.store')} />
                     </div>
                 )}
 
-                {/* SOCIAL HUB */}
-                <CategoryHeader 
-                    label="Social" 
-                    color="text-amber-500" 
-                    icon={<UserGroupIcon />} 
-                    isOpen={openCategories.social} 
-                    onClick={() => toggleCategory('social')} 
-                />
-                {openCategories.social && (
-                    <div className="space-y-1 animate-fade-in">
-                        <NavItem indent label="Community" icon={<UserGroupIcon />} isActive={activeView === 'social.community'} onClick={() => onNavigate('social.community')} />
-                        <NavItem indent label="My Journey" icon={<HeartIcon />} isActive={activeView === 'social.journey'} onClick={() => onNavigate('social.journey')} />
-                        <NavItem indent label="Rewards" icon={<TrophyIcon />} isActive={activeView === 'social.rewards'} onClick={() => onNavigate('social.rewards')} />
+                {/* 5. ROLES & PORTALS */}
+                <CategoryHeader label="Roles & Portals" color="text-rose-500" isOpen={openCategories.roles} onClick={() => toggleCategory('roles')} />
+                {openCategories.roles && (
+                    <div className="space-y-0.5 animate-fade-in pl-2 border-l border-rose-100 ml-4">
+                        <NavItem indent label="For Coaches" icon={<UsersIcon />} isActive={activeView === 'roles.coach'} onClick={() => onNavigate('roles.coach')} />
+                        <NavItem indent label="For Influencers" icon={<BadgeCheckIcon />} isActive={activeView === 'roles.influencer'} onClick={() => onNavigate('roles.influencer')} />
+                        <NavItem indent label="For Employers" icon={<BriefcaseIcon />} isActive={activeView === 'roles.employer'} onClick={() => onNavigate('roles.employer')} />
+                        <NavItem indent label="For Unions" icon={<UserGroupIcon />} isActive={activeView === 'roles.union'} onClick={() => onNavigate('roles.union')} />
+                        <NavItem indent label="For Payors" icon={<ClipboardCheckIcon />} isActive={activeView === 'roles.payor'} onClick={() => onNavigate('roles.payor')} />
+                    </div>
+                )}
+
+                {/* 6. REWARDS & HISTORY */}
+                <CategoryHeader label="Rewards & History" color="text-blue-500" isOpen={openCategories.rewards} onClick={() => toggleCategory('rewards')} />
+                {openCategories.rewards && (
+                    <div className="space-y-0.5 animate-fade-in pl-2 border-l border-blue-100 ml-4">
+                        <NavItem indent label="My Rewards" icon={<TrophyIcon />} isActive={activeView === 'rewards'} onClick={() => onNavigate('rewards')} />
+                        <NavItem indent label="History" icon={<ClockIcon />} isActive={activeView === 'history'} onClick={() => onNavigate('history')} />
                     </div>
                 )}
             </div>

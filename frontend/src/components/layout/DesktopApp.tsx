@@ -16,6 +16,8 @@ import { SocialManager } from '../social/SocialManager';
 import { JourneyView } from '../sections/JourneyView';
 import { RewardsDashboard } from '../RewardsDashboard';
 import { Hub } from '../Hub';
+import { PlaceholderPage } from '../PlaceholderPage';
+import { FormAnalysis } from '../body/FormAnalysis';
 
 interface DesktopAppProps {
     healthStats: HealthStats;
@@ -34,6 +36,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
     const [activeView, setActiveView] = useState<ActiveView>('home');
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [rewardsBalance, setRewardsBalance] = useState(0);
+    const [showFormAnalysis, setShowFormAnalysis] = useState(false);
 
     // Calculate Daily Macros
     const today = new Date().toDateString();
@@ -55,7 +58,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             } catch (e) { console.error(e); }
         };
         loadRewards();
-    }, [activeView]); // Refresh when view changes (e.g. after logging something)
+    }, [activeView]);
 
     const handleUpdateJourney = (j: HealthJourney) => {
         if (bodyProps.onUpdatePrefs) {
@@ -82,24 +85,92 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
                     />
                 );
             
-            // Physical Hub
-            case 'physical.fuel': return <FuelSection {...fuelProps} />;
-            case 'physical.body': return <BodyHub {...bodyProps} />;
-            case 'physical.reports': return <HealthReportsView />;
+            // --- 1. MY ACCOUNT ---
+            case 'account.setup': 
+                return <JourneyView dashboardPrefs={dashboardPrefs} onOpenWizard={() => {}} />;
+            case 'account.widgets': 
+                return <PlaceholderPage title="My Widgets" description="Customize your Command Center dashboard." />;
+            case 'account.sync': 
+                return <BodyHub {...bodyProps} />; // Reusing BodyHub as it contains sync logic
+            case 'account.pharmacy': 
+                return <PlaceholderPage title="Pharmacy Store" description="Order prescriptions and view history." />;
 
-            // Mental Hub
-            case 'mental.readiness': return <ReadinessView />;
-            case 'mental.assessments': return <AssessmentHub />;
-            case 'mental.care': return <CoachingHub userRole={userRole} onUpgrade={() => {}} />;
+            // --- 2. PHYSICAL ---
+            case 'physical.scan': 
+                return <BodyHub {...bodyProps} />;
+            case 'physical.workout_log': 
+                return <PlaceholderPage title="Workout Log" description="Track your sets, reps, and PRs." />;
+            case 'physical.plans': 
+                return <PlaceholderPage title="Exercise Plans" description="AI-generated workout routines." />;
+            case 'physical.form_check':
+                // Special handling to open the overlay directly
+                return (
+                    <div className="flex flex-col items-center justify-center h-full">
+                        <button onClick={() => setShowFormAnalysis(true)} className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-bold">
+                            Launch AI Form Analysis
+                        </button>
+                        {showFormAnalysis && <FormAnalysis onClose={() => setShowFormAnalysis(false)} />}
+                    </div>
+                );
+            case 'physical.run': 
+                return <PlaceholderPage title="Running App" description="GPS tracking and pace coaching." />;
 
-            // Social Hub
-            case 'social.community': return <SocialManager />;
-            case 'social.journey': return <JourneyView dashboardPrefs={dashboardPrefs} onOpenWizard={() => {}} />;
-            case 'social.rewards': return <RewardsDashboard />;
+            // --- 3. NUTRITION ---
+            case 'nutrition.planner': 
+                return <FuelSection {...fuelProps} defaultTab="plan" />;
+            case 'nutrition.pantry': 
+                return <FuelSection {...fuelProps} defaultTab="grocery" />; // Or specific pantry component
+            case 'nutrition.dining': 
+                return (
+                    <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+                        <h2 className="text-3xl font-black mb-4">MasterChef Replicator</h2>
+                        <p className="mb-8 text-slate-500">Snap a photo of your restaurant meal to reverse-engineer the recipe.</p>
+                        <button 
+                            onClick={() => onCameraClick && onCameraClick('restaurant')} 
+                            className="bg-emerald-500 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl hover:bg-emerald-600 transition-all"
+                        >
+                            Open Camera
+                        </button>
+                    </div>
+                );
+            case 'nutrition.library': 
+                return <FuelSection {...fuelProps} defaultTab="library" />;
+            case 'nutrition.videos': 
+                return <PlaceholderPage title="Meal Prep Videos" description="Community generated cooking guides." />;
 
-            // Misc
-            case 'hub': return <Hub onEnterMeals={() => setActiveView('physical.fuel')} onLogout={onLogout} />;
-            case 'clients': return <CoachingHub userRole={userRole} onUpgrade={() => {}} />;
+            // --- 4. MENTAL & LABS ---
+            case 'mental.sleep': 
+                return <ReadinessView />; // Contains sleep logging
+            case 'mental.readiness': 
+                return <ReadinessView />;
+            case 'mental.assessments': 
+                return <AssessmentHub />;
+            case 'mental.labs': 
+                return <HealthReportsView />;
+            case 'mental.store': 
+                return <PlaceholderPage title="Lab Store" description="Order biomarker test kits." />;
+
+            // --- 5. ROLES & PORTALS ---
+            case 'roles.coach': 
+                return <CoachingHub userRole={userRole} onUpgrade={() => {}} />;
+            case 'roles.influencer': 
+                return <PlaceholderPage title="Influencer Portal" description="Manage campaigns and followers." />;
+            case 'roles.employer': 
+                return <PlaceholderPage title="Employer Portal" description="Corporate wellness dashboard." />;
+            case 'roles.union': 
+                return <PlaceholderPage title="Union Portal" description="Member benefits management." />;
+            case 'roles.payor': 
+                return <PlaceholderPage title="Payor Portal" description="Insurance integration." />;
+
+            // --- 6. REWARDS & HISTORY ---
+            case 'rewards': 
+                return <RewardsDashboard />;
+            case 'history': 
+                return <FuelSection {...fuelProps} defaultTab="history" />;
+
+            // --- MISC ---
+            case 'hub': 
+                return <Hub onEnterMeals={() => setActiveView('nutrition.planner')} onLogout={onLogout} />;
 
             default: return <div className="p-10 text-center text-slate-400">View not found</div>;
         }
