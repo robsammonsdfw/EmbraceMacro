@@ -7,7 +7,7 @@ import {
     UserGroupIcon, HeartIcon, TrophyIcon, 
     Squares2X2Icon, CogIcon, PillIcon, RunningIcon, 
     VideoIcon, BriefcaseIcon, BadgeCheckIcon, ClockIcon,
-    ClipboardListIcon, BookOpenIcon, BarcodeIcon, GlobeAltIcon
+    ClipboardListIcon, BookOpenIcon, BarcodeIcon, GlobeAltIcon, ChefHatIcon
 } from '../icons';
 import { HealthJourney, ActiveView } from '../../types';
 import { JOURNEYS } from './AppLayout';
@@ -127,7 +127,8 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
                 {openCategories.nutrition && (
                     <div className="space-y-0.5 animate-fade-in pl-2 border-l border-amber-100 ml-4">
                         <NavItem indent label="Meal Plans" icon={<UtensilsIcon />} isActive={activeView === 'nutrition.planner'} onClick={() => onNavigate('nutrition.planner')} />
-                        <NavItem indent label="My Pantry" icon={<ClipboardListIcon />} isActive={activeView === 'nutrition.pantry'} onClick={() => onNavigate('nutrition.pantry')} />
+                        <NavItem indent label="Grocery List" icon={<ClipboardListIcon />} isActive={activeView === 'nutrition.pantry'} onClick={() => onNavigate('nutrition.pantry')} />
+                        <NavItem indent label="Pantry Chef" icon={<ChefHatIcon />} isActive={activeView === 'nutrition.pantry_chef'} onClick={() => onNavigate('nutrition.pantry_chef')} />
                         <NavItem indent label="Dining Out / Replicator" icon={<BarcodeIcon />} isActive={activeView === 'nutrition.dining'} onClick={() => onNavigate('nutrition.dining')} />
                         <NavItem indent label="Saved Recipes" icon={<BookOpenIcon />} isActive={activeView === 'nutrition.library'} onClick={() => onNavigate('nutrition.library')} />
                         <NavItem indent label="Meal Prep Vids" icon={<VideoIcon />} isActive={activeView === 'nutrition.videos'} onClick={() => onNavigate('nutrition.videos')} />

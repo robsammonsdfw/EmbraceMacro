@@ -336,6 +336,11 @@ export interface BodyPhoto {
     createdAt: string;
 }
 
+export interface PantryLogEntry {
+    id: number;
+    created_at: string;
+}
+
 export type ActiveView = 
   // Core
   | 'home'
@@ -354,6 +359,7 @@ export type ActiveView =
   // Nutrition
   | 'nutrition.planner'
   | 'nutrition.pantry'
+  | 'nutrition.pantry_chef'
   | 'nutrition.dining'
   | 'nutrition.library'
   | 'nutrition.videos'

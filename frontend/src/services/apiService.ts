@@ -8,6 +8,7 @@ import type {
   Assessment, RestaurantActivity, BodyPhoto
 } from '../types';
 
+// ... existing setup (API_BASE_URL, etc.) ...
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
 const AUTH_TOKEN_KEY = 'embracehealth-api-token';
 const PROXY_CLIENT_KEY = 'embracehealth-proxy-client-id';
@@ -67,12 +68,18 @@ export const getSavedMealById = (id: number): Promise<SavedMeal> => callApi(`/sa
 export const saveMeal = (mealData: NutritionInfo): Promise<SavedMeal> => callApi('/saved-meals', 'POST', mealData);
 export const deleteMeal = (id: number): Promise<void> => callApi(`/saved-meals/${id}`, 'DELETE');
 
+// --- Pantry Log ---
+export const savePantryLogEntry = (imageBase64: string): Promise<any> => callApi('/pantry-log', 'POST', { imageBase64 });
+export const getPantryLog = (): Promise<any[]> => callApi('/pantry-log', 'GET');
+export const getPantryLogEntryById = (id: number): Promise<any> => callApi(`/pantry-log/${id}`, 'GET');
+
 export const getRewardsSummary = (): Promise<RewardsSummary> => callApi('/rewards', 'GET');
 export const getDashboardPrefs = (): Promise<UserDashboardPrefs> => callApi('/body/dashboard-prefs', 'GET');
 export const saveDashboardPrefs = (prefs: UserDashboardPrefs): Promise<void> => callApi('/body/dashboard-prefs', 'POST', prefs);
 export const getHealthStatsFromDB = (): Promise<HealthStats> => callApi('/health-metrics', 'GET');
 export const syncHealthStatsToDB = (stats: Partial<HealthStats>): Promise<HealthStats> => callApi('/health-metrics', 'POST', stats);
 
+// ... existing exports continued ...
 export const getSocialProfile = (): Promise<UserProfile> => callApi('/social/profile', 'GET');
 export const updateSocialProfile = (updates: Partial<UserProfile>): Promise<UserProfile> => callApi('/social/profile', 'POST', updates);
 export const getFriends = (): Promise<Friendship[]> => callApi('/social/friends', 'GET');
@@ -93,7 +100,6 @@ export const getBodyPhotos = (): Promise<BodyPhoto[]> => callApi('/body/photos',
 export const getBodyPhotoById = (id: number): Promise<{ imageUrl: string }> => callApi(`/body/photos/${id}`, 'GET');
 export const uploadBodyPhoto = (base64: string, category: string): Promise<BodyPhoto> => callApi('/body/photos', 'POST', { base64, category });
 
-// --- Form Check Methods ---
 export const saveFormCheck = (exerciseType: string, imageBase64: string, score: number, feedback: string): Promise<any> => callApi('/form-checks', 'POST', { exerciseType, imageBase64, score, feedback });
 export const getFormChecks = (type?: string): Promise<any[]> => callApi(type ? `/form-checks?type=${type}` : '/form-checks', 'GET');
 export const getFormCheckById = (id: number): Promise<any> => callApi(`/form-checks/${id}`, 'GET');
@@ -110,7 +116,6 @@ export const searchNearbyRestaurants = (lat: number, lng: number): Promise<{ pla
 export const checkInAtLocation = (placeName: string): Promise<void> => callApi('/check-in', 'POST', { placeName });
 
 export const getRestaurantActivity = async (placeUri: string): Promise<RestaurantActivity[]> => {
-    // Explicit usage of placeUri to pass typescript check
     console.debug(`[API] Fetching restaurant activity for location: ${placeUri}`);
     await new Promise(r => setTimeout(r, 800));
     return [

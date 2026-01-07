@@ -17,6 +17,8 @@ import { JourneyView } from '../sections/JourneyView';
 import { RewardsDashboard } from '../RewardsDashboard';
 import { PlaceholderPage } from '../PlaceholderPage';
 import { FormAnalysis } from '../body/FormAnalysis';
+import { PantryChefView } from '../nutrition/PantryChefView';
+import { DeviceSync } from '../account/DeviceSync';
 
 interface MobileAppProps {
     healthStats: HealthStats;
@@ -222,7 +224,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                 // --- Account ---
                 case 'account.setup': return <div className="pt-16 px-2"><JourneyView dashboardPrefs={dashboardPrefs} onOpenWizard={() => {}} /></div>;
                 case 'account.widgets': return <div className="pt-16 px-2"><PlaceholderPage title="My Widgets" description="Customize your mobile dashboard." /></div>;
-                case 'account.sync': return <div className="pt-16 px-2"><BodyHub {...bodyProps} /></div>; // Reusing BodyHub for sync
+                case 'account.sync': return <div className="pt-16 px-2"><DeviceSync onSyncComplete={bodyProps.onSyncHealth} /></div>; // Changed to Dedicated DeviceSync
                 case 'account.pharmacy': return <div className="pt-16 px-2"><PlaceholderPage title="Pharmacy Store" description="Refill prescriptions." /></div>;
 
                 // --- Physical ---
@@ -243,6 +245,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                 // --- Nutrition ---
                 case 'nutrition.planner': return <div className="pt-16 px-2"><FuelSection {...fuelProps} defaultTab="plan" /></div>;
                 case 'nutrition.pantry': return <div className="pt-16 px-2"><FuelSection {...fuelProps} defaultTab="grocery" /></div>;
+                case 'nutrition.pantry_chef': return <div className="pt-16 px-2"><PantryChefView savedMeals={fuelProps.savedMeals} onSaveMeal={fuelProps.onAddMealToLibrary} /></div>;
                 case 'nutrition.dining': 
                     // MasterChef Launch
                     return (
@@ -287,7 +290,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
             case 'account': return renderSubLevelMenu('My Account', [
                 { id: 'account.setup', label: 'Personalize', desc: 'Goals & settings' },
                 { id: 'account.widgets', label: 'My Widgets', desc: 'Dashboard config' },
-                { id: 'account.sync', label: 'Device Sync', desc: 'Wearables' },
+                { id: 'account.sync', label: 'Device Sync', desc: 'Apple Health & Fitbit' },
                 { id: 'account.pharmacy', label: 'Order Meds', desc: 'Pharmacy store' }
             ]);
             case 'physical': return renderSubLevelMenu('Physical', [
@@ -299,7 +302,8 @@ export const MobileApp: React.FC<MobileAppProps> = ({
             ]);
             case 'nutrition': return renderSubLevelMenu('Nutrition', [
                 { id: 'nutrition.planner', label: 'Meal Plans', desc: 'Weekly schedule' },
-                { id: 'nutrition.pantry', label: 'My Pantry', desc: 'Grocery lists' },
+                { id: 'nutrition.pantry', label: 'Grocery List', desc: 'Shopping management' },
+                { id: 'nutrition.pantry_chef', label: 'Pantry Chef', desc: 'Fridge photo to recipe' },
                 { id: 'nutrition.dining', label: 'Dining Out', desc: 'MasterChef Replicator' },
                 { id: 'nutrition.library', label: 'Saved Recipes', desc: 'Cookbook' },
                 { id: 'nutrition.videos', label: 'Meal Prep Vids', desc: 'Community guides' }

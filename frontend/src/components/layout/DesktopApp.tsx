@@ -17,6 +17,8 @@ import { RewardsDashboard } from '../RewardsDashboard';
 import { Hub } from '../Hub';
 import { PlaceholderPage } from '../PlaceholderPage';
 import { FormAnalysis } from '../body/FormAnalysis';
+import { PantryChefView } from '../nutrition/PantryChefView';
+import { DeviceSync } from '../account/DeviceSync';
 
 interface DesktopAppProps {
     healthStats: HealthStats;
@@ -90,7 +92,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             case 'account.widgets': 
                 return <PlaceholderPage title="My Widgets" description="Customize your Command Center dashboard." />;
             case 'account.sync': 
-                return <BodyHub {...bodyProps} />; // Reusing BodyHub as it contains sync logic
+                return <DeviceSync onSyncComplete={bodyProps.onSyncHealth} />; // Dedicated Sync View
             case 'account.pharmacy': 
                 return <PlaceholderPage title="Pharmacy Store" description="Order prescriptions and view history." />;
 
@@ -118,7 +120,9 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             case 'nutrition.planner': 
                 return <FuelSection {...fuelProps} defaultTab="plan" />;
             case 'nutrition.pantry': 
-                return <FuelSection {...fuelProps} defaultTab="grocery" />; // Or specific pantry component
+                return <FuelSection {...fuelProps} defaultTab="grocery" />; 
+            case 'nutrition.pantry_chef':
+                return <PantryChefView savedMeals={fuelProps.savedMeals} onSaveMeal={fuelProps.onAddMealToLibrary} />;
             case 'nutrition.dining': 
                 return (
                     <div className="flex flex-col items-center justify-center h-full p-8 text-center">

@@ -1,73 +1,97 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import * as db from './services/databaseService.mjs';
 
-let schemaEnsured = false;
+const { JWT_SECRET, FRONTEND_URL, API_KEY } = process.env;
 
-// Schemas
+// --- Schemas ---
+
 const judgeSchema = {
-    type: Type.OBJECT,
-    properties: {
-        score: { type: Type.NUMBER },
-        feedback: { type: Type.STRING }
-    },
-    required: ["score", "feedback"]
+  type: Type.OBJECT,
+  properties: {
+    score: { type: Type.NUMBER },
+    feedback: { type: Type.STRING }
+  },
+  required: ["score", "feedback"]
 };
 
 const comprehensiveFoodAnalysisSchema = {
-    type: Type.OBJECT,
-    properties: {
-        mealName: { type: Type.STRING },
-        totalCalories: { type: Type.NUMBER },
-        totalProtein: { type: Type.NUMBER },
-        totalCarbs: { type: Type.NUMBER },
-        totalFat: { type: Type.NUMBER },
-        ingredients: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    name: { type: Type.STRING },
-                    weightGrams: { type: Type.NUMBER },
-                    calories: { type: Type.NUMBER },
-                    protein: { type: Type.NUMBER },
-                    carbs: { type: Type.NUMBER },
-                    fat: { type: Type.NUMBER }
-                }
-            }
-        },
-        recipe: {
+  type: Type.OBJECT,
+  properties: {
+    mealName: { type: Type.STRING },
+    totalCalories: { type: Type.NUMBER },
+    totalProtein: { type: Type.NUMBER },
+    totalCarbs: { type: Type.NUMBER },
+    totalFat: { type: Type.NUMBER },
+    ingredients: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          name: { type: Type.STRING },
+          weightGrams: { type: Type.NUMBER },
+          calories: { type: Type.NUMBER },
+          protein: { type: Type.NUMBER },
+          carbs: { type: Type.NUMBER },
+          fat: { type: Type.NUMBER }
+        }
+      }
+    },
+    recipe: {
+        type: Type.OBJECT,
+        properties: {
+            recipeName: { type: Type.STRING },
+            description: { type: Type.STRING },
+            ingredients: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, quantity: { type: Type.STRING } } } },
+            instructions: { type: Type.ARRAY, items: { type: Type.STRING } },
+            nutrition: { type: Type.OBJECT, properties: { totalCalories: { type: Type.NUMBER }, totalProtein: { type: Type.NUMBER }, totalCarbs: { type: Type.NUMBER }, totalFat: { type: Type.NUMBER } } }
+        }
+    },
+    kitchenTools: {
+        type: Type.ARRAY,
+        items: {
             type: Type.OBJECT,
             properties: {
-                recipeName: { type: Type.STRING },
-                description: { type: Type.STRING },
-                ingredients: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, quantity: { type: Type.STRING } } } },
-                instructions: { type: Type.ARRAY, items: { type: Type.STRING } },
-                nutrition: { type: Type.OBJECT, properties: { totalCalories: { type: Type.NUMBER }, totalProtein: { type: Type.NUMBER }, totalCarbs: { type: Type.NUMBER }, totalFat: { type: Type.NUMBER } } }
-            }
-        },
-        kitchenTools: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    name: { type: Type.STRING },
-                    use: { type: Type.STRING },
-                    essential: { type: Type.BOOLEAN }
-                }
+                name: { type: Type.STRING },
+                use: { type: Type.STRING },
+                essential: { type: Type.BOOLEAN }
             }
         }
     }
+  }
 };
 
 const recipesSchema = {
     type: Type.ARRAY,
-    items: comprehensiveFoodAnalysisSchema.properties.recipe // Reuse recipe schema
+    items: {
+        type: Type.OBJECT,
+        properties: {
+            recipeName: { type: Type.STRING },
+            description: { type: Type.STRING },
+            ingredients: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, quantity: { type: Type.STRING } } } },
+            instructions: { type: Type.ARRAY, items: { type: Type.STRING } },
+            nutrition: { type: Type.OBJECT, properties: { totalCalories: { type: Type.NUMBER }, totalProtein: { type: Type.NUMBER }, totalCarbs: { type: Type.NUMBER }, totalFat: { type: Type.NUMBER } } }
+        }
+    }
 };
 
 const suggestionsSchema = {
     type: Type.ARRAY,
-    items: comprehensiveFoodAnalysisSchema
+    items: {
+        type: Type.OBJECT,
+        properties: {
+            mealName: { type: Type.STRING },
+            totalCalories: { type: Type.NUMBER },
+            totalProtein: { type: Type.NUMBER },
+            totalCarbs: { type: Type.NUMBER },
+            totalFat: { type: Type.NUMBER },
+            ingredients: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, weightGrams: { type: Type.NUMBER }, calories: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, fat: { type: Type.NUMBER } } } },
+            justification: { type: Type.STRING },
+            suggestedDay: { type: Type.STRING },
+            suggestedSlot: { type: Type.STRING }
+        }
+    }
 };
 
 const grocerySchema = {
@@ -80,15 +104,15 @@ const grocerySchema = {
 const formAnalysisSchema = {
     type: Type.OBJECT,
     properties: {
+        isCorrect: { type: Type.BOOLEAN },
         score: { type: Type.NUMBER },
-        feedback: { type: Type.STRING },
-        isCorrect: { type: Type.BOOLEAN }
+        feedback: { type: Type.STRING }
     }
 };
 
+let schemaEnsured = false;
+
 export const handler = async (event) => {
-    
-    const { JWT_SECRET, FRONTEND_URL, API_KEY } = process.env;
     const allowedOrigins = [FRONTEND_URL, "https://food.embracehealth.ai", "https://main.embracehealth.ai", "http://localhost:5173"].filter(Boolean);
     const origin = event.headers?.origin || event.headers?.Origin;
     const headers = {
@@ -112,15 +136,13 @@ export const handler = async (event) => {
     const pathParts = path.split('/').filter(Boolean);
     const resource = pathParts[0];
 
-    // Auth Public
     if (path === '/auth/customer-login') {
         const { email } = JSON.parse(event.body);
         const user = await db.findOrCreateUserByEmail(email);
-        const token = jwt.sign({ userId: user.id, email: user.email, role: user.role, firstName: user.firstName }, JWT_SECRET, { expiresIn: '7d' });
+        const token = jwt.sign({ userId: user.id, email: user.email, role: user.role, firstName: user.first_name }, JWT_SECRET, { expiresIn: '7d' });
         return { statusCode: 200, headers, body: JSON.stringify({ token }) };
     }
 
-    // JWT Check
     const authHeader = event.headers?.authorization || event.headers?.Authorization;
     const tokenStr = authHeader?.split(' ')[1];
     if (!tokenStr) return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized' }) };
@@ -225,7 +247,20 @@ export const handler = async (event) => {
             return { statusCode: 200, headers, body: res.text };
         }
 
-        // --- NEW: Form Checks ---
+        if (resource === 'pantry-log') {
+            if (method === 'GET' && pathParts[1]) {
+                return { statusCode: 200, headers, body: JSON.stringify(await db.getPantryLogEntryById(currentUserId, pathParts[1])) };
+            }
+            if (method === 'GET') {
+                return { statusCode: 200, headers, body: JSON.stringify(await db.getPantryLogEntries(currentUserId)) };
+            }
+            if (method === 'POST') {
+                const { imageBase64 } = JSON.parse(event.body);
+                const result = await db.createPantryLogEntry(currentUserId, imageBase64);
+                return { statusCode: 201, headers, body: JSON.stringify(result) };
+            }
+        }
+
         if (resource === 'form-checks') {
             if (method === 'GET' && pathParts[1]) {
                 return { statusCode: 200, headers, body: JSON.stringify(await db.getFormCheckById(currentUserId, pathParts[1])) };
