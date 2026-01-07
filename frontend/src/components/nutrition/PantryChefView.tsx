@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { CameraIcon, ChefHatIcon, ClockIcon, BookOpenIcon, UploadIcon } from '../icons';
+import { CameraIcon, ChefHatIcon, ClockIcon, BookOpenIcon } from '../icons';
 import * as apiService from '../../services/apiService';
 import type { SavedMeal, Recipe, PantryLogEntry } from '../../types';
 import { RecipeCard } from '../RecipeCard';
