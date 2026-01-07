@@ -1,53 +1,22 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import jwt from 'jsonwebtoken';
 import * as db from './services/databaseService.mjs';
 
-// --- Shared AI Schemas ---
+let schemaEnsured = false;
 
-// Standard components for re-use
-const ingredientItemSchema = {
+// Schemas
+const judgeSchema = {
     type: Type.OBJECT,
     properties: {
-        name: { type: Type.STRING },
-        weightGrams: { type: Type.NUMBER },
-        calories: { type: Type.NUMBER },
-        protein: { type: Type.NUMBER },
-        carbs: { type: Type.NUMBER },
-        fat: { type: Type.NUMBER }
+        score: { type: Type.NUMBER },
+        feedback: { type: Type.STRING }
     },
-    required: ["name", "weightGrams", "calories", "protein", "carbs", "fat"]
+    required: ["score", "feedback"]
 };
 
-const recipeObjectSchema = {
-    type: Type.OBJECT,
-    properties: {
-        recipeName: { type: Type.STRING },
-        description: { type: Type.STRING },
-        ingredients: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, quantity: { type: Type.STRING } }, required: ["name", "quantity"] } },
-        instructions: { type: Type.ARRAY, items: { type: Type.STRING } },
-        nutrition: { type: Type.OBJECT, properties: { totalCalories: { type: Type.NUMBER }, totalProtein: { type: Type.NUMBER }, totalCarbs: { type: Type.NUMBER }, totalFat: { type: Type.NUMBER } }, required: ["totalCalories", "totalProtein", "totalCarbs", "totalFat"] },
-        prepTimeMinutes: { type: Type.NUMBER },
-        cookTimeMinutes: { type: Type.NUMBER }
-    },
-    required: ["recipeName", "description", "ingredients", "instructions", "nutrition"]
-};
-
-const toolObjectSchema = {
-    type: Type.OBJECT,
-    properties: {
-        name: { type: Type.STRING, description: "Name of the tool, e.g., 'Blender'." },
-        use: { type: Type.STRING, description: "How it is used in this recipe." },
-        essential: { type: Type.BOOLEAN, description: "Is it strictly required?" }
-    },
-    required: ["name", "use", "essential"]
-};
-
-// 3-Tab Intelligence Schema (Unified)
 const comprehensiveFoodAnalysisSchema = {
     type: Type.OBJECT,
     properties: {
-        // Tab 1: Nutrition (The Root)
         mealName: { type: Type.STRING },
         totalCalories: { type: Type.NUMBER },
         totalProtein: { type: Type.NUMBER },
@@ -55,76 +24,70 @@ const comprehensiveFoodAnalysisSchema = {
         totalFat: { type: Type.NUMBER },
         ingredients: {
             type: Type.ARRAY,
-            items: ingredientItemSchema
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    name: { type: Type.STRING },
+                    weightGrams: { type: Type.NUMBER },
+                    calories: { type: Type.NUMBER },
+                    protein: { type: Type.NUMBER },
+                    carbs: { type: Type.NUMBER },
+                    fat: { type: Type.NUMBER }
+                }
+            }
         },
-        // Tab 2: Recipe
-        recipe: recipeObjectSchema,
-        // Tab 3: Tools
+        recipe: {
+            type: Type.OBJECT,
+            properties: {
+                recipeName: { type: Type.STRING },
+                description: { type: Type.STRING },
+                ingredients: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, quantity: { type: Type.STRING } } } },
+                instructions: { type: Type.ARRAY, items: { type: Type.STRING } },
+                nutrition: { type: Type.OBJECT, properties: { totalCalories: { type: Type.NUMBER }, totalProtein: { type: Type.NUMBER }, totalCarbs: { type: Type.NUMBER }, totalFat: { type: Type.NUMBER } } }
+            }
+        },
         kitchenTools: {
             type: Type.ARRAY,
-            items: toolObjectSchema
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    name: { type: Type.STRING },
+                    use: { type: Type.STRING },
+                    essential: { type: Type.BOOLEAN }
+                }
+            }
         }
-    },
-    required: ["mealName", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "ingredients", "recipe", "kitchenTools"]
-};
-
-const suggestionsSchema = {
-    type: Type.ARRAY,
-    items: {
-        type: Type.OBJECT,
-        properties: {
-            mealName: { type: Type.STRING },
-            totalCalories: { type: Type.NUMBER },
-            totalProtein: { type: Type.NUMBER },
-            totalCarbs: { type: Type.NUMBER },
-            totalFat: { type: Type.NUMBER },
-            ingredients: { type: Type.ARRAY, items: ingredientItemSchema },
-            justification: { type: Type.STRING, description: "Why this meal is suitable for these medical conditions." }
-        },
-        required: ["mealName", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "ingredients", "justification"]
     }
 };
 
 const recipesSchema = {
     type: Type.ARRAY,
-    items: recipeObjectSchema
+    items: comprehensiveFoodAnalysisSchema.properties.recipe // Reuse recipe schema
+};
+
+const suggestionsSchema = {
+    type: Type.ARRAY,
+    items: comprehensiveFoodAnalysisSchema
 };
 
 const grocerySchema = {
     type: Type.OBJECT,
     properties: {
-        items: {
-            type: Type.ARRAY,
-            description: "List of identified grocery items",
-            items: { type: Type.STRING }
-        }
-    },
-    required: ["items"]
+        items: { type: Type.ARRAY, items: { type: Type.STRING } }
+    }
 };
 
 const formAnalysisSchema = {
     type: Type.OBJECT,
     properties: {
-        isCorrect: { type: Type.BOOLEAN },
-        score: { type: Type.NUMBER, description: "Score from 0-100" },
-        feedback: { type: Type.STRING, description: "Detailed feedback on posture and form." }
-    },
-    required: ["isCorrect", "score", "feedback"]
+        score: { type: Type.NUMBER },
+        feedback: { type: Type.STRING },
+        isCorrect: { type: Type.BOOLEAN }
+    }
 };
-
-// NEW: Judge Schema
-const judgeSchema = {
-    type: Type.OBJECT,
-    properties: {
-        score: { type: Type.NUMBER, description: "Score from 0-100 based on similarity to target recipe." },
-        feedback: { type: Type.STRING, description: "A witty, 1-sentence critique comparing the attempt to the original." }
-    },
-    required: ["score", "feedback"]
-};
-
-let schemaEnsured = false;
 
 export const handler = async (event) => {
+    
     const { JWT_SECRET, FRONTEND_URL, API_KEY } = process.env;
     const allowedOrigins = [FRONTEND_URL, "https://food.embracehealth.ai", "https://main.embracehealth.ai", "http://localhost:5173"].filter(Boolean);
     const origin = event.headers?.origin || event.headers?.Origin;
@@ -149,7 +112,7 @@ export const handler = async (event) => {
     const pathParts = path.split('/').filter(Boolean);
     const resource = pathParts[0];
 
-    // Public Auth
+    // Auth Public
     if (path === '/auth/customer-login') {
         const { email } = JSON.parse(event.body);
         const user = await db.findOrCreateUserByEmail(email);
@@ -178,26 +141,19 @@ export const handler = async (event) => {
     try {
         const aiRoutes = ['analyze-image', 'analyze-image-recipes', 'analyze-restaurant-meal', 'search-food', 'get-meal-suggestions', 'analyze-image-grocery', 'analyze-form', 'search-restaurants'];
         
-        // Handle Judge separately or include in list
         if (resource === 'social' && pathParts[1] === 'judge-attempt') {
-            const ai = new GoogleGenAI({ apiKey: API_KEY });
-            const body = JSON.parse(event.body || '{}');
-            const { imageBase64, recipeContext, recipeId } = body;
-            
-            const prompt = `Act as 'MasterChef Judge AI'. Compare this user's photo of their cooked meal to the original recipe description: "${recipeContext}". Rate the visual execution from 0-100 and provide brief, constructive feedback. Return in JSON.`;
-            
-            const req = {
+             const ai = new GoogleGenAI({ apiKey: API_KEY });
+             const body = JSON.parse(event.body || '{}');
+             const { imageBase64, recipeContext, recipeId } = body;
+             const prompt = `Act as 'MasterChef Judge AI'. Compare this user's photo of their cooked meal to the original recipe description: "${recipeContext}". Rate the visual execution from 0-100 and provide brief, constructive feedback. Return in JSON.`;
+             const req = {
                 model: 'gemini-3-flash-preview',
                 contents: [{ parts: [{inlineData: {data: imageBase64, mimeType: 'image/jpeg'}}, {text: prompt}] }],
                 config: { responseMimeType: 'application/json', responseSchema: judgeSchema }
             };
-            
             const res = await ai.models.generateContent(req);
             const judgeResult = JSON.parse(res.text);
-            
-            // Save to DB
             const attempt = await db.saveRecipeAttempt(currentUserId, recipeId, imageBase64, judgeResult.score, judgeResult.feedback);
-            
             return { statusCode: 200, headers, body: JSON.stringify({ ...attempt, ...judgeResult }) };
         }
 
@@ -211,13 +167,10 @@ export const handler = async (event) => {
             let tools = [];
             let toolConfig = {};
 
-            // --- 3-Tab Intelligence Logic (Shared for MacrosChef & MasterChef) ---
             if (resource === 'analyze-image' || resource === 'analyze-restaurant-meal') { 
                 prompt = "Act as 'Kitchen AI'. Analyze this food image completely. 1. Identify the dish and ingredients with macros (Tab 1). 2. Reverse-engineer the full recipe instructions (Tab 2). 3. List all kitchen equipment/tools needed to prepare it (Tab 3). Return everything in the specified unified JSON format."; 
                 schema = comprehensiveFoodAnalysisSchema; 
             }
-            // --- End 3-Tab Logic ---
-
             else if (resource === 'analyze-image-recipes') { 
                 prompt = "Act as 'PantryChef AI'. Identify all raw ingredients/staples visible in this photo. Suggest 3 diverse, high-protein recipes that can be made using these items plus standard oil/salt/pepper. Return in JSON."; 
                 schema = recipesSchema; 
@@ -272,7 +225,22 @@ export const handler = async (event) => {
             return { statusCode: 200, headers, body: res.text };
         }
 
-        // --- Social Hub ---
+        // --- NEW: Form Checks ---
+        if (resource === 'form-checks') {
+            if (method === 'GET' && pathParts[1]) {
+                return { statusCode: 200, headers, body: JSON.stringify(await db.getFormCheckById(currentUserId, pathParts[1])) };
+            }
+            if (method === 'GET') {
+                const type = event.queryStringParameters?.type;
+                return { statusCode: 200, headers, body: JSON.stringify(await db.getFormChecks(currentUserId, type)) };
+            }
+            if (method === 'POST') {
+                const { exerciseType, imageBase64, score, feedback } = JSON.parse(event.body);
+                const result = await db.saveFormCheck(currentUserId, exerciseType, imageBase64, score, feedback);
+                return { statusCode: 201, headers, body: JSON.stringify(result) };
+            }
+        }
+
         if (resource === 'social') {
             if (pathParts[1] === 'profile') {
                 if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await db.getSocialProfile(currentUserId)) };
@@ -288,7 +256,6 @@ export const handler = async (event) => {
             }
         }
 
-        // --- Coaching Hub ---
         if (resource === 'coaching') {
             if (pathParts[1] === 'relations') {
                 const role = event.queryStringParameters?.role || 'client';
@@ -307,14 +274,12 @@ export const handler = async (event) => {
             }
         }
 
-        // --- Meal Log ---
         if (resource === 'meal-log') {
             if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await db.getMealLogEntries(currentUserId)) };
             if (method === 'POST') return { statusCode: 201, headers, body: JSON.stringify(await db.createMealLogEntry(currentUserId, JSON.parse(event.body).mealData, JSON.parse(event.body).imageBase64, proxyCoachId)) };
             if (method === 'GET' && pathParts[1]) return { statusCode: 200, headers, body: JSON.stringify(await db.getMealLogEntryById(currentUserId, pathParts[1])) };
         }
 
-        // --- Saved Meals ---
         if (resource === 'saved-meals') {
             if (method === 'GET' && !pathParts[1]) return { statusCode: 200, headers, body: JSON.stringify(await db.getSavedMeals(currentUserId)) };
             if (method === 'GET' && pathParts[1]) return { statusCode: 200, headers, body: JSON.stringify(await db.getSavedMealById(currentUserId, pathParts[1])) };
@@ -325,7 +290,6 @@ export const handler = async (event) => {
             }
         }
 
-        // --- Meal Plans ---
         if (resource === 'meal-plans') {
             if (pathParts[1] === 'items' && method === 'DELETE') {
                 await db.removeMealFromPlanItem(currentUserId, pathParts[2]);
@@ -340,7 +304,6 @@ export const handler = async (event) => {
             if (method === 'POST') return { statusCode: 201, headers, body: JSON.stringify(await db.createMealPlan(currentUserId, JSON.parse(event.body).name, proxyCoachId)) };
         }
 
-        // --- Grocery Lists ---
         if (resource === 'grocery-lists') {
             if (pathParts[2] === 'import' && method === 'POST') {
                 const res = await db.importIngredientsFromPlans(currentUserId, pathParts[1], JSON.parse(event.body).planIds);
@@ -367,12 +330,10 @@ export const handler = async (event) => {
             if (method === 'DELETE') { await db.deleteGroceryList(currentUserId, pathParts[1]); return { statusCode: 204, headers }; }
         }
 
-        // --- Rewards ---
         if (resource === 'rewards') {
             return { statusCode: 200, headers, body: JSON.stringify(await db.getRewardsSummary(currentUserId)) };
         }
 
-        // --- Body Hub & Assessments ---
         if (resource === 'health-metrics') {
             if (method === 'GET') return { statusCode: 200, headers, body: JSON.stringify(await db.getHealthMetrics(currentUserId)) };
             if (method === 'POST') return { statusCode: 200, headers, body: JSON.stringify(await db.syncHealthMetrics(currentUserId, JSON.parse(event.body))) };
@@ -386,7 +347,6 @@ export const handler = async (event) => {
                 await db.logRecoveryStats(currentUserId, JSON.parse(event.body));
                 return { statusCode: 200, headers, body: "{}" };
             }
-            // Body Photos
             if (pathParts[1] === 'photos') {
                 if (pathParts[2]) {
                     return { statusCode: 200, headers, body: JSON.stringify(await db.getBodyPhotoById(currentUserId, pathParts[2])) };

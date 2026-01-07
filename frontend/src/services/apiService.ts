@@ -1,4 +1,5 @@
 
+// ... existing imports ...
 import type { 
   NutritionInfo, SavedMeal, MealPlan, MealPlanItem, MealPlanItemMetadata, 
   GroceryList, GroceryItem, RewardsSummary, MealLogEntry, Recipe, 
@@ -49,18 +50,13 @@ const callApi = async (endpoint: string, method: string, body?: any) => {
     } catch (error) { console.error("Fetch error:", error); throw error; }
 };
 
-// Updated: analyzeImageWithGemini now returns the full structure (Nutrition + Recipe + Tools)
+// ... existing exports ...
 export const analyzeImageWithGemini = (base64Image: string, mimeType: string): Promise<NutritionInfo> => callApi('/analyze-image', 'POST', { base64Image, mimeType });
-
-// Updated: MasterChef also uses the new structure
 export const analyzeRestaurantMeal = (base64Image: string, mimeType: string): Promise<NutritionInfo> => callApi('/analyze-restaurant-meal', 'POST', { base64Image, mimeType });
-
 export const getRecipesFromImage = (base64Image: string, mimeType: string): Promise<Recipe[]> => callApi('/analyze-image-recipes', 'POST', { base64Image, mimeType });
 export const searchFood = (query: string): Promise<NutritionInfo> => callApi('/search-food', 'POST', { query });
 export const identifyGroceryItems = (base64Image: string, mimeType: string): Promise<{ items: string[] }> => callApi('/analyze-image-grocery', 'POST', { base64Image, mimeType });
 export const getMealSuggestions = (conditions: string[], cuisine: string, duration: 'day' | 'week'): Promise<NutritionInfo[]> => callApi('/get-meal-suggestions', 'POST', { conditions, cuisine, duration });
-
-// NEW: Judge Logic
 export const judgeRecipeAttempt = (imageBase64: string, recipeContext: string, recipeId: number): Promise<JudgeResult> => callApi('/social/judge-attempt', 'POST', { imageBase64, recipeContext, recipeId });
 
 export const getMealLog = (): Promise<MealLogEntry[]> => callApi('/meal-log', 'GET');
@@ -96,6 +92,11 @@ export const logRecoveryStats = (data: RecoveryData): Promise<void> => callApi('
 export const getBodyPhotos = (): Promise<BodyPhoto[]> => callApi('/body/photos', 'GET');
 export const getBodyPhotoById = (id: number): Promise<{ imageUrl: string }> => callApi(`/body/photos/${id}`, 'GET');
 export const uploadBodyPhoto = (base64: string, category: string): Promise<BodyPhoto> => callApi('/body/photos', 'POST', { base64, category });
+
+// --- Form Check Methods ---
+export const saveFormCheck = (exerciseType: string, imageBase64: string, score: number, feedback: string): Promise<any> => callApi('/form-checks', 'POST', { exerciseType, imageBase64, score, feedback });
+export const getFormChecks = (type?: string): Promise<any[]> => callApi(type ? `/form-checks?type=${type}` : '/form-checks', 'GET');
+export const getFormCheckById = (id: number): Promise<any> => callApi(`/form-checks/${id}`, 'GET');
 
 export const getAssessments = (): Promise<Assessment[]> => callApi('/assessments', 'GET');
 export const getAssessmentState = (): Promise<AssessmentState> => callApi('/assessments/state', 'GET');
