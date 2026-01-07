@@ -35,18 +35,32 @@ interface MobileAppProps {
 
 type StackLevel = 'home' | 'account' | 'physical' | 'nutrition' | 'mental' | 'roles' | 'rewards';
 
-// --- Updated Vitals Strip with Direct Sync Button ---
-const VitalsStrip: React.FC<{ stats: HealthStats; prefs: UserDashboardPrefs; onSyncClick: () => void }> = ({ stats, onSyncClick }) => {
-    const items = [
-        { id: 'steps', label: 'Steps', value: stats.steps.toLocaleString(), unit: '', color: 'text-blue-500' },
-        { id: 'activeCalories', label: 'Active', value: Math.round(stats.activeCalories), unit: 'kcal', color: 'text-emerald-500' },
-        { id: 'heartRate', label: 'HR', value: stats.heartRate || '--', unit: 'bpm', color: 'text-rose-500' },
-    ];
+// --- Updated Vitals Strip with Feature Restored ---
+const VitalsStrip: React.FC<{ stats: HealthStats; prefs: UserDashboardPrefs; onSyncClick: () => void }> = ({ stats, prefs, onSyncClick }) => {
+    
+    // Feature Restored: Map available data to widget IDs
+    const allWidgets: Record<string, { label: string, value: string | number, unit: string, color: string }> = {
+        steps: { label: 'Steps', value: stats.steps.toLocaleString(), unit: '', color: 'text-blue-500' },
+        activeCalories: { label: 'Active', value: Math.round(stats.activeCalories), unit: 'kcal', color: 'text-emerald-500' },
+        restingCalories: { label: 'Resting', value: Math.round(stats.restingCalories), unit: 'kcal', color: 'text-indigo-500' },
+        distanceMiles: { label: 'Dist', value: stats.distanceMiles.toFixed(1), unit: 'mi', color: 'text-amber-500' },
+        flightsClimbed: { label: 'Flights', value: stats.flightsClimbed, unit: 'flr', color: 'text-rose-500' },
+        heartRate: { label: 'HR', value: stats.heartRate || '--', unit: 'bpm', color: 'text-red-500' },
+    };
+
+    // Use prefs to filter, or default to Steps/Active/HR if prefs are empty
+    const widgetsToShow = (prefs.selectedWidgets && prefs.selectedWidgets.length > 0)
+        ? prefs.selectedWidgets.map(id => ({ id, ...allWidgets[id] })).filter(w => w.label)
+        : [
+            { id: 'steps', ...allWidgets.steps },
+            { id: 'activeCalories', ...allWidgets.activeCalories },
+            { id: 'heartRate', ...allWidgets.heartRate }
+          ];
 
     return (
         <div className="flex gap-4 overflow-x-auto no-scrollbar py-4 px-4 bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-0 z-30 items-center">
-            {items.map(item => (
-                <div key={item.id} className="flex flex-col items-center min-w-[70px] flex-shrink-0">
+            {widgetsToShow.map(item => (
+                <div key={item.id} className="flex flex-col items-center min-w-[70px] flex-shrink-0 animate-fade-in">
                     <span className={`text-xl font-black ${item.color}`}>{item.value}</span>
                     <span className="text-[10px] font-bold text-slate-400 uppercase">{item.label}</span>
                 </div>
