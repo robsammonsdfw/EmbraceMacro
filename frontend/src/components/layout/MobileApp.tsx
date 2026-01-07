@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { 
-    ActivityIcon, CameraIcon, DumbbellIcon, BrainIcon, UserGroupIcon, 
+    ActivityIcon, CameraIcon, DumbbellIcon, BrainIcon, 
     UserCircleIcon, XIcon, TrophyIcon, UtensilsIcon, BriefcaseIcon
 } from '../icons';
 import type { HealthStats, UserDashboardPrefs } from '../../types';
@@ -13,7 +13,6 @@ import { HealthReportsView } from '../sections/HealthReportsView';
 import { ReadinessView } from '../sections/ReadinessView';
 import { AssessmentHub } from '../tests/AssessmentHub';
 import { CoachingHub } from '../coaching/CoachingHub';
-import { SocialManager } from '../social/SocialManager';
 import { JourneyView } from '../sections/JourneyView';
 import { RewardsDashboard } from '../RewardsDashboard';
 import { PlaceholderPage } from '../PlaceholderPage';
