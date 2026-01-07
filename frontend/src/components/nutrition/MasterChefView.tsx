@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { CameraIcon, UtensilsIcon, ClockIcon, BookOpenIcon, MapPinIcon } from '../icons';
+import { CameraIcon, UtensilsIcon, ClockIcon, BookOpenIcon } from '../icons';
 import * as apiService from '../../services/apiService';
-import type { SavedMeal, NutritionInfo, Recipe } from '../../types';
+import type { SavedMeal, NutritionInfo } from '../../types';
 import { NutritionCard } from '../NutritionCard';
 import { RecipeCard } from '../RecipeCard';
 import { ImageViewModal } from '../ImageViewModal';

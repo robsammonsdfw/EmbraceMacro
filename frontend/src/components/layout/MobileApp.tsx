@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { 
     ActivityIcon, CameraIcon, DumbbellIcon, BrainIcon, 
-    UserCircleIcon, XIcon, TrophyIcon, UtensilsIcon, BriefcaseIcon, FireIcon
+    UserCircleIcon, XIcon, TrophyIcon, UtensilsIcon, BriefcaseIcon
 } from '../icons';
 import type { HealthStats, UserDashboardPrefs } from '../../types';
 
@@ -36,7 +36,7 @@ interface MobileAppProps {
 type StackLevel = 'home' | 'account' | 'physical' | 'nutrition' | 'mental' | 'roles' | 'rewards';
 
 // --- Updated Vitals Strip with Direct Sync Button ---
-const VitalsStrip: React.FC<{ stats: HealthStats; prefs: UserDashboardPrefs; onSyncClick: () => void }> = ({ stats, prefs, onSyncClick }) => {
+const VitalsStrip: React.FC<{ stats: HealthStats; prefs: UserDashboardPrefs; onSyncClick: () => void }> = ({ stats, onSyncClick }) => {
     const items = [
         { id: 'steps', label: 'Steps', value: stats.steps.toLocaleString(), unit: '', color: 'text-blue-500' },
         { id: 'activeCalories', label: 'Active', value: Math.round(stats.activeCalories), unit: 'kcal', color: 'text-emerald-500' },
