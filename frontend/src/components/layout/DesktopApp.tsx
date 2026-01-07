@@ -18,6 +18,7 @@ import { Hub } from '../Hub';
 import { PlaceholderPage } from '../PlaceholderPage';
 import { FormAnalysis } from '../body/FormAnalysis';
 import { PantryChefView } from '../nutrition/PantryChefView';
+import { MasterChefView } from '../nutrition/MasterChefView';
 import { DeviceSync } from '../account/DeviceSync';
 
 interface DesktopAppProps {
@@ -124,18 +125,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             case 'nutrition.pantry_chef':
                 return <PantryChefView savedMeals={fuelProps.savedMeals} onSaveMeal={fuelProps.onAddMealToLibrary} />;
             case 'nutrition.dining': 
-                return (
-                    <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-                        <h2 className="text-3xl font-black mb-4">MasterChef Replicator</h2>
-                        <p className="mb-8 text-slate-500">Snap a photo of your restaurant meal to reverse-engineer the recipe.</p>
-                        <button 
-                            onClick={() => onCameraClick && onCameraClick('restaurant')} 
-                            className="bg-emerald-500 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl hover:bg-emerald-600 transition-all"
-                        >
-                            Open Camera
-                        </button>
-                    </div>
-                );
+                return <MasterChefView savedMeals={fuelProps.savedMeals} onSaveMeal={fuelProps.onAddMealToLibrary} />;
             case 'nutrition.library': 
                 return <FuelSection {...fuelProps} defaultTab="library" />;
             case 'nutrition.videos': 

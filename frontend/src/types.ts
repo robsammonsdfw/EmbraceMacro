@@ -72,7 +72,7 @@ export interface NutritionInfo {
   nutriScore?: string;
   ecoScore?: string;
   allergens?: string[];
-  source?: 'user' | 'coach' | 'community' | 'medical-ai'; 
+  source?: 'user' | 'coach' | 'community' | 'medical-ai' | 'pantry' | 'restaurant'; 
   visibility?: VisibilityMode;
   
   // 3-Tab Intelligence Extensions

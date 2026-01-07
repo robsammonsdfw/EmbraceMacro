@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { 
     ActivityIcon, CameraIcon, DumbbellIcon, BrainIcon, 
-    UserCircleIcon, XIcon, TrophyIcon, UtensilsIcon, BriefcaseIcon
+    UserCircleIcon, XIcon, TrophyIcon, UtensilsIcon, BriefcaseIcon, FireIcon
 } from '../icons';
 import type { HealthStats, UserDashboardPrefs } from '../../types';
 
@@ -18,6 +18,7 @@ import { RewardsDashboard } from '../RewardsDashboard';
 import { PlaceholderPage } from '../PlaceholderPage';
 import { FormAnalysis } from '../body/FormAnalysis';
 import { PantryChefView } from '../nutrition/PantryChefView';
+import { MasterChefView } from '../nutrition/MasterChefView';
 import { DeviceSync } from '../account/DeviceSync';
 
 interface MobileAppProps {
@@ -34,27 +35,30 @@ interface MobileAppProps {
 
 type StackLevel = 'home' | 'account' | 'physical' | 'nutrition' | 'mental' | 'roles' | 'rewards';
 
-const VitalsStrip: React.FC<{ stats: HealthStats; prefs: UserDashboardPrefs }> = ({ stats, prefs }) => {
-    // Helper to render enabled stats
+// --- Updated Vitals Strip with Direct Sync Button ---
+const VitalsStrip: React.FC<{ stats: HealthStats; prefs: UserDashboardPrefs; onSyncClick: () => void }> = ({ stats, prefs, onSyncClick }) => {
     const items = [
         { id: 'steps', label: 'Steps', value: stats.steps.toLocaleString(), unit: '', color: 'text-blue-500' },
         { id: 'activeCalories', label: 'Active', value: Math.round(stats.activeCalories), unit: 'kcal', color: 'text-emerald-500' },
         { id: 'heartRate', label: 'HR', value: stats.heartRate || '--', unit: 'bpm', color: 'text-rose-500' },
-        { id: 'sleepMinutes', label: 'Sleep', value: stats.sleepMinutes ? Math.round(stats.sleepMinutes/60) : '--', unit: 'hrs', color: 'text-indigo-500' },
     ];
 
-    const displayItems = items.filter(i => prefs.selectedWidgets.includes(i.id) || i.id === 'steps' || i.id === 'heartRate');
-
     return (
-        <div className="flex gap-4 overflow-x-auto no-scrollbar py-4 px-4 bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-0 z-30">
-            {displayItems.map(item => (
+        <div className="flex gap-4 overflow-x-auto no-scrollbar py-4 px-4 bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-0 z-30 items-center">
+            {items.map(item => (
                 <div key={item.id} className="flex flex-col items-center min-w-[70px] flex-shrink-0">
                     <span className={`text-xl font-black ${item.color}`}>{item.value}</span>
                     <span className="text-[10px] font-bold text-slate-400 uppercase">{item.label}</span>
                 </div>
             ))}
-            <button className="flex flex-col items-center min-w-[50px] justify-center text-slate-300">
-                <ActivityIcon className="w-5 h-5" />
+            <button 
+                onClick={onSyncClick}
+                className="flex flex-col items-center min-w-[60px] justify-center text-slate-400 hover:text-emerald-500 transition-colors ml-auto border-l border-slate-100 pl-4"
+            >
+                <div className="bg-slate-100 p-2 rounded-full mb-1">
+                    <ActivityIcon className="w-4 h-4" />
+                </div>
+                <span className="text-[9px] font-bold uppercase tracking-wide">Sync</span>
             </button>
         </div>
     );
@@ -125,6 +129,23 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                     <UserCircleIcon className="w-6 h-6 text-slate-400" />
                 </button>
             </header>
+
+            {/* Quick Sync Button for Visibility */}
+            <button 
+                onClick={() => navigateTo('account', 'account.sync')}
+                className="w-full bg-slate-900 text-white p-4 rounded-2xl flex items-center justify-between shadow-lg"
+            >
+                <div className="flex items-center gap-3">
+                    <div className="bg-emerald-500 p-2 rounded-lg">
+                        <ActivityIcon className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="text-left">
+                        <p className="font-bold text-sm">Sync Wearables</p>
+                        <p className="text-xs text-slate-400">Connect Apple Health & Fitbit</p>
+                    </div>
+                </div>
+                <div className="bg-white/10 px-3 py-1 rounded-full text-[10px] font-black uppercase">Connect</div>
+            </button>
 
             {/* 6 Hubs Grid */}
             <div className="grid grid-cols-2 gap-3">
@@ -224,7 +245,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                 // --- Account ---
                 case 'account.setup': return <div className="pt-16 px-2"><JourneyView dashboardPrefs={dashboardPrefs} onOpenWizard={() => {}} /></div>;
                 case 'account.widgets': return <div className="pt-16 px-2"><PlaceholderPage title="My Widgets" description="Customize your mobile dashboard." /></div>;
-                case 'account.sync': return <div className="pt-16 px-2"><DeviceSync onSyncComplete={bodyProps.onSyncHealth} /></div>; // Changed to Dedicated DeviceSync
+                case 'account.sync': return <div className="pt-16 px-2"><DeviceSync onSyncComplete={bodyProps.onSyncHealth} /></div>;
                 case 'account.pharmacy': return <div className="pt-16 px-2"><PlaceholderPage title="Pharmacy Store" description="Refill prescriptions." /></div>;
 
                 // --- Physical ---
@@ -232,7 +253,6 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                 case 'physical.workout_log': return <div className="pt-16 px-2"><PlaceholderPage title="Workout Log" description="Track sets and reps." /></div>;
                 case 'physical.plans': return <div className="pt-16 px-2"><PlaceholderPage title="Exercise Plans" description="AI generated workouts." /></div>;
                 case 'physical.form_check': 
-                    // Direct render of FormAnalysis
                     return (
                         <div className="pt-16 px-4 h-[80vh] flex flex-col items-center justify-center text-center">
                             <h2 className="text-2xl font-black mb-4">AI Form Coach</h2>
@@ -246,18 +266,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                 case 'nutrition.planner': return <div className="pt-16 px-2"><FuelSection {...fuelProps} defaultTab="plan" /></div>;
                 case 'nutrition.pantry': return <div className="pt-16 px-2"><FuelSection {...fuelProps} defaultTab="grocery" /></div>;
                 case 'nutrition.pantry_chef': return <div className="pt-16 px-2"><PantryChefView savedMeals={fuelProps.savedMeals} onSaveMeal={fuelProps.onAddMealToLibrary} /></div>;
-                case 'nutrition.dining': 
-                    // MasterChef Launch
-                    return (
-                        <div className="pt-24 px-6 text-center h-[80vh] flex flex-col items-center justify-center">
-                            <div className="w-24 h-24 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mb-6">
-                                <UtensilsIcon className="w-12 h-12" />
-                            </div>
-                            <h2 className="text-3xl font-black text-slate-900 mb-2">MasterChef Replicator</h2>
-                            <p className="text-slate-500 mb-8">Snap a photo of any restaurant meal to get the recipe.</p>
-                            <button onClick={() => onCameraClick()} className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-bold uppercase tracking-widest shadow-xl">Open Camera</button>
-                        </div>
-                    );
+                case 'nutrition.dining': return <div className="pt-16 px-2"><MasterChefView savedMeals={fuelProps.savedMeals} onSaveMeal={fuelProps.onAddMealToLibrary} /></div>;
                 case 'nutrition.library': return <div className="pt-16 px-2"><FuelSection {...fuelProps} defaultTab="library" /></div>;
                 case 'nutrition.videos': return <div className="pt-16 px-2"><PlaceholderPage title="Meal Prep Videos" /></div>;
 
@@ -334,7 +343,11 @@ export const MobileApp: React.FC<MobileAppProps> = ({
 
     return (
         <div className="bg-slate-50 min-h-screen font-sans">
-            <VitalsStrip stats={healthStats} prefs={dashboardPrefs} />
+            <VitalsStrip 
+                stats={healthStats} 
+                prefs={dashboardPrefs} 
+                onSyncClick={() => navigateTo('account', 'account.sync')} 
+            />
             
             {/* Main Content Render */}
             <main>

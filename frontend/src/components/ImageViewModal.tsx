@@ -5,7 +5,7 @@ import * as apiService from '../services/apiService';
 
 interface ImageViewModalProps {
     itemId: number;
-    type: 'history' | 'saved' | 'body' | 'pantry';
+    type: 'history' | 'saved' | 'body' | 'pantry' | 'restaurant';
     onClose: () => void;
 }
 
@@ -28,6 +28,8 @@ export const ImageViewModal: React.FC<ImageViewModalProps> = ({ itemId, type, on
                     data = await apiService.getBodyPhotoById(itemId);
                 } else if (type === 'pantry') {
                     data = await apiService.getPantryLogEntryById(itemId);
+                } else if (type === 'restaurant') {
+                    data = await apiService.getRestaurantLogEntryById(itemId);
                 }
                 
                 if (isMounted) {

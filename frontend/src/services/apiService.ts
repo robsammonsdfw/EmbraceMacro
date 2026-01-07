@@ -73,6 +73,11 @@ export const savePantryLogEntry = (imageBase64: string): Promise<any> => callApi
 export const getPantryLog = (): Promise<any[]> => callApi('/pantry-log', 'GET');
 export const getPantryLogEntryById = (id: number): Promise<any> => callApi(`/pantry-log/${id}`, 'GET');
 
+// --- MasterChef (Restaurant) Log ---
+export const saveRestaurantLogEntry = (imageBase64: string): Promise<any> => callApi('/restaurant-log', 'POST', { imageBase64 });
+export const getRestaurantLog = (): Promise<any[]> => callApi('/restaurant-log', 'GET');
+export const getRestaurantLogEntryById = (id: number): Promise<any> => callApi(`/restaurant-log/${id}`, 'GET');
+
 export const getRewardsSummary = (): Promise<RewardsSummary> => callApi('/rewards', 'GET');
 export const getDashboardPrefs = (): Promise<UserDashboardPrefs> => callApi('/body/dashboard-prefs', 'GET');
 export const saveDashboardPrefs = (prefs: UserDashboardPrefs): Promise<void> => callApi('/body/dashboard-prefs', 'POST', prefs);
