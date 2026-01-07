@@ -12,7 +12,6 @@ import { HealthReportsView } from '../sections/HealthReportsView';
 import { ReadinessView } from '../sections/ReadinessView';
 import { AssessmentHub } from '../tests/AssessmentHub';
 import { CoachingHub } from '../coaching/CoachingHub';
-import { SocialManager } from '../social/SocialManager';
 import { JourneyView } from '../sections/JourneyView';
 import { RewardsDashboard } from '../RewardsDashboard';
 import { Hub } from '../Hub';
