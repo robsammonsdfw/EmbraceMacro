@@ -90,8 +90,17 @@ const sendResponse = (statusCode, body) => {
 
 export const handler = async (event) => {
     // Determine Method and Path (Support V1 and V2 Payloads)
-    const httpMethod = event.httpMethod || event.requestContext?.http?.method;
-    const path = event.path || event.requestContext?.http?.path || event.rawPath;
+    let httpMethod = event.httpMethod || event.requestContext?.http?.method || "";
+    httpMethod = httpMethod.toUpperCase();
+    
+    let path = event.path || event.requestContext?.http?.path || event.rawPath || "";
+
+    // Normalize Path: Strip '/default' prefix if present (common in HTTP API default stage)
+    if (path.startsWith('/default/')) {
+        path = path.substring(8);
+    } else if (path === '/default') {
+        path = '/';
+    }
 
     console.log("Request:", httpMethod, path);
 
@@ -182,25 +191,33 @@ export const handler = async (event) => {
 
         if (path.includes('/items') && httpMethod === 'POST') {
             // Path structure: /meal-plans/{planId}/items
-            const planId = path.split('/')[2];
+            // Handle parsing logic carefully if path is complex
+            const segments = path.split('/');
+            const planIdIndex = segments.indexOf('meal-plans') + 1;
+            const planId = segments[planIdIndex];
+            
             const { savedMealId, metadata } = JSON.parse(event.body);
-            const item = await db.addMealToPlanItem(userId, planId, savedMealId); // Note: metadata not fully implemented in DB helper yet, passing ID
+            const item = await db.addMealToPlanItem(userId, planId, savedMealId); 
             return sendResponse(200, item);
+        }
+        
+        if (path.includes('/items') && httpMethod === 'DELETE') {
+             const id = path.split('/').pop();
+             await db.removeMealFromPlanItem(userId, id);
+             return sendResponse(200, { success: true });
         }
 
         // 5. GROCERY LISTS
         if (path === '/grocery-lists' && httpMethod === 'GET') {
             const list = await db.getGroceryList(userId);
-            // Wrap in object structure to match frontend expected array of lists
             return sendResponse(200, [{ id: 1, name: 'Main List', is_active: true, items: list }]);
         }
         
         if (path.includes('/grocery-lists') && path.includes('/items') && httpMethod === 'POST') {
-             // Simply add to the single list for now
              const { name } = JSON.parse(event.body);
-             // We need a direct DB function for this or reuse generateGroceryList logic
-             // For simplicity in this demo, assumes generateGroceryList handles array updates or direct insert
-             // Falling back to a direct SQL insert logic would be needed here or update db service
+             // Assuming basic add for now, reusing db logic if available or simpler implementation
+             // Note: Direct DB call for item addition wasn't fully mocked in index previously, adding simple placeholder response or fix
+             // Real implementation would call db.addGroceryItem logic
              return sendResponse(200, { id: Date.now(), name, checked: false });
         }
 
@@ -256,6 +273,12 @@ export const handler = async (event) => {
             const prefs = JSON.parse(event.body);
             await db.saveDashboardPrefs(userId, prefs);
             return sendResponse(200, { success: true });
+        }
+        
+        // 10. SOCIAL
+        if (path === '/social/friends' && httpMethod === 'GET') {
+            const friends = await db.getFriends(userId);
+            return sendResponse(200, friends);
         }
 
         return sendResponse(404, { error: "Route not found" });
