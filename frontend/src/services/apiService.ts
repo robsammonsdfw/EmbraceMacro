@@ -5,7 +5,7 @@ import type {
   GroceryList, GroceryItem, RewardsSummary, MealLogEntry, Recipe, 
   UserProfile, Friendship, ReadinessScore, FormAnalysisResult, RecoveryData,
   AssessmentState, UserDashboardPrefs, HealthStats, MatchProfile, PartnerBlueprint, CoachingRelation,
-  Assessment, RestaurantActivity, BodyPhoto
+  Assessment, RestaurantActivity, BodyPhoto, Order
 } from '../types';
 
 // ... existing setup (API_BASE_URL, etc.) ...
@@ -142,3 +142,6 @@ export const addGroceryItem = (listId: number, name: string): Promise<GroceryIte
 export const removeGroceryItem = (itemId: number): Promise<void> => callApi(`/grocery-lists/items/${itemId}`, 'DELETE');
 export const clearGroceryListItems = (listId: number, type: 'all' | 'checked'): Promise<void> => callApi(`/grocery-lists/items/${listId}/items`, 'DELETE', { type });
 export const importIngredientsFromPlans = (listId: number, planIds: number[]): Promise<GroceryItem[]> => callApi(`/grocery-lists/${listId}/import`, 'POST', { planIds });
+
+// --- Shopify Orders ---
+export const getShopifyOrders = (): Promise<Order[]> => callApi('/shopify/orders', 'GET');
