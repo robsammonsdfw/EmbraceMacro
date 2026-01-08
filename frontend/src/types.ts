@@ -114,6 +114,7 @@ export interface HealthStats {
   bloodPressureDiastolic?: number;
   bodyFatPercentage?: number;
   bmi?: number;
+  glucoseMgDl?: number;
 }
 
 export interface UserDashboardPrefs {
