@@ -12,16 +12,15 @@ export const getPlatform = (): PlatformType => {
 
 export const connectHealthProvider = async (platform: PlatformType): Promise<boolean> => {
     if (platform === 'fitbit') {
-        alert("Redirecting to Fitbit for authorization... (Simulation)");
-        // Simulate a popup or redirect
-        window.open('https://www.fitbit.com/login', '_blank', 'width=500,height=600');
+        // Simulate a popup or redirect logic
+        console.log("Initializing Fitbit OAuth flow...");
     }
     
     return new Promise((resolve) => {
         setTimeout(() => {
             console.log(`Connected to ${platform}`);
             resolve(true);
-        }, 2000);
+        }, 1500);
     });
 };
 
@@ -29,47 +28,36 @@ export const syncHealthData = async (source: 'apple' | 'fitbit' = 'apple'): Prom
     return new Promise((resolve) => {
         setTimeout(() => {
             if (source === 'apple') {
-                // CALIBRATED to user's screenshots
+                // APPLE HEALTH SOURCE OF TRUTH
+                // Focus: Clinical Vitals, Body Composition, Mindfulness, Hydration
                 resolve({
-                    steps: 1642,
-                    activeCalories: 65.3,
-                    restingCalories: 1414,
-                    distanceMiles: 0.69,
-                    flightsClimbed: 4,
-                    heartRate: 73, // From Heart screenshot
-                    restingHeartRate: 64,
-                    hrv: 62,
-                    sleepMinutes: 440,
-                    sleepScore: 84,
-                    vo2Max: 42.5,
-                    mindfulnessMinutes: 10,
-                    waterFlOz: 24,
-                    // Specific Values from User Screenshots:
-                    bloodPressureSystolic: 149, // From Heart screenshot
-                    bloodPressureDiastolic: 92, // From Heart screenshot
-                    bodyFatPercentage: 25.8, // From Body Measurements screenshot
-                    bmi: 31.3, // From Body Measurements screenshot
-                    weightLbs: 231.7 // From Body Measurements screenshot
+                    bloodPressureSystolic: 120,
+                    bloodPressureDiastolic: 80,
+                    bodyFatPercentage: 22.5,
+                    bmi: 24.1,
+                    weightLbs: 175.5,
+                    mindfulnessMinutes: 15,
+                    waterFlOz: 32, // Often logged via apps writing to HealthKit
+                    vo2Max: 45 // Apple Watch Cardio Fitness
                 });
             } else {
-                // Fitbit specific metrics
+                // FITBIT SOURCE OF TRUTH
+                // Focus: Daily Activity, Sleep, Continuous Heart Rate
                 resolve({
-                    steps: 5800, 
-                    activeCalories: 145.5,
-                    restingCalories: 1550,
-                    distanceMiles: 2.1,
-                    flightsClimbed: 2, 
-                    heartRate: 85, 
-                    restingHeartRate: 61,
-                    hrv: 68,
-                    sleepMinutes: 420,
-                    sleepScore: 78,
-                    activeZoneMinutes: 22,
-                    spo2: 97.5,
-                    waterFlOz: 48,
-                    weightLbs: 240
+                    steps: 8432,
+                    activeCalories: 450,
+                    restingCalories: 1600,
+                    distanceMiles: 3.2,
+                    flightsClimbed: 12,
+                    heartRate: 72,
+                    restingHeartRate: 60,
+                    hrv: 55,
+                    sleepMinutes: 450,
+                    sleepScore: 85,
+                    activeZoneMinutes: 45,
+                    spo2: 98
                 });
             }
-        }, 1500);
+        }, 2000);
     });
 };
