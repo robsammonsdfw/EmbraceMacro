@@ -119,7 +119,8 @@ export const searchNearbyRestaurants = (lat: number, lng: number): Promise<{ pla
 export const checkInAtLocation = (placeName: string): Promise<void> => callApi('/check-in', 'POST', { placeName });
 
 export const getRestaurantActivity = async (placeUri: string): Promise<RestaurantActivity[]> => {
-    // Mock activity for now
+    // Mock activity for now, use param to avoid lint error
+    console.debug(`Fetching activity for ${placeUri}`);
     await new Promise(r => setTimeout(r, 800));
     return [
         { friendName: 'Sarah', friendInitial: 'S', mealName: 'Grilled Salmon Salad', rating: 5, date: '2 days ago', imageUrl: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=200' },

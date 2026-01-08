@@ -105,6 +105,9 @@ export const handler = async (event) => {
         // --- PROTECTED ROUTES ---
         
         const user = verifyToken(event.headers);
+        if (!user || typeof user === 'string') {
+            throw new Error("Invalid token payload");
+        }
         const userId = user.userId;
 
         // 1. SHOPIFY ORDERS (NEW)
@@ -202,23 +205,23 @@ export const handler = async (event) => {
             const { base64Image, mimeType, prompt, schema } = JSON.parse(event.body);
             
             const ai = new GoogleGenAI({ apiKey: API_KEY });
-            const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" }); // Or 1.5-pro
-
-            const result = await model.generateContent({
-                contents: [{
+            
+            const response = await ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: {
                     role: 'user',
                     parts: [
                         { text: prompt || "Analyze this food." },
                         { inlineData: { mimeType: mimeType, data: base64Image } }
                     ]
-                }],
-                generationConfig: {
+                },
+                config: {
                     responseMimeType: "application/json",
                     responseSchema: schema || nutritionSchema
                 }
             });
 
-            return sendResponse(200, JSON.parse(result.response.text()));
+            return sendResponse(200, JSON.parse(response.text));
         }
 
         return sendResponse(404, { error: "Route not found" });
