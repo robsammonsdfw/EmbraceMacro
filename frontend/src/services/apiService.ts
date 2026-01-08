@@ -1,6 +1,6 @@
 
 import type { 
-  NutritionInfo, SavedMeal, MealPlan, MealPlanItem, MealPlanItemMetadata, 
+  NutritionInfo, SavedMeal, MealPlan,  
   GroceryList, GroceryItem, RewardsSummary, MealLogEntry, Recipe, 
   UserProfile, Friendship, ReadinessScore, FormAnalysisResult, RecoveryData,
   AssessmentState, UserDashboardPrefs, HealthStats, MatchProfile, PartnerBlueprint, CoachingRelation,

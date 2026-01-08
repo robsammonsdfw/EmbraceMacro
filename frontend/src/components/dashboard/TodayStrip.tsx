@@ -1,14 +1,14 @@
 
 import React from 'react';
-import { FireIcon, ActivityIcon, ClockIcon, GlobeAltIcon, TrophyIcon, HeartIcon, MoonIcon, DropIcon, WavesIcon, BrainIcon, UserCircleIcon } from '../icons';
+import { FireIcon, ActivityIcon, HeartIcon, MoonIcon, DropIcon } from '../icons';
 import type { HealthStats, UserDashboardPrefs } from '../../types';
 
 interface TodayStripProps {
     stats: HealthStats;
     isConnected: boolean;
     onConnect: (source?: 'apple' | 'fitbit') => void;
-    isSyncing?: boolean;
     dashboardPrefs: UserDashboardPrefs;
+    isSyncing?: boolean;
 }
 
 const StatCard: React.FC<{
@@ -40,7 +40,7 @@ const StatCard: React.FC<{
     </div>
 );
 
-export const TodayStrip: React.FC<TodayStripProps> = ({ stats, onConnect, isSyncing, dashboardPrefs }) => {
+export const TodayStrip: React.FC<TodayStripProps> = ({ stats, onConnect, dashboardPrefs, isSyncing }) => {
     
     const availableWidgets = [
         { id: 'steps', label: 'Steps', value: stats.steps.toLocaleString(), subValue: 'Daily Count', icon: <ActivityIcon />, colors: 'bg-blue-50 text-blue-600' },
@@ -67,7 +67,13 @@ export const TodayStrip: React.FC<TodayStripProps> = ({ stats, onConnect, isSync
                 ))}
             </div>
             <div className="flex gap-2">
-                <button onClick={() => onConnect('apple')} className="flex-1 py-3 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg">Vision Sync Screenshot</button>
+                <button 
+                    onClick={() => onConnect('apple')} 
+                    disabled={isSyncing}
+                    className="flex-1 py-3 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                    {isSyncing ? 'Processing Vision...' : 'Vision Sync Screenshot'}
+                </button>
             </div>
         </div>
     );

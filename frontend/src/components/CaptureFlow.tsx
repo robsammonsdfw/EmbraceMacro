@@ -1,14 +1,11 @@
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { XIcon, CameraIcon, BarcodeIcon, ChefHatIcon, UtensilsIcon, UserCircleIcon, MapPinIcon, SearchIcon, UploadIcon, PhotoIcon, ActivityIcon } from './icons';
+import React, { useState, useRef, useEffect } from 'react';
+import { XIcon, CameraIcon, ChefHatIcon, UtensilsIcon, UploadIcon, ActivityIcon } from './icons';
 import { BarcodeScanner } from './BarcodeScanner';
-import type { MealLogEntry } from '../types';
-import * as apiService from '../services/apiService';
 
 interface CaptureFlowProps {
   onClose: () => void;
   onCapture: (image: string | null, mode: 'meal' | 'barcode' | 'pantry' | 'restaurant' | 'search' | 'vitals', barcode?: string, searchQuery?: string) => void;
-  onBodyScanClick: () => void;
   initialMode?: 'meal' | 'barcode' | 'pantry' | 'restaurant' | 'search' | 'vitals';
 }
 
@@ -17,7 +14,6 @@ type CaptureMode = 'barcode' | 'meal' | 'pantry' | 'restaurant' | 'search' | 'vi
 export const CaptureFlow: React.FC<CaptureFlowProps> = ({ 
   onClose, 
   onCapture, 
-  onBodyScanClick,
   initialMode = 'meal'
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);

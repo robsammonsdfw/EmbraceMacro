@@ -1,7 +1,7 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import * as apiService from './services/apiService';
-import type { NutritionInfo, MealLogEntry, SavedMeal, MealPlan, HealthStats, UserDashboardPrefs, Recipe, RestaurantPlace } from './types';
+import type { MealLogEntry, SavedMeal, MealPlan, HealthStats, UserDashboardPrefs } from './types';
 import { useAuth } from './hooks/useAuth';
 import { Login } from './components/Login';
 import { Loader } from './components/Loader';
@@ -55,8 +55,8 @@ const App: React.FC = () => {
             setHealthStats(updated);
             alert("Vision Sync Complete: Clinical vitals extracted from screenshot.");
         } else if (mode === 'meal') {
-            const data = await apiService.analyzeImageWithGemini(base64, 'image/jpeg');
-            // Show result modal logic... (omitted for brevity in this delta)
+            await apiService.analyzeImageWithGemini(base64, 'image/jpeg');
+            // Show result modal logic... (omitted for brevity)
         }
     } catch (err) {
         alert("Vision analysis failed.");
@@ -68,14 +68,18 @@ const App: React.FC = () => {
   if (isAuthLoading) return <div className="min-h-screen flex items-center justify-center"><Loader message="Authenticating..." /></div>;
   if (!isAuthenticated) return <Login />;
 
+  // Bundle props
+  const fuelProps = { mealLog, savedMeals, mealPlans };
+  const bodyProps = { onSyncHealth: loadAllData, onUpdatePrefs: setDashboardPrefs };
+
   return (
     <>
         {isProcessing && <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center"><Loader message="Vision Sync in Progress..." /></div>}
-        {isCaptureOpen && <CaptureFlow onClose={() => setIsCaptureOpen(false)} onCapture={handleCaptureResult} onRepeatMeal={() => {}} onBodyScanClick={() => {}} initialMode={captureMode} />}
+        {isCaptureOpen && <CaptureFlow onClose={() => setIsCaptureOpen(false)} onCapture={handleCaptureResult} initialMode={captureMode} />}
         {isDesktop ? (
-            <DesktopApp healthStats={healthStats} dashboardPrefs={dashboardPrefs} fuelProps={{ mealLog, savedMeals }} bodyProps={{ onSyncHealth: loadAllData, onUpdatePrefs: setDashboardPrefs }} userRole={user?.role || 'user'} onLogout={logout} user={user} onCameraClick={m => { setCaptureMode(m as any); setIsCaptureOpen(true); }} />
+            <DesktopApp healthStats={healthStats} dashboardPrefs={dashboardPrefs} fuelProps={fuelProps} bodyProps={bodyProps} userRole={user?.role || 'user'} onLogout={logout} user={user} onCameraClick={m => { setCaptureMode(m as any); setIsCaptureOpen(true); }} />
         ) : (
-            <MobileApp healthStats={healthStats} dashboardPrefs={dashboardPrefs} onCameraClick={() => { setCaptureMode('meal'); setIsCaptureOpen(true); }} fuelProps={{ mealLog, savedMeals }} bodyProps={{ onSyncHealth: loadAllData, onUpdatePrefs: setDashboardPrefs }} userRole={user?.role || 'user'} onLogout={logout} user={user} />
+            <MobileApp healthStats={healthStats} dashboardPrefs={dashboardPrefs} onCameraClick={() => { setCaptureMode('meal'); setIsCaptureOpen(true); }} fuelProps={fuelProps} bodyProps={bodyProps} userRole={user?.role || 'user'} onLogout={logout} user={user} />
         )}
     </>
   );
