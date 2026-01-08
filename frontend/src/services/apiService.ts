@@ -1,5 +1,4 @@
 
-// ... existing imports ...
 import type { 
   NutritionInfo, SavedMeal, MealPlan, MealPlanItem, MealPlanItemMetadata, 
   GroceryList, GroceryItem, RewardsSummary, MealLogEntry, Recipe, 
@@ -8,7 +7,6 @@ import type {
   Assessment, RestaurantActivity, BodyPhoto, Order
 } from '../types';
 
-// ... existing setup (API_BASE_URL, etc.) ...
 const API_BASE_URL: string = "https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default"; 
 const AUTH_TOKEN_KEY = 'embracehealth-api-token';
 const PROXY_CLIENT_KEY = 'embracehealth-proxy-client-id';
@@ -121,7 +119,7 @@ export const searchNearbyRestaurants = (lat: number, lng: number): Promise<{ pla
 export const checkInAtLocation = (placeName: string): Promise<void> => callApi('/check-in', 'POST', { placeName });
 
 export const getRestaurantActivity = async (placeUri: string): Promise<RestaurantActivity[]> => {
-    console.debug(`[API] Fetching restaurant activity for location: ${placeUri}`);
+    // Mock activity for now
     await new Promise(r => setTimeout(r, 800));
     return [
         { friendName: 'Sarah', friendInitial: 'S', mealName: 'Grilled Salmon Salad', rating: 5, date: '2 days ago', imageUrl: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=200' },
