@@ -30,6 +30,10 @@ const callApi = async (endpoint: string, method: string, body?: any) => {
         if (response.status === 401) { 
             localStorage.removeItem(AUTH_TOKEN_KEY); 
             window.location.reload(); 
+            throw new Error("Unauthorized");
+        }
+        if (!response.ok) {
+            throw new Error(`API Request Failed: ${response.status} ${response.statusText}`);
         }
         return response.json();
     } catch (error) { throw error; }

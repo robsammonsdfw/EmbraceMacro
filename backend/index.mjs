@@ -127,7 +127,7 @@ export const handler = async (event) => {
             return sendResponse(200, JSON.parse(response.text));
         }
 
-        // --- DATA ENDPOINTS ---
+        // --- CORE DATA ENDPOINTS ---
         if (path.endsWith('/health-metrics') && httpMethod === 'GET') {
             return sendResponse(200, await db.getHealthMetrics(userId));
         }
@@ -140,7 +140,26 @@ export const handler = async (event) => {
             return sendResponse(200, await db.createMealLogEntry(userId, mealData, imageBase64));
         }
         if (path.endsWith('/saved-meals') && httpMethod === 'GET') return sendResponse(200, await db.getSavedMeals(userId));
+        if (path.endsWith('/saved-meals') && httpMethod === 'POST') return sendResponse(200, await db.saveMeal(userId, JSON.parse(event.body)));
+        
         if (path.endsWith('/rewards') && httpMethod === 'GET') return sendResponse(200, await db.getRewardsSummary(userId));
+
+        // --- MISSING ENDPOINTS ADDED ---
+        if (path.endsWith('/meal-plans') && httpMethod === 'GET') return sendResponse(200, await db.getMealPlans(userId));
+        if (path.endsWith('/meal-plans') && httpMethod === 'POST') {
+            const { name } = JSON.parse(event.body);
+            return sendResponse(200, await db.createMealPlan(userId, name));
+        }
+        if (path.endsWith('/body/dashboard-prefs') && httpMethod === 'GET') return sendResponse(200, await db.getDashboardPrefs(userId));
+        if (path.endsWith('/body/dashboard-prefs') && httpMethod === 'POST') {
+            await db.saveDashboardPrefs(userId, JSON.parse(event.body));
+            return sendResponse(200, { success: true });
+        }
+        if (path.endsWith('/social/friends') && httpMethod === 'GET') return sendResponse(200, await db.getFriends(userId));
+        
+        if (path.endsWith('/grocery/lists') && httpMethod === 'GET') return sendResponse(200, []); // Placeholder until DB implemented
+        if (path.endsWith('/social/profile') && httpMethod === 'GET') return sendResponse(200, await db.getSocialProfile(userId));
+        if (path.endsWith('/social/requests') && httpMethod === 'GET') return sendResponse(200, await db.getFriendRequests(userId));
 
         return sendResponse(404, { error: `Route not found: ${path}` });
     } catch (err) {

@@ -44,7 +44,13 @@ const App: React.FC = () => {
             apiService.getDashboardPrefs().catch(() => ({ selectedWidgets: ['steps', 'activeCalories', 'bloodPressure'] })),
             apiService.getHealthStatsFromDB().catch(() => null)
         ]);
-        setMealLog(log); setSavedMeals(saved); setMealPlans(plans); setDashboardPrefs(prefs);
+        
+        // Safety check: Ensure responses are arrays before setting state to prevent .filter() crashes
+        setMealLog(Array.isArray(log) ? log : []);
+        setSavedMeals(Array.isArray(saved) ? saved : []);
+        setMealPlans(Array.isArray(plans) ? plans : []);
+        
+        if (prefs && typeof prefs === 'object') setDashboardPrefs(prefs);
         if (health) setHealthStats(health);
     } catch (e) { console.error("Load failed", e); }
   }, [isAuthenticated]);
@@ -62,7 +68,6 @@ const App: React.FC = () => {
             setHealthStats(updated);
             alert("Vision Sync Complete: Clinical vitals extracted from screenshot.");
         } else if (mode === 'meal' || mode === 'restaurant') {
-            // FIX: Capture the data and set state instead of ignoring it
             const data = mode === 'restaurant' 
                 ? await apiService.analyzeRestaurantMeal(base64, 'image/jpeg')
                 : await apiService.analyzeImageWithGemini(base64, 'image/jpeg');
@@ -84,7 +89,7 @@ const App: React.FC = () => {
           if (data.source === 'pantry' || data.source === 'restaurant') {
              await apiService.saveMeal(data);
              const saved = await apiService.getSavedMeals();
-             setSavedMeals(saved);
+             setSavedMeals(Array.isArray(saved) ? saved : []);
              alert("Saved to Library!");
           } else {
              // Default meal scan goes to log + library
@@ -102,8 +107,6 @@ const App: React.FC = () => {
   };
 
   const handleAddToPlan = (data: any) => {
-      // In a real app this would open the AddToPlanModal
-      // For now we just save it to library as a shortcut
       handleSaveAnalyzedMeal(data);
   };
 
@@ -117,7 +120,6 @@ const App: React.FC = () => {
     <>
         {isProcessing && <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center"><Loader message="Vision Sync in Progress..." /></div>}
         
-        {/* FIX: Render the result modal when analysis is complete */}
         {(analysisResult || analysisRecipes) && (
             <AnalysisResultModal 
                 nutritionData={analysisResult}
