@@ -20,6 +20,7 @@ import { FormAnalysis } from '../body/FormAnalysis';
 import { PantryChefView } from '../nutrition/PantryChefView';
 import { MasterChefView } from '../nutrition/MasterChefView';
 import { DeviceSync } from '../account/DeviceSync';
+import { WidgetConfig } from '../account/WidgetConfig';
 
 interface DesktopAppProps {
     healthStats: HealthStats;
@@ -91,7 +92,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             case 'account.setup': 
                 return <JourneyView dashboardPrefs={dashboardPrefs} onOpenWizard={() => {}} />;
             case 'account.widgets': 
-                return <PlaceholderPage title="My Widgets" description="Customize your mobile dashboard." />;
+                return <WidgetConfig currentPrefs={dashboardPrefs} onSave={bodyProps.onUpdatePrefs} />;
             case 'account.sync': 
                 return <DeviceSync onSyncComplete={bodyProps.onSyncHealth} lastSynced={healthStats.lastSynced} />; // Dedicated Sync View
             case 'account.pharmacy': 
