@@ -109,14 +109,10 @@ const HubButton: React.FC<{
 );
 
 export const MobileApp: React.FC<MobileAppProps> = ({ 
-    healthStats, dashboardPrefs, onCameraClick, fuelProps, bodyProps, userRole, onLogout, user, onProxySelect
+    healthStats, dashboardPrefs, onCameraClick, fuelProps, bodyProps, userRole, onLogout, onProxySelect
 }) => {
     const [stack, setStack] = useState<StackLevel>('home');
     const [subView, setSubView] = useState<string | null>(null);
-
-    // Suppress unused warning for user prop
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _currentUser = user;
 
     const navigateTo = (level: StackLevel, view?: string) => {
         setStack(level);

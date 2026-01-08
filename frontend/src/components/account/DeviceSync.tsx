@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { ActivityIcon, FireIcon, CheckIcon, HeartIcon } from '../icons';
+import { ActivityIcon, CheckIcon, HeartIcon } from '../icons';
 import * as apiService from '../../services/apiService';
 import { connectHealthProvider, syncHealthData } from '../../services/healthService';
 import type { HealthStats } from '../../types';
