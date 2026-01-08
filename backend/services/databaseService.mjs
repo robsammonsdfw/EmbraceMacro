@@ -257,6 +257,22 @@ export const ensureSchema = async () => {
                 value JSONB,
                 created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
             );
+
+            -- Migrations for health_metrics to ensure columns exist if table was created earlier
+            ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS resting_heart_rate INT DEFAULT 0;
+            ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS sleep_score INT DEFAULT 0;
+            ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS spo2 FLOAT DEFAULT 0;
+            ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS vo2_max FLOAT DEFAULT 0;
+            ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS active_zone_minutes INT DEFAULT 0;
+            ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS water_fl_oz FLOAT DEFAULT 0;
+            ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS mindfulness_minutes INT DEFAULT 0;
+            ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS weight_lbs FLOAT DEFAULT 0;
+            ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS blood_pressure_systolic INT DEFAULT 0;
+            ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS blood_pressure_diastolic INT DEFAULT 0;
+            ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS body_fat_percentage FLOAT DEFAULT 0;
+            ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS bmi FLOAT DEFAULT 0;
+            ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS hrv INT DEFAULT 0;
+            ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS sleep_minutes INT DEFAULT 0;
         `);
     } finally {
         client.release();
@@ -874,6 +890,8 @@ export const getHealthMetrics = async (userId) => {
                 blood_pressure_diastolic as "bloodPressureDiastolic",
                 body_fat_percentage as "bodyFatPercentage",
                 bmi,
+                hrv,
+                sleep_minutes as "sleepMinutes",
                 last_synced as "lastSynced"
             FROM health_metrics WHERE user_id = $1
         `, [userId]);
@@ -884,74 +902,65 @@ export const getHealthMetrics = async (userId) => {
 export const syncHealthMetrics = async (userId, stats) => {
     const client = await pool.connect();
     try {
+        // Use COALESCE(EXCLUDED.col, health_metrics.col) for values that shouldn't be overwritten with null
+        // Use GREATEST for accumulators if receiving partial updates might reset them (though usually stats come in full for a given provider)
+        // Since we are now segregating provider data, 'stats' will contain only Apple OR Fitbit keys.
+        // We must ensure that missing keys in 'stats' result in 'NULL' passed to the INSERT, so that COALESCE works.
+        
         const q = `INSERT INTO health_metrics (
                         user_id, steps, active_calories, resting_calories, distance_miles, 
                         flights_climbed, heart_rate, resting_heart_rate, sleep_score, spo2, 
                         vo2_max, active_zone_minutes, water_fl_oz, mindfulness_minutes, weight_lbs, 
-                        blood_pressure_systolic, blood_pressure_diastolic, body_fat_percentage, bmi,
+                        blood_pressure_systolic, blood_pressure_diastolic, body_fat_percentage, bmi, hrv, sleep_minutes,
                         last_synced
                     )
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, CURRENT_TIMESTAMP)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, CURRENT_TIMESTAMP)
                    ON CONFLICT (user_id) DO UPDATE SET 
-                        steps = GREATEST(health_metrics.steps, EXCLUDED.steps), 
-                        active_calories = GREATEST(health_metrics.active_calories, EXCLUDED.active_calories),
-                        resting_calories = GREATEST(health_metrics.resting_calories, EXCLUDED.resting_calories),
-                        distance_miles = GREATEST(health_metrics.distance_miles, EXCLUDED.distance_miles),
-                        flights_climbed = GREATEST(health_metrics.flights_climbed, EXCLUDED.flights_climbed),
-                        heart_rate = EXCLUDED.heart_rate, 
-                        resting_heart_rate = EXCLUDED.resting_heart_rate,
-                        sleep_score = EXCLUDED.sleep_score,
-                        spo2 = EXCLUDED.spo2,
-                        vo2_max = EXCLUDED.vo2_max,
-                        active_zone_minutes = GREATEST(health_metrics.active_zone_minutes, EXCLUDED.active_zone_minutes),
-                        water_fl_oz = GREATEST(health_metrics.water_fl_oz, EXCLUDED.water_fl_oz),
-                        mindfulness_minutes = GREATEST(health_metrics.mindfulness_minutes, EXCLUDED.mindfulness_minutes),
-                        weight_lbs = EXCLUDED.weight_lbs,
-                        blood_pressure_systolic = EXCLUDED.blood_pressure_systolic,
-                        blood_pressure_diastolic = EXCLUDED.blood_pressure_diastolic,
-                        body_fat_percentage = EXCLUDED.body_fat_percentage,
-                        bmi = EXCLUDED.bmi,
+                        steps = GREATEST(health_metrics.steps, COALESCE(EXCLUDED.steps, 0)),
+                        active_calories = GREATEST(health_metrics.active_calories, COALESCE(EXCLUDED.active_calories, 0)),
+                        resting_calories = GREATEST(health_metrics.resting_calories, COALESCE(EXCLUDED.resting_calories, 0)),
+                        distance_miles = GREATEST(health_metrics.distance_miles, COALESCE(EXCLUDED.distance_miles, 0)),
+                        flights_climbed = GREATEST(health_metrics.flights_climbed, COALESCE(EXCLUDED.flights_climbed, 0)),
+                        heart_rate = COALESCE(EXCLUDED.heart_rate, health_metrics.heart_rate),
+                        resting_heart_rate = COALESCE(EXCLUDED.resting_heart_rate, health_metrics.resting_heart_rate),
+                        sleep_score = COALESCE(EXCLUDED.sleep_score, health_metrics.sleep_score),
+                        spo2 = COALESCE(EXCLUDED.spo2, health_metrics.spo2),
+                        vo2_max = COALESCE(EXCLUDED.vo2_max, health_metrics.vo2_max),
+                        active_zone_minutes = GREATEST(health_metrics.active_zone_minutes, COALESCE(EXCLUDED.active_zone_minutes, 0)),
+                        water_fl_oz = GREATEST(health_metrics.water_fl_oz, COALESCE(EXCLUDED.water_fl_oz, 0)),
+                        mindfulness_minutes = GREATEST(health_metrics.mindfulness_minutes, COALESCE(EXCLUDED.mindfulness_minutes, 0)),
+                        weight_lbs = COALESCE(EXCLUDED.weight_lbs, health_metrics.weight_lbs),
+                        blood_pressure_systolic = COALESCE(EXCLUDED.blood_pressure_systolic, health_metrics.blood_pressure_systolic),
+                        blood_pressure_diastolic = COALESCE(EXCLUDED.blood_pressure_diastolic, health_metrics.blood_pressure_diastolic),
+                        body_fat_percentage = COALESCE(EXCLUDED.body_fat_percentage, health_metrics.body_fat_percentage),
+                        bmi = COALESCE(EXCLUDED.bmi, health_metrics.bmi),
+                        hrv = COALESCE(EXCLUDED.hrv, health_metrics.hrv),
+                        sleep_minutes = COALESCE(EXCLUDED.sleep_minutes, health_metrics.sleep_minutes),
                         last_synced = CURRENT_TIMESTAMP 
-                   RETURNING 
-                        steps, 
-                        active_calories as "activeCalories", 
-                        resting_calories as "restingCalories", 
-                        distance_miles as "distanceMiles", 
-                        flights_climbed as "flightsClimbed", 
-                        heart_rate as "heartRate",
-                        resting_heart_rate as "restingHeartRate",
-                        sleep_score as "sleepScore",
-                        spo2,
-                        vo2_max as "vo2Max",
-                        active_zone_minutes as "activeZoneMinutes",
-                        water_fl_oz as "waterFlOz",
-                        mindfulness_minutes as "mindfulnessMinutes",
-                        weight_lbs as "weightLbs",
-                        blood_pressure_systolic as "bloodPressureSystolic",
-                        blood_pressure_diastolic as "bloodPressureDiastolic",
-                        body_fat_percentage as "bodyFatPercentage",
-                        bmi,
-                        last_synced as "lastSynced"`;
+                   RETURNING *`;
+        
         const res = await client.query(q, [
             userId, 
-            stats.steps || 0, 
-            stats.activeCalories || 0, 
-            stats.restingCalories || 0, 
-            stats.distanceMiles || 0, 
-            stats.flightsClimbed || 0, 
-            stats.heartRate || 0,
-            stats.restingHeartRate || 0,
-            stats.sleepScore || 0,
-            stats.spo2 || 0,
-            stats.vo2Max || 0,
-            stats.activeZoneMinutes || 0,
-            stats.waterFlOz || 0,
-            stats.mindfulnessMinutes || 0,
-            stats.weightLbs || 0,
-            stats.bloodPressureSystolic || 0,
-            stats.bloodPressureDiastolic || 0,
-            stats.bodyFatPercentage || 0,
-            stats.bmi || 0
+            stats.steps ?? null, 
+            stats.activeCalories ?? null, 
+            stats.restingCalories ?? null, 
+            stats.distanceMiles ?? null, 
+            stats.flightsClimbed ?? null, 
+            stats.heartRate ?? null,
+            stats.restingHeartRate ?? null,
+            stats.sleepScore ?? null,
+            stats.spo2 ?? null,
+            stats.vo2Max ?? null,
+            stats.activeZoneMinutes ?? null,
+            stats.waterFlOz ?? null,
+            stats.mindfulnessMinutes ?? null,
+            stats.weightLbs ?? null,
+            stats.bloodPressureSystolic ?? null,
+            stats.bloodPressureDiastolic ?? null,
+            stats.bodyFatPercentage ?? null,
+            stats.bmi ?? null,
+            stats.hrv ?? null,
+            stats.sleepMinutes ?? null
         ]);
         return res.rows[0];
     } finally { client.release(); }
