@@ -6,9 +6,10 @@ import { connectHealthProvider, syncHealthData } from '../../services/healthServ
 
 interface DeviceSyncProps {
     onSyncComplete: () => void;
+    lastSynced?: string;
 }
 
-export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete }) => {
+export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete, lastSynced }) => {
     const [appleStatus, setAppleStatus] = useState<'idle' | 'syncing' | 'connected'>('idle');
     const [fitbitStatus, setFitbitStatus] = useState<'idle' | 'syncing' | 'connected'>('idle');
 
@@ -38,6 +39,11 @@ export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete }) => {
             alert("Fitbit sync failed.");
             setFitbitStatus('idle');
         }
+    };
+
+    const formatLastSynced = (dateString?: string) => {
+        if (!dateString) return 'Never';
+        return new Date(dateString).toLocaleString();
     };
 
     return (
@@ -106,7 +112,7 @@ export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete }) => {
 
             <div className="bg-indigo-50 p-6 rounded-3xl border border-indigo-100 text-center">
                 <p className="text-indigo-800 text-xs font-bold uppercase tracking-widest mb-2">Sync Status</p>
-                <p className="text-indigo-600 text-sm font-medium">Last updated: Just now</p>
+                <p className="text-indigo-600 text-sm font-medium">Last updated: {formatLastSynced(lastSynced)}</p>
             </div>
         </div>
     );

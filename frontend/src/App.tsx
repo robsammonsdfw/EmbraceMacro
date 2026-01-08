@@ -196,7 +196,7 @@ const App: React.FC = () => {
 
   const bodyProps = {
       healthStats: healthStats,
-      onSyncHealth: () => {},
+      onSyncHealth: () => loadAllData(),
       dashboardPrefs: dashboardPrefs,
       onUpdatePrefs: (p: UserDashboardPrefs) => { setDashboardPrefs(p); apiService.saveDashboardPrefs(p); }
   };

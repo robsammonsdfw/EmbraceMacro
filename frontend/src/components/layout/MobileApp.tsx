@@ -259,7 +259,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                 // --- Account ---
                 case 'account.setup': return <div className="pt-16 px-2"><JourneyView dashboardPrefs={dashboardPrefs} onOpenWizard={() => {}} /></div>;
                 case 'account.widgets': return <div className="pt-16 px-2"><PlaceholderPage title="My Widgets" description="Customize your mobile dashboard." /></div>;
-                case 'account.sync': return <div className="pt-16 px-2"><DeviceSync onSyncComplete={bodyProps.onSyncHealth} /></div>;
+                case 'account.sync': return <div className="pt-16 px-2"><DeviceSync onSyncComplete={bodyProps.onSyncHealth} lastSynced={healthStats.lastSynced} /></div>;
                 case 'account.pharmacy': return <div className="pt-16 px-2"><PlaceholderPage title="Pharmacy Store" description="Refill prescriptions." /></div>;
 
                 // --- Physical ---

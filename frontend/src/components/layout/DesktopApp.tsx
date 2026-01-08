@@ -91,9 +91,9 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             case 'account.setup': 
                 return <JourneyView dashboardPrefs={dashboardPrefs} onOpenWizard={() => {}} />;
             case 'account.widgets': 
-                return <PlaceholderPage title="My Widgets" description="Customize your Command Center dashboard." />;
+                return <PlaceholderPage title="My Widgets" description="Customize your mobile dashboard." />;
             case 'account.sync': 
-                return <DeviceSync onSyncComplete={bodyProps.onSyncHealth} />; // Dedicated Sync View
+                return <DeviceSync onSyncComplete={bodyProps.onSyncHealth} lastSynced={healthStats.lastSynced} />; // Dedicated Sync View
             case 'account.pharmacy': 
                 return <PlaceholderPage title="Pharmacy Store" description="Order prescriptions and view history." />;
 
@@ -101,7 +101,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             case 'physical.scan': 
                 return <BodyHub {...bodyProps} />;
             case 'physical.workout_log': 
-                return <PlaceholderPage title="Workout Log" description="Track your sets, reps, and PRs." />;
+                return <PlaceholderPage title="Workout Log" description="Track sets and reps." />;
             case 'physical.plans': 
                 return <PlaceholderPage title="Exercise Plans" description="AI-generated workout routines." />;
             case 'physical.form_check':
