@@ -44,15 +44,31 @@ const nutritionSchema = {
 // --- HELPER FUNCTIONS ---
 
 const verifyToken = (headers) => {
-    const authHeader = headers.Authorization || headers.authorization;
-    if (!authHeader) throw new Error("No token provided");
+    if (!headers) throw new Error("No headers provided");
     
-    const token = authHeader.split(' ')[1];
+    // Normalize headers to lowercase to handle API Gateway/Lambda variations
+    const normalizedHeaders = {};
+    for (const key in headers) {
+        normalizedHeaders[key.toLowerCase()] = headers[key];
+    }
+
+    const authHeader = normalizedHeaders['authorization'];
+    if (!authHeader) {
+        console.error("Missing Authorization header. Available headers:", Object.keys(normalizedHeaders));
+        throw new Error("No token provided");
+    }
+    
+    // Support "Bearer <token>" and just "<token>"
+    const token = authHeader.startsWith('Bearer ') || authHeader.startsWith('bearer ') 
+        ? authHeader.slice(7).trim() 
+        : authHeader;
+
     if (!token) throw new Error("Invalid token format");
 
     try {
         return jwt.verify(token, JWT_SECRET);
     } catch (err) {
+        console.error("Token verification failed:", err.message);
         throw new Error("Invalid or expired token");
     }
 };
@@ -92,10 +108,6 @@ export const handler = async (event) => {
         // --- PUBLIC ROUTES ---
         
         if (path === '/auth/customer-login' && httpMethod === 'POST') {
-            // This is a placeholder. In a real app, you would validate against the DB or Shopify Storefront API here.
-            // For now, we assume the frontend handles the Shopify redirect flow or uses a mock login.
-            // If you are using the Shopify Multipass or specific Storefront login, logic goes here.
-            // For this implementation, we will trust the databaseService findOrCreate logic if used elsewhere.
             const body = JSON.parse(event.body);
             const user = await db.findOrCreateUserByEmail(body.email);
             const token = jwt.sign({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
@@ -104,9 +116,16 @@ export const handler = async (event) => {
 
         // --- PROTECTED ROUTES ---
         
-        const user = verifyToken(event.headers);
+        let user;
+        try {
+            user = verifyToken(event.headers);
+        } catch (e) {
+            console.error("Auth Error:", e.message);
+            return sendResponse(401, { error: e.message });
+        }
+
         if (!user || typeof user === 'string') {
-            throw new Error("Invalid token payload");
+            return sendResponse(401, { error: "Invalid token payload" });
         }
         const userId = user.userId;
 

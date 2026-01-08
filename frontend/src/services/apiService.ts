@@ -36,17 +36,34 @@ const callApi = async (endpoint: string, method: string, body?: any) => {
     const url = `${API_BASE_URL}${formattedEndpoint}`;
     
     const headers: HeadersInit = { 'Content-Type': 'application/json' };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+    
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    } else {
+        console.warn("No auth token found in localStorage. API call may fail.");
+    }
+
     if (proxyClientId) headers['x-proxy-client-id'] = proxyClientId;
     
     const config: RequestInit = { method, headers, body: body ? JSON.stringify(body) : undefined };
 
     try {
         const response = await fetch(url, config);
-        if (response.status === 401) { localStorage.removeItem(AUTH_TOKEN_KEY); window.location.reload(); throw new Error("Unauthorized"); }
-        if (!response.ok) throw new Error(`API failed: ${response.status}`);
+        if (response.status === 401) { 
+            console.error("Unauthorized access. Clearing token.");
+            localStorage.removeItem(AUTH_TOKEN_KEY); 
+            window.location.reload(); 
+            throw new Error("Unauthorized"); 
+        }
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`API failed: ${response.status} - ${errText}`);
+        }
         return response.status === 204 ? null : response.json();
-    } catch (error) { console.error("Fetch error:", error); throw error; }
+    } catch (error) { 
+        console.error(`Fetch error for ${endpoint}:`, error); 
+        throw error; 
+    }
 };
 
 // ... existing exports ...
