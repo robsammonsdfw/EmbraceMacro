@@ -2,14 +2,15 @@
 import React, { useState, useEffect } from 'react';
 import * as apiService from '../../services/apiService';
 import { CoachingRelation } from '../../types';
-import { UsersIcon, UserCircleIcon, PlusIcon, XIcon, ActivityIcon, CheckIcon, TrophyIcon, BeakerIcon } from '../icons';
+import { UsersIcon, UserCircleIcon, PlusIcon, XIcon, ActivityIcon, CheckIcon, TrophyIcon, BeakerIcon, UtensilsIcon } from '../icons';
 
 interface CoachingHubProps {
     userRole: 'coach' | 'user';
     onUpgrade: () => void;
+    onProxySelect?: (client: { id: string; name: string }) => void;
 }
 
-export const CoachingHub: React.FC<CoachingHubProps> = ({ userRole, onUpgrade }) => {
+export const CoachingHub: React.FC<CoachingHubProps> = ({ userRole, onUpgrade, onProxySelect }) => {
     const [tab, setTab] = useState<'practice' | 'care'>('practice');
     const [clientEmail, setClientEmail] = useState('');
     const [asCoachRelations, setAsCoachRelations] = useState<CoachingRelation[]>([]);
@@ -208,13 +209,13 @@ export const CoachingHub: React.FC<CoachingHubProps> = ({ userRole, onUpgrade })
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {asCoachRelations.map(rel => (
-                                    <div key={rel.id} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow">
-                                        <div className="flex items-center gap-4">
-                                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-white ${rel.status === 'pending' ? 'bg-amber-400' : 'bg-indigo-500'}`}>
+                                    <div key={rel.id} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between group hover:shadow-md transition-shadow">
+                                        <div className="flex items-center gap-4 mb-4">
+                                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-white text-xl ${rel.status === 'pending' ? 'bg-amber-400' : 'bg-indigo-600'}`}>
                                                 {rel.clientEmail?.[0].toUpperCase()}
                                             </div>
                                             <div>
-                                                <p className="font-black text-slate-800 leading-tight">{rel.clientName || rel.clientEmail}</p>
+                                                <p className="font-black text-slate-800 text-lg leading-tight">{rel.clientName || rel.clientEmail}</p>
                                                 <div className="flex items-center gap-2 mt-1">
                                                     <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${rel.status === 'pending' ? 'bg-amber-50 text-amber-600 border border-amber-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
                                                         {rel.status}
@@ -223,13 +224,24 @@ export const CoachingHub: React.FC<CoachingHubProps> = ({ userRole, onUpgrade })
                                                 </div>
                                             </div>
                                         </div>
-                                        <button 
-                                            onClick={() => handleRevoke(rel.id)}
-                                            className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
-                                            title="Remove Client"
-                                        >
-                                            <XIcon className="w-5 h-5" />
-                                        </button>
+                                        
+                                        <div className="flex gap-2">
+                                            {rel.status === 'active' && onProxySelect && (
+                                                <button
+                                                    onClick={() => onProxySelect({ id: rel.clientId, name: rel.clientName || rel.clientEmail || 'Client' })}
+                                                    className="flex-grow bg-slate-900 text-white py-3 rounded-xl font-black uppercase tracking-widest text-xs hover:bg-black transition-all shadow-md active:scale-95 flex items-center justify-center gap-2"
+                                                >
+                                                    <UtensilsIcon className="w-4 h-4" /> Manage Client
+                                                </button>
+                                            )}
+                                            <button 
+                                                onClick={() => handleRevoke(rel.id)}
+                                                className="p-3 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all border border-transparent hover:border-rose-100"
+                                                title="Remove Client"
+                                            >
+                                                <XIcon className="w-5 h-5" />
+                                            </button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>

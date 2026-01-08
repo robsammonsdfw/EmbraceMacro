@@ -32,10 +32,11 @@ interface DesktopAppProps {
     onLogout: () => void;
     user?: any;
     onCameraClick?: (mode: 'meal' | 'barcode' | 'pantry' | 'restaurant' | 'search') => void;
+    onProxySelect?: (client: { id: string; name: string }) => void;
 }
 
 export const DesktopApp: React.FC<DesktopAppProps> = ({ 
-    healthStats, dashboardPrefs, fuelProps, bodyProps, userRole, onLogout, user, onCameraClick
+    healthStats, dashboardPrefs, fuelProps, bodyProps, userRole, onLogout, user, onCameraClick, onProxySelect
 }) => {
     const [activeView, setActiveView] = useState<ActiveView>('home');
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -147,7 +148,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
 
             // --- 5. ROLES & PORTALS ---
             case 'roles.coach': 
-                return <CoachingHub userRole={userRole} onUpgrade={() => {}} />;
+                return <CoachingHub userRole={userRole} onUpgrade={() => {}} onProxySelect={onProxySelect} />;
             case 'roles.influencer': 
                 return <PlaceholderPage title="Influencer Portal" description="Manage campaigns and followers." />;
             case 'roles.employer': 

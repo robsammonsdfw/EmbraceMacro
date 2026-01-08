@@ -181,6 +181,21 @@ const App: React.FC = () => {
       loadAllData();
   };
 
+  // COACH PROXY LOGIC
+  const handleProxySelect = async (client: {id: string, name: string}) => {
+      const proxyData = { id: client.id, name: client.name, permissions: {} };
+      setProxyClient(proxyData);
+      apiService.setProxyClient(client.id);
+      await loadAllData();
+      alert(`Proxy Activated: You are now managing ${client.name}'s account.`);
+  };
+
+  const handleExitProxy = async () => {
+      setProxyClient(null);
+      apiService.setProxyClient(null);
+      await loadAllData();
+  };
+
   // Props Bundles
   const fuelProps = {
       plans: mealPlans,
@@ -214,7 +229,7 @@ const App: React.FC = () => {
 
   return (
     <>
-        {proxyClient && <CoachProxyBanner clientName={proxyClient.name} onExit={() => setProxyClient(null)} />}
+        {proxyClient && <CoachProxyBanner clientName={proxyClient.name} onExit={handleExitProxy} />}
         
         {/* Modals for Results */}
         {(analysisNutrition || analysisRecipes) && (
@@ -261,6 +276,7 @@ const App: React.FC = () => {
                 onLogout={logout}
                 user={user}
                 onCameraClick={handleOpenCapture}
+                onProxySelect={handleProxySelect}
             />
         ) : (
             <MobileApp 
@@ -272,6 +288,7 @@ const App: React.FC = () => {
                 userRole={user?.role || 'user'}
                 onLogout={logout}
                 user={user}
+                onProxySelect={handleProxySelect}
             />
         )}
     </>

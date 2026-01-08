@@ -213,8 +213,8 @@ export interface Friendship {
 
 export interface CoachingRelation {
     id: string;
-    coachId: number;
-    clientId: number;
+    coachId: string; // Updated to string
+    clientId: string; // Updated to string
     coachEmail?: string;
     clientEmail?: string;
     coachName?: string;

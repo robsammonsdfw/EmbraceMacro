@@ -26,6 +26,7 @@ interface MobileAppProps {
     userRole: 'coach' | 'user';
     onLogout: () => void;
     user?: any;
+    onProxySelect?: (client: { id: string; name: string }) => void;
 }
 
 type StackLevel = 'home' | 'account' | 'physical' | 'nutrition' | 'mental' | 'roles' | 'rewards';
@@ -108,10 +109,14 @@ const HubButton: React.FC<{
 );
 
 export const MobileApp: React.FC<MobileAppProps> = ({ 
-    healthStats, dashboardPrefs, onCameraClick, fuelProps, bodyProps, userRole, onLogout
+    healthStats, dashboardPrefs, onCameraClick, fuelProps, bodyProps, userRole, onLogout, user, onProxySelect
 }) => {
     const [stack, setStack] = useState<StackLevel>('home');
     const [subView, setSubView] = useState<string | null>(null);
+
+    // Suppress unused warning for user prop
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _currentUser = user;
 
     const navigateTo = (level: StackLevel, view?: string) => {
         setStack(level);
@@ -179,7 +184,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                     {stack === 'nutrition' && <FuelSection {...fuelProps} />}
                     {stack === 'physical' && <BodyHub {...bodyProps} />}
                     {stack === 'mental' && <AssessmentHub />}
-                    {stack === 'roles' && <CoachingHub userRole={userRole} onUpgrade={() => {}} />}
+                    {stack === 'roles' && <CoachingHub userRole={userRole} onUpgrade={() => {}} onProxySelect={onProxySelect} />}
                     {stack === 'rewards' && <RewardsDashboard />}
                     {stack === 'account' && (
                         <div className="space-y-4">
