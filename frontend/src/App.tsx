@@ -173,6 +173,14 @@ const App: React.FC = () => {
     finally { setMedicalPlannerState({ isLoading: false, progress: 0, status: '' }); }
   };
 
+  // Updated Sync Handler
+  const handleSyncHealth = (syncedData?: HealthStats) => {
+      if (syncedData) {
+          setHealthStats(prev => ({ ...prev, ...syncedData }));
+      }
+      loadAllData();
+  };
+
   // Props Bundles
   const fuelProps = {
       plans: mealPlans,
@@ -196,7 +204,7 @@ const App: React.FC = () => {
 
   const bodyProps = {
       healthStats: healthStats,
-      onSyncHealth: () => loadAllData(),
+      onSyncHealth: handleSyncHealth,
       dashboardPrefs: dashboardPrefs,
       onUpdatePrefs: (p: UserDashboardPrefs) => { setDashboardPrefs(p); apiService.saveDashboardPrefs(p); }
   };

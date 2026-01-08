@@ -1,3 +1,4 @@
+
 import pg from 'pg';
 
 const { Pool } = pg;
@@ -635,8 +636,18 @@ export const getRewardsSummary = async (userId) => {
 export const getHealthMetrics = async (userId) => {
     const client = await pool.connect();
     try {
-        const res = await client.query('SELECT * FROM health_metrics WHERE user_id = $1', [userId]);
-        return res.rows[0] || { steps: 0, active_calories: 0, resting_calories: 0, distance_miles: 0, flights_climbed: 0, heart_rate: 0 };
+        const res = await client.query(`
+            SELECT 
+                steps, 
+                active_calories as "activeCalories", 
+                resting_calories as "restingCalories", 
+                distance_miles as "distanceMiles", 
+                flights_climbed as "flightsClimbed", 
+                heart_rate as "heartRate", 
+                last_synced as "lastSynced"
+            FROM health_metrics WHERE user_id = $1
+        `, [userId]);
+        return res.rows[0] || { steps: 0, activeCalories: 0, restingCalories: 0, distanceMiles: 0, flightsClimbed: 0, heartRate: 0 };
     } finally { client.release(); }
 };
 
@@ -647,25 +658,24 @@ export const syncHealthMetrics = async (userId, stats) => {
             INSERT INTO health_metrics (user_id, steps, active_calories, resting_calories, distance_miles, flights_climbed, heart_rate, last_synced)
             VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
             ON CONFLICT (user_id) DO UPDATE SET
-            steps = GREATEST(health_metrics.steps, EXCLUDED.steps),
-            active_calories = GREATEST(health_metrics.active_calories, EXCLUDED.active_calories),
-            resting_calories = GREATEST(health_metrics.resting_calories, EXCLUDED.resting_calories),
-            distance_miles = GREATEST(health_metrics.distance_miles, EXCLUDED.distance_miles),
-            flights_climbed = GREATEST(health_metrics.flights_climbed, EXCLUDED.flights_climbed),
-            heart_rate = GREATEST(health_metrics.heart_rate, EXCLUDED.heart_rate),
+            steps = GREATEST(COALESCE(health_metrics.steps, 0), EXCLUDED.steps),
+            active_calories = GREATEST(COALESCE(health_metrics.active_calories, 0), EXCLUDED.active_calories),
+            resting_calories = GREATEST(COALESCE(health_metrics.resting_calories, 0), EXCLUDED.resting_calories),
+            distance_miles = GREATEST(COALESCE(health_metrics.distance_miles, 0), EXCLUDED.distance_miles),
+            flights_climbed = GREATEST(COALESCE(health_metrics.flights_climbed, 0), EXCLUDED.flights_climbed),
+            heart_rate = GREATEST(COALESCE(health_metrics.heart_rate, 0), EXCLUDED.heart_rate),
             last_synced = CURRENT_TIMESTAMP
-            RETURNING *
+            RETURNING 
+                steps, 
+                active_calories as "activeCalories", 
+                resting_calories as "restingCalories", 
+                distance_miles as "distanceMiles", 
+                flights_climbed as "flightsClimbed", 
+                heart_rate as "heartRate", 
+                last_synced as "lastSynced"
         `;
         const res = await client.query(query, [userId, stats.steps || 0, stats.activeCalories || 0, stats.restingCalories || 0, stats.distanceMiles || 0, stats.flightsClimbed || 0, stats.heartRate || 0]);
-        return {
-            steps: res.rows[0].steps,
-            activeCalories: res.rows[0].active_calories,
-            restingCalories: res.rows[0].resting_calories,
-            distanceMiles: res.rows[0].distance_miles,
-            flightsClimbed: res.rows[0].flights_climbed,
-            heartRate: res.rows[0].heart_rate,
-            lastSynced: res.rows[0].last_synced
-        };
+        return res.rows[0];
     } finally { client.release(); }
 };
 

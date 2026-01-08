@@ -3,9 +3,10 @@ import React, { useState } from 'react';
 import { ActivityIcon, FireIcon, CheckIcon } from '../icons';
 import * as apiService from '../../services/apiService';
 import { connectHealthProvider, syncHealthData } from '../../services/healthService';
+import type { HealthStats } from '../../types';
 
 interface DeviceSyncProps {
-    onSyncComplete: () => void;
+    onSyncComplete: (data?: HealthStats) => void;
     lastSynced?: string;
 }
 
@@ -18,9 +19,9 @@ export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete, lastSync
         try {
             await connectHealthProvider('ios');
             const data = await syncHealthData('apple');
-            await apiService.syncHealthStatsToDB(data);
+            const result = await apiService.syncHealthStatsToDB(data);
             setAppleStatus('connected');
-            onSyncComplete();
+            onSyncComplete(result);
         } catch (e) {
             alert("Apple Health sync failed.");
             setAppleStatus('idle');
@@ -32,9 +33,9 @@ export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete, lastSync
         try {
             await connectHealthProvider('fitbit');
             const data = await syncHealthData('fitbit');
-            await apiService.syncHealthStatsToDB(data);
+            const result = await apiService.syncHealthStatsToDB(data);
             setFitbitStatus('connected');
-            onSyncComplete();
+            onSyncComplete(result);
         } catch (e) {
             alert("Fitbit sync failed.");
             setFitbitStatus('idle');
