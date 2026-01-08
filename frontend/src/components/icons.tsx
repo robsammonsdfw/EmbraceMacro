@@ -1,7 +1,6 @@
 
 import React from 'react';
 
-// FIX: Added IconProps to allow className to be passed to icons.
 export interface IconProps {
     className?: string;
 }
