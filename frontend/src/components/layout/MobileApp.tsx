@@ -1,25 +1,18 @@
 
 import React, { useState } from 'react';
 import { 
-    ActivityIcon, CameraIcon, DumbbellIcon, BrainIcon, 
-    UserCircleIcon, XIcon, TrophyIcon, UtensilsIcon, BriefcaseIcon,
-    MoonIcon, DropIcon, WavesIcon, FireIcon, HomeIcon, BookOpenIcon
+    ActivityIcon, CameraIcon, BrainIcon, 
+    UserCircleIcon, XIcon, UtensilsIcon, BriefcaseIcon,
+    HomeIcon, BookOpenIcon
 } from '../icons';
 import type { HealthStats, UserDashboardPrefs } from '../../types';
 
 // Import Views
 import { FuelSection } from '../sections/FuelSection';
 import { BodyHub } from '../body/BodyHub';
-import { HealthReportsView } from '../sections/HealthReportsView';
-import { ReadinessView } from '../sections/ReadinessView';
 import { AssessmentHub } from '../tests/AssessmentHub';
 import { CoachingHub } from '../coaching/CoachingHub';
-import { JourneyView } from '../sections/JourneyView';
 import { RewardsDashboard } from '../RewardsDashboard';
-import { PlaceholderPage } from '../PlaceholderPage';
-import { FormAnalysis } from '../body/FormAnalysis';
-import { PantryChefView } from '../nutrition/PantryChefView';
-import { MasterChefView } from '../nutrition/MasterChefView';
 import { DeviceSync } from '../account/DeviceSync';
 import { WidgetConfig } from '../account/WidgetConfig';
 import { PharmacyOrders } from '../account/PharmacyOrders';
@@ -119,6 +112,10 @@ export const MobileApp: React.FC<MobileAppProps> = ({
 }) => {
     const [stack, setStack] = useState<StackLevel>('home');
     const [subView, setSubView] = useState<string | null>(null);
+
+    // Suppress unused warning for user prop
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _currentUser = user;
 
     const navigateTo = (level: StackLevel, view?: string) => {
         setStack(level);
