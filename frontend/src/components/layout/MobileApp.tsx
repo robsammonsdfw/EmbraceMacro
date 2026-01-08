@@ -2,7 +2,8 @@
 import React, { useState } from 'react';
 import { 
     ActivityIcon, CameraIcon, DumbbellIcon, BrainIcon, 
-    UserCircleIcon, XIcon, TrophyIcon, UtensilsIcon, BriefcaseIcon
+    UserCircleIcon, XIcon, TrophyIcon, UtensilsIcon, BriefcaseIcon,
+    MoonIcon, DropIcon, WavesIcon, FireIcon, HomeIcon, BookOpenIcon
 } from '../icons';
 import type { HealthStats, UserDashboardPrefs } from '../../types';
 
@@ -27,7 +28,6 @@ interface MobileAppProps {
     healthStats: HealthStats;
     dashboardPrefs: UserDashboardPrefs;
     onCameraClick: () => void;
-    // Pass-through props for views
     fuelProps: any;
     bodyProps: any;
     userRole: 'coach' | 'user';
@@ -37,10 +37,8 @@ interface MobileAppProps {
 
 type StackLevel = 'home' | 'account' | 'physical' | 'nutrition' | 'mental' | 'roles' | 'rewards';
 
-// --- Updated Vitals Strip with Feature Restored ---
 const VitalsStrip: React.FC<{ stats: HealthStats; prefs: UserDashboardPrefs; onSyncClick: () => void }> = ({ stats, prefs, onSyncClick }) => {
     
-    // Feature Restored: Map available data to widget IDs
     const allWidgets: Record<string, { label: string, value: string | number, unit: string, color: string }> = {
         steps: { label: 'Steps', value: stats.steps.toLocaleString(), unit: '', color: 'text-blue-500' },
         activeCalories: { label: 'Active', value: Math.round(stats.activeCalories), unit: 'kcal', color: 'text-emerald-500' },
@@ -48,9 +46,20 @@ const VitalsStrip: React.FC<{ stats: HealthStats; prefs: UserDashboardPrefs; onS
         distanceMiles: { label: 'Dist', value: stats.distanceMiles.toFixed(1), unit: 'mi', color: 'text-amber-500' },
         flightsClimbed: { label: 'Flights', value: stats.flightsClimbed, unit: 'flr', color: 'text-rose-500' },
         heartRate: { label: 'HR', value: stats.heartRate || '--', unit: 'bpm', color: 'text-red-500' },
+        restingHeartRate: { label: 'RHR', value: stats.restingHeartRate || '--', unit: 'bpm', color: 'text-rose-600' },
+        sleepScore: { label: 'Sleep', value: stats.sleepScore || '--', unit: 'pts', color: 'text-indigo-600' },
+        spo2: { label: 'O2', value: stats.spo2 ? `${stats.spo2}%` : '--', unit: '', color: 'text-cyan-500' },
+        activeZoneMinutes: { label: 'Zones', value: stats.activeZoneMinutes || '--', unit: 'min', color: 'text-orange-500' },
+        vo2Max: { label: 'Fit', value: stats.vo2Max || '--', unit: 'vo2', color: 'text-teal-500' },
+        waterFlOz: { label: 'Water', value: stats.waterFlOz || '--', unit: 'oz', color: 'text-blue-600' },
+        mindfulnessMinutes: { label: 'Mind', value: stats.mindfulnessMinutes || '--', unit: 'min', color: 'text-violet-500' },
+        // Apple Health iHealth Fields
+        bloodPressure: { label: 'BP', value: stats.bloodPressureSystolic && stats.bloodPressureDiastolic ? `${stats.bloodPressureSystolic}/${stats.bloodPressureDiastolic}` : '--', unit: '', color: 'text-rose-600' },
+        bodyFat: { label: 'Fat %', value: stats.bodyFatPercentage ? `${stats.bodyFatPercentage}%` : '--', unit: '', color: 'text-indigo-600' },
+        bmi: { label: 'BMI', value: stats.bmi ? stats.bmi.toFixed(1) : '--', unit: '', color: 'text-violet-600' },
+        weight: { label: 'Lbs', value: stats.weightLbs ? stats.weightLbs.toFixed(1) : '--', unit: '', color: 'text-slate-600' }
     };
 
-    // Use prefs to filter, or default to Steps/Active/HR if prefs are empty
     const widgetsToShow = (prefs.selectedWidgets && prefs.selectedWidgets.length > 0)
         ? prefs.selectedWidgets.map(id => ({ id, ...allWidgets[id] })).filter(w => w.label)
         : [
@@ -93,21 +102,14 @@ const HubButton: React.FC<{
         onClick={onClick}
         className="relative flex flex-col items-center justify-center h-40 w-full rounded-[2rem] overflow-hidden shadow-xl transition-transform active:scale-95 group border border-white/5"
     >
-        {/* Dynamic Background */}
         <div className={`absolute inset-0 bg-gradient-to-b ${gradientFrom} ${gradientTo}`}></div>
-        
-        {/* Neon Glow Circle */}
         <div className={`w-16 h-16 rounded-full border-2 ${iconColor} flex items-center justify-center mb-3 relative z-10 shadow-[0_0_15px_rgba(0,0,0,0.5)] bg-white/5 backdrop-blur-sm`}>
             <div className={`absolute inset-0 rounded-full ${glowColor} opacity-20 blur-md`}></div>
             <span className={`${iconColor} drop-shadow-md`}>
                 {React.cloneElement(icon as React.ReactElement<{ className?: string }>, { className: "w-8 h-8" })}
             </span>
         </div>
-
-        {/* Label */}
         <span className={`text-sm font-black tracking-wider uppercase text-white z-10`}>{label}</span>
-        
-        {/* Subtle Bottom Fade */}
         <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-black/40 to-transparent pointer-events-none"></div>
     </button>
 );
@@ -117,9 +119,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
 }) => {
     const [stack, setStack] = useState<StackLevel>('home');
     const [subView, setSubView] = useState<string | null>(null);
-    const [showFormAnalysis, setShowFormAnalysis] = useState(false);
 
-    // Navigation Helper
     const navigateTo = (level: StackLevel, view?: string) => {
         setStack(level);
         if (view) setSubView(view);
@@ -136,257 +136,87 @@ export const MobileApp: React.FC<MobileAppProps> = ({
 
     const renderHome = () => (
         <div className="p-4 space-y-6 pb-24 animate-fade-in">
-            <header className="flex justify-between items-center px-2">
+             <div className="flex justify-between items-end px-2">
                 <div>
-                    <h1 className="text-2xl font-black text-slate-900">Hello, {user?.firstName || 'Hero'}</h1>
-                    <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Your Utility Hub</p>
+                    <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-none">Intelligence</h1>
+                    <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px] mt-1.5">Metabolic Control Center</p>
                 </div>
-                <button onClick={onLogout} className="bg-slate-100 p-2 rounded-full">
-                    <UserCircleIcon className="w-6 h-6 text-slate-400" />
+                <button onClick={() => navigateTo('rewards')} className="bg-indigo-50 border border-indigo-100 rounded-2xl p-2 px-3 flex flex-col items-center">
+                    <span className="text-[8px] font-black uppercase text-indigo-400">Wallet</span>
+                    <span className="text-xs font-black text-indigo-700">EH-Pts</span>
                 </button>
-            </header>
+            </div>
 
-            {/* Quick Sync Button for Visibility */}
-            <button 
-                onClick={() => navigateTo('account', 'account.sync')}
-                className="w-full bg-slate-900 text-white p-4 rounded-2xl flex items-center justify-between shadow-lg"
-            >
-                <div className="flex items-center gap-3">
-                    <div className="bg-emerald-500 p-2 rounded-lg">
-                        <ActivityIcon className="w-5 h-5 text-white" />
+            <div className="grid grid-cols-2 gap-4">
+                <HubButton label="Fuel" icon={<UtensilsIcon />} onClick={() => navigateTo('nutrition')} gradientFrom="from-emerald-500" gradientTo="to-emerald-700" iconColor="text-white border-white/40" glowColor="bg-emerald-400" />
+                <HubButton label="Body" icon={<UserCircleIcon />} onClick={() => navigateTo('physical')} gradientFrom="from-indigo-600" gradientTo="to-indigo-800" iconColor="text-white border-white/40" glowColor="bg-indigo-400" />
+                <HubButton label="Brain" icon={<BrainIcon />} onClick={() => navigateTo('mental')} gradientFrom="from-amber-400" gradientTo="to-amber-600" iconColor="text-white border-white/40" glowColor="bg-amber-300" />
+                <HubButton label="Social" icon={<BriefcaseIcon />} onClick={() => navigateTo('roles')} gradientFrom="from-rose-500" gradientTo="to-rose-700" iconColor="text-white border-white/40" glowColor="bg-rose-400" />
+            </div>
+
+            <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm flex items-center justify-between group active:scale-95 transition-all" onClick={() => navigateTo('account')}>
+                <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-white">
+                        <ActivityIcon className="w-6 h-6" />
                     </div>
-                    <div className="text-left">
-                        <p className="font-bold text-sm">Sync Wearables</p>
-                        <p className="text-xs text-slate-400">Connect Apple Health & Fitbit</p>
+                    <div>
+                        <h4 className="font-black uppercase text-sm text-slate-800">Account Control</h4>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Setup & Device Sync</p>
                     </div>
                 </div>
-                <div className="bg-white/10 px-3 py-1 rounded-full text-[10px] font-black uppercase">Connect</div>
-            </button>
-
-            {/* 6 Hubs Grid */}
-            <div className="grid grid-cols-2 gap-3">
-                {/* 1. MY ACCOUNT */}
-                <HubButton 
-                    label="Account"
-                    icon={<UserCircleIcon />}
-                    gradientFrom="from-slate-700" 
-                    gradientTo="to-slate-900"
-                    iconColor="text-slate-200"
-                    glowColor="bg-slate-400"
-                    onClick={() => navigateTo('account')}
-                />
-                
-                {/* 2. PHYSICAL */}
-                <HubButton 
-                    label="Physical"
-                    icon={<DumbbellIcon />}
-                    gradientFrom="from-emerald-700" 
-                    gradientTo="to-teal-900"
-                    iconColor="text-emerald-200"
-                    glowColor="bg-emerald-400"
-                    onClick={() => navigateTo('physical')}
-                />
-
-                {/* 3. NUTRITION */}
-                <HubButton 
-                    label="Nutrition"
-                    icon={<UtensilsIcon />}
-                    gradientFrom="from-orange-600" 
-                    gradientTo="to-amber-800"
-                    iconColor="text-orange-200"
-                    glowColor="bg-orange-400"
-                    onClick={() => navigateTo('nutrition')}
-                />
-
-                {/* 4. MENTAL & LABS */}
-                <HubButton 
-                    label="Mental"
-                    icon={<BrainIcon />}
-                    gradientFrom="from-indigo-700" 
-                    gradientTo="to-violet-900"
-                    iconColor="text-indigo-200"
-                    glowColor="bg-indigo-400"
-                    onClick={() => navigateTo('mental')}
-                />
-
-                {/* 5. ROLES */}
-                <HubButton 
-                    label="Portals"
-                    icon={<BriefcaseIcon />}
-                    gradientFrom="from-blue-600" 
-                    gradientTo="to-cyan-800"
-                    iconColor="text-cyan-200"
-                    glowColor="bg-cyan-400"
-                    onClick={() => navigateTo('roles')}
-                />
-
-                {/* 6. REWARDS */}
-                <HubButton 
-                    label="Rewards"
-                    icon={<TrophyIcon />}
-                    gradientFrom="from-yellow-600" 
-                    gradientTo="to-amber-800"
-                    iconColor="text-yellow-200"
-                    glowColor="bg-yellow-400"
-                    onClick={() => navigateTo('rewards')}
-                />
+                <div className="text-slate-300">→</div>
             </div>
         </div>
     );
 
-    const renderSubLevelMenu = (title: string, items: { id: string, label: string, desc: string }[]) => (
-        <div className="p-6 pt-20 animate-slide-in-left min-h-screen bg-slate-50">
-            <h2 className="text-4xl font-black text-slate-900 mb-8">{title}</h2>
-            <div className="space-y-4">
-                {items.map(item => (
-                    <button 
-                        key={item.id}
-                        onClick={() => setSubView(item.id)}
-                        className="w-full bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 text-left active:scale-95 transition-transform"
-                    >
-                        <h3 className="text-xl font-bold text-slate-800">{item.label}</h3>
-                        <p className="text-slate-500 text-sm mt-1">{item.desc}</p>
-                    </button>
-                ))}
-            </div>
-        </div>
-    );
-
-    const renderContent = () => {
+    const renderStack = () => {
         if (stack === 'home') return renderHome();
 
-        // Drilled-Down Views (subView)
-        if (subView) {
-            switch(subView) {
-                // --- Account ---
-                case 'account.setup': return <div className="pt-16 px-2"><JourneyView dashboardPrefs={dashboardPrefs} onOpenWizard={() => {}} /></div>;
-                case 'account.widgets': return <div className="pt-16 px-2"><WidgetConfig currentPrefs={dashboardPrefs} onSave={bodyProps.onUpdatePrefs} /></div>;
-                case 'account.sync': return <div className="pt-16 px-2"><DeviceSync onSyncComplete={bodyProps.onSyncHealth} lastSynced={healthStats.lastSynced} /></div>;
-                case 'account.pharmacy': return <div className="pt-16 px-2"><PharmacyOrders /></div>;
+        return (
+            <div className="min-h-screen bg-slate-50 flex flex-col animate-fade-in">
+                <div className="bg-white/80 backdrop-blur-md border-b border-slate-100 p-4 sticky top-0 z-50 flex items-center justify-between">
+                    <button onClick={goBack} className="text-slate-400 font-black uppercase text-xs tracking-widest flex items-center gap-1 hover:text-slate-900 transition-colors">
+                        ← {subView ? stack : 'Dashboard'}
+                    </button>
+                    <h2 className="font-black uppercase tracking-tighter text-sm">{subView || stack} Hub</h2>
+                    <button onClick={() => setStack('home')} className="p-2 bg-slate-100 rounded-full text-slate-500"><XIcon className="w-4 h-4" /></button>
+                </div>
 
-                // --- Physical ---
-                case 'physical.scan': return <div className="pt-16 px-2"><BodyHub {...bodyProps} /></div>;
-                case 'physical.workout_log': return <div className="pt-16 px-2"><PlaceholderPage title="Workout Log" description="Track sets and reps." /></div>;
-                case 'physical.plans': return <div className="pt-16 px-2"><PlaceholderPage title="Exercise Plans" description="AI generated workouts." /></div>;
-                case 'physical.form_check': 
-                    return (
-                        <div className="pt-16 px-4 h-[80vh] flex flex-col items-center justify-center text-center">
-                            <h2 className="text-2xl font-black mb-4">AI Form Coach</h2>
-                            <button onClick={() => setShowFormAnalysis(true)} className="bg-emerald-500 text-white px-8 py-4 rounded-2xl font-bold shadow-lg">Open Camera</button>
-                            {showFormAnalysis && <FormAnalysis onClose={() => setShowFormAnalysis(false)} />}
+                <div className="flex-grow p-4 pb-24">
+                    {stack === 'nutrition' && <FuelSection {...fuelProps} />}
+                    {stack === 'physical' && <BodyHub {...bodyProps} />}
+                    {stack === 'mental' && <AssessmentHub />}
+                    {stack === 'roles' && <CoachingHub userRole={userRole} onUpgrade={() => {}} />}
+                    {stack === 'rewards' && <RewardsDashboard />}
+                    {stack === 'account' && (
+                        <div className="space-y-4">
+                            <button onClick={() => setSubView('sync')} className="w-full bg-white p-6 rounded-3xl border border-slate-200 text-left font-black uppercase text-sm text-slate-800 flex justify-between shadow-sm">Device Sync <span>→</span></button>
+                            <button onClick={() => setSubView('widgets')} className="w-full bg-white p-6 rounded-3xl border border-slate-200 text-left font-black uppercase text-sm text-slate-800 flex justify-between shadow-sm">My Widgets <span>→</span></button>
+                            <button onClick={() => setSubView('pharmacy')} className="w-full bg-white p-6 rounded-3xl border border-slate-200 text-left font-black uppercase text-sm text-slate-800 flex justify-between shadow-sm">Pharmacy History <span>→</span></button>
+                            <button onClick={onLogout} className="w-full bg-rose-50 p-6 rounded-3xl border border-rose-100 text-left font-black uppercase text-sm text-rose-600 flex justify-between mt-10">Sign Out <span>⏻</span></button>
                         </div>
-                    );
-                case 'physical.run': return <div className="pt-16 px-2"><PlaceholderPage title="Running App" description="GPS tracking." /></div>;
+                    )}
 
-                // --- Nutrition ---
-                case 'nutrition.planner': return <div className="pt-16 px-2"><FuelSection {...fuelProps} defaultTab="plan" /></div>;
-                case 'nutrition.pantry': return <div className="pt-16 px-2"><FuelSection {...fuelProps} defaultTab="grocery" /></div>;
-                case 'nutrition.pantry_chef': return <div className="pt-16 px-2"><PantryChefView savedMeals={fuelProps.savedMeals} onSaveMeal={fuelProps.onAddMealToLibrary} /></div>;
-                case 'nutrition.dining': return <div className="pt-16 px-2"><MasterChefView savedMeals={fuelProps.savedMeals} onSaveMeal={fuelProps.onAddMealToLibrary} /></div>;
-                case 'nutrition.library': return <div className="pt-16 px-2"><FuelSection {...fuelProps} defaultTab="library" /></div>;
-                case 'nutrition.videos': return <div className="pt-16 px-2"><PlaceholderPage title="Meal Prep Videos" /></div>;
-
-                // --- Mental ---
-                case 'mental.sleep': return <div className="pt-16 px-2"><ReadinessView /></div>;
-                case 'mental.readiness': return <div className="pt-16 px-2"><ReadinessView /></div>;
-                case 'mental.assessments': return <div className="pt-16 px-2"><AssessmentHub /></div>;
-                case 'mental.labs': return <div className="pt-16 px-2"><HealthReportsView /></div>;
-                case 'mental.store': return <div className="pt-16 px-2"><PlaceholderPage title="Lab Store" /></div>;
-
-                // --- Roles ---
-                case 'roles.coach': return <div className="pt-16 px-2"><CoachingHub userRole={userRole} onUpgrade={fuelProps.onGenerateMedical} /></div>;
-                case 'roles.influencer': return <div className="pt-16 px-2"><PlaceholderPage title="Influencer Portal" /></div>;
-                case 'roles.employer': return <div className="pt-16 px-2"><PlaceholderPage title="Employer Portal" /></div>;
-                case 'roles.union': return <div className="pt-16 px-2"><PlaceholderPage title="Union Portal" /></div>;
-                case 'roles.payor': return <div className="pt-16 px-2"><PlaceholderPage title="Payor Portal" /></div>;
-                case 'roles.government': return <div className="pt-16 px-2"><PlaceholderPage title="Government Portal" /></div>;
-                case 'roles.health_systems': return <div className="pt-16 px-2"><PlaceholderPage title="Health Systems" /></div>;
-
-                // --- Rewards ---
-                case 'rewards': return <div className="pt-16 px-2"><RewardsDashboard /></div>;
-                case 'history': return <div className="pt-16 px-2"><FuelSection {...fuelProps} defaultTab="history" /></div>;
-
-                default: return <div className="pt-20 text-center">View Not Found</div>;
-            }
-        }
-
-        // Stack Menus (The "Drill Down" Lists)
-        switch(stack) {
-            case 'account': return renderSubLevelMenu('My Account', [
-                { id: 'account.setup', label: 'Personalize', desc: 'Goals & settings' },
-                { id: 'account.widgets', label: 'My Widgets', desc: 'Dashboard config' },
-                { id: 'account.sync', label: 'Device Sync', desc: 'Apple Health & Fitbit' },
-                { id: 'account.pharmacy', label: 'Order Meds', desc: 'Pharmacy store' }
-            ]);
-            case 'physical': return renderSubLevelMenu('Physical', [
-                { id: 'physical.scan', label: '3D Body Scan', desc: 'Biometric avatar' },
-                { id: 'physical.workout_log', label: 'Workout Log', desc: 'Track training' },
-                { id: 'physical.plans', label: 'Exercise Plans', desc: 'AI routines' },
-                { id: 'physical.form_check', label: 'Form Checker', desc: 'Real-time correction' },
-                { id: 'physical.run', label: 'Running App', desc: 'GPS tracker' }
-            ]);
-            case 'nutrition': return renderSubLevelMenu('Nutrition', [
-                { id: 'nutrition.planner', label: 'Meal Plans', desc: 'Weekly schedule' },
-                { id: 'nutrition.pantry', label: 'Grocery List', desc: 'Shopping management' },
-                { id: 'nutrition.pantry_chef', label: 'Pantry Chef', desc: 'Fridge photo to recipe' },
-                { id: 'nutrition.dining', label: 'Dining Out', desc: 'MasterChef Replicator' },
-                { id: 'nutrition.library', label: 'Saved Recipes', desc: 'Cookbook' },
-                { id: 'nutrition.videos', label: 'Meal Prep Vids', desc: 'Community guides' }
-            ]);
-            case 'mental': return renderSubLevelMenu('Mental & Labs', [
-                { id: 'mental.sleep', label: 'Sleep Log', desc: 'Rest tracking' },
-                { id: 'mental.readiness', label: 'Readiness Score', desc: 'Daily capacity' },
-                { id: 'mental.assessments', label: 'Psych Quizzes', desc: 'Cognitive check-ins' },
-                { id: 'mental.labs', label: 'Labs', desc: 'Bloodwork results' },
-                { id: 'mental.store', label: 'Buy Test Kits', desc: 'Home biomarkers' }
-            ]);
-            case 'roles': return renderSubLevelMenu('Roles & Portals', [
-                { id: 'roles.coach', label: 'For Coaches', desc: 'Professional suite' },
-                { id: 'roles.influencer', label: 'For Influencers', desc: 'Brand tools' },
-                { id: 'roles.employer', label: 'For Employers', desc: 'Corporate wellness' },
-                { id: 'roles.union', label: 'For Unions', desc: 'Member benefits' },
-                { id: 'roles.government', label: 'For Government', desc: 'Public health initiatives' },
-                { id: 'roles.payor', label: 'Payers / Insurers', desc: 'Insurance claims' },
-                { id: 'roles.health_systems', label: 'For Health Systems', desc: 'Clinical integration' }
-            ]);
-            case 'rewards': return renderSubLevelMenu('Rewards', [
-                { id: 'rewards', label: 'My Rewards', desc: 'Health wallet' },
-                { id: 'history', label: 'History', desc: 'Timeline log' }
-            ]);
-            default: return null;
-        }
+                    {subView === 'sync' && <div className="fixed inset-0 z-[60] bg-slate-50 overflow-y-auto"><div className="p-4 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0"><button onClick={() => setSubView(null)} className="text-xs font-black uppercase">← Back</button><h2 className="font-black uppercase">Sync</h2><div className="w-10"></div></div><DeviceSync onSyncComplete={bodyProps.onSyncHealth} /></div>}
+                    {subView === 'widgets' && <div className="fixed inset-0 z-[60] bg-slate-50 overflow-y-auto"><div className="p-4 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0"><button onClick={() => setSubView(null)} className="text-xs font-black uppercase">← Back</button><h2 className="font-black uppercase">Widgets</h2><div className="w-10"></div></div><WidgetConfig currentPrefs={dashboardPrefs} onSave={bodyProps.onUpdatePrefs} /></div>}
+                    {subView === 'pharmacy' && <div className="fixed inset-0 z-[60] bg-slate-50 overflow-y-auto"><div className="p-4 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0"><button onClick={() => setSubView(null)} className="text-xs font-black uppercase">← Back</button><h2 className="font-black uppercase">Pharmacy</h2><div className="w-10"></div></div><PharmacyOrders /></div>}
+                </div>
+            </div>
+        );
     };
 
     return (
-        <div className="bg-slate-50 min-h-screen font-sans">
-            <VitalsStrip 
-                stats={healthStats} 
-                prefs={dashboardPrefs} 
-                onSyncClick={() => navigateTo('account', 'account.sync')} 
-            />
-            
-            {/* Main Content Render */}
-            <main>
-                {renderContent()}
+        <div className="min-h-screen bg-slate-50 flex flex-col font-sans selection:bg-indigo-100">
+            <VitalsStrip stats={healthStats} prefs={dashboardPrefs} onSyncClick={() => navigateTo('account', 'sync')} />
+            <main className="flex-grow overflow-y-auto no-scrollbar">
+                {renderStack()}
             </main>
-
-            {/* Back Button Overlay (if not home) */}
-            {stack !== 'home' && (
-                <button 
-                    onClick={goBack}
-                    className="fixed bottom-6 left-6 w-14 h-14 bg-white rounded-full shadow-2xl flex items-center justify-center text-slate-800 border border-slate-100 z-50 active:scale-90 transition-transform"
-                >
-                    <XIcon className="w-6 h-6" />
-                </button>
-            )}
-
-            {/* Persistent Camera FAB */}
-            <button 
-                onClick={onCameraClick}
-                className="fixed bottom-6 right-6 w-16 h-16 bg-emerald-500 rounded-full shadow-2xl shadow-emerald-500/40 flex items-center justify-center text-white z-50 active:scale-90 transition-transform border-4 border-white"
-            >
-                <CameraIcon className="w-8 h-8" />
-            </button>
+            
+            <div className="fixed bottom-0 left-0 right-0 h-20 bg-white/90 backdrop-blur-xl border-t border-slate-100 z-40 flex items-center justify-around px-6 pb-safe shadow-[0_-4px_24px_rgba(0,0,0,0.04)]">
+                 <button onClick={() => setStack('home')} className={`p-3 rounded-2xl transition-all ${stack === 'home' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:bg-slate-50'}`}><HomeIcon /></button>
+                 <button onClick={onCameraClick} className="w-16 h-16 bg-emerald-500 text-white rounded-[1.8rem] shadow-xl shadow-emerald-200 flex items-center justify-center transform active:scale-90 transition-all border-4 border-white -mt-10"><CameraIcon className="w-8 h-8" /></button>
+                 <button onClick={() => navigateTo('nutrition', 'library')} className={`p-3 rounded-2xl transition-all ${stack === 'nutrition' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:bg-slate-50'}`}><BookOpenIcon /></button>
+            </div>
         </div>
     );
 };

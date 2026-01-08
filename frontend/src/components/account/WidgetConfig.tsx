@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { ActivityIcon, FireIcon, TrophyIcon, GlobeAltIcon, HeartIcon, Squares2X2Icon, IconProps } from '../icons';
+import { ActivityIcon, FireIcon, TrophyIcon, GlobeAltIcon, HeartIcon, Squares2X2Icon, IconProps, MoonIcon, DropIcon, WavesIcon, BrainIcon, UserCircleIcon } from '../icons';
 import type { UserDashboardPrefs } from '../../types';
 
 interface WidgetConfigProps {
@@ -15,7 +15,19 @@ export const WidgetConfig: React.FC<WidgetConfigProps> = ({ currentPrefs, onSave
         { id: 'restingCalories', label: 'Resting Energy', icon: <TrophyIcon /> },
         { id: 'distanceMiles', label: 'Distance', icon: <GlobeAltIcon /> },
         { id: 'flightsClimbed', label: 'Flights', icon: <ActivityIcon /> },
-        { id: 'heartRate', label: 'Heart Rate', icon: <HeartIcon /> }
+        { id: 'heartRate', label: 'Heart Rate', icon: <HeartIcon /> },
+        { id: 'restingHeartRate', label: 'Resting HR', icon: <HeartIcon /> },
+        { id: 'sleepScore', label: 'Sleep Score', icon: <MoonIcon /> },
+        { id: 'spo2', label: 'Oxygen (SpO2)', icon: <WavesIcon /> },
+        { id: 'vo2Max', label: 'Cardio Fitness', icon: <TrophyIcon /> },
+        { id: 'waterFlOz', label: 'Hydration', icon: <DropIcon /> },
+        { id: 'activeZoneMinutes', label: 'Zone Minutes', icon: <FireIcon /> },
+        { id: 'mindfulnessMinutes', label: 'Mindfulness', icon: <BrainIcon /> },
+        // NEW Apple Health / iHealth Options
+        { id: 'bloodPressure', label: 'Blood Pressure', icon: <HeartIcon /> },
+        { id: 'bodyFat', label: 'Body Fat %', icon: <UserCircleIcon /> },
+        { id: 'bmi', label: 'Body Mass Index', icon: <ActivityIcon /> },
+        { id: 'weight', label: 'Body Weight', icon: <ActivityIcon /> }
     ];
 
     const handleToggle = (id: string) => {

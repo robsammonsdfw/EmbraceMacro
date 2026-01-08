@@ -95,7 +95,7 @@ export const ensureSchema = async () => {
                 first_name VARCHAR(255),
                 role VARCHAR(50) DEFAULT 'user',
                 shopify_customer_id VARCHAR(255),
-                dashboard_prefs JSONB DEFAULT '{"selectedWidgets": ["steps", "activeCalories"]}',
+                dashboard_prefs JSONB DEFAULT '{"selectedWidgets": ["steps", "activeCalories", "heartRate"]}',
                 privacy_mode VARCHAR(50) DEFAULT 'private',
                 bio TEXT,
                 created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
@@ -164,6 +164,18 @@ export const ensureSchema = async () => {
                 distance_miles FLOAT DEFAULT 0,
                 flights_climbed INT DEFAULT 0,
                 heart_rate INT DEFAULT 0,
+                resting_heart_rate INT DEFAULT 0,
+                sleep_score INT DEFAULT 0,
+                spo2 FLOAT DEFAULT 0,
+                vo2_max FLOAT DEFAULT 0,
+                active_zone_minutes INT DEFAULT 0,
+                water_fl_oz FLOAT DEFAULT 0,
+                mindfulness_minutes INT DEFAULT 0,
+                weight_lbs FLOAT DEFAULT 0,
+                blood_pressure_systolic INT DEFAULT 0,
+                blood_pressure_diastolic INT DEFAULT 0,
+                body_fat_percentage FLOAT DEFAULT 0,
+                bmi FLOAT DEFAULT 0,
                 last_synced TIMESTAMPTZ
             );
             CREATE TABLE IF NOT EXISTS sleep_records (
@@ -850,6 +862,18 @@ export const getHealthMetrics = async (userId) => {
                 distance_miles as "distanceMiles", 
                 flights_climbed as "flightsClimbed", 
                 heart_rate as "heartRate", 
+                resting_heart_rate as "restingHeartRate",
+                sleep_score as "sleepScore",
+                spo2,
+                vo2_max as "vo2Max",
+                active_zone_minutes as "activeZoneMinutes",
+                water_fl_oz as "waterFlOz",
+                mindfulness_minutes as "mindfulnessMinutes",
+                weight_lbs as "weightLbs",
+                blood_pressure_systolic as "bloodPressureSystolic",
+                blood_pressure_diastolic as "bloodPressureDiastolic",
+                body_fat_percentage as "bodyFatPercentage",
+                bmi,
                 last_synced as "lastSynced"
             FROM health_metrics WHERE user_id = $1
         `, [userId]);
@@ -860,15 +884,33 @@ export const getHealthMetrics = async (userId) => {
 export const syncHealthMetrics = async (userId, stats) => {
     const client = await pool.connect();
     try {
-        const q = `INSERT INTO health_metrics (user_id, steps, active_calories, resting_calories, distance_miles, flights_climbed, heart_rate, last_synced)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
+        const q = `INSERT INTO health_metrics (
+                        user_id, steps, active_calories, resting_calories, distance_miles, 
+                        flights_climbed, heart_rate, resting_heart_rate, sleep_score, spo2, 
+                        vo2_max, active_zone_minutes, water_fl_oz, mindfulness_minutes, weight_lbs, 
+                        blood_pressure_systolic, blood_pressure_diastolic, body_fat_percentage, bmi,
+                        last_synced
+                    )
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, CURRENT_TIMESTAMP)
                    ON CONFLICT (user_id) DO UPDATE SET 
                         steps = GREATEST(health_metrics.steps, EXCLUDED.steps), 
                         active_calories = GREATEST(health_metrics.active_calories, EXCLUDED.active_calories),
                         resting_calories = GREATEST(health_metrics.resting_calories, EXCLUDED.resting_calories),
                         distance_miles = GREATEST(health_metrics.distance_miles, EXCLUDED.distance_miles),
                         flights_climbed = GREATEST(health_metrics.flights_climbed, EXCLUDED.flights_climbed),
-                        heart_rate = GREATEST(health_metrics.heart_rate, EXCLUDED.heart_rate),
+                        heart_rate = EXCLUDED.heart_rate, 
+                        resting_heart_rate = EXCLUDED.resting_heart_rate,
+                        sleep_score = EXCLUDED.sleep_score,
+                        spo2 = EXCLUDED.spo2,
+                        vo2_max = EXCLUDED.vo2_max,
+                        active_zone_minutes = GREATEST(health_metrics.active_zone_minutes, EXCLUDED.active_zone_minutes),
+                        water_fl_oz = GREATEST(health_metrics.water_fl_oz, EXCLUDED.water_fl_oz),
+                        mindfulness_minutes = GREATEST(health_metrics.mindfulness_minutes, EXCLUDED.mindfulness_minutes),
+                        weight_lbs = EXCLUDED.weight_lbs,
+                        blood_pressure_systolic = EXCLUDED.blood_pressure_systolic,
+                        blood_pressure_diastolic = EXCLUDED.blood_pressure_diastolic,
+                        body_fat_percentage = EXCLUDED.body_fat_percentage,
+                        bmi = EXCLUDED.bmi,
                         last_synced = CURRENT_TIMESTAMP 
                    RETURNING 
                         steps, 
@@ -876,7 +918,19 @@ export const syncHealthMetrics = async (userId, stats) => {
                         resting_calories as "restingCalories", 
                         distance_miles as "distanceMiles", 
                         flights_climbed as "flightsClimbed", 
-                        heart_rate as "heartRate", 
+                        heart_rate as "heartRate",
+                        resting_heart_rate as "restingHeartRate",
+                        sleep_score as "sleepScore",
+                        spo2,
+                        vo2_max as "vo2Max",
+                        active_zone_minutes as "activeZoneMinutes",
+                        water_fl_oz as "waterFlOz",
+                        mindfulness_minutes as "mindfulnessMinutes",
+                        weight_lbs as "weightLbs",
+                        blood_pressure_systolic as "bloodPressureSystolic",
+                        blood_pressure_diastolic as "bloodPressureDiastolic",
+                        body_fat_percentage as "bodyFatPercentage",
+                        bmi,
                         last_synced as "lastSynced"`;
         const res = await client.query(q, [
             userId, 
@@ -885,7 +939,19 @@ export const syncHealthMetrics = async (userId, stats) => {
             stats.restingCalories || 0, 
             stats.distanceMiles || 0, 
             stats.flightsClimbed || 0, 
-            stats.heartRate || 0
+            stats.heartRate || 0,
+            stats.restingHeartRate || 0,
+            stats.sleepScore || 0,
+            stats.spo2 || 0,
+            stats.vo2Max || 0,
+            stats.activeZoneMinutes || 0,
+            stats.waterFlOz || 0,
+            stats.mindfulnessMinutes || 0,
+            stats.weightLbs || 0,
+            stats.bloodPressureSystolic || 0,
+            stats.bloodPressureDiastolic || 0,
+            stats.bodyFatPercentage || 0,
+            stats.bmi || 0
         ]);
         return res.rows[0];
     } finally { client.release(); }

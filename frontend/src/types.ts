@@ -100,6 +100,20 @@ export interface HealthStats {
   hrv?: number;
   sleepMinutes?: number;
   lastSynced?: string;
+  // Fitbit & Apple Health Fields
+  restingHeartRate?: number;
+  sleepScore?: number;
+  spo2?: number;
+  activeZoneMinutes?: number;
+  vo2Max?: number;
+  waterFlOz?: number;
+  mindfulnessMinutes?: number;
+  weightLbs?: number;
+  // Apple Health / iHealth Clinical Fields
+  bloodPressureSystolic?: number;
+  bloodPressureDiastolic?: number;
+  bodyFatPercentage?: number;
+  bmi?: number;
 }
 
 export interface UserDashboardPrefs {

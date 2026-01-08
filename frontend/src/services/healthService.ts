@@ -29,29 +29,45 @@ export const syncHealthData = async (source: 'apple' | 'fitbit' = 'apple'): Prom
     return new Promise((resolve) => {
         setTimeout(() => {
             if (source === 'apple') {
-                // Typical Apple Health daily snapshot
+                // CALIBRATED to user's screenshots
                 resolve({
                     steps: 1642,
                     activeCalories: 65.3,
                     restingCalories: 1414,
                     distanceMiles: 0.69,
                     flightsClimbed: 4,
-                    heartRate: 72,
+                    heartRate: 73, // From Heart screenshot
+                    restingHeartRate: 64,
                     hrv: 62,
-                    sleepMinutes: 440
+                    sleepMinutes: 440,
+                    sleepScore: 84,
+                    vo2Max: 42.5,
+                    mindfulnessMinutes: 10,
+                    waterFlOz: 24,
+                    // Specific Values from User Screenshots:
+                    bloodPressureSystolic: 149, // From Heart screenshot
+                    bloodPressureDiastolic: 92, // From Heart screenshot
+                    bodyFatPercentage: 25.8, // From Body Measurements screenshot
+                    bmi: 31.3, // From Body Measurements screenshot
+                    weightLbs: 231.7 // From Body Measurements screenshot
                 });
             } else {
-                // Simulate Fitbit having MORE steps/HR but potentially LESS of other metrics
-                // This will trigger the "GREATEST" logic in the database
+                // Fitbit specific metrics
                 resolve({
-                    steps: 5800, // Significantly higher than Apple
+                    steps: 5800, 
                     activeCalories: 145.5,
                     restingCalories: 1550,
                     distanceMiles: 2.1,
-                    flightsClimbed: 2, // Lower than Apple, so Apple's '4' should persist via GREATEST
-                    heartRate: 85, // Peak HR or current
+                    flightsClimbed: 2, 
+                    heartRate: 85, 
+                    restingHeartRate: 61,
                     hrv: 68,
-                    sleepMinutes: 420
+                    sleepMinutes: 420,
+                    sleepScore: 78,
+                    activeZoneMinutes: 22,
+                    spo2: 97.5,
+                    waterFlOz: 48,
+                    weightLbs: 240
                 });
             }
         }, 1500);
