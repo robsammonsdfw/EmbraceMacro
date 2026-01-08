@@ -54,7 +54,8 @@ const verifyToken = (headers) => {
 
     const authHeader = normalizedHeaders['authorization'];
     if (!authHeader) {
-        console.error("Missing Authorization header. Available headers:", Object.keys(normalizedHeaders));
+        // Log keys to help debug if it's missing or named differently
+        console.error("Missing Authorization header. Available:", Object.keys(normalizedHeaders));
         throw new Error("No token provided");
     }
     
@@ -89,26 +90,34 @@ const sendResponse = (statusCode, body) => {
 // --- MAIN HANDLER ---
 
 export const handler = async (event) => {
-    // Determine Method and Path (Support V1 and V2 Payloads)
-    let httpMethod = event.httpMethod || event.requestContext?.http?.method || "";
-    httpMethod = httpMethod.toUpperCase();
-    
-    let path = event.path || event.requestContext?.http?.path || event.rawPath || "";
+    // 1. Debugging: Log the event structure to catch payload mismatches
+    console.log("Event Keys:", Object.keys(event));
+    if (event.requestContext) console.log("RequestContext Keys:", Object.keys(event.requestContext));
 
-    // Normalize Path: Strip '/default' prefix if present (common in HTTP API default stage)
-    if (path.startsWith('/default/')) {
-        path = path.substring(8);
-    } else if (path === '/default') {
-        path = '/';
+    // 2. Robust Extraction of Method and Path
+    // Try multiple locations where API Gateway might put these values
+    let httpMethod = event.httpMethod;
+    if (!httpMethod && event.requestContext && event.requestContext.http) {
+        httpMethod = event.requestContext.http.method;
+    }
+    
+    let path = event.path || event.rawPath;
+    if (!path && event.requestContext && event.requestContext.http) {
+        path = event.requestContext.http.path;
     }
 
-    console.log("Request:", httpMethod, path);
+    // Default to safe strings
+    httpMethod = (httpMethod || "").toUpperCase();
+    path = path || "";
 
+    console.log(`Resolved Route: [${httpMethod}] ${path}`);
+
+    // 3. Handle OPTIONS (CORS Preflight) - MUST be first
     if (httpMethod === 'OPTIONS') {
         return sendResponse(200, { message: "OK" });
     }
 
-    // Ensure DB Schema (Idempotent)
+    // 4. Ensure DB Schema
     try {
         await db.ensureSchema();
     } catch (e) {
@@ -116,10 +125,10 @@ export const handler = async (event) => {
     }
 
     try {
-        
         // --- PUBLIC ROUTES ---
+        // Using endsWith() avoids issues with '/default' or stage name prefixes
         
-        if (path === '/auth/customer-login' && httpMethod === 'POST') {
+        if (path.endsWith('/auth/customer-login') && httpMethod === 'POST') {
             const body = JSON.parse(event.body);
             const user = await db.findOrCreateUserByEmail(body.email);
             const token = jwt.sign({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
@@ -132,7 +141,7 @@ export const handler = async (event) => {
         try {
             user = verifyToken(event.headers);
         } catch (e) {
-            console.error("Auth Error:", e.message);
+            console.error("Auth Verification Error:", e.message);
             return sendResponse(401, { error: e.message });
         }
 
@@ -141,63 +150,66 @@ export const handler = async (event) => {
         }
         const userId = user.userId;
 
-        // 1. SHOPIFY ORDERS (NEW)
-        if (path === '/shopify/orders' && httpMethod === 'GET') {
+        // 1. SHOPIFY ORDERS
+        if (path.endsWith('/shopify/orders') && httpMethod === 'GET') {
             const orders = await shopify.fetchCustomerOrders(userId);
             return sendResponse(200, orders);
         }
 
         // 2. MEAL LOGS
-        if (path === '/meal-log' && httpMethod === 'GET') {
+        if (path.endsWith('/meal-log') && httpMethod === 'GET') {
             const logs = await db.getMealLogEntries(userId);
             return sendResponse(200, logs);
         }
 
-        if (path === '/meal-log' && httpMethod === 'POST') {
+        if (path.endsWith('/meal-log') && httpMethod === 'POST') {
             const { mealData, imageBase64 } = JSON.parse(event.body);
             const entry = await db.createMealLogEntry(userId, mealData, imageBase64);
             return sendResponse(200, entry);
         }
 
         // 3. SAVED MEALS
-        if (path === '/saved-meals' && httpMethod === 'GET') {
+        if (path.endsWith('/saved-meals') && httpMethod === 'GET') {
             const meals = await db.getSavedMeals(userId);
             return sendResponse(200, meals);
         }
 
-        if (path === '/saved-meals' && httpMethod === 'POST') {
+        if (path.endsWith('/saved-meals') && httpMethod === 'POST') {
             const mealData = JSON.parse(event.body);
             const saved = await db.saveMeal(userId, mealData);
             return sendResponse(200, saved);
         }
 
-        if (path.startsWith('/saved-meals/') && httpMethod === 'DELETE') {
+        // Dynamic ID route for delete
+        if (path.includes('/saved-meals/') && httpMethod === 'DELETE') {
             const id = path.split('/').pop();
             await db.deleteMeal(userId, id);
             return sendResponse(200, { success: true });
         }
 
         // 4. MEAL PLANS
-        if (path === '/meal-plans' && httpMethod === 'GET') {
+        if (path.endsWith('/meal-plans') && httpMethod === 'GET') {
             const plans = await db.getMealPlans(userId);
             return sendResponse(200, plans);
         }
 
-        if (path === '/meal-plans' && httpMethod === 'POST') {
+        if (path.endsWith('/meal-plans') && httpMethod === 'POST') {
             const { name } = JSON.parse(event.body);
             const plan = await db.createMealPlan(userId, name);
             return sendResponse(200, plan);
         }
 
         if (path.includes('/items') && httpMethod === 'POST') {
-            // Path structure: /meal-plans/{planId}/items
-            // Handle parsing logic carefully if path is complex
+            // Path structure: .../meal-plans/{planId}/items
             const segments = path.split('/');
-            const planIdIndex = segments.indexOf('meal-plans') + 1;
-            const planId = segments[planIdIndex];
+            const planIndex = segments.indexOf('meal-plans');
+            if (planIndex === -1 || segments.length <= planIndex + 1) {
+                 return sendResponse(400, { error: "Invalid path structure for items" });
+            }
+            const planId = segments[planIndex + 1];
             
             const { savedMealId, metadata } = JSON.parse(event.body);
-            const item = await db.addMealToPlanItem(userId, planId, savedMealId); 
+            const item = await db.addMealToPlanItem(userId, planId, savedMealId);
             return sendResponse(200, item);
         }
         
@@ -208,39 +220,37 @@ export const handler = async (event) => {
         }
 
         // 5. GROCERY LISTS
-        if (path === '/grocery-lists' && httpMethod === 'GET') {
+        if (path.endsWith('/grocery-lists') && httpMethod === 'GET') {
             const list = await db.getGroceryList(userId);
             return sendResponse(200, [{ id: 1, name: 'Main List', is_active: true, items: list }]);
         }
         
         if (path.includes('/grocery-lists') && path.includes('/items') && httpMethod === 'POST') {
              const { name } = JSON.parse(event.body);
-             // Assuming basic add for now, reusing db logic if available or simpler implementation
-             // Note: Direct DB call for item addition wasn't fully mocked in index previously, adding simple placeholder response or fix
-             // Real implementation would call db.addGroceryItem logic
+             // Basic add placeholder
              return sendResponse(200, { id: Date.now(), name, checked: false });
         }
 
-        // 6. HEALTH METRICS
-        if (path === '/health-metrics' && httpMethod === 'GET') {
+        // 6. HEALTH METRICS (Fixing the 404 issue)
+        if (path.endsWith('/health-metrics') && httpMethod === 'GET') {
             const metrics = await db.getHealthMetrics(userId);
             return sendResponse(200, metrics);
         }
 
-        if (path === '/health-metrics' && httpMethod === 'POST') {
+        if (path.endsWith('/health-metrics') && httpMethod === 'POST') {
             const stats = JSON.parse(event.body);
             const updated = await db.syncHealthMetrics(userId, stats);
             return sendResponse(200, updated);
         }
 
         // 7. REWARDS
-        if (path === '/rewards' && httpMethod === 'GET') {
+        if (path.endsWith('/rewards') && httpMethod === 'GET') {
             const summary = await db.getRewardsSummary(userId);
             return sendResponse(200, summary);
         }
 
-        // 8. GEMINI AI (Image Analysis)
-        if (path === '/analyze-image' && httpMethod === 'POST') {
+        // 8. GEMINI AI
+        if (path.endsWith('/analyze-image') && httpMethod === 'POST') {
             const { base64Image, mimeType, prompt, schema } = JSON.parse(event.body);
             
             const ai = new GoogleGenAI({ apiKey: API_KEY });
@@ -264,27 +274,29 @@ export const handler = async (event) => {
         }
 
         // 9. BODY PREFS
-        if (path === '/body/dashboard-prefs' && httpMethod === 'GET') {
+        if (path.endsWith('/body/dashboard-prefs') && httpMethod === 'GET') {
             const prefs = await db.getDashboardPrefs(userId);
             return sendResponse(200, prefs);
         }
 
-        if (path === '/body/dashboard-prefs' && httpMethod === 'POST') {
+        if (path.endsWith('/body/dashboard-prefs') && httpMethod === 'POST') {
             const prefs = JSON.parse(event.body);
             await db.saveDashboardPrefs(userId, prefs);
             return sendResponse(200, { success: true });
         }
         
         // 10. SOCIAL
-        if (path === '/social/friends' && httpMethod === 'GET') {
+        if (path.endsWith('/social/friends') && httpMethod === 'GET') {
             const friends = await db.getFriends(userId);
             return sendResponse(200, friends);
         }
 
-        return sendResponse(404, { error: "Route not found" });
+        // Catch-all for unmatched paths
+        console.warn(`Route not matched: [${httpMethod}] ${path}`);
+        return sendResponse(404, { error: `Route not found: ${path}` });
 
     } catch (err) {
-        console.error("Handler Error:", err);
+        console.error("Handler Exception:", err);
         return sendResponse(500, { error: err.message });
     }
 };

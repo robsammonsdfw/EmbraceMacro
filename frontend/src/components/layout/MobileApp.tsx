@@ -21,6 +21,7 @@ import { PantryChefView } from '../nutrition/PantryChefView';
 import { MasterChefView } from '../nutrition/MasterChefView';
 import { DeviceSync } from '../account/DeviceSync';
 import { WidgetConfig } from '../account/WidgetConfig';
+import { PharmacyOrders } from '../account/PharmacyOrders';
 
 interface MobileAppProps {
     healthStats: HealthStats;
@@ -261,7 +262,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                 case 'account.setup': return <div className="pt-16 px-2"><JourneyView dashboardPrefs={dashboardPrefs} onOpenWizard={() => {}} /></div>;
                 case 'account.widgets': return <div className="pt-16 px-2"><WidgetConfig currentPrefs={dashboardPrefs} onSave={bodyProps.onUpdatePrefs} /></div>;
                 case 'account.sync': return <div className="pt-16 px-2"><DeviceSync onSyncComplete={bodyProps.onSyncHealth} lastSynced={healthStats.lastSynced} /></div>;
-                case 'account.pharmacy': return <div className="pt-16 px-2"><PlaceholderPage title="Pharmacy Store" description="Refill prescriptions." /></div>;
+                case 'account.pharmacy': return <div className="pt-16 px-2"><PharmacyOrders /></div>;
 
                 // --- Physical ---
                 case 'physical.scan': return <div className="pt-16 px-2"><BodyHub {...bodyProps} /></div>;

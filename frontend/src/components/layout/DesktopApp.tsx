@@ -21,6 +21,7 @@ import { PantryChefView } from '../nutrition/PantryChefView';
 import { MasterChefView } from '../nutrition/MasterChefView';
 import { DeviceSync } from '../account/DeviceSync';
 import { WidgetConfig } from '../account/WidgetConfig';
+import { PharmacyOrders } from '../account/PharmacyOrders';
 
 interface DesktopAppProps {
     healthStats: HealthStats;
@@ -96,7 +97,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             case 'account.sync': 
                 return <DeviceSync onSyncComplete={bodyProps.onSyncHealth} lastSynced={healthStats.lastSynced} />; // Dedicated Sync View
             case 'account.pharmacy': 
-                return <PlaceholderPage title="Pharmacy Store" description="Order prescriptions and view history." />;
+                return <PharmacyOrders />;
 
             // --- 2. PHYSICAL ---
             case 'physical.scan': 
