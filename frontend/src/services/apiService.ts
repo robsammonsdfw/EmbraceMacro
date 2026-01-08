@@ -40,7 +40,7 @@ const callApi = async (endpoint: string, method: string, body?: any) => {
     if (token) {
         headers['Authorization'] = `Bearer ${token}`;
     } else {
-        console.warn("No auth token found in localStorage. API call may fail.");
+        console.warn("API Service: No auth token found in localStorage for key", AUTH_TOKEN_KEY);
     }
 
     if (proxyClientId) headers['x-proxy-client-id'] = proxyClientId;

@@ -89,9 +89,13 @@ const sendResponse = (statusCode, body) => {
 // --- MAIN HANDLER ---
 
 export const handler = async (event) => {
-    console.log("Request:", event.httpMethod, event.path);
+    // Determine Method and Path (Support V1 and V2 Payloads)
+    const httpMethod = event.httpMethod || event.requestContext?.http?.method;
+    const path = event.path || event.requestContext?.http?.path || event.rawPath;
 
-    if (event.httpMethod === 'OPTIONS') {
+    console.log("Request:", httpMethod, path);
+
+    if (httpMethod === 'OPTIONS') {
         return sendResponse(200, { message: "OK" });
     }
 
@@ -103,7 +107,6 @@ export const handler = async (event) => {
     }
 
     try {
-        const { path, httpMethod } = event;
         
         // --- PUBLIC ROUTES ---
         
@@ -241,6 +244,18 @@ export const handler = async (event) => {
             });
 
             return sendResponse(200, JSON.parse(response.text));
+        }
+
+        // 9. BODY PREFS
+        if (path === '/body/dashboard-prefs' && httpMethod === 'GET') {
+            const prefs = await db.getDashboardPrefs(userId);
+            return sendResponse(200, prefs);
+        }
+
+        if (path === '/body/dashboard-prefs' && httpMethod === 'POST') {
+            const prefs = JSON.parse(event.body);
+            await db.saveDashboardPrefs(userId, prefs);
+            return sendResponse(200, { success: true });
         }
 
         return sendResponse(404, { error: "Route not found" });
