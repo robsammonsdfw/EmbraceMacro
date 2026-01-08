@@ -80,7 +80,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
                         healthStats={healthStats}
                         isHealthConnected={false}
                         isHealthSyncing={false}
-                        onConnectHealth={() => {}}
+                        onConnectHealth={() => setActiveView('account.sync')}
                         onScanClick={() => {}}
                         onCameraClick={onCameraClick || (() => {})}
                         dashboardPrefs={dashboardPrefs}

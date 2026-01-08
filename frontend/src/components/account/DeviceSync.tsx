@@ -54,14 +54,14 @@ export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete, lastSync
                     <ActivityIcon className="w-10 h-10" />
                 </div>
                 <h2 className="text-2xl font-black text-slate-900">Device Sync</h2>
-                <p className="text-slate-500 font-medium mt-1">Connect your wearables to feed the Digital Twin.</p>
+                <p className="text-slate-500 font-medium mt-1">Manually trigger a data pull from your wearables.</p>
             </header>
 
             <div className="space-y-4">
                 {/* Apple Health Button */}
                 <button
                     onClick={handleAppleSync}
-                    disabled={appleStatus === 'syncing' || appleStatus === 'connected'}
+                    disabled={appleStatus === 'syncing'}
                     className={`w-full p-5 rounded-3xl border-2 transition-all flex items-center justify-between group ${
                         appleStatus === 'connected' 
                         ? 'bg-emerald-50 border-emerald-200' 
@@ -78,16 +78,21 @@ export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete, lastSync
                         </div>
                     </div>
                     <div className="pr-2">
-                        {appleStatus === 'idle' && <span className="bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide group-hover:bg-slate-200">Connect</span>}
+                        {appleStatus === 'idle' && <span className="bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide group-hover:bg-slate-200">Sync Now</span>}
                         {appleStatus === 'syncing' && <div className="w-5 h-5 border-2 border-slate-300 border-t-indigo-500 rounded-full animate-spin"></div>}
-                        {appleStatus === 'connected' && <div className="bg-emerald-500 text-white p-1 rounded-full"><CheckIcon className="w-4 h-4" /></div>}
+                        {appleStatus === 'connected' && (
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold text-emerald-600 uppercase">Synced</span>
+                                <div className="bg-emerald-500 text-white p-1 rounded-full"><CheckIcon className="w-3 h-3" /></div>
+                            </div>
+                        )}
                     </div>
                 </button>
 
                 {/* Fitbit Button */}
                 <button
                     onClick={handleFitbitSync}
-                    disabled={fitbitStatus === 'syncing' || fitbitStatus === 'connected'}
+                    disabled={fitbitStatus === 'syncing'}
                     className={`w-full p-5 rounded-3xl border-2 transition-all flex items-center justify-between group ${
                         fitbitStatus === 'connected' 
                         ? 'bg-emerald-50 border-emerald-200' 
@@ -104,9 +109,14 @@ export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete, lastSync
                         </div>
                     </div>
                     <div className="pr-2">
-                        {fitbitStatus === 'idle' && <span className="bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide group-hover:bg-slate-200">Connect</span>}
+                        {fitbitStatus === 'idle' && <span className="bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide group-hover:bg-slate-200">Sync Now</span>}
                         {fitbitStatus === 'syncing' && <div className="w-5 h-5 border-2 border-slate-300 border-t-indigo-500 rounded-full animate-spin"></div>}
-                        {fitbitStatus === 'connected' && <div className="bg-emerald-500 text-white p-1 rounded-full"><CheckIcon className="w-4 h-4" /></div>}
+                        {fitbitStatus === 'connected' && (
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold text-emerald-600 uppercase">Synced</span>
+                                <div className="bg-emerald-500 text-white p-1 rounded-full"><CheckIcon className="w-3 h-3" /></div>
+                            </div>
+                        )}
                     </div>
                 </button>
             </div>
