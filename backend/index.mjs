@@ -57,7 +57,13 @@ const verifyToken = (headers) => {
     const authHeader = normalizedHeaders['authorization'];
     if (!authHeader) throw new Error("No token provided");
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : authHeader;
-    return jwt.verify(token, JWT_SECRET);
+    
+    const decoded = jwt.verify(token, JWT_SECRET);
+    // Explicit check to narrow type from string | JwtPayload to JwtPayload (object)
+    if (typeof decoded === 'string') {
+        throw new Error("Invalid token payload type");
+    }
+    return decoded;
 };
 
 const sendResponse = (statusCode, body) => ({

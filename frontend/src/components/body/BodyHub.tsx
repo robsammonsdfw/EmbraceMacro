@@ -97,10 +97,13 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth, das
 
     const handleStartBodyScan = () => {
         const token = localStorage.getItem('embracehealth-api-token');
-        const url = token 
-            ? `https://app.embracehealth.ai?token=${encodeURIComponent(token)}`
-            : 'https://app.embracehealth.ai';
-        window.open(url, '_blank');
+        const baseUrl = 'https://app.embracehealth.ai/';
+        // Use standard redirect for seamless feel between apps
+        if (token) {
+            window.location.href = `${baseUrl}?token=${encodeURIComponent(token)}`;
+        } else {
+            window.location.href = baseUrl;
+        }
     };
 
     // Gallery Handlers
