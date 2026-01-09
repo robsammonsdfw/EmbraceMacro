@@ -3,16 +3,18 @@ import * as db from './databaseService.mjs';
 
 // Updated to match the specific environment variables from your configuration
 const SHOPIFY_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN || process.env.SHOPIFY_STORE_URL;
-// We will attempt to use the Storefront Token provided in the env vars as the Access Token
-const SHOPIFY_TOKEN = process.env.SHOPIFY_ADMIN_API_KEY || process.env.SHOPIFY_STOREFRONT_TOKEN;
+
+// STRICT: Use the Admin API Key for server-side operations (Orders, Customers)
+// The Storefront token is for client-side interactions only.
+const SHOPIFY_ADMIN_TOKEN = process.env.SHOPIFY_ADMIN_API_KEY;
 
 export const fetchCustomerOrders = async (userId) => {
     // 1. Validate Credentials
-    if (!SHOPIFY_DOMAIN || !SHOPIFY_TOKEN) {
-        const errorMsg = "Server configuration error: Missing Shopify Credentials (SHOPIFY_STORE_DOMAIN or SHOPIFY_STOREFRONT_TOKEN)";
+    if (!SHOPIFY_DOMAIN || !SHOPIFY_ADMIN_TOKEN) {
+        const errorMsg = "Server configuration error: Missing Shopify Admin Credentials (SHOPIFY_STORE_DOMAIN or SHOPIFY_ADMIN_API_KEY)";
         console.error(errorMsg, { 
             hasDomain: !!SHOPIFY_DOMAIN, 
-            hasToken: !!SHOPIFY_TOKEN 
+            hasToken: !!SHOPIFY_ADMIN_TOKEN 
         });
         throw new Error(errorMsg);
     }
@@ -27,6 +29,7 @@ export const fetchCustomerOrders = async (userId) => {
 
     try {
         // 3. Call Shopify Admin API to get orders
+        // Note: Admin API version 2024-01
         const url = `https://${SHOPIFY_DOMAIN}/admin/api/2024-01/customers/${shopifyCustomerId}/orders.json?status=any`;
         
         console.log(`Fetching orders from: ${url}`);
@@ -35,7 +38,7 @@ export const fetchCustomerOrders = async (userId) => {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
-                'X-Shopify-Access-Token': SHOPIFY_TOKEN
+                'X-Shopify-Access-Token': SHOPIFY_ADMIN_TOKEN // Must use Admin Token here
             }
         });
 
@@ -44,7 +47,7 @@ export const fetchCustomerOrders = async (userId) => {
             console.error(`Shopify API Error (${response.status}):`, errText);
             
             if (response.status === 401) {
-                throw new Error("Shopify Unauthorized (401). The provided token may not have Admin API permissions.");
+                throw new Error("Shopify Unauthorized (401). Check SHOPIFY_ADMIN_API_KEY permissions.");
             }
             throw new Error(`Shopify API Failed: ${response.status} ${response.statusText}`);
         }

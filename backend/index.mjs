@@ -1,5 +1,6 @@
 
 import * as db from './services/databaseService.mjs';
+import { fetchCustomerOrders } from './services/shopifyService.mjs';
 import jwt from 'jsonwebtoken';
 import { GoogleGenAI } from "@google/genai";
 
@@ -236,8 +237,6 @@ export const handler = async (event) => {
 
         // --- FORM CHECKS ---
         if (path.includes('/physical/form-checks') && httpMethod === 'GET') {
-            // Need to parse query param for exercise manually or assumes passed via path if we adjust route, 
-            // but standard API Gateway event usually has queryStringParameters.
             const exercise = event.queryStringParameters?.exercise || 'Squat';
             return sendResponse(200, await db.getFormChecks(userId, exercise));
         }
@@ -270,7 +269,13 @@ export const handler = async (event) => {
 
         // --- SHOPIFY ---
         if (path.endsWith('/shopify/orders') && httpMethod === 'GET') {
-             return sendResponse(200, []); 
+             try {
+                const orders = await fetchCustomerOrders(userId);
+                return sendResponse(200, orders);
+             } catch (e) {
+                console.error("Shopify Order Fetch Error:", e);
+                return sendResponse(500, { error: "Failed to fetch orders" });
+             }
         }
 
         // --- LOGGING (Meal History) ---

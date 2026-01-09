@@ -364,6 +364,11 @@ export type ActiveView =
   // Core
   | 'home'
   | 'hub' 
+  // Tele-Medicine (NEW)
+  | 'telemed.weight_loss'
+  | 'telemed.rx_mens'
+  | 'telemed.hair_loss'
+  | 'telemed.low_t'
   // Account
   | 'account.setup'
   | 'account.widgets'

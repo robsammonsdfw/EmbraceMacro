@@ -90,7 +90,14 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
                     />
                 );
             
-            // --- 1. MY ACCOUNT ---
+            // --- 1. TELE-MEDICINE ---
+            case 'telemed.weight_loss': return <PlaceholderPage title="Weight Loss Program" description="GLP-1s and metabolic management." />;
+            case 'telemed.rx_mens': return <PlaceholderPage title="RxMens" description="Men's health solutions." />;
+            case 'telemed.hair_loss': return <PlaceholderPage title="Hair Loss" description="Treatment plans." />;
+            case 'telemed.low_t': return <PlaceholderPage title="Low Testosterone" description="TRT and hormone optimization." />;
+            // Order History (Telemed) maps to PharmacyOrders
+            
+            // --- 2. MY ACCOUNT ---
             case 'account.setup': 
                 return <JourneyView dashboardPrefs={dashboardPrefs} onOpenWizard={() => {}} />;
             case 'account.widgets': 
@@ -100,7 +107,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             case 'account.pharmacy': 
                 return <PharmacyOrders />;
 
-            // --- 2. PHYSICAL ---
+            // --- 3. PHYSICAL ---
             case 'physical.scan': 
                 return <BodyHub {...bodyProps} />;
             case 'physical.workout_log': 
@@ -120,7 +127,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             case 'physical.run': 
                 return <PlaceholderPage title="Running App" description="GPS tracking and pace coaching." />;
 
-            // --- 3. NUTRITION ---
+            // --- 4. NUTRITION ---
             case 'nutrition.planner': 
                 return <FuelSection {...fuelProps} defaultTab="plan" />;
             case 'nutrition.pantry': 
@@ -134,7 +141,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             case 'nutrition.videos': 
                 return <PlaceholderPage title="Meal Prep Videos" description="Community generated cooking guides." />;
 
-            // --- 4. MENTAL & LABS ---
+            // --- 5. MENTAL & LABS ---
             case 'mental.sleep': 
                 return <ReadinessView />; // Contains sleep logging
             case 'mental.readiness': 
@@ -146,7 +153,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             case 'mental.store': 
                 return <PlaceholderPage title="Lab Store" description="Order biomarker test kits." />;
 
-            // --- 5. ROLES & PORTALS ---
+            // --- 6. ROLES & PORTALS ---
             case 'roles.coach': 
                 return <CoachingHub userRole={userRole} onUpgrade={() => {}} onProxySelect={onProxySelect} />;
             case 'roles.influencer': 
@@ -162,7 +169,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             case 'roles.health_systems':
                 return <PlaceholderPage title="Health Systems" description="Hospital and clinic integration." />;
 
-            // --- 6. REWARDS & HISTORY ---
+            // --- 7. REWARDS & HISTORY ---
             case 'rewards': 
                 return <RewardsDashboard />;
             case 'history': 

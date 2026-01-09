@@ -61,6 +61,7 @@ const CategoryHeader: React.FC<{
 export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, onLogout, selectedJourney, onJourneyChange }) => {
     // Categories state
     const [openCategories, setOpenCategories] = useState({
+        telemedicine: true, // NEW
         account: true,
         physical: true,
         nutrition: true,
@@ -99,14 +100,15 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
             <div className="flex-grow px-3 space-y-1 overflow-y-auto no-scrollbar pb-10">
                 <NavItem label="Dashboard" icon={<HomeIcon />} isActive={activeView === 'home'} onClick={() => onNavigate('home')} />
 
-                {/* 1. MY ACCOUNT */}
-                <CategoryHeader label="My Account" color="text-slate-500" isOpen={openCategories.account} onClick={() => toggleCategory('account')} />
-                {openCategories.account && (
-                    <div className="space-y-0.5 animate-fade-in pl-2 border-l border-slate-100 ml-4">
-                        <NavItem indent label="Personalize / Setup" icon={<CogIcon />} isActive={activeView === 'account.setup'} onClick={() => onNavigate('account.setup')} />
-                        <NavItem indent label="My Widgets" icon={<Squares2X2Icon />} isActive={activeView === 'account.widgets'} onClick={() => onNavigate('account.widgets')} />
-                        <NavItem indent label="Device Sync" icon={<ActivityIcon />} isActive={activeView === 'account.sync'} onClick={() => onNavigate('account.sync')} />
-                        <NavItem indent label="Order Meds / History" icon={<PillIcon />} isActive={activeView === 'account.pharmacy'} onClick={() => onNavigate('account.pharmacy')} />
+                {/* 1. TELE-MEDICINE (MOVED TO TOP) */}
+                <CategoryHeader label="Tele-Medicine" color="text-sky-600" isOpen={openCategories.telemedicine} onClick={() => toggleCategory('telemedicine')} />
+                {openCategories.telemedicine && (
+                    <div className="space-y-0.5 animate-fade-in pl-2 border-l border-sky-100 ml-4">
+                        <NavItem indent label="Weight Loss" icon={<ActivityIcon />} isActive={activeView === 'telemed.weight_loss'} onClick={() => onNavigate('telemed.weight_loss')} />
+                        <NavItem indent label="RxMens" icon={<UserCircleIcon />} isActive={activeView === 'telemed.rx_mens'} onClick={() => onNavigate('telemed.rx_mens')} />
+                        <NavItem indent label="Hair Loss" icon={<UserCircleIcon />} isActive={activeView === 'telemed.hair_loss'} onClick={() => onNavigate('telemed.hair_loss')} />
+                        <NavItem indent label="Low Testosterone" icon={<ActivityIcon />} isActive={activeView === 'telemed.low_t'} onClick={() => onNavigate('telemed.low_t')} />
+                        <NavItem indent label="Order History" icon={<PillIcon />} isActive={activeView === 'account.pharmacy'} onClick={() => onNavigate('account.pharmacy')} />
                     </div>
                 )}
 
@@ -167,6 +169,18 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
                     <div className="space-y-0.5 animate-fade-in pl-2 border-l border-blue-100 ml-4">
                         <NavItem indent label="My Rewards" icon={<TrophyIcon />} isActive={activeView === 'rewards'} onClick={() => onNavigate('rewards')} />
                         <NavItem indent label="History" icon={<ClockIcon />} isActive={activeView === 'history'} onClick={() => onNavigate('history')} />
+                    </div>
+                )}
+
+                {/* 7. MY ACCOUNT (MOVED TO BOTTOM) */}
+                <CategoryHeader label="My Account" color="text-slate-500" isOpen={openCategories.account} onClick={() => toggleCategory('account')} />
+                {openCategories.account && (
+                    <div className="space-y-0.5 animate-fade-in pl-2 border-l border-slate-100 ml-4">
+                        <NavItem indent label="Personalize / Setup" icon={<CogIcon />} isActive={activeView === 'account.setup'} onClick={() => onNavigate('account.setup')} />
+                        <NavItem indent label="My Widgets" icon={<Squares2X2Icon />} isActive={activeView === 'account.widgets'} onClick={() => onNavigate('account.widgets')} />
+                        <NavItem indent label="Device Sync" icon={<ActivityIcon />} isActive={activeView === 'account.sync'} onClick={() => onNavigate('account.sync')} />
+                        {/* Order History is now also linked in Tele-Medicine, but kept here for account completeness or can be removed if desired. For now, keeping it consistent with valid view IDs */}
+                        <NavItem indent label="Pharmacy History" icon={<PillIcon />} isActive={activeView === 'account.pharmacy'} onClick={() => onNavigate('account.pharmacy')} />
                     </div>
                 )}
             </div>
