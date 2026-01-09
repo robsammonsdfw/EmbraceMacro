@@ -4,7 +4,7 @@ import {
     RecoveryData, ReadinessScore, FormAnalysisResult, BodyPhoto, 
     Assessment, AssessmentState, PartnerBlueprint, MatchProfile, 
     CoachingRelation, NutritionInfo, RestaurantActivity, PantryLogEntry,
-    Recipe, SavedMeal, MealLogEntry, HealthStats, RewardsSummary
+    Recipe, SavedMeal, MealLogEntry, HealthStats, RewardsSummary, UserDashboardPrefs
 } from '../types';
 
 const API_BASE_URL = 'https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default';
@@ -26,9 +26,13 @@ const callApi = async (endpoint: string, method: string = 'GET', body?: any) => 
     });
 
     if (!response.ok) {
+        const text = await response.text();
+        console.error(`API Error ${response.status} for ${endpoint}:`, text);
         throw new Error(`API Error: ${response.statusText}`);
     }
     
+    // Handle 204 No Content or empty responses
+    if (response.status === 204) return null;
     const text = await response.text();
     return text ? JSON.parse(text) : {};
 };
@@ -130,5 +134,8 @@ export const judgeRecipeAttempt = (base64: string, recipeContext: string, recipe
 // --- REWARDS ---
 export const getRewardsSummary = (): Promise<RewardsSummary> => callApi('/rewards', 'GET');
 
-// --- SYNC ---
+// --- SYNC & DASHBOARD ---
 export const syncHealthStatsToDB = (stats: Partial<HealthStats>): Promise<HealthStats> => callApi('/sync-health', 'POST', stats);
+export const getHealthMetrics = (): Promise<HealthStats> => callApi('/health-metrics', 'GET');
+export const getDashboardPrefs = (): Promise<UserDashboardPrefs> => callApi('/body/dashboard-prefs', 'GET');
+export const saveDashboardPrefs = (prefs: UserDashboardPrefs): Promise<void> => callApi('/body/dashboard-prefs', 'POST', prefs);

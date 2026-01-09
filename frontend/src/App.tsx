@@ -43,34 +43,33 @@ const App: React.FC = () => {
 
   const loadAllData = async () => {
       if (!isAuthenticated) return;
+      
+      // Load independent data streams separately so one failure doesn't crash the app
       try {
-          const [meals, plansData, log, stats, prefs] = await Promise.all([
-              apiService.getSavedMeals(),
-              apiService.getMealPlans(),
-              apiService.getMealLogEntries(),
-              // apiService.getHealthStats(), // Assume implemented or mocked
-              Promise.resolve({ 
-                  steps: 5000, 
-                  activeCalories: 300, 
-                  restingCalories: 1500, 
-                  distanceMiles: 2.5, 
-                  flightsClimbed: 5, 
-                  heartRate: 70,
-                  cardioScore: 75,
-                  sleepMinutes: 420
-              }), 
-              // apiService.getDashboardPrefs()
-              Promise.resolve({ selectedWidgets: [] })
-          ]);
+          const meals = await apiService.getSavedMeals().catch(e => { console.warn("Failed saved meals", e); return []; });
           setSavedMeals(meals);
+      } catch (e) {}
+
+      try {
+          const plansData = await apiService.getMealPlans().catch(e => { console.warn("Failed plans", e); return []; });
           setPlans(plansData);
-          setMealLog(log);
-          setHealthStats(stats as HealthStats);
-          setDashboardPrefs(prefs as UserDashboardPrefs);
           if (plansData.length > 0 && !activePlanId) setActivePlanId(plansData[0].id);
-      } catch (e) {
-          console.error("Data load failed", e);
-      }
+      } catch (e) {}
+
+      try {
+          const log = await apiService.getMealLogEntries().catch(e => { console.warn("Failed log", e); return []; });
+          setMealLog(log);
+      } catch (e) {}
+
+      try {
+          const stats = await apiService.getHealthMetrics().catch(e => { console.warn("Failed health stats", e); return null; });
+          if (stats) setHealthStats(prev => ({...prev, ...stats}));
+      } catch (e) {}
+
+      try {
+          const prefs = await apiService.getDashboardPrefs().catch(e => { console.warn("Failed prefs", e); return null; });
+          if (prefs) setDashboardPrefs(prefs);
+      } catch (e) {}
   };
 
   useEffect(() => { loadAllData(); }, [isAuthenticated]);
@@ -157,9 +156,14 @@ const App: React.FC = () => {
 
   const bodyProps = {
       healthStats, 
-      onSyncHealth: (source?: 'apple' | 'fitbit') => { console.log('Syncing', source); },
+      onSyncHealth: (source?: 'apple' | 'fitbit') => { 
+          apiService.syncHealthStatsToDB({ steps: 8500, activeCalories: 450 }).then(() => loadAllData());
+      },
       dashboardPrefs, 
-      onUpdatePrefs: setDashboardPrefs
+      onUpdatePrefs: (p: UserDashboardPrefs) => {
+          setDashboardPrefs(p);
+          apiService.saveDashboardPrefs(p); // Fire and forget
+      }
   };
 
   if (isLoading) return <Loader message="Initializing..." />;
