@@ -1,9 +1,10 @@
+
 import { 
     MealPlan, GroceryList, GroceryItem, Order, Friendship, UserProfile, 
     RecoveryData, ReadinessScore, FormAnalysisResult, BodyPhoto, 
     Assessment, AssessmentState, PartnerBlueprint, MatchProfile, 
     CoachingRelation, NutritionInfo, RestaurantActivity, PantryLogEntry,
-    Recipe, SavedMeal, MealLogEntry, HealthStats
+    Recipe, SavedMeal, MealLogEntry, HealthStats, RewardsSummary
 } from '../types';
 
 const API_BASE_URL = 'https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default';
@@ -32,7 +33,7 @@ const callApi = async (endpoint: string, method: string = 'GET', body?: any) => 
     return text ? JSON.parse(text) : {};
 };
 
-const compressImage = async (base64: string, mimeType: string): Promise<string> => {
+const compressImage = async (base64: string, _mimeType: string): Promise<string> => {
     // Placeholder for client-side compression
     return base64; 
 };
@@ -127,7 +128,7 @@ export const saveRestaurantLogEntry = (imageBase64: string): Promise<void> => ca
 export const judgeRecipeAttempt = (base64: string, recipeContext: string, recipeId: number): Promise<JudgeResult> => callApi('/judge-recipe', 'POST', { base64, recipeContext, recipeId });
 
 // --- REWARDS ---
-export const getRewardsSummary = (): Promise<{ points_total: number, tier: string, history: any[] }> => callApi('/rewards', 'GET');
+export const getRewardsSummary = (): Promise<RewardsSummary> => callApi('/rewards', 'GET');
 
 // --- SYNC ---
 export const syncHealthStatsToDB = (stats: Partial<HealthStats>): Promise<HealthStats> => callApi('/sync-health', 'POST', stats);

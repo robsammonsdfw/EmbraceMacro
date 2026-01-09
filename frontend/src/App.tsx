@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { Login } from './components/Login';
@@ -13,7 +14,16 @@ const App: React.FC = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   
   // Global Data State
-  const [healthStats, setHealthStats] = useState<HealthStats>({ steps: 0, activeCalories: 0, restingCalories: 0, distanceMiles: 0, flightsClimbed: 0, heartRate: 0 });
+  const [healthStats, setHealthStats] = useState<HealthStats>({ 
+      steps: 0, 
+      activeCalories: 0, 
+      restingCalories: 0, 
+      distanceMiles: 0, 
+      flightsClimbed: 0, 
+      heartRate: 0,
+      cardioScore: 0,
+      sleepMinutes: 0
+  });
   const [dashboardPrefs, setDashboardPrefs] = useState<UserDashboardPrefs>({ selectedWidgets: [] });
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
   const [mealLog, setMealLog] = useState<MealLogEntry[]>([]);
@@ -39,7 +49,16 @@ const App: React.FC = () => {
               apiService.getMealPlans(),
               apiService.getMealLogEntries(),
               // apiService.getHealthStats(), // Assume implemented or mocked
-              Promise.resolve({ steps: 5000, activeCalories: 300, restingCalories: 1500, distanceMiles: 2.5, flightsClimbed: 5, heartRate: 70 }), 
+              Promise.resolve({ 
+                  steps: 5000, 
+                  activeCalories: 300, 
+                  restingCalories: 1500, 
+                  distanceMiles: 2.5, 
+                  flightsClimbed: 5, 
+                  heartRate: 70,
+                  cardioScore: 75,
+                  sleepMinutes: 420
+              }), 
               // apiService.getDashboardPrefs()
               Promise.resolve({ selectedWidgets: [] })
           ]);
