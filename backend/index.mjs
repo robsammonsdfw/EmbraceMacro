@@ -59,7 +59,7 @@ const verifyToken = (headers) => {
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : authHeader;
     
     const decoded = jwt.verify(token, JWT_SECRET);
-    // Explicit check to narrow type from string | JwtPayload to JwtPayload (object)
+    // CRITICAL FIX: Ensure token is an object, not a string
     if (typeof decoded === 'string') {
         throw new Error("Invalid token payload type");
     }
@@ -150,7 +150,7 @@ export const handler = async (event) => {
         
         if (path.endsWith('/rewards') && httpMethod === 'GET') return sendResponse(200, await db.getRewardsSummary(userId));
 
-        // --- MISSING ENDPOINTS ADDED ---
+        // --- MISSING ENDPOINTS RESTORED ---
         if (path.endsWith('/meal-plans') && httpMethod === 'GET') return sendResponse(200, await db.getMealPlans(userId));
         if (path.endsWith('/meal-plans') && httpMethod === 'POST') {
             const { name } = JSON.parse(event.body);
@@ -169,6 +169,7 @@ export const handler = async (event) => {
 
         return sendResponse(404, { error: `Route not found: ${path}` });
     } catch (err) {
+        console.error("Backend Error:", err);
         return sendResponse(500, { error: err.message });
     }
 };
