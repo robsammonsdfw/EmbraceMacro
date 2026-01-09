@@ -643,6 +643,25 @@ export const removeMealFromPlanItem = async (userId, planItemId) => {
 
 // --- Grocery List Persistence ---
 
+export const getGroceryLists = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const query = `
+            SELECT id, name, is_active, created_at 
+            FROM grocery_lists 
+            WHERE user_id = $1 
+            ORDER BY created_at DESC;
+        `;
+        const res = await client.query(query, [userId]);
+        return res.rows;
+    } catch (err) {
+        console.error('Database error in getGroceryLists:', err);
+        throw new Error('Could not retrieve grocery lists.');
+    } finally {
+        client.release();
+    }
+};
+
 export const getGroceryList = async (userId) => {
     const client = await pool.connect();
     try {
@@ -878,20 +897,6 @@ export const getHealthMetrics = async (userId) => {
                 distance_miles as "distanceMiles", 
                 flights_climbed as "flightsClimbed", 
                 heart_rate as "heartRate", 
-                resting_heart_rate as "restingHeartRate",
-                sleep_score as "sleepScore",
-                spo2,
-                vo2_max as "vo2Max",
-                active_zone_minutes as "activeZoneMinutes",
-                water_fl_oz as "waterFlOz",
-                mindfulness_minutes as "mindfulnessMinutes",
-                weight_lbs as "weightLbs",
-                blood_pressure_systolic as "bloodPressureSystolic",
-                blood_pressure_diastolic as "bloodPressureDiastolic",
-                body_fat_percentage as "bodyFatPercentage",
-                bmi,
-                hrv,
-                sleep_minutes as "sleepMinutes",
                 last_synced as "lastSynced"
             FROM health_metrics WHERE user_id = $1
         `, [userId]);
@@ -902,65 +907,32 @@ export const getHealthMetrics = async (userId) => {
 export const syncHealthMetrics = async (userId, stats) => {
     const client = await pool.connect();
     try {
-        // Use COALESCE(EXCLUDED.col, health_metrics.col) for values that shouldn't be overwritten with null
-        // Use GREATEST for accumulators if receiving partial updates might reset them (though usually stats come in full for a given provider)
-        // Since we are now segregating provider data, 'stats' will contain only Apple OR Fitbit keys.
-        // We must ensure that missing keys in 'stats' result in 'NULL' passed to the INSERT, so that COALESCE works.
-        
-        const q = `INSERT INTO health_metrics (
-                        user_id, steps, active_calories, resting_calories, distance_miles, 
-                        flights_climbed, heart_rate, resting_heart_rate, sleep_score, spo2, 
-                        vo2_max, active_zone_minutes, water_fl_oz, mindfulness_minutes, weight_lbs, 
-                        blood_pressure_systolic, blood_pressure_diastolic, body_fat_percentage, bmi, hrv, sleep_minutes,
-                        last_synced
-                    )
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, CURRENT_TIMESTAMP)
+        const q = `INSERT INTO health_metrics (user_id, steps, active_calories, resting_calories, distance_miles, flights_climbed, heart_rate, last_synced)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
                    ON CONFLICT (user_id) DO UPDATE SET 
-                        steps = GREATEST(health_metrics.steps, COALESCE(EXCLUDED.steps, 0)),
-                        active_calories = GREATEST(health_metrics.active_calories, COALESCE(EXCLUDED.active_calories, 0)),
-                        resting_calories = GREATEST(health_metrics.resting_calories, COALESCE(EXCLUDED.resting_calories, 0)),
-                        distance_miles = GREATEST(health_metrics.distance_miles, COALESCE(EXCLUDED.distance_miles, 0)),
-                        flights_climbed = GREATEST(health_metrics.flights_climbed, COALESCE(EXCLUDED.flights_climbed, 0)),
-                        heart_rate = COALESCE(EXCLUDED.heart_rate, health_metrics.heart_rate),
-                        resting_heart_rate = COALESCE(EXCLUDED.resting_heart_rate, health_metrics.resting_heart_rate),
-                        sleep_score = COALESCE(EXCLUDED.sleep_score, health_metrics.sleep_score),
-                        spo2 = COALESCE(EXCLUDED.spo2, health_metrics.spo2),
-                        vo2_max = COALESCE(EXCLUDED.vo2_max, health_metrics.vo2_max),
-                        active_zone_minutes = GREATEST(health_metrics.active_zone_minutes, COALESCE(EXCLUDED.active_zone_minutes, 0)),
-                        water_fl_oz = GREATEST(health_metrics.water_fl_oz, COALESCE(EXCLUDED.water_fl_oz, 0)),
-                        mindfulness_minutes = GREATEST(health_metrics.mindfulness_minutes, COALESCE(EXCLUDED.mindfulness_minutes, 0)),
-                        weight_lbs = COALESCE(EXCLUDED.weight_lbs, health_metrics.weight_lbs),
-                        blood_pressure_systolic = COALESCE(EXCLUDED.blood_pressure_systolic, health_metrics.blood_pressure_systolic),
-                        blood_pressure_diastolic = COALESCE(EXCLUDED.blood_pressure_diastolic, health_metrics.blood_pressure_diastolic),
-                        body_fat_percentage = COALESCE(EXCLUDED.body_fat_percentage, health_metrics.body_fat_percentage),
-                        bmi = COALESCE(EXCLUDED.bmi, health_metrics.bmi),
-                        hrv = COALESCE(EXCLUDED.hrv, health_metrics.hrv),
-                        sleep_minutes = COALESCE(EXCLUDED.sleep_minutes, health_metrics.sleep_minutes),
+                        steps = GREATEST(health_metrics.steps, EXCLUDED.steps), 
+                        active_calories = GREATEST(health_metrics.active_calories, EXCLUDED.active_calories),
+                        resting_calories = GREATEST(health_metrics.resting_calories, EXCLUDED.resting_calories),
+                        distance_miles = GREATEST(health_metrics.distance_miles, EXCLUDED.distance_miles),
+                        flights_climbed = GREATEST(health_metrics.flights_climbed, EXCLUDED.flights_climbed),
+                        heart_rate = GREATEST(health_metrics.heart_rate, EXCLUDED.heart_rate),
                         last_synced = CURRENT_TIMESTAMP 
-                   RETURNING *`;
-        
+                   RETURNING 
+                        steps, 
+                        active_calories as "activeCalories", 
+                        resting_calories as "restingCalories", 
+                        distance_miles as "distanceMiles", 
+                        flights_climbed as "flightsClimbed", 
+                        heart_rate as "heartRate", 
+                        last_synced as "lastSynced"`;
         const res = await client.query(q, [
             userId, 
-            stats.steps ?? null, 
-            stats.activeCalories ?? null, 
-            stats.restingCalories ?? null, 
-            stats.distanceMiles ?? null, 
-            stats.flightsClimbed ?? null, 
-            stats.heartRate ?? null,
-            stats.restingHeartRate ?? null,
-            stats.sleepScore ?? null,
-            stats.spo2 ?? null,
-            stats.vo2Max ?? null,
-            stats.activeZoneMinutes ?? null,
-            stats.waterFlOz ?? null,
-            stats.mindfulnessMinutes ?? null,
-            stats.weightLbs ?? null,
-            stats.bloodPressureSystolic ?? null,
-            stats.bloodPressureDiastolic ?? null,
-            stats.bodyFatPercentage ?? null,
-            stats.bmi ?? null,
-            stats.hrv ?? null,
-            stats.sleepMinutes ?? null
+            stats.steps || 0, 
+            stats.activeCalories || 0, 
+            stats.restingCalories || 0, 
+            stats.distanceMiles || 0, 
+            stats.flightsClimbed || 0, 
+            stats.heartRate || 0
         ]);
         return res.rows[0];
     } finally { client.release(); }
@@ -987,6 +959,138 @@ export const logRecoveryStats = async (userId, data) => {
             VALUES ($1, $2, $3)
         `, [userId, data.sleepMinutes, data.sleepQuality]);
         await awardPoints(userId, 'recovery.logged', 20);
+    } finally { client.release(); }
+};
+
+// --- Missing Log Functions ---
+
+export const getPantryLog = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, image_base64, created_at FROM pantry_log_entries WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
+        return res.rows.map(row => ({
+            id: row.id,
+            imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
+            created_at: row.created_at
+        }));
+    } finally { client.release(); }
+};
+
+export const savePantryLogEntry = async (userId, imageBase64) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`INSERT INTO pantry_log_entries (user_id, image_base64) VALUES ($1, $2)`, [userId, imageBase64]);
+    } finally { client.release(); }
+};
+
+export const getPantryLogEntryById = async (id) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, image_base64, created_at FROM pantry_log_entries WHERE id = $1`, [id]);
+        if (res.rows.length === 0) return null;
+        return {
+            id: res.rows[0].id,
+            imageUrl: `data:image/jpeg;base64,${res.rows[0].image_base64}`,
+            created_at: res.rows[0].created_at
+        };
+    } finally { client.release(); }
+};
+
+export const getRestaurantLog = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, image_base64, created_at FROM restaurant_log_entries WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
+        return res.rows.map(row => ({
+            id: row.id,
+            imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
+            created_at: row.created_at
+        }));
+    } finally { client.release(); }
+};
+
+export const saveRestaurantLogEntry = async (userId, imageBase64) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`INSERT INTO restaurant_log_entries (user_id, image_base64) VALUES ($1, $2)`, [userId, imageBase64]);
+    } finally { client.release(); }
+};
+
+export const getRestaurantLogEntryById = async (id) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, image_base64, created_at FROM restaurant_log_entries WHERE id = $1`, [id]);
+        if (res.rows.length === 0) return null;
+        return {
+            id: res.rows[0].id,
+            imageUrl: `data:image/jpeg;base64,${res.rows[0].image_base64}`,
+            created_at: res.rows[0].created_at
+        };
+    } finally { client.release(); }
+};
+
+export const getBodyPhotos = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, image_base64, category, created_at FROM body_photos WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
+        return res.rows.map(row => ({
+            id: row.id,
+            imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
+            category: row.category,
+            createdAt: row.created_at
+        }));
+    } finally { client.release(); }
+};
+
+export const uploadBodyPhoto = async (userId, imageBase64, category) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`INSERT INTO body_photos (user_id, image_base64, category) VALUES ($1, $2, $3) RETURNING id, created_at`, [userId, imageBase64, category]);
+        return { id: res.rows[0].id, imageUrl: `data:image/jpeg;base64,${imageBase64}`, category, createdAt: res.rows[0].created_at };
+    } finally { client.release(); }
+};
+
+export const getBodyPhotoById = async (id) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, image_base64, category, created_at FROM body_photos WHERE id = $1`, [id]);
+        if (res.rows.length === 0) return null;
+        return {
+            id: res.rows[0].id,
+            imageUrl: `data:image/jpeg;base64,${res.rows[0].image_base64}`,
+            category: res.rows[0].category,
+            createdAt: res.rows[0].created_at
+        };
+    } finally { client.release(); }
+};
+
+export const getFormChecks = async (userId, exercise) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, exercise_type, ai_score, ai_feedback, created_at FROM form_checks WHERE user_id = $1 AND exercise_type = $2 ORDER BY created_at DESC`, [userId, exercise]);
+        return res.rows;
+    } finally { client.release(); }
+};
+
+export const saveFormCheck = async (userId, exercise, imageBase64, score, feedback) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`INSERT INTO form_checks (user_id, exercise_type, image_base64, ai_score, ai_feedback) VALUES ($1, $2, $3, $4, $5)`, [userId, exercise, imageBase64, score, feedback]);
+    } finally { client.release(); }
+};
+
+export const getFormCheckById = async (id) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, exercise_type, image_base64, ai_score, ai_feedback, created_at FROM form_checks WHERE id = $1`, [id]);
+        if (res.rows.length === 0) return null;
+        return {
+            id: res.rows[0].id,
+            exercise_type: res.rows[0].exercise_type,
+            imageUrl: `data:image/jpeg;base64,${res.rows[0].image_base64}`,
+            ai_score: res.rows[0].ai_score,
+            ai_feedback: res.rows[0].ai_feedback,
+            created_at: res.rows[0].created_at
+        };
     } finally { client.release(); }
 };
 

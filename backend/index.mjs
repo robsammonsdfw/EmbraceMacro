@@ -133,6 +133,50 @@ export const handler = async (event) => {
             return sendResponse(200, JSON.parse(response.text));
         }
 
+        if (path.endsWith('/analyze-restaurant-meal') && httpMethod === 'POST') {
+            // Uses same logic as analyze-image but different prompt context if needed, currently reusing logic
+            const { base64Image, mimeType } = JSON.parse(event.body);
+            const ai = new GoogleGenAI({ apiKey: API_KEY });
+            const response = await ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: {
+                    role: 'user',
+                    parts: [{ text: "Analyze this restaurant meal. Identify the dish, estimate macros, and suggest a home cooking recipe." }, { inlineData: { mimeType, data: base64Image } }]
+                },
+                config: { responseMimeType: "application/json", responseSchema: nutritionSchema }
+            });
+            return sendResponse(200, JSON.parse(response.text));
+        }
+
+        if (path.endsWith('/grocery/identify') && httpMethod === 'POST') {
+             const { base64Image, mimeType } = JSON.parse(event.body);
+             // Implement simple item identification
+             const ai = new GoogleGenAI({ apiKey: API_KEY });
+             const response = await ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: {
+                    role: 'user',
+                    parts: [{ text: "Identify grocery items in this image. Return a JSON object with a list of item names." }, { inlineData: { mimeType, data: base64Image } }]
+                },
+                config: { responseMimeType: "application/json" } // Expecting { items: ["apple", "milk"] }
+            });
+            return sendResponse(200, JSON.parse(response.text));
+        }
+
+        if (path.endsWith('/analyze-form') && httpMethod === 'POST') {
+             const { base64Image, exercise } = JSON.parse(event.body);
+             const ai = new GoogleGenAI({ apiKey: API_KEY });
+             const response = await ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: {
+                    role: 'user',
+                    parts: [{ text: `Analyze the form for ${exercise} in this image. Give a score 0-100 and feedback.` }, { inlineData: { mimeType: 'image/jpeg', data: base64Image } }]
+                },
+                config: { responseMimeType: "application/json" }
+            });
+            return sendResponse(200, JSON.parse(response.text));
+        }
+
         // --- CORE DATA ENDPOINTS ---
         if (path.endsWith('/health-metrics') && httpMethod === 'GET') {
             return sendResponse(200, await db.getHealthMetrics(userId));
@@ -163,9 +207,40 @@ export const handler = async (event) => {
         }
         if (path.endsWith('/social/friends') && httpMethod === 'GET') return sendResponse(200, await db.getFriends(userId));
         
-        if (path.endsWith('/grocery/lists') && httpMethod === 'GET') return sendResponse(200, []); // Placeholder until DB implemented
+        if (path.endsWith('/grocery/lists') && httpMethod === 'GET') return sendResponse(200, await db.getGroceryLists(userId)); 
         if (path.endsWith('/social/profile') && httpMethod === 'GET') return sendResponse(200, await db.getSocialProfile(userId));
         if (path.endsWith('/social/requests') && httpMethod === 'GET') return sendResponse(200, await db.getFriendRequests(userId));
+
+        // --- NEW LOGGING ROUTES ---
+        if (path.endsWith('/nutrition/pantry-log') && httpMethod === 'GET') return sendResponse(200, await db.getPantryLog(userId));
+        if (path.endsWith('/nutrition/pantry-log') && httpMethod === 'POST') {
+            const { base64Image } = JSON.parse(event.body);
+            await db.savePantryLogEntry(userId, base64Image);
+            return sendResponse(200, { success: true });
+        }
+        
+        if (path.endsWith('/nutrition/restaurant-log') && httpMethod === 'GET') return sendResponse(200, await db.getRestaurantLog(userId));
+        if (path.endsWith('/nutrition/restaurant-log') && httpMethod === 'POST') {
+            const { base64Image } = JSON.parse(event.body);
+            await db.saveRestaurantLogEntry(userId, base64Image);
+            return sendResponse(200, { success: true });
+        }
+
+        if (path.endsWith('/body/photos') && httpMethod === 'GET') return sendResponse(200, await db.getBodyPhotos(userId));
+        if (path.endsWith('/body/photos') && httpMethod === 'POST') {
+            const { base64, category } = JSON.parse(event.body);
+            return sendResponse(200, await db.uploadBodyPhoto(userId, base64, category));
+        }
+
+        if (path.endsWith('/physical/form-checks') && httpMethod === 'GET') {
+             const exercise = event.queryStringParameters?.exercise || 'Squat';
+             return sendResponse(200, await db.getFormChecks(userId, exercise));
+        }
+        if (path.endsWith('/physical/form-checks') && httpMethod === 'POST') {
+            const { exercise, base64Image, score, feedback } = JSON.parse(event.body);
+            await db.saveFormCheck(userId, exercise, base64Image, score, feedback);
+            return sendResponse(200, { success: true });
+        }
 
         return sendResponse(404, { error: `Route not found: ${path}` });
     } catch (err) {

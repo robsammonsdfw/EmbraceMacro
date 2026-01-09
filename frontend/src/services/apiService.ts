@@ -33,13 +33,16 @@ const compressImage = (base64: string, mimeType: string): Promise<string> => {
         img.src = `data:${mimeType};base64,${base64}`;
         img.onload = () => {
             const canvas = document.createElement('canvas');
-            const MAX_WIDTH = 1024;
+            const MAX_WIDTH = 1024; // Resize to max 1024px width/height
             let width = img.width;
             let height = img.height;
 
             if (width > MAX_WIDTH) {
                 height = Math.round((height * MAX_WIDTH) / width);
                 width = MAX_WIDTH;
+            } else if (height > MAX_WIDTH) {
+                width = Math.round((width * MAX_WIDTH) / height);
+                height = MAX_WIDTH;
             }
 
             canvas.width = width;
@@ -74,14 +77,14 @@ const callApi = async (endpoint: string, method: string, body?: any) => {
         }
         if (!response.ok) {
             const errText = await response.text().catch(() => response.statusText);
-            throw new Error(`API Request Failed: ${response.status} ${errText}`);
+            console.error(`API Error ${response.status} on ${endpoint}:`, errText);
+            throw new Error(`API Request Failed: ${response.status}`);
         }
         return response.json();
     } catch (error) { throw error; }
 };
 
 // --- VISION & ANALYSIS ---
-// Wrapped with compression to prevent 413 errors
 export const analyzeImageWithGemini = async (base64Image: string, mimeType: string): Promise<NutritionInfo> => {
     const compressed = await compressImage(base64Image, mimeType);
     return callApi('/analyze-image', 'POST', { base64Image: compressed, mimeType: 'image/jpeg' });
@@ -108,7 +111,6 @@ export const identifyGroceryItems = async (base64Image: string, mimeType: string
 };
 
 export const createMealLogEntry = async (mealData: NutritionInfo, imageBase64: string): Promise<MealLogEntry> => {
-    // Compress stored images too to save bandwidth/DB space
     const compressed = imageBase64 ? await compressImage(imageBase64, 'image/jpeg') : imageBase64;
     return callApi('/meal-log', 'POST', { mealData, imageBase64: compressed });
 };
@@ -128,7 +130,6 @@ export const judgeRecipeAttempt = async (base64Image: string, recipeContext: str
     return callApi('/nutrition/judge-attempt', 'POST', { base64Image: compressed, recipeContext, recipeId });
 };
 
-// Standard text/data endpoints
 export const searchFood = (query: string): Promise<NutritionInfo> => callApi('/search-food', 'POST', { query });
 
 // --- HEALTH & REWARDS ---
