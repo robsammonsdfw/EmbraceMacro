@@ -1,6 +1,7 @@
 
 import * as db from './services/databaseService.mjs';
 import jwt from 'jsonwebtoken';
+import { GoogleGenAI } from "@google/genai";
 
 const CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
@@ -9,6 +10,9 @@ const CORS_HEADERS = {
 };
 
 const JWT_SECRET = 'embrace-health-secret'; // In prod, use process.env.JWT_SECRET
+
+// Initialize Gemini
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const sendResponse = (statusCode, body) => ({
     statusCode,
@@ -43,6 +47,28 @@ const parseBody = (event) => {
     } catch (e) {
         console.error("Failed to parse JSON body", e);
         return {};
+    }
+};
+
+// Helper for Gemini Calls
+const callGemini = async (prompt, imageBase64, mimeType = 'image/jpeg') => {
+    try {
+        const model = 'gemini-2.5-flash-image';
+        const imagePart = {
+            inlineData: {
+                mimeType: mimeType,
+                data: imageBase64
+            }
+        };
+        const response = await ai.models.generateContent({
+            model: model,
+            contents: { parts: [imagePart, { text: prompt }] },
+            config: { responseMimeType: "application/json" }
+        });
+        return JSON.parse(response.text);
+    } catch (e) {
+        console.error("Gemini Error:", e);
+        throw new Error("AI Processing Failed");
     }
 };
 
@@ -90,14 +116,15 @@ export const handler = async (event) => {
         const userId = getUserFromEvent(event);
 
         // --- SAVED MEALS ---
-        if (path.match(/\/saved-meals\/\d+$/) && httpMethod === 'GET') {
-            const id = parseInt(path.split('/').pop());
-            return sendResponse(200, await db.getSavedMealById(id));
-        }
-        if (path.match(/\/saved-meals\/\d+$/) && httpMethod === 'DELETE') {
-            const id = parseInt(path.split('/').pop());
-            await db.deleteMeal(userId, id);
-            return sendResponse(200, { success: true });
+        // Match specific ID first
+        const savedMealMatch = path.match(/\/saved-meals\/(\d+)$/);
+        if (savedMealMatch) {
+            const id = parseInt(savedMealMatch[1]);
+            if (httpMethod === 'GET') return sendResponse(200, await db.getSavedMealById(id));
+            if (httpMethod === 'DELETE') {
+                await db.deleteMeal(userId, id);
+                return sendResponse(200, { success: true });
+            }
         }
         if (path.endsWith('/saved-meals') && httpMethod === 'GET') return sendResponse(200, await db.getSavedMeals(userId));
         if (path.endsWith('/saved-meals') && httpMethod === 'POST') return sendResponse(200, await db.saveMeal(userId, parseBody(event)));
@@ -106,14 +133,16 @@ export const handler = async (event) => {
         if (path.endsWith('/rewards') && httpMethod === 'GET') return sendResponse(200, await db.getRewardsSummary(userId));
 
         // --- MEAL PLANS ---
-        if (path.match(/\/meal-plans\/\d+\/items$/) && httpMethod === 'POST') {
-            const planId = parseInt(path.split('/')[2]);
+        const planItemsMatch = path.match(/\/meal-plans\/(\d+)\/items$/);
+        if (planItemsMatch && httpMethod === 'POST') {
+            const planId = parseInt(planItemsMatch[1]);
             const { savedMealId, metadata } = parseBody(event);
             return sendResponse(200, await db.addMealToPlanItem(userId, planId, savedMealId, metadata));
         }
         
-        if (path.match(/\/meal-plans\/items\/\d+$/) && httpMethod === 'DELETE') {
-             const itemId = parseInt(path.split('/').pop());
+        const planItemDeleteMatch = path.match(/\/meal-plans\/items\/(\d+)$/);
+        if (planItemDeleteMatch && httpMethod === 'DELETE') {
+             const itemId = parseInt(planItemDeleteMatch[1]);
              await db.removeMealFromPlanItem(userId, itemId);
              return sendResponse(200, { success: true });
         }
@@ -125,16 +154,80 @@ export const handler = async (event) => {
         }
 
         // --- GROCERY LISTS ---
-        if (path.endsWith('/grocery/lists') && httpMethod === 'GET') return sendResponse(200, await db.getGroceryList(userId)); 
+        
+        // 1. Get All Lists (Mocked as single list wrapper for now to match simplified DB)
+        if (path.endsWith('/grocery/lists') && httpMethod === 'GET') {
+             return sendResponse(200, [{ id: 1, name: "Main List", is_active: true }]);
+        }
         if (path.endsWith('/grocery/lists') && httpMethod === 'POST') {
-             // Basic implementation for creating a list if needed, or just return success
              return sendResponse(200, { id: 1, name: "Main List", is_active: true });
         }
+
+        // 2. List Items (GET/POST)
+        const listItemsMatch = path.match(/\/grocery\/lists\/(\d+)\/items$/);
+        if (listItemsMatch) {
+            // const listId = parseInt(listItemsMatch[1]); // Unused in single-list mock
+            if (httpMethod === 'GET') return sendResponse(200, await db.getGroceryList(userId));
+            if (httpMethod === 'POST') {
+                const { name } = parseBody(event);
+                return sendResponse(200, await db.addGroceryItem(userId, name));
+            }
+        }
+
+        // 3. Item Management (PATCH/DELETE)
+        const groceryItemMatch = path.match(/\/grocery\/items\/(\d+)$/);
+        if (groceryItemMatch) {
+            const itemId = parseInt(groceryItemMatch[1]);
+            if (httpMethod === 'PATCH') {
+                const { checked } = parseBody(event);
+                return sendResponse(200, await db.updateGroceryListItem(userId, itemId, checked));
+            }
+            if (httpMethod === 'DELETE') {
+                await db.removeGroceryItem(userId, itemId);
+                return sendResponse(200, { success: true });
+            }
+        }
+
+        // 4. Import / Clear
+        const importMatch = path.match(/\/grocery\/lists\/(\d+)\/import$/);
+        if (importMatch && httpMethod === 'POST') {
+            const { planIds } = parseBody(event);
+            return sendResponse(200, await db.generateGroceryList(userId, planIds));
+        }
+
+        const clearMatch = path.match(/\/grocery\/lists\/(\d+)\/clear$/);
+        if (clearMatch && httpMethod === 'POST') {
+            const { type } = parseBody(event);
+            await db.clearGroceryList(userId, type);
+            return sendResponse(200, { success: true });
+        }
+
+        // 5. AI Identify
+        if (path.endsWith('/grocery/identify') && httpMethod === 'POST') {
+            const { base64, mimeType } = parseBody(event);
+            // Simple prompt for identification
+            const prompt = "Identify the grocery items in this image. Return a JSON object with a single key 'items' which is an array of strings.";
+            const result = await callGemini(prompt, base64, mimeType);
+            return sendResponse(200, result);
+        }
+
 
         // --- SOCIAL ---
         if (path.endsWith('/social/friends') && httpMethod === 'GET') return sendResponse(200, await db.getFriends(userId));
         if (path.endsWith('/social/requests') && httpMethod === 'GET') return sendResponse(200, await db.getFriendRequests(userId));
         if (path.endsWith('/social/profile') && httpMethod === 'GET') return sendResponse(200, await db.getSocialProfile(userId));
+        if (path.endsWith('/social/profile') && httpMethod === 'PATCH') return sendResponse(200, await db.updateSocialProfile(userId, parseBody(event)));
+        if (path.endsWith('/social/requests') && httpMethod === 'POST') {
+            const { email } = parseBody(event);
+            await db.sendFriendRequest(userId, email);
+            return sendResponse(200, { success: true });
+        }
+        const reqRespondMatch = path.match(/\/social\/requests\/(\d+)$/);
+        if (reqRespondMatch && httpMethod === 'POST') {
+            const { status } = parseBody(event);
+            await db.respondToFriendRequest(userId, parseInt(reqRespondMatch[1]), status);
+            return sendResponse(200, { success: true });
+        }
 
         // --- SHOPIFY ---
         // Mock shopify response if DB service doesn't have credentials configured yet to prevent crash
@@ -148,6 +241,10 @@ export const handler = async (event) => {
             const { mealData, imageBase64 } = parseBody(event);
             return sendResponse(200, await db.createMealLogEntry(userId, mealData, imageBase64));
         }
+        const logIdMatch = path.match(/\/meal-log\/(\d+)$/);
+        if (logIdMatch && httpMethod === 'GET') {
+            return sendResponse(200, await db.getMealLogEntryById(parseInt(logIdMatch[1])));
+        }
 
         // --- HEALTH METRICS ---
         if (path.endsWith('/health-metrics') && httpMethod === 'GET') return sendResponse(200, await db.getHealthMetrics(userId));
@@ -157,6 +254,43 @@ export const handler = async (event) => {
         if (path.endsWith('/body/dashboard-prefs') && httpMethod === 'GET') return sendResponse(200, await db.getDashboardPrefs(userId));
         if (path.endsWith('/body/dashboard-prefs') && httpMethod === 'POST') return sendResponse(200, await db.saveDashboardPrefs(userId, parseBody(event)));
 
+        // --- COACHING ---
+        if (path.includes('/coaching/relations') && httpMethod === 'GET') return sendResponse(200, []); // Mock
+        if (path.includes('/coaching/invites') && httpMethod === 'POST') return sendResponse(200, { success: true }); // Mock
+
+        // --- AI ANALYSIS ROUTES ---
+        if (path.endsWith('/analyze-image') && httpMethod === 'POST') {
+            const { base64Image, mimeType } = parseBody(event);
+            const prompt = `Analyze this food. Identify the meal name, and provide nutritional estimates (calories, protein, carbs, fat) and a list of ingredients with their estimated weights. 
+            Return JSON: { "mealName": string, "totalCalories": number, "totalProtein": number, "totalCarbs": number, "totalFat": number, "ingredients": [ { "name": string, "weightGrams": number, "calories": number, "protein": number, "carbs": number, "fat": number } ] }`;
+            return sendResponse(200, await callGemini(prompt, base64Image, mimeType));
+        }
+
+        if (path.endsWith('/analyze-restaurant-meal') && httpMethod === 'POST') {
+            const { base64Image, mimeType } = parseBody(event);
+            const prompt = `Analyze this restaurant dish. Reverse engineer it into a recipe.
+            Return JSON: { "mealName": string, "totalCalories": number, "totalProtein": number, "totalCarbs": number, "totalFat": number, "recipe": { "recipeName": string, "description": string, "ingredients": [{"name": string, "quantity": string}], "instructions": [string], "nutrition": { "totalCalories": number, "totalProtein": number, "totalCarbs": number, "totalFat": number } } }`;
+            return sendResponse(200, await callGemini(prompt, base64Image, mimeType));
+        }
+
+        if (path.endsWith('/get-recipes-from-image') && httpMethod === 'POST') {
+            // Pantry Chef
+            const { base64Image, mimeType } = parseBody(event);
+            const prompt = `Identify the ingredients in this fridge/pantry. Suggest 3 recipes I can make.
+            Return JSON Array of objects: [{ "recipeName": string, "description": string, "ingredients": [{"name": string, "quantity": string}], "instructions": [string], "nutrition": { "totalCalories": number, "totalProtein": number, "totalCarbs": number, "totalFat": number } }]`;
+            const result = await callGemini(prompt, base64Image, mimeType);
+            // Ensure array format
+            return sendResponse(200, Array.isArray(result) ? result : [result]);
+        }
+
+        if (path.endsWith('/analyze-form') && httpMethod === 'POST') {
+            const { base64Image, exercise } = parseBody(event);
+            const prompt = `Analyze this frame of a person performing a ${exercise}. 
+            Return JSON: { "score": number (0-100), "feedback": string (critique of form), "isCorrect": boolean }`;
+            return sendResponse(200, await callGemini(prompt, base64Image));
+        }
+
+        // --- FALLBACK ---
         return sendResponse(404, { error: `Route not found: ${httpMethod} ${path}` });
 
     } catch (error) {
