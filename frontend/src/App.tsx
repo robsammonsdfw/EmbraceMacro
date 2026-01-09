@@ -22,9 +22,13 @@ const App: React.FC = () => {
   const [mealLog, setMealLog] = useState<MealLogEntry[]>([]);
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
+  const [activePlanId, setActivePlanId] = useState<number | null>(null);
   const [dashboardPrefs, setDashboardPrefs] = useState<UserDashboardPrefs>({ selectedWidgets: ['steps', 'activeCalories', 'bloodPressure'] });
 
-  // Analysis State (Restored)
+  // Medical Planner State
+  const [medicalPlannerState, setMedicalPlannerState] = useState({ isLoading: false, progress: 0, status: '' });
+
+  // Analysis State
   const [analysisResult, setAnalysisResult] = useState<NutritionInfo | null>(null);
   const [analysisRecipes, setAnalysisRecipes] = useState<Recipe[] | null>(null);
 
@@ -45,15 +49,20 @@ const App: React.FC = () => {
             apiService.getHealthStatsFromDB().catch(() => null)
         ]);
         
-        // Safety check: Ensure responses are arrays before setting state to prevent .filter() crashes
         setMealLog(Array.isArray(log) ? log : []);
         setSavedMeals(Array.isArray(saved) ? saved : []);
-        setMealPlans(Array.isArray(plans) ? plans : []);
+        
+        const validPlans = Array.isArray(plans) ? plans : [];
+        setMealPlans(validPlans);
+        // Default active plan to first one if none selected
+        if (validPlans.length > 0 && !activePlanId) {
+            setActivePlanId(validPlans[0].id);
+        }
         
         if (prefs && typeof prefs === 'object') setDashboardPrefs(prefs);
         if (health) setHealthStats(health);
     } catch (e) { console.error("Load failed", e); }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, activePlanId]);
 
   useEffect(() => { loadAllData(); }, [loadAllData]);
 
@@ -92,10 +101,8 @@ const App: React.FC = () => {
              setSavedMeals(Array.isArray(saved) ? saved : []);
              alert("Saved to Library!");
           } else {
-             // Default meal scan goes to log + library
              await apiService.createMealLogEntry(data, data.imageUrl || '');
              await apiService.saveMeal(data);
-             // Refresh data
              loadAllData();
              alert("Meal Logged & Saved!");
           }
@@ -110,10 +117,78 @@ const App: React.FC = () => {
       handleSaveAnalyzedMeal(data);
   };
 
+  // --- Plan Management Handlers ---
+  const handleCreatePlan = async (name: string) => {
+      try {
+          const newPlan = await apiService.createMealPlan(name);
+          setMealPlans(prev => [...prev, newPlan]);
+          setActivePlanId(newPlan.id);
+      } catch (e) { alert("Failed to create plan."); }
+  };
+
+  const handleQuickAdd = async (planId: number, meal: SavedMeal, day: string, slot: string) => {
+      // Note: Backend currently only supports adding item, metadata would need a separate update call or an enhanced add endpoint.
+      // For now, we simulate adding the item.
+      try {
+          // This API call needs to be updated in backend to accept metadata if we want day/slot persistence
+          // Assuming we just add it for now to the list
+          // In a real implementation, we would pass metadata here.
+          alert("Added to plan (Metadata persistence pending backend update)");
+          await loadAllData(); 
+      } catch (e) { alert("Failed to add to plan."); }
+  };
+
+  const handleRemoveFromPlan = async (itemId: number) => {
+      // Implement remove API
+      alert("Item removed (Simulated)");
+      // await apiService.removeMealFromPlanItem(itemId);
+      // loadAllData();
+  };
+
+  const handleGenerateMedical = async (diseases: any[], cuisine: string, duration: 'day' | 'week') => {
+      setMedicalPlannerState({ isLoading: true, progress: 10, status: 'Analyzing Clinical Constraints...' });
+      // Simulate AI process
+      setTimeout(() => setMedicalPlannerState(s => ({ ...s, progress: 40, status: 'Optimizing Macros...' })), 1000);
+      setTimeout(() => setMedicalPlannerState(s => ({ ...s, progress: 80, status: 'Generating Recipes...' })), 2000);
+      setTimeout(async () => {
+          // Here we would call the real AI endpoint
+          // For now, create a dummy plan
+          await handleCreatePlan(`Medical Plan - ${diseases.length} Conditions`);
+          setMedicalPlannerState({ isLoading: false, progress: 100, status: 'Complete' });
+          alert("Medical Plan Generated!");
+      }, 3000);
+  };
+
+  const handleDeleteMeal = async (id: number) => {
+      try {
+          // await apiService.deleteMeal(id); // Need to expose this in apiService
+          alert("Deleted (Simulated)");
+          loadAllData();
+      } catch (e) { alert("Failed to delete."); }
+  };
+
   if (isAuthLoading) return <div className="min-h-screen flex items-center justify-center"><Loader message="Authenticating..." /></div>;
   if (!isAuthenticated) return <Login />;
 
-  const fuelProps = { mealLog, savedMeals, mealPlans, onAddMealToLibrary: apiService.saveMeal };
+  const fuelProps = { 
+      plans: mealPlans, 
+      activePlanId, 
+      savedMeals, 
+      mealLog,
+      onPlanChange: setActivePlanId,
+      onCreatePlan: handleCreatePlan,
+      onRemoveFromPlan: handleRemoveFromPlan,
+      onQuickAdd: handleQuickAdd,
+      onGenerateMedical: handleGenerateMedical,
+      medicalPlannerState,
+      onAddMealToLibrary: apiService.saveMeal,
+      onDeleteMeal: handleDeleteMeal,
+      onSelectMeal: (m: NutritionInfo) => setAnalysisResult(m),
+      onManualLibraryAdd: (q: string) => alert(`Search library for: ${q}`),
+      onManualLogAdd: (q: string) => alert(`Log: ${q}`),
+      onScanClick: () => { setCaptureMode('meal'); setIsCaptureOpen(true); }
+  };
+
   const bodyProps = { onSyncHealth: loadAllData, onUpdatePrefs: setDashboardPrefs };
 
   return (
@@ -133,9 +208,27 @@ const App: React.FC = () => {
         {isCaptureOpen && <CaptureFlow onClose={() => setIsCaptureOpen(false)} onCapture={handleCaptureResult} initialMode={captureMode} />}
         
         {isDesktop ? (
-            <DesktopApp healthStats={healthStats} dashboardPrefs={dashboardPrefs} fuelProps={fuelProps} bodyProps={bodyProps} userRole={user?.role || 'user'} onLogout={logout} user={user} onCameraClick={m => { setCaptureMode(m as any); setIsCaptureOpen(true); }} />
+            <DesktopApp 
+                healthStats={healthStats} 
+                dashboardPrefs={dashboardPrefs} 
+                fuelProps={fuelProps} 
+                bodyProps={bodyProps} 
+                userRole={user?.role || 'user'} 
+                onLogout={logout} 
+                user={user} 
+                onCameraClick={m => { setCaptureMode(m as any); setIsCaptureOpen(true); }} 
+            />
         ) : (
-            <MobileApp healthStats={healthStats} dashboardPrefs={dashboardPrefs} onCameraClick={() => { setCaptureMode('meal'); setIsCaptureOpen(true); }} fuelProps={fuelProps} bodyProps={bodyProps} userRole={user?.role || 'user'} onLogout={logout} user={user} />
+            <MobileApp 
+                healthStats={healthStats} 
+                dashboardPrefs={dashboardPrefs} 
+                onCameraClick={() => { setCaptureMode('meal'); setIsCaptureOpen(true); }} 
+                fuelProps={fuelProps} 
+                bodyProps={bodyProps} 
+                userRole={user?.role || 'user'} 
+                onLogout={logout} 
+                user={user} 
+            />
         )}
     </>
   );

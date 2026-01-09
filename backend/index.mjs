@@ -59,7 +59,6 @@ const verifyToken = (headers) => {
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : authHeader;
     
     const decoded = jwt.verify(token, JWT_SECRET);
-    // CRITICAL FIX: Ensure token is an object, not a string
     if (typeof decoded === 'string') {
         throw new Error("Invalid token payload type");
     }
@@ -134,7 +133,6 @@ export const handler = async (event) => {
         }
 
         if (path.endsWith('/analyze-restaurant-meal') && httpMethod === 'POST') {
-            // Uses same logic as analyze-image but different prompt context if needed, currently reusing logic
             const { base64Image, mimeType } = JSON.parse(event.body);
             const ai = new GoogleGenAI({ apiKey: API_KEY });
             const response = await ai.models.generateContent({
@@ -150,7 +148,6 @@ export const handler = async (event) => {
 
         if (path.endsWith('/grocery/identify') && httpMethod === 'POST') {
              const { base64Image, mimeType } = JSON.parse(event.body);
-             // Implement simple item identification
              const ai = new GoogleGenAI({ apiKey: API_KEY });
              const response = await ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
@@ -158,7 +155,7 @@ export const handler = async (event) => {
                     role: 'user',
                     parts: [{ text: "Identify grocery items in this image. Return a JSON object with a list of item names." }, { inlineData: { mimeType, data: base64Image } }]
                 },
-                config: { responseMimeType: "application/json" } // Expecting { items: ["apple", "milk"] }
+                config: { responseMimeType: "application/json" }
             });
             return sendResponse(200, JSON.parse(response.text));
         }
@@ -184,10 +181,22 @@ export const handler = async (event) => {
         if (path.endsWith('/health-metrics') && httpMethod === 'POST') {
             return sendResponse(200, await db.syncHealthMetrics(userId, JSON.parse(event.body)));
         }
+        
+        // Meal Log
+        if (path.match(/\/meal-log\/\d+$/) && httpMethod === 'GET') {
+            const id = parseInt(path.split('/').pop());
+            return sendResponse(200, await db.getMealLogEntryById(id));
+        }
         if (path.endsWith('/meal-log') && httpMethod === 'GET') return sendResponse(200, await db.getMealLogEntries(userId));
         if (path.endsWith('/meal-log') && httpMethod === 'POST') {
             const { mealData, imageBase64 } = JSON.parse(event.body);
             return sendResponse(200, await db.createMealLogEntry(userId, mealData, imageBase64));
+        }
+
+        // Saved Meals
+        if (path.match(/\/saved-meals\/\d+$/) && httpMethod === 'GET') {
+            const id = parseInt(path.split('/').pop());
+            return sendResponse(200, await db.getSavedMealById(id));
         }
         if (path.endsWith('/saved-meals') && httpMethod === 'GET') return sendResponse(200, await db.getSavedMeals(userId));
         if (path.endsWith('/saved-meals') && httpMethod === 'POST') return sendResponse(200, await db.saveMeal(userId, JSON.parse(event.body)));
@@ -211,7 +220,12 @@ export const handler = async (event) => {
         if (path.endsWith('/social/profile') && httpMethod === 'GET') return sendResponse(200, await db.getSocialProfile(userId));
         if (path.endsWith('/social/requests') && httpMethod === 'GET') return sendResponse(200, await db.getFriendRequests(userId));
 
-        // --- NEW LOGGING ROUTES ---
+        // --- NEW LOGGING ROUTES WITH ID HANDLERS ---
+        // Pantry
+        if (path.match(/\/nutrition\/pantry-log\/\d+$/) && httpMethod === 'GET') {
+            const id = parseInt(path.split('/').pop());
+            return sendResponse(200, await db.getPantryLogEntryById(id));
+        }
         if (path.endsWith('/nutrition/pantry-log') && httpMethod === 'GET') return sendResponse(200, await db.getPantryLog(userId));
         if (path.endsWith('/nutrition/pantry-log') && httpMethod === 'POST') {
             const { base64Image } = JSON.parse(event.body);
@@ -219,6 +233,11 @@ export const handler = async (event) => {
             return sendResponse(200, { success: true });
         }
         
+        // Restaurant
+        if (path.match(/\/nutrition\/restaurant-log\/\d+$/) && httpMethod === 'GET') {
+            const id = parseInt(path.split('/').pop());
+            return sendResponse(200, await db.getRestaurantLogEntryById(id));
+        }
         if (path.endsWith('/nutrition/restaurant-log') && httpMethod === 'GET') return sendResponse(200, await db.getRestaurantLog(userId));
         if (path.endsWith('/nutrition/restaurant-log') && httpMethod === 'POST') {
             const { base64Image } = JSON.parse(event.body);
@@ -226,6 +245,11 @@ export const handler = async (event) => {
             return sendResponse(200, { success: true });
         }
 
+        // Body Photos
+        if (path.match(/\/body\/photos\/\d+$/) && httpMethod === 'GET') {
+            const id = parseInt(path.split('/').pop());
+            return sendResponse(200, await db.getBodyPhotoById(id));
+        }
         if (path.endsWith('/body/photos') && httpMethod === 'GET') return sendResponse(200, await db.getBodyPhotos(userId));
         if (path.endsWith('/body/photos') && httpMethod === 'POST') {
             const { base64, category } = JSON.parse(event.body);
