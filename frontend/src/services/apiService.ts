@@ -37,9 +37,60 @@ const callApi = async (endpoint: string, method: string = 'GET', body?: any) => 
     return text ? JSON.parse(text) : {};
 };
 
-const compressImage = async (base64: string, _mimeType: string): Promise<string> => {
-    // Placeholder for client-side compression
-    return base64; 
+const compressImage = async (base64: string, mimeType: string = 'image/jpeg'): Promise<string> => {
+    return new Promise((resolve) => {
+        try {
+            const img = new Image();
+            // Ensure we have the data prefix for loading
+            img.src = base64.startsWith('data:') ? base64 : `data:${mimeType};base64,${base64}`;
+
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 800; // Limit to 800px to ensure <6MB payload
+                const MAX_HEIGHT = 800;
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > MAX_WIDTH) {
+                        height *= MAX_WIDTH / width;
+                        width = MAX_WIDTH;
+                    }
+                } else {
+                    if (height > MAX_HEIGHT) {
+                        width *= MAX_HEIGHT / height;
+                        height = MAX_HEIGHT;
+                    }
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                
+                if (!ctx) {
+                    // Fallback to original if context fails
+                    resolve(base64.startsWith('data:') ? base64.split(',')[1] : base64);
+                    return;
+                }
+                
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                // Compress to JPEG 0.7 quality
+                const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                
+                // Return raw base64 string without prefix
+                resolve(compressedDataUrl.split(',')[1]);
+            };
+
+            img.onerror = (e) => {
+                console.warn("Image compression failed (load error), using original", e);
+                resolve(base64.startsWith('data:') ? base64.split(',')[1] : base64);
+            };
+        } catch (e) {
+            console.warn("Image compression failed (exception), using original", e);
+            resolve(base64.startsWith('data:') ? base64.split(',')[1] : base64);
+        }
+    });
 };
 
 export interface JudgeResult {
@@ -63,7 +114,10 @@ export const addGroceryItem = (listId: number, name: string): Promise<GroceryIte
 export const updateGroceryItem = (itemId: number, checked: boolean): Promise<GroceryItem> => callApi(`/grocery/items/${itemId}`, 'PATCH', { checked });
 export const removeGroceryItem = (itemId: number): Promise<void> => callApi(`/grocery/items/${itemId}`, 'DELETE');
 export const clearGroceryListItems = (listId: number, type: 'all' | 'checked'): Promise<void> => callApi(`/grocery/lists/${listId}/clear`, 'POST', { type });
-export const identifyGroceryItems = async (base64: string, mimeType: string): Promise<{ items: string[] }> => callApi('/grocery/identify', 'POST', { base64, mimeType });
+export const identifyGroceryItems = async (base64: string, mimeType: string): Promise<{ items: string[] }> => {
+    const compressed = await compressImage(base64, mimeType);
+    return callApi('/grocery/identify', 'POST', { base64: compressed, mimeType });
+};
 
 // --- SHOPIFY ---
 export const getShopifyOrders = (): Promise<Order[]> => callApi('/shopify/orders', 'GET');
@@ -111,9 +165,18 @@ export const respondToCoachingInvite = (id: string, status: 'active' | 'rejected
 export const revokeCoachingAccess = (id: string): Promise<void> => callApi(`/coaching/relations/${id}`, 'DELETE');
 
 // --- NUTRITION INTELLIGENCE ---
-export const analyzeImageWithGemini = (base64Image: string, mimeType: string): Promise<NutritionInfo> => callApi('/analyze-image', 'POST', { base64Image, mimeType });
-export const analyzeRestaurantMeal = (base64Image: string, mimeType: string): Promise<NutritionInfo> => callApi('/analyze-restaurant-meal', 'POST', { base64Image, mimeType });
-export const getRecipesFromImage = (base64Image: string, mimeType: string): Promise<Recipe[]> => callApi('/get-recipes-from-image', 'POST', { base64Image, mimeType });
+export const analyzeImageWithGemini = async (base64Image: string, mimeType: string): Promise<NutritionInfo> => {
+    const compressed = await compressImage(base64Image, mimeType);
+    return callApi('/analyze-image', 'POST', { base64Image: compressed, mimeType });
+};
+export const analyzeRestaurantMeal = async (base64Image: string, mimeType: string): Promise<NutritionInfo> => {
+    const compressed = await compressImage(base64Image, mimeType);
+    return callApi('/analyze-restaurant-meal', 'POST', { base64Image: compressed, mimeType });
+};
+export const getRecipesFromImage = async (base64Image: string, mimeType: string): Promise<Recipe[]> => {
+    const compressed = await compressImage(base64Image, mimeType);
+    return callApi('/get-recipes-from-image', 'POST', { base64Image: compressed, mimeType });
+};
 export const searchFood = (query: string): Promise<NutritionInfo> => callApi(`/search-food?q=${encodeURIComponent(query)}`, 'GET');
 export const getMealSuggestions = (conditions: string[], cuisine: string, duration: string): Promise<NutritionInfo[]> => callApi('/meal-suggestions', 'POST', { conditions, cuisine, duration });
 export const getRestaurantActivity = (uri: string): Promise<RestaurantActivity[]> => callApi(`/nutrition/restaurant-activity?uri=${encodeURIComponent(uri)}`, 'GET');
@@ -127,9 +190,18 @@ export const getMealLogEntryById = (id: number): Promise<MealLogEntry> => callAp
 export const getSavedMeals = (): Promise<SavedMeal[]> => callApi('/saved-meals', 'GET');
 export const getSavedMealById = (id: number): Promise<SavedMeal> => callApi(`/saved-meals/${id}`, 'GET');
 export const saveMeal = (mealData: NutritionInfo): Promise<SavedMeal> => callApi('/saved-meals', 'POST', mealData);
-export const savePantryLogEntry = (imageBase64: string): Promise<void> => callApi('/nutrition/pantry-log', 'POST', { imageBase64 });
-export const saveRestaurantLogEntry = (imageBase64: string): Promise<void> => callApi('/nutrition/restaurant-log', 'POST', { imageBase64 });
-export const judgeRecipeAttempt = (base64: string, recipeContext: string, recipeId: number): Promise<JudgeResult> => callApi('/judge-recipe', 'POST', { base64, recipeContext, recipeId });
+export const savePantryLogEntry = async (imageBase64: string): Promise<void> => {
+    const compressed = await compressImage(imageBase64);
+    return callApi('/nutrition/pantry-log', 'POST', { imageBase64: compressed });
+};
+export const saveRestaurantLogEntry = async (imageBase64: string): Promise<void> => {
+    const compressed = await compressImage(imageBase64);
+    return callApi('/nutrition/restaurant-log', 'POST', { imageBase64: compressed });
+};
+export const judgeRecipeAttempt = async (base64: string, recipeContext: string, recipeId: number): Promise<JudgeResult> => {
+    const compressed = await compressImage(base64);
+    return callApi('/judge-recipe', 'POST', { base64: compressed, recipeContext, recipeId });
+};
 
 // --- REWARDS ---
 export const getRewardsSummary = (): Promise<RewardsSummary> => callApi('/rewards', 'GET');
