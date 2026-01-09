@@ -64,8 +64,8 @@ export const findOrCreateUserByEmail = async (email) => {
             throw new Error("Failed to find or create user after insert operation.");
         }
         
-        // Ensure rewards tables exist
-        await ensureRewardsTables(client);
+        // Ensure ALL application tables exist
+        await ensureTables(client);
         
         // Ensure rewards balance entry exists for this user
         await client.query(`
@@ -84,7 +84,8 @@ export const findOrCreateUserByEmail = async (email) => {
     }
 };
 
-const ensureRewardsTables = async (client) => {
+const ensureTables = async (client) => {
+    // Core User & Rewards
     await client.query(`
         CREATE TABLE IF NOT EXISTS rewards_balances (
             user_id VARCHAR(255) PRIMARY KEY,
@@ -106,6 +107,38 @@ const ensureRewardsTables = async (client) => {
             user_id VARCHAR(255) NOT NULL,
             name VARCHAR(255) NOT NULL,
             checked BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+    `);
+
+    // Logs (Pantry, Restaurant, Body, Form)
+    await client.query(`
+        CREATE TABLE IF NOT EXISTS pantry_logs (
+            id SERIAL PRIMARY KEY,
+            user_id VARCHAR(255) NOT NULL,
+            image_base64 TEXT,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS restaurant_logs (
+            id SERIAL PRIMARY KEY,
+            user_id VARCHAR(255) NOT NULL,
+            image_base64 TEXT,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS body_photos (
+            id SERIAL PRIMARY KEY,
+            user_id VARCHAR(255) NOT NULL,
+            image_base64 TEXT,
+            category VARCHAR(50) DEFAULT 'General',
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS form_checks (
+            id SERIAL PRIMARY KEY,
+            user_id VARCHAR(255) NOT NULL,
+            exercise VARCHAR(100),
+            image_base64 TEXT,
+            ai_score INT,
+            ai_feedback TEXT,
             created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         );
     `);
@@ -511,7 +544,7 @@ export const getGroceryList = async (userId) => {
     const client = await pool.connect();
     try {
         // Ensure table exists
-        await ensureRewardsTables(client);
+        await ensureTables(client);
         
         const query = `
             SELECT id, name, checked FROM grocery_list_items 
@@ -561,9 +594,6 @@ export const removeGroceryItem = async (userId, itemId) => {
 export const generateGroceryList = async (userId, planIds = []) => {
     const client = await pool.connect();
     if (planIds.length === 0) {
-        // Option: Don't delete, just don't import anything. 
-        // Or if the user meant "sync strictly", we might delete.
-        // For now, let's assuming importing appends.
         return getGroceryList(userId);
     }
     
@@ -588,14 +618,6 @@ export const generateGroceryList = async (userId, planIds = []) => {
         const uniqueIngredientNames = [...new Set(allIngredients.map(ing => ing.name))].sort();
         
         if (uniqueIngredientNames.length > 0) {
-            // Avoid duplicates in the list
-            const insertQuery = `
-                INSERT INTO grocery_list_items (user_id, name)
-                SELECT $1, unnest($2::text[])
-                ON CONFLICT DO NOTHING; 
-                -- Note: Real conflict handling needs a UNIQUE constraint on (user_id, name) or similar logic
-            `;
-            // Simple Insert for now
              for (const name of uniqueIngredientNames) {
                  await client.query(`INSERT INTO grocery_list_items (user_id, name) VALUES ($1, $2)`, [userId, name]);
              }
@@ -648,6 +670,204 @@ export const clearGroceryList = async (userId, type) => {
     } finally {
         client.release();
     }
+};
+
+// --- Pantry & Restaurant Log Implementation ---
+
+export const getPantryLog = async (userId) => {
+    const client = await pool.connect();
+    try {
+        await ensureTables(client);
+        // Optimize: Don't send heavy image_base64 in list view
+        const query = `
+            SELECT id, created_at, (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image 
+            FROM pantry_logs 
+            WHERE user_id = $1 
+            ORDER BY created_at DESC
+        `;
+        const res = await client.query(query, [userId]);
+        return res.rows.map(r => ({
+            id: r.id,
+            created_at: r.created_at,
+            hasImage: r.has_image
+        }));
+    } catch (err) {
+        console.error("Error getting pantry log", err);
+        return [];
+    } finally { 
+        client.release(); 
+    }
+};
+
+export const getPantryLogEntryById = async (id) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, image_base64, created_at FROM pantry_logs WHERE id = $1`, [id]);
+        if (res.rows.length === 0) return null;
+        return {
+            id: res.rows[0].id,
+            imageUrl: `data:image/jpeg;base64,${res.rows[0].image_base64}`,
+            created_at: res.rows[0].created_at
+        };
+    } finally { client.release(); }
+};
+
+export const savePantryLogEntry = async (userId, imageBase64) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`INSERT INTO pantry_logs (user_id, image_base64) VALUES ($1, $2)`, [userId, imageBase64]);
+        await awardPoints(userId, 'pantry.scan', 10);
+    } finally { client.release(); }
+};
+
+export const getRestaurantLog = async (userId) => {
+    const client = await pool.connect();
+    try {
+        await ensureTables(client);
+        const query = `
+            SELECT id, created_at, (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image 
+            FROM restaurant_logs 
+            WHERE user_id = $1 
+            ORDER BY created_at DESC
+        `;
+        const res = await client.query(query, [userId]);
+        return res.rows.map(r => ({
+            id: r.id,
+            created_at: r.created_at,
+            hasImage: r.has_image
+        }));
+    } catch (err) {
+        console.error("Error getting restaurant log", err);
+        return [];
+    } finally { 
+        client.release(); 
+    }
+};
+
+export const getRestaurantLogEntryById = async (id) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, image_base64, created_at FROM restaurant_logs WHERE id = $1`, [id]);
+        if (res.rows.length === 0) return null;
+        return {
+            id: res.rows[0].id,
+            imageUrl: `data:image/jpeg;base64,${res.rows[0].image_base64}`,
+            created_at: res.rows[0].created_at
+        };
+    } finally { client.release(); }
+};
+
+export const saveRestaurantLogEntry = async (userId, imageBase64) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`INSERT INTO restaurant_logs (user_id, image_base64) VALUES ($1, $2)`, [userId, imageBase64]);
+        await awardPoints(userId, 'dining.scan', 15);
+    } finally { client.release(); }
+};
+
+// --- Body Photos Implementation ---
+
+export const getBodyPhotos = async (userId) => {
+    const client = await pool.connect();
+    try {
+        await ensureTables(client);
+        const query = `
+            SELECT id, category, created_at, (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image 
+            FROM body_photos 
+            WHERE user_id = $1 
+            ORDER BY created_at DESC
+        `;
+        const res = await client.query(query, [userId]);
+        return res.rows.map(r => ({
+            id: r.id,
+            category: r.category,
+            createdAt: r.created_at,
+            hasImage: r.has_image
+        }));
+    } catch (err) {
+        console.error("Error getting body photos", err);
+        return [];
+    } finally { 
+        client.release(); 
+    }
+};
+
+export const uploadBodyPhoto = async (userId, imageBase64, category) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`INSERT INTO body_photos (user_id, image_base64, category) VALUES ($1, $2, $3)`, [userId, imageBase64, category]);
+        await awardPoints(userId, 'body.photo', 25);
+    } finally { client.release(); }
+};
+
+export const getBodyPhotoById = async (id) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, image_base64, category, created_at FROM body_photos WHERE id = $1`, [id]);
+        if (res.rows.length === 0) return null;
+        return {
+            id: res.rows[0].id,
+            imageUrl: `data:image/jpeg;base64,${res.rows[0].image_base64}`,
+            category: res.rows[0].category,
+            createdAt: res.rows[0].created_at
+        };
+    } finally { client.release(); }
+};
+
+// --- Form Checks Implementation ---
+
+export const getFormChecks = async (userId, exercise) => {
+    const client = await pool.connect();
+    try {
+        await ensureTables(client);
+        const query = `
+            SELECT id, exercise, ai_score, ai_feedback, created_at, (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image
+            FROM form_checks
+            WHERE user_id = $1 AND exercise = $2
+            ORDER BY created_at DESC
+        `;
+        const res = await client.query(query, [userId, exercise]);
+        return res.rows.map(r => ({
+            id: r.id,
+            exercise: r.exercise,
+            ai_score: r.ai_score,
+            ai_feedback: r.ai_feedback,
+            created_at: r.created_at,
+            hasImage: r.has_image
+        }));
+    } catch (err) {
+        console.error("Error getting form checks", err);
+        return [];
+    } finally { 
+        client.release(); 
+    }
+};
+
+export const saveFormCheck = async (userId, data) => {
+    const client = await pool.connect();
+    try {
+        await client.query(
+            `INSERT INTO form_checks (user_id, exercise, image_base64, ai_score, ai_feedback) VALUES ($1, $2, $3, $4, $5)`,
+            [userId, data.exercise, data.imageBase64, data.score, data.feedback]
+        );
+        await awardPoints(userId, 'form.check', 30);
+    } finally { client.release(); }
+};
+
+export const getFormCheckById = async (id) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, image_base64, exercise, ai_score, ai_feedback, created_at FROM form_checks WHERE id = $1`, [id]);
+        if (res.rows.length === 0) return null;
+        return {
+            id: res.rows[0].id,
+            imageUrl: `data:image/jpeg;base64,${res.rows[0].image_base64}`,
+            exercise: res.rows[0].exercise,
+            ai_score: res.rows[0].ai_score,
+            ai_feedback: res.rows[0].ai_feedback,
+            created_at: res.rows[0].created_at
+        };
+    } finally { client.release(); }
 };
 
 /**
@@ -863,73 +1083,3 @@ export const submitAssessment = async (userId, id, resp) => { await awardPoints(
 export const getPartnerBlueprint = async () => ({ preferences: {} });
 export const savePartnerBlueprint = async () => {};
 export const getMatches = async () => [];
-
-// --- Pantry & Restaurant Log Placeholders ---
-// Added to satisfy interface requirements even if they just return empty for now or use generic image logic
-export const getPantryLog = async (userId) => {
-    // Placeholder implementation pattern
-    const client = await pool.connect();
-    try {
-        // Assuming table exists or we return empty
-        // return []; 
-        // If table existed:
-        /*
-        const query = `SELECT id, (image_base64 IS NOT NULL) as has_image, created_at FROM pantry_log WHERE user_id = $1 ORDER BY created_at DESC`;
-        const res = await client.query(query, [userId]);
-        return res.rows.map(r => ({ id: r.id, hasImage: r.has_image, created_at: r.created_at }));
-        */
-       return [];
-    } finally { client.release(); }
-};
-
-export const getPantryLogEntryById = async (id) => {
-    // Placeholder
-    return null;
-};
-
-export const getRestaurantLog = async (userId) => {
-    // Placeholder
-    return [];
-};
-
-export const getRestaurantLogEntryById = async (id) => {
-    // Placeholder
-    return null;
-};
-
-export const savePantryLogEntry = async (userId, data) => {
-    // Placeholder
-    return;
-};
-
-export const saveRestaurantLogEntry = async (userId, data) => {
-    // Placeholder
-    return;
-};
-
-export const getBodyPhotos = async (userId) => {
-    // Placeholder implementation
-    return [];
-};
-
-export const uploadBodyPhoto = async (userId, imageBase64, category) => {
-    // Placeholder
-    return;
-};
-
-export const getBodyPhotoById = async (id) => {
-    // Placeholder
-    return null;
-};
-
-export const getFormChecks = async (userId, exercise) => {
-    return [];
-};
-
-export const saveFormCheck = async (userId, data) => {
-    return;
-};
-
-export const getFormCheckById = async (id) => {
-    return null;
-};

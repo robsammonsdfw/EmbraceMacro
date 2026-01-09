@@ -98,11 +98,7 @@ export const handler = async (event) => {
             if (!body.email) {
                 return sendResponse(400, { error: "Email is required" });
             }
-            
-            // In a real app, verify password here. 
-            // For this demo, we trust the email and get/create the user.
             const user = await db.findOrCreateUserByEmail(body.email);
-            
             const token = jwt.sign({ 
                 userId: user.id, 
                 email: user.email,
@@ -116,7 +112,6 @@ export const handler = async (event) => {
         const userId = getUserFromEvent(event);
 
         // --- SAVED MEALS ---
-        // Match specific ID first
         const savedMealMatch = path.match(/\/saved-meals\/(\d+)$/);
         if (savedMealMatch) {
             const id = parseInt(savedMealMatch[1]);
@@ -154,8 +149,6 @@ export const handler = async (event) => {
         }
 
         // --- GROCERY LISTS ---
-        
-        // 1. Get All Lists (Mocked as single list wrapper for now to match simplified DB)
         if (path.endsWith('/grocery/lists') && httpMethod === 'GET') {
              return sendResponse(200, [{ id: 1, name: "Main List", is_active: true }]);
         }
@@ -163,10 +156,8 @@ export const handler = async (event) => {
              return sendResponse(200, { id: 1, name: "Main List", is_active: true });
         }
 
-        // 2. List Items (GET/POST)
         const listItemsMatch = path.match(/\/grocery\/lists\/(\d+)\/items$/);
         if (listItemsMatch) {
-            // const listId = parseInt(listItemsMatch[1]); // Unused in single-list mock
             if (httpMethod === 'GET') return sendResponse(200, await db.getGroceryList(userId));
             if (httpMethod === 'POST') {
                 const { name } = parseBody(event);
@@ -174,7 +165,6 @@ export const handler = async (event) => {
             }
         }
 
-        // 3. Item Management (PATCH/DELETE)
         const groceryItemMatch = path.match(/\/grocery\/items\/(\d+)$/);
         if (groceryItemMatch) {
             const itemId = parseInt(groceryItemMatch[1]);
@@ -188,7 +178,6 @@ export const handler = async (event) => {
             }
         }
 
-        // 4. Import / Clear
         const importMatch = path.match(/\/grocery\/lists\/(\d+)\/import$/);
         if (importMatch && httpMethod === 'POST') {
             const { planIds } = parseBody(event);
@@ -202,15 +191,65 @@ export const handler = async (event) => {
             return sendResponse(200, { success: true });
         }
 
-        // 5. AI Identify
         if (path.endsWith('/grocery/identify') && httpMethod === 'POST') {
             const { base64, mimeType } = parseBody(event);
-            // Simple prompt for identification
             const prompt = "Identify the grocery items in this image. Return a JSON object with a single key 'items' which is an array of strings.";
             const result = await callGemini(prompt, base64, mimeType);
             return sendResponse(200, result);
         }
 
+        // --- PANTRY LOG ---
+        if (path.endsWith('/nutrition/pantry-log') && httpMethod === 'GET') return sendResponse(200, await db.getPantryLog(userId));
+        if (path.endsWith('/nutrition/pantry-log') && httpMethod === 'POST') {
+            const { imageBase64 } = parseBody(event);
+            await db.savePantryLogEntry(userId, imageBase64);
+            return sendResponse(200, { success: true });
+        }
+        const pantryIdMatch = path.match(/\/nutrition\/pantry-log\/(\d+)$/);
+        if (pantryIdMatch && httpMethod === 'GET') {
+            return sendResponse(200, await db.getPantryLogEntryById(parseInt(pantryIdMatch[1])));
+        }
+
+        // --- RESTAURANT LOG ---
+        if (path.endsWith('/nutrition/restaurant-log') && httpMethod === 'GET') return sendResponse(200, await db.getRestaurantLog(userId));
+        if (path.endsWith('/nutrition/restaurant-log') && httpMethod === 'POST') {
+            const { imageBase64 } = parseBody(event);
+            await db.saveRestaurantLogEntry(userId, imageBase64);
+            return sendResponse(200, { success: true });
+        }
+        const restaurantIdMatch = path.match(/\/nutrition\/restaurant-log\/(\d+)$/);
+        if (restaurantIdMatch && httpMethod === 'GET') {
+            return sendResponse(200, await db.getRestaurantLogEntryById(parseInt(restaurantIdMatch[1])));
+        }
+
+        // --- BODY PHOTOS ---
+        if (path.endsWith('/body/photos') && httpMethod === 'GET') return sendResponse(200, await db.getBodyPhotos(userId));
+        if (path.endsWith('/body/photos') && httpMethod === 'POST') {
+            const { base64, category } = parseBody(event);
+            await db.uploadBodyPhoto(userId, base64, category);
+            return sendResponse(200, { success: true });
+        }
+        const bodyPhotoMatch = path.match(/\/body\/photos\/(\d+)$/);
+        if (bodyPhotoMatch && httpMethod === 'GET') {
+            return sendResponse(200, await db.getBodyPhotoById(parseInt(bodyPhotoMatch[1])));
+        }
+
+        // --- FORM CHECKS ---
+        if (path.includes('/physical/form-checks') && httpMethod === 'GET') {
+            // Need to parse query param for exercise manually or assumes passed via path if we adjust route, 
+            // but standard API Gateway event usually has queryStringParameters.
+            const exercise = event.queryStringParameters?.exercise || 'Squat';
+            return sendResponse(200, await db.getFormChecks(userId, exercise));
+        }
+        if (path.endsWith('/physical/form-checks') && httpMethod === 'POST') {
+            const { exercise, base64Image, score, feedback } = parseBody(event);
+            await db.saveFormCheck(userId, { exercise, imageBase64: base64Image, score, feedback });
+            return sendResponse(200, { success: true });
+        }
+        const formCheckMatch = path.match(/\/physical\/form-checks\/(\d+)$/);
+        if (formCheckMatch && httpMethod === 'GET') {
+            return sendResponse(200, await db.getFormCheckById(parseInt(formCheckMatch[1])));
+        }
 
         // --- SOCIAL ---
         if (path.endsWith('/social/friends') && httpMethod === 'GET') return sendResponse(200, await db.getFriends(userId));
@@ -230,7 +269,6 @@ export const handler = async (event) => {
         }
 
         // --- SHOPIFY ---
-        // Mock shopify response if DB service doesn't have credentials configured yet to prevent crash
         if (path.endsWith('/shopify/orders') && httpMethod === 'GET') {
              return sendResponse(200, []); 
         }
@@ -255,8 +293,8 @@ export const handler = async (event) => {
         if (path.endsWith('/body/dashboard-prefs') && httpMethod === 'POST') return sendResponse(200, await db.saveDashboardPrefs(userId, parseBody(event)));
 
         // --- COACHING ---
-        if (path.includes('/coaching/relations') && httpMethod === 'GET') return sendResponse(200, []); // Mock
-        if (path.includes('/coaching/invites') && httpMethod === 'POST') return sendResponse(200, { success: true }); // Mock
+        if (path.includes('/coaching/relations') && httpMethod === 'GET') return sendResponse(200, []);
+        if (path.includes('/coaching/invites') && httpMethod === 'POST') return sendResponse(200, { success: true });
 
         // --- AI ANALYSIS ROUTES ---
         if (path.endsWith('/analyze-image') && httpMethod === 'POST') {
@@ -274,12 +312,10 @@ export const handler = async (event) => {
         }
 
         if (path.endsWith('/get-recipes-from-image') && httpMethod === 'POST') {
-            // Pantry Chef
             const { base64Image, mimeType } = parseBody(event);
             const prompt = `Identify the ingredients in this fridge/pantry. Suggest 3 recipes I can make.
             Return JSON Array of objects: [{ "recipeName": string, "description": string, "ingredients": [{"name": string, "quantity": string}], "instructions": [string], "nutrition": { "totalCalories": number, "totalProtein": number, "totalCarbs": number, "totalFat": number } }]`;
             const result = await callGemini(prompt, base64Image, mimeType);
-            // Ensure array format
             return sendResponse(200, Array.isArray(result) ? result : [result]);
         }
 
