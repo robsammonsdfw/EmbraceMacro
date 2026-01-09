@@ -1,11 +1,14 @@
 
 import * as db from './services/databaseService.mjs';
+import jwt from 'jsonwebtoken';
 
 const CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "OPTIONS,POST,GET,PUT,DELETE,PATCH",
     "Access-Control-Allow-Headers": "Content-Type,Authorization"
 };
+
+const JWT_SECRET = 'embrace-health-secret'; // In prod, use process.env.JWT_SECRET
 
 const sendResponse = (statusCode, body) => ({
     statusCode,
@@ -16,16 +19,38 @@ const sendResponse = (statusCode, body) => ({
     body: JSON.stringify(body)
 });
 
+const getUserFromEvent = (event) => {
+    try {
+        const authHeader = event.headers?.Authorization || event.headers?.authorization;
+        if (!authHeader) return 1; // Default to ID 1 (Demo User) if no token, preventing crash
+        
+        const token = authHeader.replace('Bearer ', '');
+        const decoded = jwt.verify(token, JWT_SECRET);
+        
+        if (typeof decoded === 'object' && decoded !== null && 'userId' in decoded) {
+            return decoded.userId;
+        }
+        return 1;
+    } catch (e) {
+        console.warn("Token verification failed, defaulting to demo user (ID 1)");
+        return 1; // Fallback to a valid integer ID to prevent DB type errors
+    }
+};
+
+const parseBody = (event) => {
+    try {
+        return event.body ? JSON.parse(event.body) : {};
+    } catch (e) {
+        console.error("Failed to parse JSON body", e);
+        return {};
+    }
+};
+
 export const handler = async (event) => {
     // Robustly handle different API Gateway payload formats (v1.0 vs v2.0)
     let path = event.path || event.rawPath || "";
     let httpMethod = event.httpMethod || event.requestContext?.http?.method || "";
     httpMethod = httpMethod.toUpperCase();
-
-    // Extract user ID from token (mock for now, replace with real JWT validation in prod)
-    // const authHeader = event.headers?.Authorization || event.headers?.authorization;
-    // const userId = validateToken(authHeader); 
-    const userId = "test-user-123"; 
 
     try {
         if (httpMethod === 'OPTIONS') {
@@ -35,6 +60,34 @@ export const handler = async (event) => {
                 body: ''
             };
         }
+
+        // --- HEALTH CHECK ---
+        if (path === '/' || path === '/health') {
+            return sendResponse(200, { status: 'ok', timestamp: new Date().toISOString() });
+        }
+
+        // --- AUTHENTICATION ---
+        if (path.endsWith('/auth/customer-login') && httpMethod === 'POST') {
+            const body = parseBody(event);
+            if (!body.email) {
+                return sendResponse(400, { error: "Email is required" });
+            }
+            
+            // In a real app, verify password here. 
+            // For this demo, we trust the email and get/create the user.
+            const user = await db.findOrCreateUserByEmail(body.email);
+            
+            const token = jwt.sign({ 
+                userId: user.id, 
+                email: user.email,
+                firstName: 'User' 
+            }, JWT_SECRET, { expiresIn: '7d' });
+
+            return sendResponse(200, { token, user });
+        }
+
+        // Extract User ID for protected routes
+        const userId = getUserFromEvent(event);
 
         // --- SAVED MEALS ---
         if (path.match(/\/saved-meals\/\d+$/) && httpMethod === 'GET') {
@@ -47,7 +100,7 @@ export const handler = async (event) => {
             return sendResponse(200, { success: true });
         }
         if (path.endsWith('/saved-meals') && httpMethod === 'GET') return sendResponse(200, await db.getSavedMeals(userId));
-        if (path.endsWith('/saved-meals') && httpMethod === 'POST') return sendResponse(200, await db.saveMeal(userId, JSON.parse(event.body)));
+        if (path.endsWith('/saved-meals') && httpMethod === 'POST') return sendResponse(200, await db.saveMeal(userId, parseBody(event)));
         
         // --- REWARDS ---
         if (path.endsWith('/rewards') && httpMethod === 'GET') return sendResponse(200, await db.getRewardsSummary(userId));
@@ -55,7 +108,7 @@ export const handler = async (event) => {
         // --- MEAL PLANS ---
         if (path.match(/\/meal-plans\/\d+\/items$/) && httpMethod === 'POST') {
             const planId = parseInt(path.split('/')[2]);
-            const { savedMealId, metadata } = JSON.parse(event.body);
+            const { savedMealId, metadata } = parseBody(event);
             return sendResponse(200, await db.addMealToPlanItem(userId, planId, savedMealId, metadata));
         }
         
@@ -67,7 +120,7 @@ export const handler = async (event) => {
 
         if (path.endsWith('/meal-plans') && httpMethod === 'GET') return sendResponse(200, await db.getMealPlans(userId));
         if (path.endsWith('/meal-plans') && httpMethod === 'POST') {
-            const { name } = JSON.parse(event.body);
+            const { name } = parseBody(event);
             return sendResponse(200, await db.createMealPlan(userId, name));
         }
 
@@ -92,13 +145,17 @@ export const handler = async (event) => {
         // --- LOGGING (Meal History) ---
         if (path.endsWith('/meal-log') && httpMethod === 'GET') return sendResponse(200, await db.getMealLogEntries(userId));
         if (path.endsWith('/meal-log') && httpMethod === 'POST') {
-            const { mealData, imageBase64 } = JSON.parse(event.body);
+            const { mealData, imageBase64 } = parseBody(event);
             return sendResponse(200, await db.createMealLogEntry(userId, mealData, imageBase64));
         }
 
         // --- HEALTH METRICS ---
         if (path.endsWith('/health-metrics') && httpMethod === 'GET') return sendResponse(200, await db.getHealthMetrics(userId));
-        if (path.endsWith('/sync-health') && httpMethod === 'POST') return sendResponse(200, await db.syncHealthMetrics(userId, JSON.parse(event.body)));
+        if (path.endsWith('/sync-health') && httpMethod === 'POST') return sendResponse(200, await db.syncHealthMetrics(userId, parseBody(event)));
+        
+        // --- DASHBOARD PREFS ---
+        if (path.endsWith('/body/dashboard-prefs') && httpMethod === 'GET') return sendResponse(200, await db.getDashboardPrefs(userId));
+        if (path.endsWith('/body/dashboard-prefs') && httpMethod === 'POST') return sendResponse(200, await db.saveDashboardPrefs(userId, parseBody(event)));
 
         return sendResponse(404, { error: `Route not found: ${httpMethod} ${path}` });
 
