@@ -1,4 +1,3 @@
-
 import pg from 'pg';
 
 const { Pool } = pg;
@@ -8,35 +7,25 @@ const pool = new Pool({
     }
 });
 
-/**
- * Helper function to prepare meal data for database insertion.
- */
 const processMealDataForSave = (mealData) => {
     const dataForDb = { ...mealData };
-    // If image is inside the JSON blob, extract it (though usually we store in separate column now)
     if (dataForDb.imageUrl && dataForDb.imageUrl.startsWith('data:image')) {
-        // We generally don't want giant base64 strings inside the JSONB column either
-        delete dataForDb.imageUrl; 
-        delete dataForDb.imageBase64;
+        dataForDb.imageBase64 = dataForDb.imageUrl.split(',')[1];
+        delete dataForDb.imageUrl;
     }
     delete dataForDb.id;
     delete dataForDb.createdAt;
     return dataForDb;
 };
 
-/**
- * Helper function to prepare meal data for the client.
- */
 const processMealDataForClient = (mealData) => {
     const dataForClient = { ...mealData };
-    // Just in case legacy data has it
     if (dataForClient.imageBase64) {
         dataForClient.imageUrl = `data:image/jpeg;base64,${dataForClient.imageBase64}`;
         delete dataForClient.imageBase64;
     }
     return dataForClient;
 };
-
 
 export const findOrCreateUserByEmail = async (email) => {
     const client = await pool.connect();
@@ -76,212 +65,6 @@ export const findOrCreateUserByEmail = async (email) => {
     }
 };
 
-export const getShopifyCustomerId = async (userId) => {
-    const client = await pool.connect();
-    try {
-        const res = await client.query('SELECT shopify_customer_id FROM users WHERE id = $1', [userId]);
-        return res.rows[0]?.shopify_customer_id;
-    } finally {
-        client.release();
-    }
-};
-
-export const ensureSchema = async () => {
-    const client = await pool.connect();
-    try {
-        await client.query(`
-            CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-            
-            CREATE TABLE IF NOT EXISTS users (
-                id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                email VARCHAR(255) UNIQUE NOT NULL,
-                first_name VARCHAR(255),
-                role VARCHAR(50) DEFAULT 'user',
-                shopify_customer_id VARCHAR(255),
-                dashboard_prefs JSONB DEFAULT '{"selectedWidgets": ["steps", "activeCalories", "heartRate"]}',
-                privacy_mode VARCHAR(50) DEFAULT 'private',
-                bio TEXT,
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS meal_log_entries (
-                id SERIAL PRIMARY KEY,
-                user_id UUID NOT NULL,
-                meal_data JSONB,
-                image_base64 TEXT,
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS saved_meals (
-                id SERIAL PRIMARY KEY,
-                user_id UUID NOT NULL,
-                meal_data JSONB,
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS meal_plans (
-                id SERIAL PRIMARY KEY,
-                user_id UUID NOT NULL,
-                name VARCHAR(255),
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS meal_plan_items (
-                id SERIAL PRIMARY KEY,
-                user_id UUID NOT NULL,
-                meal_plan_id INT NOT NULL,
-                saved_meal_id INT,
-                metadata JSONB,
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS grocery_lists (
-                id SERIAL PRIMARY KEY,
-                user_id UUID NOT NULL,
-                name VARCHAR(255),
-                is_active BOOLEAN DEFAULT FALSE,
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS grocery_list_items (
-                id SERIAL PRIMARY KEY,
-                grocery_list_id INT NOT NULL,
-                user_id UUID NOT NULL,
-                name VARCHAR(255),
-                checked BOOLEAN DEFAULT FALSE
-            );
-            CREATE TABLE IF NOT EXISTS rewards_balances (
-                user_id UUID PRIMARY KEY,
-                points_total INT DEFAULT 0,
-                points_available INT DEFAULT 0,
-                tier VARCHAR(50) DEFAULT 'Bronze',
-                updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS rewards_ledger (
-                entry_id SERIAL PRIMARY KEY,
-                user_id UUID NOT NULL,
-                event_type VARCHAR(100) NOT NULL,
-                points_delta INT NOT NULL,
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-                metadata JSONB DEFAULT '{}'
-            );
-            CREATE TABLE IF NOT EXISTS health_metrics (
-                user_id UUID PRIMARY KEY,
-                steps INT DEFAULT 0,
-                active_calories FLOAT DEFAULT 0,
-                resting_calories FLOAT DEFAULT 0,
-                distance_miles FLOAT DEFAULT 0,
-                flights_climbed INT DEFAULT 0,
-                heart_rate INT DEFAULT 0,
-                resting_heart_rate INT DEFAULT 0,
-                sleep_score INT DEFAULT 0,
-                spo2 FLOAT DEFAULT 0,
-                vo2_max FLOAT DEFAULT 0,
-                active_zone_minutes INT DEFAULT 0,
-                water_fl_oz FLOAT DEFAULT 0,
-                mindfulness_minutes INT DEFAULT 0,
-                weight_lbs FLOAT DEFAULT 0,
-                blood_pressure_systolic INT DEFAULT 0,
-                blood_pressure_diastolic INT DEFAULT 0,
-                body_fat_percentage FLOAT DEFAULT 0,
-                bmi FLOAT DEFAULT 0,
-                last_synced TIMESTAMPTZ
-            );
-            CREATE TABLE IF NOT EXISTS sleep_records (
-                id SERIAL PRIMARY KEY,
-                user_id UUID NOT NULL,
-                duration_minutes INT,
-                quality_score INT,
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS body_photos (
-                id SERIAL PRIMARY KEY,
-                user_id UUID NOT NULL,
-                image_base64 TEXT,
-                category VARCHAR(50),
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS friendships (
-                id SERIAL PRIMARY KEY,
-                requester_id UUID NOT NULL,
-                receiver_id UUID NOT NULL,
-                status VARCHAR(50) DEFAULT 'pending',
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(requester_id, receiver_id)
-            );
-            CREATE TABLE IF NOT EXISTS coaching_relations (
-                id SERIAL PRIMARY KEY,
-                coach_id UUID NOT NULL,
-                client_id UUID NOT NULL,
-                status VARCHAR(50) DEFAULT 'pending',
-                permissions JSONB DEFAULT '{}',
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(coach_id, client_id)
-            );
-            CREATE TABLE IF NOT EXISTS restaurant_log_entries (
-                id SERIAL PRIMARY KEY,
-                user_id UUID NOT NULL,
-                image_base64 TEXT,
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS pantry_log_entries (
-                id SERIAL PRIMARY KEY,
-                user_id UUID NOT NULL,
-                image_base64 TEXT,
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS form_checks (
-                id SERIAL PRIMARY KEY,
-                user_id UUID NOT NULL,
-                exercise_type VARCHAR(50),
-                image_base64 TEXT,
-                ai_score INT,
-                ai_feedback TEXT,
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS partner_blueprints (
-                user_id UUID PRIMARY KEY,
-                preferences JSONB
-            );
-            CREATE TABLE IF NOT EXISTS recipe_attempts (
-                id SERIAL PRIMARY KEY,
-                user_id UUID NOT NULL,
-                recipe_id INT,
-                image_base64 TEXT,
-                score INT,
-                feedback TEXT,
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS assessment_responses (
-                id SERIAL PRIMARY KEY,
-                user_id UUID NOT NULL,
-                assessment_id VARCHAR(50),
-                responses JSONB,
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS passive_pulse_responses (
-                id SERIAL PRIMARY KEY,
-                user_id UUID NOT NULL,
-                prompt_id VARCHAR(50),
-                value JSONB,
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-            );
-
-            -- Migrations for health_metrics
-            ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS resting_heart_rate INT DEFAULT 0;
-            ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS sleep_score INT DEFAULT 0;
-            ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS spo2 FLOAT DEFAULT 0;
-            ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS vo2_max FLOAT DEFAULT 0;
-            ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS active_zone_minutes INT DEFAULT 0;
-            ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS water_fl_oz FLOAT DEFAULT 0;
-            ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS mindfulness_minutes INT DEFAULT 0;
-            ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS weight_lbs FLOAT DEFAULT 0;
-            ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS blood_pressure_systolic INT DEFAULT 0;
-            ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS blood_pressure_diastolic INT DEFAULT 0;
-            ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS body_fat_percentage FLOAT DEFAULT 0;
-            ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS bmi FLOAT DEFAULT 0;
-            ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS hrv INT DEFAULT 0;
-            ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS sleep_minutes INT DEFAULT 0;
-        `);
-    } finally {
-        client.release();
-    }
-};
-
 const ensureRewardsTables = async (client) => {
     await client.query(`
         CREATE TABLE IF NOT EXISTS rewards_balances (
@@ -300,6 +83,19 @@ const ensureRewardsTables = async (client) => {
             metadata JSONB DEFAULT '{}'
         );
     `);
+};
+
+export const getShopifyCustomerId = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT shopify_customer_id FROM users WHERE id = $1`, [userId]);
+        return res.rows[0]?.shopify_customer_id;
+    } catch (err) {
+        console.error('Error getting shopify customer id:', err);
+        return null;
+    } finally {
+        client.release();
+    }
 };
 
 // --- Rewards Logic ---
@@ -381,7 +177,7 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
         const query = `
             INSERT INTO meal_log_entries (user_id, meal_data, image_base64)
             VALUES ($1, $2, $3)
-            RETURNING id, meal_data, created_at, (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image;
+            RETURNING id, meal_data, image_base64, created_at;
         `;
         const res = await client.query(query, [userId, mealData, imageBase64]);
         const row = res.rows[0];
@@ -392,7 +188,7 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
         return { 
             id: row.id,
             ...mealDataFromDb,
-            hasImage: row.has_image,
+            imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
             createdAt: row.created_at
         };
     } catch (err) {
@@ -407,10 +203,8 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
 export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
     try {
-        // CRITICAL FIX: Do NOT select image_base64 column to prevent 6MB payload limits
         const query = `
-            SELECT id, meal_data, created_at,
-            (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image 
+            SELECT id, meal_data, image_base64, created_at 
             FROM meal_log_entries
             WHERE user_id = $1 
             ORDER BY created_at DESC;
@@ -421,7 +215,7 @@ export const getMealLogEntries = async (userId) => {
             return {
                 id: row.id,
                 ...mealData,
-                hasImage: row.has_image,
+                imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
                 createdAt: row.created_at,
             };
         });
@@ -436,18 +230,19 @@ export const getMealLogEntries = async (userId) => {
 export const getMealLogEntryById = async (id) => {
     const client = await pool.connect();
     try {
-        const query = `SELECT id, meal_data, image_base64, created_at FROM meal_log_entries WHERE id = $1`;
-        const res = await client.query(query, [id]);
+        const res = await client.query(`SELECT id, meal_data, image_base64, created_at FROM meal_log_entries WHERE id = $1`, [id]);
         if (res.rows.length === 0) return null;
         const row = res.rows[0];
         const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
         return {
             id: row.id,
             ...mealData,
-            imageUrl: row.image_base64 ? `data:image/jpeg;base64,${row.image_base64}` : null,
-            createdAt: row.created_at
+            imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
+            createdAt: row.created_at,
         };
-    } finally { client.release(); }
+    } finally {
+        client.release();
+    }
 };
 
 // --- Saved Meals Persistence ---
@@ -455,7 +250,6 @@ export const getMealLogEntryById = async (id) => {
 export const getSavedMeals = async (userId) => {
     const client = await pool.connect();
     try {
-        // CRITICAL FIX: Do not return full image data in list
         const query = `
             SELECT id, meal_data FROM saved_meals 
             WHERE user_id = $1 
@@ -464,13 +258,7 @@ export const getSavedMeals = async (userId) => {
         const res = await client.query(query, [userId]);
         return res.rows.map(row => {
             const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
-            const cleanMealData = processMealDataForClient(mealData);
-            // Check if there was an image inside the JSON or implicitly
-            const hasImage = !!cleanMealData.imageUrl || !!cleanMealData.imageBase64;
-            delete cleanMealData.imageUrl; 
-            delete cleanMealData.imageBase64;
-            
-            return { id: row.id, ...cleanMealData, hasImage };
+            return { id: row.id, ...processMealDataForClient(mealData) };
         });
     } catch (err) {
         console.error('Database error in getSavedMeals:', err);
@@ -483,13 +271,14 @@ export const getSavedMeals = async (userId) => {
 export const getSavedMealById = async (id) => {
     const client = await pool.connect();
     try {
-        const query = `SELECT id, meal_data FROM saved_meals WHERE id = $1`;
-        const res = await client.query(query, [id]);
+        const res = await client.query(`SELECT id, meal_data FROM saved_meals WHERE id = $1`, [id]);
         if (res.rows.length === 0) return null;
         const row = res.rows[0];
         const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
         return { id: row.id, ...processMealDataForClient(mealData) };
-    } finally { client.release(); }
+    } finally {
+        client.release();
+    }
 };
 
 export const saveMeal = async (userId, mealData) => {
@@ -538,7 +327,8 @@ export const getMealPlans = async (userId) => {
             SELECT 
                 p.id as plan_id, p.name as plan_name,
                 i.id as item_id,
-                sm.id as meal_id, sm.meal_data
+                sm.id as meal_id, sm.meal_data,
+                i.metadata
             FROM meal_plans p
             LEFT JOIN meal_plan_items i ON p.id = i.meal_plan_id
             LEFT JOIN saved_meals sm ON i.saved_meal_id = sm.id
@@ -558,17 +348,13 @@ export const getMealPlans = async (userId) => {
             }
             if (row.item_id) {
                 const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
-                const cleanData = processMealDataForClient(mealData);
-                const hasImage = !!cleanData.imageUrl;
-                delete cleanData.imageUrl; // Keep plans light
-                
                 plans.get(row.plan_id).items.push({
                     id: row.item_id,
                     meal: {
                         id: row.meal_id,
-                        ...cleanData,
-                        hasImage
-                    }
+                        ...processMealDataForClient(mealData)
+                    },
+                    metadata: row.metadata || {}
                 });
             }
         });
@@ -611,7 +397,7 @@ export const deleteMealPlan = async (userId, planId) => {
 };
 
 
-export const addMealToPlanItem = async (userId, planId, savedMealId) => {
+export const addMealToPlanItem = async (userId, planId, savedMealId, metadata = {}) => {
     const client = await pool.connect();
     try {
         const checkQuery = `
@@ -624,18 +410,19 @@ export const addMealToPlanItem = async (userId, planId, savedMealId) => {
         }
 
         const insertQuery = `
-            INSERT INTO meal_plan_items (user_id, meal_plan_id, saved_meal_id)
-            VALUES ($1, $2, $3)
+            INSERT INTO meal_plan_items (user_id, meal_plan_id, saved_meal_id, metadata)
+            VALUES ($1, $2, $3, $4)
             RETURNING id;
         `;
-        const insertRes = await client.query(insertQuery, [userId, planId, savedMealId]);
+        const insertRes = await client.query(insertQuery, [userId, planId, savedMealId, metadata]);
         const newItemId = insertRes.rows[0].id;
 
         const selectQuery = `
             SELECT 
                 i.id,
                 m.id as meal_id,
-                m.meal_data
+                m.meal_data,
+                i.metadata
             FROM meal_plan_items i
             JOIN saved_meals m ON i.saved_meal_id = m.id
             WHERE i.id = $1;
@@ -645,7 +432,8 @@ export const addMealToPlanItem = async (userId, planId, savedMealId) => {
         const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
         return {
             id: row.id,
-            meal: { id: row.meal_id, ...processMealDataForClient(mealData) }
+            meal: { id: row.meal_id, ...processMealDataForClient(mealData) },
+            metadata: row.metadata
         };
 
     } catch (err) {
@@ -688,25 +476,6 @@ export const removeMealFromPlanItem = async (userId, planItemId) => {
 
 
 // --- Grocery List Persistence ---
-
-export const getGroceryLists = async (userId) => {
-    const client = await pool.connect();
-    try {
-        const query = `
-            SELECT id, name, is_active, created_at 
-            FROM grocery_lists 
-            WHERE user_id = $1 
-            ORDER BY created_at DESC;
-        `;
-        const res = await client.query(query, [userId]);
-        return res.rows;
-    } catch (err) {
-        console.error('Database error in getGroceryLists:', err);
-        throw new Error('Could not retrieve grocery lists.');
-    } finally {
-        client.release();
-    }
-};
 
 export const getGroceryList = async (userId) => {
     const client = await pool.connect();
@@ -1005,141 +774,6 @@ export const logRecoveryStats = async (userId, data) => {
             VALUES ($1, $2, $3)
         `, [userId, data.sleepMinutes, data.sleepQuality]);
         await awardPoints(userId, 'recovery.logged', 20);
-    } finally { client.release(); }
-};
-
-// --- Missing Log Functions ---
-
-export const getPantryLog = async (userId) => {
-    const client = await pool.connect();
-    try {
-        // CRITICAL FIX: Do not select image_base64
-        const res = await client.query(`SELECT id, created_at, (image_base64 IS NOT NULL) as has_image FROM pantry_log_entries WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
-        return res.rows.map(row => ({
-            id: row.id,
-            hasImage: row.has_image,
-            created_at: row.created_at
-        }));
-    } finally { client.release(); }
-};
-
-export const savePantryLogEntry = async (userId, imageBase64) => {
-    const client = await pool.connect();
-    try {
-        await client.query(`INSERT INTO pantry_log_entries (user_id, image_base64) VALUES ($1, $2)`, [userId, imageBase64]);
-    } finally { client.release(); }
-};
-
-export const getPantryLogEntryById = async (id) => {
-    const client = await pool.connect();
-    try {
-        const res = await client.query(`SELECT id, image_base64, created_at FROM pantry_log_entries WHERE id = $1`, [id]);
-        if (res.rows.length === 0) return null;
-        return {
-            id: res.rows[0].id,
-            imageUrl: `data:image/jpeg;base64,${res.rows[0].image_base64}`,
-            created_at: res.rows[0].created_at
-        };
-    } finally { client.release(); }
-};
-
-export const getRestaurantLog = async (userId) => {
-    const client = await pool.connect();
-    try {
-        // CRITICAL FIX: Do not select image_base64
-        const res = await client.query(`SELECT id, created_at, (image_base64 IS NOT NULL) as has_image FROM restaurant_log_entries WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
-        return res.rows.map(row => ({
-            id: row.id,
-            hasImage: row.has_image,
-            created_at: row.created_at
-        }));
-    } finally { client.release(); }
-};
-
-export const saveRestaurantLogEntry = async (userId, imageBase64) => {
-    const client = await pool.connect();
-    try {
-        await client.query(`INSERT INTO restaurant_log_entries (user_id, image_base64) VALUES ($1, $2)`, [userId, imageBase64]);
-    } finally { client.release(); }
-};
-
-export const getRestaurantLogEntryById = async (id) => {
-    const client = await pool.connect();
-    try {
-        const res = await client.query(`SELECT id, image_base64, created_at FROM restaurant_log_entries WHERE id = $1`, [id]);
-        if (res.rows.length === 0) return null;
-        return {
-            id: res.rows[0].id,
-            imageUrl: `data:image/jpeg;base64,${res.rows[0].image_base64}`,
-            created_at: res.rows[0].created_at
-        };
-    } finally { client.release(); }
-};
-
-export const getBodyPhotos = async (userId) => {
-    const client = await pool.connect();
-    try {
-        // CRITICAL FIX: Do not select image_base64
-        const res = await client.query(`SELECT id, category, created_at, (image_base64 IS NOT NULL) as has_image FROM body_photos WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
-        return res.rows.map(row => ({
-            id: row.id,
-            hasImage: row.has_image,
-            category: row.category,
-            createdAt: row.created_at
-        }));
-    } finally { client.release(); }
-};
-
-export const uploadBodyPhoto = async (userId, imageBase64, category) => {
-    const client = await pool.connect();
-    try {
-        const res = await client.query(`INSERT INTO body_photos (user_id, image_base64, category) VALUES ($1, $2, $3) RETURNING id, created_at`, [userId, imageBase64, category]);
-        return { id: res.rows[0].id, hasImage: true, category, createdAt: res.rows[0].created_at };
-    } finally { client.release(); }
-};
-
-export const getBodyPhotoById = async (id) => {
-    const client = await pool.connect();
-    try {
-        const res = await client.query(`SELECT id, image_base64, category, created_at FROM body_photos WHERE id = $1`, [id]);
-        if (res.rows.length === 0) return null;
-        return {
-            id: res.rows[0].id,
-            imageUrl: `data:image/jpeg;base64,${res.rows[0].image_base64}`,
-            category: res.rows[0].category,
-            createdAt: res.rows[0].created_at
-        };
-    } finally { client.release(); }
-};
-
-export const getFormChecks = async (userId, exercise) => {
-    const client = await pool.connect();
-    try {
-        const res = await client.query(`SELECT id, exercise_type, ai_score, ai_feedback, created_at FROM form_checks WHERE user_id = $1 AND exercise_type = $2 ORDER BY created_at DESC`, [userId, exercise]);
-        return res.rows;
-    } finally { client.release(); }
-};
-
-export const saveFormCheck = async (userId, exercise, imageBase64, score, feedback) => {
-    const client = await pool.connect();
-    try {
-        await client.query(`INSERT INTO form_checks (user_id, exercise_type, image_base64, ai_score, ai_feedback) VALUES ($1, $2, $3, $4, $5)`, [userId, exercise, imageBase64, score, feedback]);
-    } finally { client.release(); }
-};
-
-export const getFormCheckById = async (id) => {
-    const client = await pool.connect();
-    try {
-        const res = await client.query(`SELECT id, exercise_type, image_base64, ai_score, ai_feedback, created_at FROM form_checks WHERE id = $1`, [id]);
-        if (res.rows.length === 0) return null;
-        return {
-            id: res.rows[0].id,
-            exercise_type: res.rows[0].exercise_type,
-            imageUrl: `data:image/jpeg;base64,${res.rows[0].image_base64}`,
-            ai_score: res.rows[0].ai_score,
-            ai_feedback: res.rows[0].ai_feedback,
-            created_at: res.rows[0].created_at
-        };
     } finally { client.release(); }
 };
 

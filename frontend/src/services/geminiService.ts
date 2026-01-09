@@ -1,8 +1,7 @@
-
 import * as apiService from './apiService';
 import type { NutritionInfo, Recipe } from '../types';
 
-export const analyzeFoodImage = async (base64Data: string, mimeType: string): Promise<NutritionInfo> => {
+export const analyzeImageWithGemini = async (base64Data: string, mimeType: string): Promise<NutritionInfo> => {
   return apiService.analyzeImageWithGemini(base64Data, mimeType);
 };
 
@@ -18,7 +17,6 @@ export const searchFood = async (query: string): Promise<NutritionInfo> => {
     return apiService.searchFood(query);
 };
 
-export const getMealSuggestions = async (conditions: string[], cuisine: string, duration: 'day' | 'week'): Promise<NutritionInfo[]> => {
-    // Correctly using conditions, cuisine, and duration to fetch clinical meal ideas
+export const getMealSuggestions = async (conditions: string[], cuisine: string, duration: string): Promise<NutritionInfo[]> => {
     return apiService.getMealSuggestions(conditions, cuisine, duration);
 };

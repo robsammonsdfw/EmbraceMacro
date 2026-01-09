@@ -2,6 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { CameraIcon, XIcon, TrophyIcon, FireIcon } from './icons';
 import * as apiService from '../services/apiService';
+import type { JudgeResult } from '../services/apiService';
 
 interface CookOffModalProps {
     recipeContext: string; // The text description of the recipe
@@ -13,7 +14,7 @@ export const CookOffModal: React.FC<CookOffModalProps> = ({ recipeContext, recip
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [image, setImage] = useState<string | null>(null);
     const [isJudging, setIsJudging] = useState(false);
-    const [result, setResult] = useState<apiService.JudgeResult | null>(null);
+    const [result, setResult] = useState<JudgeResult | null>(null);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
