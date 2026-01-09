@@ -50,7 +50,7 @@ const compressImage = (base64: string, mimeType: string): Promise<string> => {
             const ctx = canvas.getContext('2d');
             if (ctx) {
                 ctx.drawImage(img, 0, 0, width, height);
-                // Compress to JPEG at 0.7 quality
+                // Compress to JPEG at 0.7 quality - drastically reduces size
                 const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
                 resolve(dataUrl.split(',')[1]);
             } else {
@@ -111,6 +111,7 @@ export const identifyGroceryItems = async (base64Image: string, mimeType: string
 };
 
 export const createMealLogEntry = async (mealData: NutritionInfo, imageBase64: string): Promise<MealLogEntry> => {
+    // Compress stored images too to save bandwidth/DB space
     const compressed = imageBase64 ? await compressImage(imageBase64, 'image/jpeg') : imageBase64;
     return callApi('/meal-log', 'POST', { mealData, imageBase64: compressed });
 };
