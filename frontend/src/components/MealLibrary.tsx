@@ -20,6 +20,7 @@ const MealCard: React.FC<{
     onViewImage: () => void;
     onDetails: () => void;
 }> = ({ meal, onAdd, onDelete, onViewImage, onDetails }) => {
+    // Only trust the hasImage flag, ignore imageUrl in list view as it won't be there
     const hasImage = meal.hasImage;
 
     return (
@@ -29,12 +30,10 @@ const MealCard: React.FC<{
         >
             {/* Image Header */}
             <div className="relative h-40 bg-slate-100 group cursor-pointer">
-                {hasImage && meal.imageUrl ? (
-                     <div className="w-full h-full bg-cover bg-center" style={{backgroundImage: `url(${meal.imageUrl})`}}></div>
-                ) : hasImage ? (
-                    <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 bg-slate-50">
-                        <CameraIcon />
-                        <span className="text-xs font-bold mt-1">View Image</span>
+                {hasImage ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 bg-slate-50 group-hover:bg-slate-100 transition-colors">
+                        <CameraIcon className="w-8 h-8 mb-2 opacity-50 group-hover:opacity-80" />
+                        <span className="text-xs font-bold uppercase tracking-widest opacity-60">View Photo</span>
                     </div>
                 ) : (
                     <div className="w-full h-full flex items-center justify-center text-slate-300 bg-slate-50">
@@ -43,19 +42,23 @@ const MealCard: React.FC<{
                 )}
                 
                 {/* Overlay Actions */}
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                     <button 
                         onClick={(e) => { e.stopPropagation(); onAdd(meal); }} 
-                        className="bg-emerald-500 text-white p-2 rounded-full hover:scale-110 transition-transform shadow-lg"
+                        className="bg-emerald-500 text-white p-3 rounded-full hover:scale-110 transition-transform shadow-lg"
+                        title="Add to Plan"
                     >
                         <PlusIcon />
                     </button>
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); onViewImage(); }} 
-                        className="bg-white text-slate-700 p-2 rounded-full hover:scale-110 transition-transform shadow-lg"
-                    >
-                        <CameraIcon />
-                    </button>
+                    {hasImage && (
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); onViewImage(); }} 
+                            className="bg-white text-slate-700 p-3 rounded-full hover:scale-110 transition-transform shadow-lg"
+                            title="View Full Image"
+                        >
+                            <CameraIcon />
+                        </button>
+                    )}
                 </div>
             </div>
 

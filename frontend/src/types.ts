@@ -335,6 +335,7 @@ export interface RestaurantActivity {
     rating: number;
     date: string;
     imageUrl?: string;
+    hasImage?: boolean;
 }
 
 export interface RestaurantPlace {
@@ -346,7 +347,8 @@ export interface RestaurantPlace {
 
 export interface BodyPhoto {
     id: number;
-    imageUrl: string;
+    imageUrl?: string;
+    hasImage: boolean;
     category: string;
     createdAt: string;
 }
@@ -354,6 +356,8 @@ export interface BodyPhoto {
 export interface PantryLogEntry {
     id: number;
     created_at: string;
+    hasImage?: boolean;
+    imageUrl?: string;
 }
 
 export type ActiveView = 

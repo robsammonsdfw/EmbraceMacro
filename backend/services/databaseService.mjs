@@ -13,9 +13,11 @@ const pool = new Pool({
  */
 const processMealDataForSave = (mealData) => {
     const dataForDb = { ...mealData };
+    // If image is inside the JSON blob, extract it (though usually we store in separate column now)
     if (dataForDb.imageUrl && dataForDb.imageUrl.startsWith('data:image')) {
-        dataForDb.imageBase64 = dataForDb.imageUrl.split(',')[1];
-        delete dataForDb.imageUrl;
+        // We generally don't want giant base64 strings inside the JSONB column either
+        delete dataForDb.imageUrl; 
+        delete dataForDb.imageBase64;
     }
     delete dataForDb.id;
     delete dataForDb.createdAt;
@@ -27,6 +29,7 @@ const processMealDataForSave = (mealData) => {
  */
 const processMealDataForClient = (mealData) => {
     const dataForClient = { ...mealData };
+    // Just in case legacy data has it
     if (dataForClient.imageBase64) {
         dataForClient.imageUrl = `data:image/jpeg;base64,${dataForClient.imageBase64}`;
         delete dataForClient.imageBase64;
@@ -258,7 +261,7 @@ export const ensureSchema = async () => {
                 created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
             );
 
-            -- Migrations for health_metrics to ensure columns exist if table was created earlier
+            -- Migrations for health_metrics
             ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS resting_heart_rate INT DEFAULT 0;
             ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS sleep_score INT DEFAULT 0;
             ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS spo2 FLOAT DEFAULT 0;
@@ -378,7 +381,7 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
         const query = `
             INSERT INTO meal_log_entries (user_id, meal_data, image_base64)
             VALUES ($1, $2, $3)
-            RETURNING id, meal_data, image_base64, created_at;
+            RETURNING id, meal_data, created_at, (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image;
         `;
         const res = await client.query(query, [userId, mealData, imageBase64]);
         const row = res.rows[0];
@@ -389,7 +392,7 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
         return { 
             id: row.id,
             ...mealDataFromDb,
-            imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
+            hasImage: row.has_image,
             createdAt: row.created_at
         };
     } catch (err) {
@@ -404,8 +407,10 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
 export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
     try {
+        // CRITICAL FIX: Do NOT select image_base64 column to prevent 6MB payload limits
         const query = `
-            SELECT id, meal_data, image_base64, created_at 
+            SELECT id, meal_data, created_at,
+            (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image 
             FROM meal_log_entries
             WHERE user_id = $1 
             ORDER BY created_at DESC;
@@ -416,7 +421,7 @@ export const getMealLogEntries = async (userId) => {
             return {
                 id: row.id,
                 ...mealData,
-                imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
+                hasImage: row.has_image,
                 createdAt: row.created_at,
             };
         });
@@ -428,11 +433,29 @@ export const getMealLogEntries = async (userId) => {
     }
 };
 
+export const getMealLogEntryById = async (id) => {
+    const client = await pool.connect();
+    try {
+        const query = `SELECT id, meal_data, image_base64, created_at FROM meal_log_entries WHERE id = $1`;
+        const res = await client.query(query, [id]);
+        if (res.rows.length === 0) return null;
+        const row = res.rows[0];
+        const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
+        return {
+            id: row.id,
+            ...mealData,
+            imageUrl: row.image_base64 ? `data:image/jpeg;base64,${row.image_base64}` : null,
+            createdAt: row.created_at
+        };
+    } finally { client.release(); }
+};
+
 // --- Saved Meals Persistence ---
 
 export const getSavedMeals = async (userId) => {
     const client = await pool.connect();
     try {
+        // CRITICAL FIX: Do not return full image data in list
         const query = `
             SELECT id, meal_data FROM saved_meals 
             WHERE user_id = $1 
@@ -441,7 +464,13 @@ export const getSavedMeals = async (userId) => {
         const res = await client.query(query, [userId]);
         return res.rows.map(row => {
             const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
-            return { id: row.id, ...processMealDataForClient(mealData) };
+            const cleanMealData = processMealDataForClient(mealData);
+            // Check if there was an image inside the JSON or implicitly
+            const hasImage = !!cleanMealData.imageUrl || !!cleanMealData.imageBase64;
+            delete cleanMealData.imageUrl; 
+            delete cleanMealData.imageBase64;
+            
+            return { id: row.id, ...cleanMealData, hasImage };
         });
     } catch (err) {
         console.error('Database error in getSavedMeals:', err);
@@ -449,6 +478,18 @@ export const getSavedMeals = async (userId) => {
     } finally {
         client.release();
     }
+};
+
+export const getSavedMealById = async (id) => {
+    const client = await pool.connect();
+    try {
+        const query = `SELECT id, meal_data FROM saved_meals WHERE id = $1`;
+        const res = await client.query(query, [id]);
+        if (res.rows.length === 0) return null;
+        const row = res.rows[0];
+        const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
+        return { id: row.id, ...processMealDataForClient(mealData) };
+    } finally { client.release(); }
 };
 
 export const saveMeal = async (userId, mealData) => {
@@ -517,11 +558,16 @@ export const getMealPlans = async (userId) => {
             }
             if (row.item_id) {
                 const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
+                const cleanData = processMealDataForClient(mealData);
+                const hasImage = !!cleanData.imageUrl;
+                delete cleanData.imageUrl; // Keep plans light
+                
                 plans.get(row.plan_id).items.push({
                     id: row.item_id,
                     meal: {
                         id: row.meal_id,
-                        ...processMealDataForClient(mealData)
+                        ...cleanData,
+                        hasImage
                     }
                 });
             }
@@ -967,10 +1013,11 @@ export const logRecoveryStats = async (userId, data) => {
 export const getPantryLog = async (userId) => {
     const client = await pool.connect();
     try {
-        const res = await client.query(`SELECT id, image_base64, created_at FROM pantry_log_entries WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
+        // CRITICAL FIX: Do not select image_base64
+        const res = await client.query(`SELECT id, created_at, (image_base64 IS NOT NULL) as has_image FROM pantry_log_entries WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
         return res.rows.map(row => ({
             id: row.id,
-            imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
+            hasImage: row.has_image,
             created_at: row.created_at
         }));
     } finally { client.release(); }
@@ -999,10 +1046,11 @@ export const getPantryLogEntryById = async (id) => {
 export const getRestaurantLog = async (userId) => {
     const client = await pool.connect();
     try {
-        const res = await client.query(`SELECT id, image_base64, created_at FROM restaurant_log_entries WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
+        // CRITICAL FIX: Do not select image_base64
+        const res = await client.query(`SELECT id, created_at, (image_base64 IS NOT NULL) as has_image FROM restaurant_log_entries WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
         return res.rows.map(row => ({
             id: row.id,
-            imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
+            hasImage: row.has_image,
             created_at: row.created_at
         }));
     } finally { client.release(); }
@@ -1031,10 +1079,11 @@ export const getRestaurantLogEntryById = async (id) => {
 export const getBodyPhotos = async (userId) => {
     const client = await pool.connect();
     try {
-        const res = await client.query(`SELECT id, image_base64, category, created_at FROM body_photos WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
+        // CRITICAL FIX: Do not select image_base64
+        const res = await client.query(`SELECT id, category, created_at, (image_base64 IS NOT NULL) as has_image FROM body_photos WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
         return res.rows.map(row => ({
             id: row.id,
-            imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
+            hasImage: row.has_image,
             category: row.category,
             createdAt: row.created_at
         }));
@@ -1045,7 +1094,7 @@ export const uploadBodyPhoto = async (userId, imageBase64, category) => {
     const client = await pool.connect();
     try {
         const res = await client.query(`INSERT INTO body_photos (user_id, image_base64, category) VALUES ($1, $2, $3) RETURNING id, created_at`, [userId, imageBase64, category]);
-        return { id: res.rows[0].id, imageUrl: `data:image/jpeg;base64,${imageBase64}`, category, createdAt: res.rows[0].created_at };
+        return { id: res.rows[0].id, hasImage: true, category, createdAt: res.rows[0].created_at };
     } finally { client.release(); }
 };
 

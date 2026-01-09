@@ -20,6 +20,7 @@ const HistoryEntryCard: React.FC<{
     onViewImage: () => void;
     onDetails: () => void;
 }> = ({ entry, onAdd, onSave, onViewImage, onDetails }) => {
+    // Rely on hasImage flag from backend
     const hasImage = entry.hasImage;
 
     return (
@@ -32,11 +33,11 @@ const HistoryEntryCard: React.FC<{
                 {hasImage ? (
                     <button 
                         onClick={(e) => { e.stopPropagation(); onViewImage(); }}
-                        className="w-full sm:w-20 h-20 bg-slate-200 rounded-xl flex flex-col items-center justify-center text-slate-600 hover:bg-slate-300 transition-colors flex-shrink-0 group"
+                        className="w-full sm:w-20 h-20 bg-slate-200 rounded-xl flex flex-col items-center justify-center text-slate-600 hover:bg-slate-300 transition-colors flex-shrink-0 group shadow-sm hover:shadow-md"
                         title="View Meal Image"
                     >
                         <CameraIcon />
-                        <span className="text-[10px] font-black mt-1 uppercase text-slate-500">Photo</span>
+                        <span className="text-[10px] font-black mt-1 uppercase text-slate-500 group-hover:text-slate-700">View</span>
                     </button>
                 ) : (
                      <div className="w-full sm:w-20 h-20 bg-white rounded-xl flex flex-col items-center justify-center text-slate-300 border border-slate-100 flex-shrink-0">

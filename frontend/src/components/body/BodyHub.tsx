@@ -486,7 +486,7 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, onSyncHealth, das
                                 onClick={() => setViewPhotoId(photo.id)}
                                 className="relative group rounded-2xl overflow-hidden shadow-sm aspect-[3/4] bg-slate-100 flex flex-col items-center justify-center p-4 transition-all hover:scale-[1.02] active:scale-95 border border-slate-200"
                             >
-                                {/* Placeholder Visual since we lazy load the actual image */}
+                                {/* Only show camera icon if we don't load the full image in list (which we don't now) */}
                                 <div className="bg-white p-3 rounded-full shadow-sm mb-3">
                                     <CameraIcon className="w-6 h-6 text-slate-300" />
                                 </div>
