@@ -156,7 +156,7 @@ const App: React.FC = () => {
 
   const bodyProps = {
       healthStats, 
-      onSyncHealth: (source?: 'apple' | 'fitbit') => { 
+      onSyncHealth: (_source?: 'apple' | 'fitbit') => { 
           apiService.syncHealthStatsToDB({ steps: 8500, activeCalories: 450 }).then(() => loadAllData());
       },
       dashboardPrefs, 
