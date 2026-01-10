@@ -8,6 +8,9 @@ const pool = new Pool({
     }
 });
 
+/**
+ * Helper function to prepare meal data for database insertion.
+ */
 const processMealDataForSave = (mealData) => {
     const dataForDb = { ...mealData };
     if (dataForDb.imageUrl && dataForDb.imageUrl.startsWith('data:image')) {
@@ -19,6 +22,9 @@ const processMealDataForSave = (mealData) => {
     return dataForDb;
 };
 
+/**
+ * Helper function to prepare meal data for the client.
+ */
 const processMealDataForClient = (mealData) => {
     const dataForClient = { ...mealData };
     if (dataForClient.imageBase64) {
@@ -771,6 +777,7 @@ export const getBodyPhotos = async (userId) => {
     const client = await pool.connect();
     try {
         await ensureTables(client);
+        // CRITICAL: Strip image_base64 to comply with 6MB AWS Lambda payload limit
         const query = `
             SELECT id, category, created_at, (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image 
             FROM body_photos 
@@ -782,7 +789,7 @@ export const getBodyPhotos = async (userId) => {
             id: r.id,
             category: r.category,
             createdAt: r.created_at,
-            hasImage: r.has_image
+            hasImage: r.has_image // Boolean flag only, no string
         }));
     } catch (err) {
         console.error("Error getting body photos", err);
@@ -803,6 +810,7 @@ export const uploadBodyPhoto = async (userId, imageBase64, category) => {
 export const getBodyPhotoById = async (id) => {
     const client = await pool.connect();
     try {
+        // Only return full base64 data in the detailed ID query
         const res = await client.query(`SELECT id, image_base64, category, created_at FROM body_photos WHERE id = $1`, [id]);
         if (res.rows.length === 0) return null;
         return {
@@ -820,6 +828,7 @@ export const getFormChecks = async (userId, exercise) => {
     const client = await pool.connect();
     try {
         await ensureTables(client);
+        // CRITICAL: Strip image_base64 to comply with 6MB AWS Lambda payload limit
         const query = `
             SELECT id, exercise, ai_score, ai_feedback, created_at, (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image
             FROM form_checks
@@ -833,7 +842,7 @@ export const getFormChecks = async (userId, exercise) => {
             ai_score: r.ai_score,
             ai_feedback: r.ai_feedback,
             created_at: r.created_at,
-            hasImage: r.has_image
+            hasImage: r.has_image // Boolean flag only
         }));
     } catch (err) {
         console.error("Error getting form checks", err);
