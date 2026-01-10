@@ -97,7 +97,7 @@ const App: React.FC = () => {
               alert("Failed to analyze health screenshot. Please try again.");
           }
       } else {
-          console.log("Captured:", mode, img ? "Image present" : "No image", barcode);
+          console.log("Captured:", mode, img ? "Image present" : "No image", barcode, searchQuery);
           // Other modes would be handled here or by specific components listening to state changes
           // For this app architecture, specific analysis modals usually handle the logic,
           // but 'vitals' is global so handled here.
