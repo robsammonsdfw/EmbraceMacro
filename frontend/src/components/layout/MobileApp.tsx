@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { 
     ActivityIcon, CameraIcon, BrainIcon, 
     UserCircleIcon, XIcon, UtensilsIcon, BriefcaseIcon,
-    HomeIcon, BookOpenIcon, PillIcon
+    HomeIcon, BookOpenIcon, PillIcon, UploadIcon
 } from '../icons';
 import type { HealthStats, UserDashboardPrefs } from '../../types';
 
@@ -73,12 +73,12 @@ const VitalsStrip: React.FC<{ stats: HealthStats; prefs: UserDashboardPrefs; onS
             ))}
             <button 
                 onClick={onSyncClick}
-                className="flex flex-col items-center min-w-[60px] justify-center text-slate-400 hover:text-emerald-500 transition-colors ml-auto border-l border-slate-100 pl-4"
+                className="flex flex-col items-center min-w-[80px] justify-center text-slate-500 hover:text-emerald-500 transition-colors ml-auto border-l border-slate-100 pl-4"
             >
-                <div className="bg-slate-100 p-2 rounded-full mb-1">
-                    <ActivityIcon className="w-4 h-4" />
+                <div className="bg-slate-900 text-white p-2 rounded-xl mb-1 shadow-md">
+                    <UploadIcon className="w-4 h-4" />
                 </div>
-                <span className="text-[9px] font-bold uppercase tracking-wide">Sync</span>
+                <span className="text-[8px] font-black uppercase tracking-wide text-center leading-tight">Vision Sync<br/>Screenshot</span>
             </button>
         </div>
     );

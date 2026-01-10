@@ -23,6 +23,7 @@ import { DeviceSync } from '../account/DeviceSync';
 import { WidgetConfig } from '../account/WidgetConfig';
 import { PharmacyOrders } from '../account/PharmacyOrders';
 import { TeleMedicineHub } from '../telemed/TeleMedicineHub'; // NEW IMPORT
+import { ActivityIcon, CameraIcon } from '../icons';
 
 interface DesktopAppProps {
     healthStats: HealthStats;
@@ -43,6 +44,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [rewardsBalance, setRewardsBalance] = useState(0);
     const [showFormAnalysis, setShowFormAnalysis] = useState(false);
+    const [recentFormChecks, setRecentFormChecks] = useState<any[]>([]);
 
     // Calculate Daily Macros
     const today = new Date().toDateString();
@@ -65,6 +67,21 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
         };
         loadRewards();
     }, [activeView]);
+
+    // Fetch form checks when entering view
+    useEffect(() => {
+        if (activeView === 'physical.form_check') {
+            const fetchChecks = async () => {
+                try {
+                    // Fetch generic exercises to show history
+                    const squats = await apiService.getFormChecks('Squat');
+                    const pushups = await apiService.getFormChecks('Pushup');
+                    setRecentFormChecks([...squats, ...pushups].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 6));
+                } catch(e) { console.warn(e); }
+            };
+            fetchChecks();
+        }
+    }, [activeView, showFormAnalysis]); // Reload when modal closes
 
     const handleUpdateJourney = (j: HealthJourney) => {
         if (bodyProps.onUpdatePrefs) {
@@ -115,11 +132,48 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
                 return <PlaceholderPage title="Exercise Plans" description="AI-generated workout routines." />;
             case 'physical.form_check':
                 return (
-                    <div className="flex flex-col items-center justify-center h-full">
-                        <button onClick={() => setShowFormAnalysis(true)} className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-bold">
-                            Launch AI Form Analysis
-                        </button>
+                    <div className="flex flex-col h-full animate-fade-in pb-20">
+                        <div className="bg-slate-900 rounded-[2.5rem] p-10 text-center text-white shadow-2xl relative overflow-hidden shrink-0">
+                            <div className="absolute top-0 right-0 p-12 opacity-10"><ActivityIcon className="w-32 h-32" /></div>
+                            <div className="relative z-10">
+                                <h2 className="text-3xl font-black mb-4">AI Form Coach</h2>
+                                <p className="text-slate-400 mb-8 max-w-md mx-auto">Get real-time feedback on your squats, pushups, and deadlifts using computer vision.</p>
+                                <button 
+                                    onClick={() => setShowFormAnalysis(true)} 
+                                    className="bg-emerald-500 hover:bg-emerald-400 text-white px-10 py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg transition-all active:scale-95"
+                                >
+                                    Launch Analysis
+                                </button>
+                            </div>
+                        </div>
+
                         {showFormAnalysis && <FormAnalysis onClose={() => setShowFormAnalysis(false)} />}
+
+                        <div className="mt-8 flex-grow">
+                            <h3 className="font-black text-slate-800 uppercase tracking-widest text-xs mb-4 flex items-center gap-2">
+                                <ActivityIcon className="w-4 h-4 text-indigo-500" /> Recent Sessions
+                            </h3>
+                            {recentFormChecks.length > 0 ? (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {recentFormChecks.map(check => (
+                                        <div key={check.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
+                                            <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center text-slate-300">
+                                                <CameraIcon />
+                                            </div>
+                                            <div>
+                                                <p className="font-bold text-slate-800 text-sm">{check.exercise}</p>
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`text-xs font-bold ${check.ai_score >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>{check.ai_score}% Score</span>
+                                                    <span className="text-[10px] text-slate-400">{new Date(check.created_at).toLocaleDateString()}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-center py-12 text-slate-400 text-sm">No recent form checks recorded.</div>
+                            )}
+                        </div>
                     </div>
                 );
             case 'physical.run': 

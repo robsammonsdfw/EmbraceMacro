@@ -1,6 +1,6 @@
 
 import React, { useRef, useState, useEffect } from 'react';
-import { CameraIcon, XIcon, ActivityIcon, DumbbellIcon, TrophyIcon, RunningIcon, CheckIcon } from '../icons';
+import { CameraIcon, XIcon, ActivityIcon, DumbbellIcon, TrophyIcon, RunningIcon, CheckIcon, UploadIcon } from '../icons';
 import * as apiService from '../../services/apiService';
 import type { FormAnalysisResult } from '../../types';
 
@@ -9,6 +9,7 @@ type ViewMode = 'categories' | 'gallery' | 'camera' | 'analysis';
 export const FormAnalysis: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const [stream, setStream] = useState<MediaStream | null>(null);
     
     // States
@@ -66,6 +67,30 @@ export const FormAnalysis: React.FC<{ onClose: () => void }> = ({ onClose }) => 
         setIsSaved(false);
         startCamera();
         setView('camera');
+    };
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !selectedExercise) return;
+
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+            const base64 = (reader.result as string).split(',')[1];
+            setCapturedImage(base64);
+            setIsAnalyzing(true);
+            setView('analysis');
+            try {
+                const analysis = await apiService.analyzeExerciseForm(base64, selectedExercise);
+                setResult(analysis);
+            } catch (err) {
+                alert("Failed to analyze uploaded file.");
+                setView('gallery');
+            } finally {
+                setIsAnalyzing(false);
+            }
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
     };
 
     const captureAndAnalyze = async () => {
@@ -176,12 +201,21 @@ export const FormAnalysis: React.FC<{ onClose: () => void }> = ({ onClose }) => 
             </div>
             
             <div className="flex-grow overflow-y-auto px-6 pb-24 space-y-3">
-                <button 
-                    onClick={handleNewScan}
-                    className="w-full py-4 bg-emerald-500 rounded-2xl flex items-center justify-center gap-2 font-black uppercase text-xs tracking-widest text-white shadow-lg mb-6"
-                >
-                    <CameraIcon className="w-5 h-5" /> New Scan
-                </button>
+                <div className="flex gap-2 mb-6">
+                    <button 
+                        onClick={handleNewScan}
+                        className="flex-1 py-4 bg-emerald-500 rounded-2xl flex items-center justify-center gap-2 font-black uppercase text-xs tracking-widest text-white shadow-lg"
+                    >
+                        <CameraIcon className="w-5 h-5" /> New Scan
+                    </button>
+                    <button 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex-1 py-4 bg-slate-700 rounded-2xl flex items-center justify-center gap-2 font-black uppercase text-xs tracking-widest text-white shadow-lg"
+                    >
+                        <UploadIcon className="w-5 h-5" /> Upload
+                    </button>
+                    <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*" className="hidden" />
+                </div>
 
                 {savedChecks.map(check => (
                     <button 
