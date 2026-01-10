@@ -56,12 +56,12 @@ To prevent `413 Request Entity Too Large` errors, **NEVER** return Base64 image 
 - [ ] `GET  /nutrition/restaurant-log/:id` (Detail - **Include Image**)
 
 ### 💪 Physical & Body
-- [ ] `GET  /body/photos` (List - **Strip Images**)
-- [ ] `POST /body/photos`
-- [ ] `GET  /body/photos/:id` (Detail - **Include Image**)
-- [ ] `GET  /physical/form-checks` (List - **Strip Images**)
-- [ ] `POST /physical/form-checks`
-- [ ] `GET  /physical/form-checks/:id` (Detail - **Include Image**)
+- [x] `GET  /body/photos` (List - **Strip Images**)
+- [x] `POST /body/photos`
+- [x] `GET  /body/photos/:id` (Detail - **Include Image**)
+- [x] `GET  /physical/form-checks` (List - **Strip Images**)
+- [x] `POST /physical/form-checks`
+- [x] `GET  /physical/form-checks/:id` (Detail - **Include Image**)
 - [ ] `GET  /health-metrics`
 - [ ] `POST /sync-health`
 - [ ] `GET  /body/dashboard-prefs`
@@ -102,24 +102,24 @@ To prevent `413 Request Entity Too Large` errors, **NEVER** return Base64 image 
 - [ ] `getMealLogEntries` -> **MUST** return `has_image` boolean, **NOT** `image_base64`.
 - [ ] `getPantryLog` -> **MUST** return `has_image` boolean.
 - [ ] `getRestaurantLog` -> **MUST** return `has_image` boolean.
-- [ ] `getBodyPhotos` -> **MUST** return `has_image` boolean.
-- [ ] `getFormChecks` -> **MUST** return `has_image` boolean.
+- [x] `getBodyPhotos` -> **MUST** return `has_image` boolean.
+- [x] `getFormChecks` -> **MUST** return `has_image` boolean.
 - [ ] `getSavedMeals` -> **MUST** return `has_image` boolean.
 
 ### Detail Getters (Full Data)
 - [ ] `getMealLogEntryById`
 - [ ] `getPantryLogEntryById`
 - [ ] `getRestaurantLogEntryById`
-- [ ] `getBodyPhotoById`
-- [ ] `getFormCheckById`
+- [x] `getBodyPhotoById`
+- [x] `getFormCheckById`
 - [ ] `getSavedMealById`
 
 ### Savers/Setters
 - [ ] `createMealLogEntry`
 - [ ] `savePantryLogEntry`
 - [ ] `saveRestaurantLogEntry`
-- [ ] `uploadBodyPhoto`
-- [ ] `saveFormCheck`
+- [x] `uploadBodyPhoto`
+- [x] `saveFormCheck`
 - [ ] `saveMeal`
 - [ ] `deleteMeal`
 
