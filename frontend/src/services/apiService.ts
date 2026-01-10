@@ -179,6 +179,10 @@ export const getRecipesFromImage = async (base64Image: string, mimeType: string)
     const compressed = await compressImage(base64Image, mimeType);
     return callApi('/get-recipes-from-image', 'POST', { base64Image: compressed, mimeType });
 };
+export const analyzeHealthScreenshot = async (base64Image: string): Promise<Partial<HealthStats>> => {
+    const compressed = await compressImage(base64Image, 'image/jpeg');
+    return callApi('/analyze-health-screenshot', 'POST', { base64Image: compressed, mimeType: 'image/jpeg' });
+};
 export const searchFood = (query: string): Promise<NutritionInfo> => callApi(`/search-food?q=${encodeURIComponent(query)}`, 'GET');
 export const getMealSuggestions = (conditions: string[], cuisine: string, duration: string): Promise<NutritionInfo[]> => callApi('/meal-suggestions', 'POST', { conditions, cuisine, duration });
 export const getRestaurantActivity = (uri: string): Promise<RestaurantActivity[]> => callApi(`/nutrition/restaurant-activity?uri=${encodeURIComponent(uri)}`, 'GET');

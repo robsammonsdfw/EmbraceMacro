@@ -73,23 +73,67 @@ export const FormAnalysis: React.FC<{ onClose: () => void }> = ({ onClose }) => 
         const file = e.target.files?.[0];
         if (!file || !selectedExercise) return;
 
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-            const base64 = (reader.result as string).split(',')[1];
-            setCapturedImage(base64);
-            setIsAnalyzing(true);
-            setView('analysis');
-            try {
-                const analysis = await apiService.analyzeExerciseForm(base64, selectedExercise);
-                setResult(analysis);
-            } catch (err) {
-                alert("Failed to analyze uploaded file.");
-                setView('gallery');
-            } finally {
+        setIsAnalyzing(true);
+        setView('analysis');
+
+        if (file.type.startsWith('video/')) {
+            // Process Video: Create URL, load hidden video, seek, capture frame
+            const videoUrl = URL.createObjectURL(file);
+            const tempVideo = document.createElement('video');
+            tempVideo.src = videoUrl;
+            tempVideo.muted = true;
+            tempVideo.playsInline = true;
+            
+            tempVideo.onloadeddata = () => {
+                tempVideo.currentTime = 1.0; // Seek to 1s
+            };
+
+            tempVideo.onseeked = async () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = tempVideo.videoWidth;
+                canvas.height = tempVideo.videoHeight;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.drawImage(tempVideo, 0, 0, canvas.width, canvas.height);
+                    const base64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+                    setCapturedImage(base64);
+                    try {
+                        const analysis = await apiService.analyzeExerciseForm(base64, selectedExercise);
+                        setResult(analysis);
+                    } catch (err) {
+                        alert("Failed to analyze video frame.");
+                        setView('gallery');
+                    } finally {
+                        setIsAnalyzing(false);
+                        URL.revokeObjectURL(videoUrl);
+                    }
+                }
+            };
+            
+            tempVideo.onerror = () => {
+                alert("Could not process video file.");
                 setIsAnalyzing(false);
-            }
-        };
-        reader.readAsDataURL(file);
+                setView('gallery');
+            };
+
+        } else {
+            // Process Image
+            const reader = new FileReader();
+            reader.onloadend = async () => {
+                const base64 = (reader.result as string).split(',')[1];
+                setCapturedImage(base64);
+                try {
+                    const analysis = await apiService.analyzeExerciseForm(base64, selectedExercise);
+                    setResult(analysis);
+                } catch (err) {
+                    alert("Failed to analyze uploaded file.");
+                    setView('gallery');
+                } finally {
+                    setIsAnalyzing(false);
+                }
+            };
+            reader.readAsDataURL(file);
+        }
         e.target.value = '';
     };
 
@@ -212,9 +256,10 @@ export const FormAnalysis: React.FC<{ onClose: () => void }> = ({ onClose }) => 
                         onClick={() => fileInputRef.current?.click()}
                         className="flex-1 py-4 bg-slate-700 rounded-2xl flex items-center justify-center gap-2 font-black uppercase text-xs tracking-widest text-white shadow-lg"
                     >
-                        <UploadIcon className="w-5 h-5" /> Upload
+                        <UploadIcon className="w-5 h-5" /> Upload Video
                     </button>
-                    <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*" className="hidden" />
+                    {/* Updated to accept both image and video */}
+                    <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*,video/*" className="hidden" />
                 </div>
 
                 {savedChecks.map(check => (

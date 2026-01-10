@@ -79,6 +79,37 @@ const App: React.FC = () => {
       setShowCapture(true);
   };
 
+  const handleCaptureComplete = async (img: string | null, mode: string, barcode?: string, searchQuery?: string) => {
+      setShowCapture(false);
+      
+      if (mode === 'vitals' && img) {
+          // Trigger Vision Sync
+          try {
+              const base64 = img.startsWith('data:') ? img.split(',')[1] : img;
+              const analyzedStats = await apiService.analyzeHealthScreenshot(base64);
+              if (analyzedStats) {
+                  const updated = await apiService.syncHealthStatsToDB(analyzedStats);
+                  setHealthStats(prev => ({ ...prev, ...updated }));
+                  alert("Vision Sync Complete! Dashboard updated.");
+              }
+          } catch (e) {
+              console.error("Vision Sync Failed", e);
+              alert("Failed to analyze health screenshot. Please try again.");
+          }
+      } else {
+          console.log("Captured:", mode, img ? "Image present" : "No image", barcode);
+          // Other modes would be handled here or by specific components listening to state changes
+          // For this app architecture, specific analysis modals usually handle the logic,
+          // but 'vitals' is global so handled here.
+      }
+  };
+
+  const onProxySelect = (client: { id: string; name: string }) => {
+      console.log("Proxy selected:", client);
+      alert(`Switching to proxy view for ${client.name}. This is a simulation of coach access.`);
+      // In a real implementation, this would switch the auth context or data context to the client's ID.
+  };
+
   // --- Handlers ---
   const handleCreatePlan = async (name: string) => {
       try {
@@ -171,14 +202,16 @@ const App: React.FC = () => {
 
   return (
     <>
-        {showCapture && <CaptureFlow onClose={() => setShowCapture(false)} onCapture={(img, mode) => { console.log(img, mode); setShowCapture(false); }} initialMode={captureMode} />}
+        {showCapture && <CaptureFlow onClose={() => setShowCapture(false)} onCapture={handleCaptureComplete} initialMode={captureMode} />}
         
         {isMobile ? (
             <MobileApp 
                 healthStats={healthStats} dashboardPrefs={dashboardPrefs} 
-                onCameraClick={() => handleCaptureClick()} 
+                onCameraClick={() => handleCaptureClick('meal')} 
                 fuelProps={fuelProps} bodyProps={bodyProps} 
                 userRole="user" onLogout={logout} user={user}
+                onProxySelect={onProxySelect}
+                onVisionSync={() => handleCaptureClick('vitals')}
             />
         ) : (
             <DesktopApp 
@@ -186,6 +219,7 @@ const App: React.FC = () => {
                 fuelProps={fuelProps} bodyProps={bodyProps} 
                 userRole="user" onLogout={logout} user={user}
                 onCameraClick={handleCaptureClick}
+                onProxySelect={onProxySelect}
             />
         )}
     </>

@@ -28,11 +28,12 @@ interface MobileAppProps {
     onLogout: () => void;
     user?: any;
     onProxySelect?: (client: { id: string; name: string }) => void;
+    onVisionSync?: () => void;
 }
 
 type StackLevel = 'home' | 'account' | 'physical' | 'nutrition' | 'mental' | 'roles' | 'rewards' | 'telemed';
 
-const VitalsStrip: React.FC<{ stats: HealthStats; prefs: UserDashboardPrefs; onSyncClick: () => void }> = ({ stats, prefs, onSyncClick }) => {
+const VitalsStrip: React.FC<{ stats: HealthStats; prefs: UserDashboardPrefs; onVisionSync?: () => void }> = ({ stats, prefs, onVisionSync }) => {
     
     const allWidgets: Record<string, { label: string, value: string | number, unit: string, color: string }> = {
         steps: { label: 'Steps', value: stats.steps.toLocaleString(), unit: '', color: 'text-blue-500' },
@@ -72,7 +73,7 @@ const VitalsStrip: React.FC<{ stats: HealthStats; prefs: UserDashboardPrefs; onS
                 </div>
             ))}
             <button 
-                onClick={onSyncClick}
+                onClick={onVisionSync}
                 className="flex flex-col items-center min-w-[80px] justify-center text-slate-500 hover:text-emerald-500 transition-colors ml-auto border-l border-slate-100 pl-4"
             >
                 <div className="bg-slate-900 text-white p-2 rounded-xl mb-1 shadow-md">
@@ -110,7 +111,7 @@ const HubButton: React.FC<{
 );
 
 export const MobileApp: React.FC<MobileAppProps> = ({ 
-    healthStats, dashboardPrefs, onCameraClick, fuelProps, bodyProps, userRole, onLogout, onProxySelect
+    healthStats, dashboardPrefs, onCameraClick, fuelProps, bodyProps, userRole, onLogout, onProxySelect, onVisionSync
 }) => {
     const [stack, setStack] = useState<StackLevel>('home');
     const [subView, setSubView] = useState<string | null>(null);
@@ -231,7 +232,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col font-sans selection:bg-indigo-100">
-            <VitalsStrip stats={healthStats} prefs={dashboardPrefs} onSyncClick={() => navigateTo('account', 'sync')} />
+            <VitalsStrip stats={healthStats} prefs={dashboardPrefs} onVisionSync={onVisionSync} />
             <main className="flex-grow overflow-y-auto no-scrollbar">
                 {renderStack()}
             </main>

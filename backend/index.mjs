@@ -344,6 +344,12 @@ export const handler = async (event) => {
             return sendResponse(200, await callGemini(prompt, base64Image));
         }
 
+        if (path.endsWith('/analyze-health-screenshot') && httpMethod === 'POST') {
+            const { base64Image, mimeType } = parseBody(event);
+            const prompt = `Analyze this screenshot of a health app. Extract key metrics if available: steps, active calories, resting calories, distance (miles), flights climbed, heart rate, resting heart rate, sleep minutes, sleep score, spo2, vo2 max, water (oz), mindfulness minutes, blood pressure (systolic/diastolic), body fat %, weight (lbs), bmi, glucose. Return JSON matching the structure: { steps: number, activeCalories: number, ... }. Omit fields not found.`;
+            return sendResponse(200, await callGemini(prompt, base64Image, mimeType));
+        }
+
         // --- FALLBACK ---
         return sendResponse(404, { error: `Route not found: ${httpMethod} ${path}` });
 
