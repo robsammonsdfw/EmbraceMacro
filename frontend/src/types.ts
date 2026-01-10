@@ -360,6 +360,16 @@ export interface PantryLogEntry {
     imageUrl?: string;
 }
 
+export interface ShopifyProduct {
+    id: string;
+    title: string;
+    description: string;
+    price: string;
+    currency: string;
+    imageUrl?: string;
+    url?: string;
+}
+
 export type ActiveView = 
   // Core
   | 'home'

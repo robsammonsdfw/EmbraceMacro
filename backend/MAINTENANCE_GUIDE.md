@@ -1,11 +1,18 @@
 
 # Backend Maintenance & Integrity Guide
 
-**CRITICAL RULE: AWS Lambda 6MB Payload Limit**
+**⚠️ CRITICAL RULE: AWS Lambda 6MB Payload Limit ⚠️**
 To prevent `413 Request Entity Too Large` errors, **NEVER** return Base64 image strings in "List" endpoints (endpoints returning arrays of items).
-1.  **List Endpoints (GET /collection):** MUST return `{ id, ..., hasImage: true }`. Strip the `image_base64` or `imageUrl` field.
-2.  **Detail Endpoints (GET /collection/:id):** ONLY here should you return the full Base64 string.
-3.  **Frontend Logic:** The frontend sees `hasImage: true` and renders a "View" button, which fetches the detail endpoint on demand.
+
+1.  **List Endpoints (GET /collection):** 
+    *   MUST return `{ id, ..., hasImage: true }`.
+    *   **STRIP** the `image_base64` or `imageUrl` field before sending the response.
+    *   Use the helper `processMealDataForList(data)` in `databaseService.mjs`.
+2.  **Detail Endpoints (GET /collection/:id):** 
+    *   ONLY here is it safe to return the full Base64 string.
+3.  **Frontend Logic:** 
+    *   The frontend sees `hasImage: true` and renders a "View" button.
+    *   Clicking "View" fetches the specific Detail endpoint to load the heavy image data on demand.
 
 ---
 
@@ -17,9 +24,9 @@ To prevent `413 Request Entity Too Large` errors, **NEVER** return Base64 image 
 - [ ] `POST /auth/customer-login`
 
 ### 🍎 Nutrition & Meals
-- [ ] `GET  /saved-meals` (List - Strip Images)
+- [ ] `GET  /saved-meals` (List - **Strip Images**)
 - [ ] `POST /saved-meals`
-- [ ] `GET  /saved-meals/:id` (Detail - Include Image)
+- [ ] `GET  /saved-meals/:id` (Detail - **Include Image**)
 - [ ] `DELETE /saved-meals/:id`
 - [ ] `GET  /meal-plans`
 - [ ] `POST /meal-plans`
@@ -38,29 +45,30 @@ To prevent `413 Request Entity Too Large` errors, **NEVER** return Base64 image 
 - [ ] `POST /grocery/identify` (AI Vision)
 
 ### 📸 Logs (Specific Features)
-- [ ] `GET  /meal-log` (History List - Strip Images)
+- [ ] `GET  /meal-log` (History List - **Strip Images**)
 - [ ] `POST /meal-log`
-- [ ] `GET  /meal-log/:id` (Detail - Include Image)
-- [ ] `GET  /nutrition/pantry-log` (List - Strip Images)
+- [ ] `GET  /meal-log/:id` (Detail - **Include Image**)
+- [ ] `GET  /nutrition/pantry-log` (List - **Strip Images**)
 - [ ] `POST /nutrition/pantry-log`
-- [ ] `GET  /nutrition/pantry-log/:id` (Detail - Include Image)
-- [ ] `GET  /nutrition/restaurant-log` (List - Strip Images)
+- [ ] `GET  /nutrition/pantry-log/:id` (Detail - **Include Image**)
+- [ ] `GET  /nutrition/restaurant-log` (List - **Strip Images**)
 - [ ] `POST /nutrition/restaurant-log`
-- [ ] `GET  /nutrition/restaurant-log/:id` (Detail - Include Image)
+- [ ] `GET  /nutrition/restaurant-log/:id` (Detail - **Include Image**)
 
 ### 💪 Physical & Body
-- [ ] `GET  /body/photos` (List - Strip Images)
+- [ ] `GET  /body/photos` (List - **Strip Images**)
 - [ ] `POST /body/photos`
-- [ ] `GET  /body/photos/:id` (Detail - Include Image)
-- [ ] `GET  /physical/form-checks` (List - Strip Images)
+- [ ] `GET  /body/photos/:id` (Detail - **Include Image**)
+- [ ] `GET  /physical/form-checks` (List - **Strip Images**)
 - [ ] `POST /physical/form-checks`
-- [ ] `GET  /physical/form-checks/:id` (Detail - Include Image)
+- [ ] `GET  /physical/form-checks/:id` (Detail - **Include Image**)
 - [ ] `GET  /health-metrics`
 - [ ] `POST /sync-health`
 - [ ] `GET  /body/dashboard-prefs`
 - [ ] `POST /body/dashboard-prefs`
 
-### 👥 Social & Coaching
+### 👥 Social, Rewards & Coaching
+- [ ] `GET  /rewards` (Returns points & history)
 - [ ] `GET  /social/friends`
 - [ ] `GET  /social/requests`
 - [ ] `POST /social/requests` (Send)
@@ -72,6 +80,7 @@ To prevent `413 Request Entity Too Large` errors, **NEVER** return Base64 image 
 
 ### 🛍️ Shopify & Orders
 - [ ] `GET /shopify/orders` (Proxies data via `fetchCustomerOrders`)
+- [ ] `GET /shopify/products/:handle` (Proxies data via `getProductByHandle`)
 
 ### 🤖 AI Analysis (Gemini)
 - [ ] `POST /analyze-image` (Macros)
@@ -82,7 +91,7 @@ To prevent `413 Request Entity Too Large` errors, **NEVER** return Base64 image 
 ---
 
 ## 2. `backend/services/databaseService.mjs` (Export Checklist)
-*Ensure these functions are exported. If modifying SQL, check the "Strip Image" logic.*
+*Ensure these functions are exported. If modifying SQL, ALWAYS check the "Strip Image" logic.*
 
 ### Core
 - [ ] `findOrCreateUserByEmail`
@@ -118,7 +127,8 @@ To prevent `413 Request Entity Too Large` errors, **NEVER** return Base64 image 
 - [ ] `getGroceryList`, `addGroceryItem`, `removeGroceryItem`, `updateGroceryListItem`, `clearGroceryList`, `generateGroceryList`
 - [ ] `getMealPlans`, `createMealPlan`, `deleteMealPlan`, `addMealToPlanItem`, `removeMealFromPlanItem`
 
-### Social & Health
+### Social, Health & Rewards
+- [ ] `getRewardsSummary`, `awardPoints`
 - [ ] `getFriends`, `getFriendRequests`, `sendFriendRequest`, `respondToFriendRequest`, `getSocialProfile`, `updateSocialProfile`
 - [ ] `getHealthMetrics`, `syncHealthMetrics`, `getDashboardPrefs`, `saveDashboardPrefs`
 
@@ -130,3 +140,12 @@ To prevent `413 Request Entity Too Large` errors, **NEVER** return Base64 image 
 - [ ] **Customer API Usage:** Authentication and customer-facing interactions **MUST** use the Shopify **Customer API (Storefront API)** context.
 - [ ] **Admin API Restriction:** **NEVER** attempt to authenticate a customer using the Admin API credentials. The Admin API is for server-side data fetching (like pulling orders for a mapped ID) only.
 - [ ] **Credential Safety:** Ensure `SHOPIFY_STOREFRONT_TOKEN` is used for client operations and `SHOPIFY_ADMIN_API_KEY` is strictly reserved for backend order lookups.
+
+---
+
+## 4. Gemini AI Model Standards
+*Ensure `backend/index.mjs` uses the correct models for tasks.*
+
+- [ ] **Vision Tasks (Food/Body/Pantry):** Use `gemini-2.5-flash-image`. It is optimized for low latency and high accuracy in image recognition.
+- [ ] **Text Tasks (Chat/Reasoning):** Use `gemini-3-flash-preview` or `gemini-3-pro-preview` if deep reasoning is required.
+- [ ] **Initialization:** Always use `new GoogleGenAI({ apiKey: process.env.API_KEY })`.

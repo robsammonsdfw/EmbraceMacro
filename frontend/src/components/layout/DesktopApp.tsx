@@ -22,6 +22,7 @@ import { MasterChefView } from '../nutrition/MasterChefView';
 import { DeviceSync } from '../account/DeviceSync';
 import { WidgetConfig } from '../account/WidgetConfig';
 import { PharmacyOrders } from '../account/PharmacyOrders';
+import { TeleMedicineHub } from '../telemed/TeleMedicineHub'; // NEW IMPORT
 
 interface DesktopAppProps {
     healthStats: HealthStats;
@@ -72,6 +73,11 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
     };
 
     const renderContent = () => {
+        // Handle Telemedicine Views via the Hub
+        if (activeView.startsWith('telemed.')) {
+            return <TeleMedicineHub view={activeView} />;
+        }
+
         switch(activeView) {
             case 'home':
                 return (
@@ -90,24 +96,17 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
                     />
                 );
             
-            // --- 1. TELE-MEDICINE ---
-            case 'telemed.weight_loss': return <PlaceholderPage title="Weight Loss Program" description="GLP-1s and metabolic management." />;
-            case 'telemed.rx_mens': return <PlaceholderPage title="RxMens" description="Men's health solutions." />;
-            case 'telemed.hair_loss': return <PlaceholderPage title="Hair Loss" description="Treatment plans." />;
-            case 'telemed.low_t': return <PlaceholderPage title="Low Testosterone" description="TRT and hormone optimization." />;
-            // Order History (Telemed) maps to PharmacyOrders
-            
-            // --- 2. MY ACCOUNT ---
+            // Account Views
             case 'account.setup': 
                 return <JourneyView dashboardPrefs={dashboardPrefs} onOpenWizard={() => {}} />;
             case 'account.widgets': 
                 return <WidgetConfig currentPrefs={dashboardPrefs} onSave={bodyProps.onUpdatePrefs} />;
             case 'account.sync': 
-                return <DeviceSync onSyncComplete={bodyProps.onSyncHealth} lastSynced={healthStats.lastSynced} />; // Dedicated Sync View
+                return <DeviceSync onSyncComplete={bodyProps.onSyncHealth} lastSynced={healthStats.lastSynced} />;
             case 'account.pharmacy': 
                 return <PharmacyOrders />;
 
-            // --- 3. PHYSICAL ---
+            // Physical Views
             case 'physical.scan': 
                 return <BodyHub {...bodyProps} />;
             case 'physical.workout_log': 
@@ -115,7 +114,6 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             case 'physical.plans': 
                 return <PlaceholderPage title="Exercise Plans" description="AI-generated workout routines." />;
             case 'physical.form_check':
-                // Special handling to open the overlay directly
                 return (
                     <div className="flex flex-col items-center justify-center h-full">
                         <button onClick={() => setShowFormAnalysis(true)} className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-bold">
@@ -127,7 +125,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             case 'physical.run': 
                 return <PlaceholderPage title="Running App" description="GPS tracking and pace coaching." />;
 
-            // --- 4. NUTRITION ---
+            // Nutrition Views
             case 'nutrition.planner': 
                 return <FuelSection {...fuelProps} defaultTab="plan" />;
             case 'nutrition.pantry': 
@@ -141,9 +139,9 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             case 'nutrition.videos': 
                 return <PlaceholderPage title="Meal Prep Videos" description="Community generated cooking guides." />;
 
-            // --- 5. MENTAL & LABS ---
+            // Mental & Labs Views
             case 'mental.sleep': 
-                return <ReadinessView />; // Contains sleep logging
+                return <ReadinessView />;
             case 'mental.readiness': 
                 return <ReadinessView />;
             case 'mental.assessments': 
@@ -153,7 +151,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             case 'mental.store': 
                 return <PlaceholderPage title="Lab Store" description="Order biomarker test kits." />;
 
-            // --- 6. ROLES & PORTALS ---
+            // Roles & Portals
             case 'roles.coach': 
                 return <CoachingHub userRole={userRole} onUpgrade={() => {}} onProxySelect={onProxySelect} />;
             case 'roles.influencer': 
@@ -169,13 +167,13 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             case 'roles.health_systems':
                 return <PlaceholderPage title="Health Systems" description="Hospital and clinic integration." />;
 
-            // --- 7. REWARDS & HISTORY ---
+            // Rewards & History
             case 'rewards': 
                 return <RewardsDashboard />;
             case 'history': 
                 return <FuelSection {...fuelProps} defaultTab="history" />;
 
-            // --- MISC ---
+            // Hub
             case 'hub': 
                 return <Hub onEnterMeals={() => setActiveView('nutrition.planner')} onLogout={onLogout} />;
 

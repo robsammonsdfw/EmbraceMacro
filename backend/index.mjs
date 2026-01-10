@@ -1,6 +1,6 @@
 
 import * as db from './services/databaseService.mjs';
-import { fetchCustomerOrders } from './services/shopifyService.mjs';
+import { fetchCustomerOrders, getProductByHandle } from './services/shopifyService.mjs';
 import jwt from 'jsonwebtoken';
 import { GoogleGenAI } from "@google/genai";
 
@@ -276,6 +276,19 @@ export const handler = async (event) => {
                 console.error("Shopify Order Fetch Error:", e);
                 return sendResponse(500, { error: "Failed to fetch orders" });
              }
+        }
+        
+        // NEW: Public Product Proxy
+        const productHandleMatch = path.match(/\/shopify\/products\/([a-zA-Z0-9_-]+)$/);
+        if (productHandleMatch && httpMethod === 'GET') {
+            try {
+                const handle = productHandleMatch[1];
+                const product = await getProductByHandle(handle);
+                return sendResponse(200, product || { error: "Product not found" });
+            } catch (e) {
+                console.error("Shopify Product Fetch Error:", e);
+                return sendResponse(500, { error: "Failed to fetch product" });
+            }
         }
 
         // --- LOGGING (Meal History) ---

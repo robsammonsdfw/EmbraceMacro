@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { 
     ActivityIcon, CameraIcon, BrainIcon, 
     UserCircleIcon, XIcon, UtensilsIcon, BriefcaseIcon,
-    HomeIcon, BookOpenIcon
+    HomeIcon, BookOpenIcon, PillIcon
 } from '../icons';
 import type { HealthStats, UserDashboardPrefs } from '../../types';
 
@@ -16,6 +16,7 @@ import { RewardsDashboard } from '../RewardsDashboard';
 import { DeviceSync } from '../account/DeviceSync';
 import { WidgetConfig } from '../account/WidgetConfig';
 import { PharmacyOrders } from '../account/PharmacyOrders';
+import { TeleMedicineHub } from '../telemed/TeleMedicineHub'; // NEW IMPORT
 
 interface MobileAppProps {
     healthStats: HealthStats;
@@ -29,7 +30,7 @@ interface MobileAppProps {
     onProxySelect?: (client: { id: string; name: string }) => void;
 }
 
-type StackLevel = 'home' | 'account' | 'physical' | 'nutrition' | 'mental' | 'roles' | 'rewards';
+type StackLevel = 'home' | 'account' | 'physical' | 'nutrition' | 'mental' | 'roles' | 'rewards' | 'telemed';
 
 const VitalsStrip: React.FC<{ stats: HealthStats; prefs: UserDashboardPrefs; onSyncClick: () => void }> = ({ stats, prefs, onSyncClick }) => {
     
@@ -142,6 +143,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
             </div>
 
             <div className="grid grid-cols-2 gap-4">
+                <HubButton label="Clinic" icon={<PillIcon />} onClick={() => navigateTo('telemed')} gradientFrom="from-blue-500" gradientTo="to-blue-700" iconColor="text-white border-white/40" glowColor="bg-blue-400" />
                 <HubButton label="Fuel" icon={<UtensilsIcon />} onClick={() => navigateTo('nutrition')} gradientFrom="from-emerald-500" gradientTo="to-emerald-700" iconColor="text-white border-white/40" glowColor="bg-emerald-400" />
                 <HubButton label="Body" icon={<UserCircleIcon />} onClick={() => navigateTo('physical')} gradientFrom="from-indigo-600" gradientTo="to-indigo-800" iconColor="text-white border-white/40" glowColor="bg-indigo-400" />
                 <HubButton label="Brain" icon={<BrainIcon />} onClick={() => navigateTo('mental')} gradientFrom="from-amber-400" gradientTo="to-amber-600" iconColor="text-white border-white/40" glowColor="bg-amber-300" />
@@ -182,6 +184,34 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                     {stack === 'mental' && <AssessmentHub />}
                     {stack === 'roles' && <CoachingHub userRole={userRole} onUpgrade={() => {}} onProxySelect={onProxySelect} />}
                     {stack === 'rewards' && <RewardsDashboard />}
+                    
+                    {stack === 'telemed' && (
+                        subView ? (
+                            // Render specific category view
+                            <TeleMedicineHub view={`telemed.${subView}` as any} />
+                        ) : (
+                            // Render Telemed Menu
+                            <div className="grid grid-cols-2 gap-4">
+                                <button onClick={() => setSubView('weight_loss')} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center gap-3 active:scale-95 transition-transform">
+                                    <div className="p-3 bg-emerald-100 text-emerald-600 rounded-full"><ActivityIcon className="w-6 h-6" /></div>
+                                    <span className="font-black text-slate-800 text-xs uppercase tracking-wider">Weight Loss</span>
+                                </button>
+                                <button onClick={() => setSubView('rx_mens')} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center gap-3 active:scale-95 transition-transform">
+                                    <div className="p-3 bg-blue-100 text-blue-600 rounded-full"><UserCircleIcon className="w-6 h-6" /></div>
+                                    <span className="font-black text-slate-800 text-xs uppercase tracking-wider">Men's Health</span>
+                                </button>
+                                <button onClick={() => setSubView('hair_loss')} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center gap-3 active:scale-95 transition-transform">
+                                    <div className="p-3 bg-amber-100 text-amber-600 rounded-full"><UserCircleIcon className="w-6 h-6" /></div>
+                                    <span className="font-black text-slate-800 text-xs uppercase tracking-wider">Hair Loss</span>
+                                </button>
+                                <button onClick={() => setSubView('low_t')} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center gap-3 active:scale-95 transition-transform">
+                                    <div className="p-3 bg-rose-100 text-rose-600 rounded-full"><ActivityIcon className="w-6 h-6" /></div>
+                                    <span className="font-black text-slate-800 text-xs uppercase tracking-wider">Hormones</span>
+                                </button>
+                            </div>
+                        )
+                    )}
+
                     {stack === 'account' && (
                         <div className="space-y-4">
                             <button onClick={() => setSubView('sync')} className="w-full bg-white p-6 rounded-3xl border border-slate-200 text-left font-black uppercase text-sm text-slate-800 flex justify-between shadow-sm">Device Sync <span>→</span></button>
@@ -191,9 +221,9 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                         </div>
                     )}
 
-                    {subView === 'sync' && <div className="fixed inset-0 z-[60] bg-slate-50 overflow-y-auto"><div className="p-4 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0"><button onClick={() => setSubView(null)} className="text-xs font-black uppercase">← Back</button><h2 className="font-black uppercase">Sync</h2><div className="w-10"></div></div><DeviceSync onSyncComplete={bodyProps.onSyncHealth} /></div>}
-                    {subView === 'widgets' && <div className="fixed inset-0 z-[60] bg-slate-50 overflow-y-auto"><div className="p-4 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0"><button onClick={() => setSubView(null)} className="text-xs font-black uppercase">← Back</button><h2 className="font-black uppercase">Widgets</h2><div className="w-10"></div></div><WidgetConfig currentPrefs={dashboardPrefs} onSave={bodyProps.onUpdatePrefs} /></div>}
-                    {subView === 'pharmacy' && <div className="fixed inset-0 z-[60] bg-slate-50 overflow-y-auto"><div className="p-4 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0"><button onClick={() => setSubView(null)} className="text-xs font-black uppercase">← Back</button><h2 className="font-black uppercase">Pharmacy</h2><div className="w-10"></div></div><PharmacyOrders /></div>}
+                    {subView === 'sync' && stack === 'account' && <div className="fixed inset-0 z-[60] bg-slate-50 overflow-y-auto"><div className="p-4 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0"><button onClick={() => setSubView(null)} className="text-xs font-black uppercase">← Back</button><h2 className="font-black uppercase">Sync</h2><div className="w-10"></div></div><DeviceSync onSyncComplete={bodyProps.onSyncHealth} /></div>}
+                    {subView === 'widgets' && stack === 'account' && <div className="fixed inset-0 z-[60] bg-slate-50 overflow-y-auto"><div className="p-4 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0"><button onClick={() => setSubView(null)} className="text-xs font-black uppercase">← Back</button><h2 className="font-black uppercase">Widgets</h2><div className="w-10"></div></div><WidgetConfig currentPrefs={dashboardPrefs} onSave={bodyProps.onUpdatePrefs} /></div>}
+                    {subView === 'pharmacy' && stack === 'account' && <div className="fixed inset-0 z-[60] bg-slate-50 overflow-y-auto"><div className="p-4 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0"><button onClick={() => setSubView(null)} className="text-xs font-black uppercase">← Back</button><h2 className="font-black uppercase">Pharmacy</h2><div className="w-10"></div></div><PharmacyOrders /></div>}
                 </div>
             </div>
         );

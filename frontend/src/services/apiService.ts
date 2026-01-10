@@ -4,7 +4,8 @@ import {
     RecoveryData, ReadinessScore, FormAnalysisResult, BodyPhoto, 
     Assessment, AssessmentState, PartnerBlueprint, MatchProfile, 
     CoachingRelation, NutritionInfo, RestaurantActivity, PantryLogEntry,
-    Recipe, SavedMeal, MealLogEntry, HealthStats, RewardsSummary, UserDashboardPrefs
+    Recipe, SavedMeal, MealLogEntry, HealthStats, RewardsSummary, UserDashboardPrefs,
+    ShopifyProduct
 } from '../types';
 
 const API_BASE_URL = 'https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default';
@@ -121,6 +122,7 @@ export const identifyGroceryItems = async (base64: string, mimeType: string): Pr
 
 // --- SHOPIFY ---
 export const getShopifyOrders = (): Promise<Order[]> => callApi('/shopify/orders', 'GET');
+export const getShopifyProduct = (handle: string): Promise<ShopifyProduct | { error: string }> => callApi(`/shopify/products/${handle}`, 'GET');
 
 // --- SOCIAL ---
 export const getFriends = (): Promise<Friendship[]> => callApi('/social/friends', 'GET');
