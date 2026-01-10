@@ -109,7 +109,9 @@ const ProductCard: React.FC<{
                         </div>
                     ) : (
                         <div className="bg-slate-50 p-4 rounded-xl text-center">
-                            <p className="text-xs text-slate-400 font-bold uppercase">Product Unavailable</p>
+                            <p className="text-xs text-slate-400 font-bold uppercase">
+                                {error ? "Unavailable" : "Coming Soon"}
+                            </p>
                         </div>
                     )}
                 </div>
