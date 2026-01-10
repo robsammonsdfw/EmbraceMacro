@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { ActivityIcon, FireIcon, HeartIcon, PlusIcon, CameraIcon, UserCircleIcon, GlobeAltIcon, TrophyIcon, XIcon, DumbbellIcon, RunningIcon, ClockIcon } from '../icons';
+import { ActivityIcon, FireIcon, PlusIcon, CameraIcon, UserCircleIcon, GlobeAltIcon, TrophyIcon, XIcon, DumbbellIcon, RunningIcon, ClockIcon } from '../icons';
 import * as apiService from '../../services/apiService';
 import type { HealthStats, UserDashboardPrefs, BodyPhoto } from '../../types';
 import { FormAnalysis } from './FormAnalysis';
@@ -15,7 +16,7 @@ interface BodyHubProps {
 type BodyTab = '3d_scan' | 'images' | 'workout' | 'form_check';
 const POSE_TEMPLATES = ['Front', 'Side', 'Back'];
 
-export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, dashboardPrefs, onUpdatePrefs }) => {
+export const BodyHub: React.FC<BodyHubProps> = ({ healthStats }) => {
     const [activeTab, setActiveTab] = useState<BodyTab>('3d_scan');
     
     // Gallery States
