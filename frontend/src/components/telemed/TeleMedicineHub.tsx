@@ -51,11 +51,25 @@ const PRODUCT_MAP: Record<string, { label: string, handle: string, desc: string 
     ]
 };
 
+// Map views to external collection URLs
+const CATEGORY_URLS: Record<string, string> = {
+    'telemed.everyone.weight_loss': 'https://embracehealth.ai/collections/weight-loss',
+    'telemed.everyone.lab_kits': 'https://embracehealth.ai/collections/lab-test-kits',
+    'telemed.everyone.dna_kits': 'https://embracehealth.ai/collections/dna-test-kits',
+    'telemed.him.hair_loss': 'https://embracehealth.ai/collections/hair-loss',
+    'telemed.him.ed': 'https://embracehealth.ai/collections/erectile-dysfunction',
+    'telemed.him.low_t': 'https://embracehealth.ai/collections/low-testosterone',
+    'telemed.him.pe': 'https://embracehealth.ai/collections/premature-ejaculation',
+    'telemed.her.menopause': 'https://embracehealth.ai/collections/menopause',
+    'telemed.her.estrogen': 'https://embracehealth.ai/collections/estrogen-therapy'
+};
+
 const ProductCard: React.FC<{ 
     label: string; 
     handle: string; 
     desc: string; 
-}> = ({ label, handle, desc }) => {
+    categoryUrl?: string;
+}> = ({ label, handle, desc, categoryUrl }) => {
     const [product, setProduct] = useState<ShopifyProduct | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
@@ -83,7 +97,8 @@ const ProductCard: React.FC<{
         return () => { isMounted = false; };
     }, [handle]);
 
-    const buyUrl = product?.url || '#';
+    // Use category URL with hash for deep linking if available, otherwise fallback to product URL
+    const buyUrl = categoryUrl ? `${categoryUrl}#${handle}` : (product?.url || '#');
 
     return (
         <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm flex flex-col h-full hover:shadow-md transition-all">
@@ -161,6 +176,7 @@ export const TeleMedicineHub: React.FC<TeleMedicineHubProps> = ({ view }) => {
 
     const header = getHeaderInfo();
     const products = PRODUCT_MAP[view] || [];
+    const categoryUrl = CATEGORY_URLS[view];
 
     return (
         <div className="max-w-6xl mx-auto space-y-8 pb-20 animate-fade-in">
@@ -203,7 +219,7 @@ export const TeleMedicineHub: React.FC<TeleMedicineHubProps> = ({ view }) => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {products.length > 0 ? (
                     products.map((prod, idx) => (
-                        <ProductCard key={idx} {...prod} />
+                        <ProductCard key={idx} {...prod} categoryUrl={categoryUrl} />
                     ))
                 ) : (
                     <div className="col-span-full text-center py-12 text-slate-400 font-medium">
