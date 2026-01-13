@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { PillIcon, ShoppingCartIcon, ActivityIcon, UserCircleIcon, HeartIcon } from '../icons';
+import { PillIcon, ShoppingCartIcon, ActivityIcon, UserCircleIcon, HeartIcon, BeakerIcon, GlobeAltIcon, ClockIcon } from '../icons';
 import { ShopifyProduct, ActiveView } from '../../types';
 import * as apiService from '../../services/apiService';
 
@@ -10,26 +10,44 @@ interface TeleMedicineHubProps {
 
 // Configuration for products mapped to views
 const PRODUCT_MAP: Record<string, { label: string, handle: string, desc: string }[]> = {
-    'telemed.weight_loss': [
+    // Everyone
+    'telemed.everyone.weight_loss': [
         { label: 'Semaglutide', handle: 'semaglutide', desc: 'GLP-1 Agonist for weight management.' },
         { label: 'Tirzepatide', handle: 'tirzepatide', desc: 'Dual GIP/GLP-1 receptor agonist.' }
     ],
-    'telemed.rx_mens': [
-        { label: 'Sildenafil', handle: 'sildenafil', desc: 'Treatment for erectile dysfunction (Generic Viagra).' },
-        { label: 'Tadalafil', handle: 'tadalafil', desc: 'Treatment for erectile dysfunction (Generic Cialis).' },
-        { label: 'Finasteride', handle: 'finasteride', desc: 'Treatment for hair loss.' },
-        { label: 'Oral Minoxidil', handle: 'oral-minoxidil', desc: 'Oral treatment for hair regrowth.' },
-        { label: 'Enclomiphene', handle: 'enclomiphene', desc: 'Testosterone support.' },
-        { label: 'Sertraline', handle: 'sertraline', desc: 'Treatment for premature ejaculation.' }
+    'telemed.everyone.lab_kits': [
+        { label: 'Comprehensive Panel', handle: 'comprehensive-lab-kit', desc: 'Full body biometric analysis.' },
+        { label: 'Hormone Panel', handle: 'hormone-lab-kit', desc: 'Detailed hormone profile check.' }
     ],
-    'telemed.hair_loss': [
+    'telemed.everyone.dna_kits': [
+        { label: 'Ancestry & Health', handle: 'dna-test-kit', desc: 'Genetic predisposition analysis.' }
+    ],
+
+    // For Him
+    'telemed.him.hair_loss': [
         { label: 'Finasteride', handle: 'finasteride', desc: 'Clinically proven hair loss treatment.' },
         { label: 'Oral Minoxidil', handle: 'oral-minoxidil', desc: 'Effective oral hair growth medication.' },
         { label: 'Topical Spray', handle: 'topical-spray', desc: 'Combined Finasteride & Minoxidil spray.' }
     ],
-    'telemed.low_t': [
+    'telemed.him.ed': [
+        { label: 'Sildenafil', handle: 'sildenafil', desc: 'Treatment for erectile dysfunction (Generic Viagra).' },
+        { label: 'Tadalafil', handle: 'tadalafil', desc: 'Treatment for erectile dysfunction (Generic Cialis).' }
+    ],
+    'telemed.him.low_t': [
         { label: 'Enclomiphene', handle: 'enclomiphene', desc: 'Boosts natural testosterone production.' },
         { label: 'TRT Cream', handle: 'trt-cream', desc: 'Topical testosterone replacement therapy.' }
+    ],
+    'telemed.him.pe': [
+        { label: 'Sertraline', handle: 'sertraline', desc: 'Treatment for premature ejaculation.' }
+    ],
+
+    // For Her
+    'telemed.her.menopause': [
+        { label: 'Menopause Support', handle: 'menopause-kit', desc: 'Symptom relief and hormone balance.' }
+    ],
+    'telemed.her.estrogen': [
+        { label: 'Estrogen Cream', handle: 'estrogen-cream', desc: 'Bioidentical hormone therapy.' },
+        { label: 'Progesterone', handle: 'progesterone', desc: 'Hormone support therapy.' }
     ]
 };
 
@@ -48,8 +66,6 @@ const ProductCard: React.FC<{
             .then(data => {
                 if (isMounted) {
                     if ('error' in data) {
-                        // Product not found or error, likely because handles are placeholders
-                        // We will just not set the product but keep the card layout
                         console.warn(`Product ${handle} not found in Shopify`);
                         setError(true);
                     } else {
@@ -104,7 +120,7 @@ const ProductCard: React.FC<{
                                 rel="noopener noreferrer"
                                 className="block w-full py-3 bg-slate-900 text-white text-center rounded-xl font-black uppercase tracking-widest text-xs hover:bg-black transition-colors shadow-lg active:scale-95"
                             >
-                                Buy Now
+                                ORDER NOW
                             </a>
                         </div>
                     ) : (
@@ -123,16 +139,23 @@ const ProductCard: React.FC<{
 export const TeleMedicineHub: React.FC<TeleMedicineHubProps> = ({ view }) => {
     const getHeaderInfo = () => {
         switch(view) {
-            case 'telemed.weight_loss':
-                return { title: 'Metabolic Weight Loss', icon: <ActivityIcon className="w-8 h-8" />, color: 'text-emerald-500', bg: 'bg-emerald-100' };
-            case 'telemed.rx_mens':
-                return { title: "Men's Health (Rx)", icon: <UserCircleIcon className="w-8 h-8" />, color: 'text-blue-500', bg: 'bg-blue-100' };
-            case 'telemed.hair_loss':
-                return { title: 'Hair Restoration', icon: <UserCircleIcon className="w-8 h-8" />, color: 'text-amber-500', bg: 'bg-amber-100' };
-            case 'telemed.low_t':
-                return { title: 'Hormone Optimization', icon: <HeartIcon className="w-8 h-8" />, color: 'text-rose-500', bg: 'bg-rose-100' };
+            // Everyone
+            case 'telemed.everyone.weight_loss': return { title: 'Weight Loss', icon: <ActivityIcon className="w-8 h-8" />, color: 'text-emerald-500', bg: 'bg-emerald-100' };
+            case 'telemed.everyone.lab_kits': return { title: 'Lab Kits', icon: <BeakerIcon className="w-8 h-8" />, color: 'text-indigo-500', bg: 'bg-indigo-100' };
+            case 'telemed.everyone.dna_kits': return { title: 'DNA Test Kits', icon: <GlobeAltIcon className="w-8 h-8" />, color: 'text-blue-500', bg: 'bg-blue-100' };
+            
+            // Him
+            case 'telemed.him.hair_loss': return { title: 'Hair Restoration', icon: <UserCircleIcon className="w-8 h-8" />, color: 'text-amber-500', bg: 'bg-amber-100' };
+            case 'telemed.him.ed': return { title: 'Erectile Dysfunction', icon: <ActivityIcon className="w-8 h-8" />, color: 'text-blue-500', bg: 'bg-blue-100' };
+            case 'telemed.him.low_t': return { title: 'Low Testosterone', icon: <HeartIcon className="w-8 h-8" />, color: 'text-rose-500', bg: 'bg-rose-100' };
+            case 'telemed.him.pe': return { title: 'Premature Ejaculation', icon: <ClockIcon className="w-8 h-8" />, color: 'text-indigo-500', bg: 'bg-indigo-100' };
+
+            // Her
+            case 'telemed.her.menopause': return { title: 'Menopause Support', icon: <HeartIcon className="w-8 h-8" />, color: 'text-pink-500', bg: 'bg-pink-100' };
+            case 'telemed.her.estrogen': return { title: 'Estrogen Therapy', icon: <PillIcon className="w-8 h-8" />, color: 'text-purple-500', bg: 'bg-purple-100' };
+
             default:
-                return { title: 'Tele-Medicine Clinic', icon: <PillIcon className="w-8 h-8" />, color: 'text-indigo-500', bg: 'bg-indigo-100' };
+                return { title: 'Tele-Medicine Clinic', icon: <PillIcon className="w-8 h-8" />, color: 'text-slate-500', bg: 'bg-slate-100' };
         }
     };
 

@@ -3,7 +3,8 @@ import React, { useState } from 'react';
 import { 
     ActivityIcon, CameraIcon, BrainIcon, 
     UserCircleIcon, XIcon, UtensilsIcon, BriefcaseIcon,
-    HomeIcon, BookOpenIcon, PillIcon, UploadIcon
+    HomeIcon, BookOpenIcon, PillIcon, UploadIcon, HeartIcon,
+    GlobeAltIcon, BeakerIcon, ClockIcon
 } from '../icons';
 import type { HealthStats, UserDashboardPrefs } from '../../types';
 
@@ -110,6 +111,13 @@ const HubButton: React.FC<{
     </button>
 );
 
+const CategoryItem: React.FC<{ label: string; onClick: () => void; icon: React.ReactNode }> = ({ label, onClick, icon }) => (
+    <button onClick={onClick} className="w-full bg-white p-4 rounded-xl border border-slate-100 flex items-center gap-3 active:scale-95 transition-transform shadow-sm">
+        <div className="p-2 bg-slate-100 text-slate-500 rounded-lg">{icon}</div>
+        <span className="font-bold text-slate-700 text-xs uppercase tracking-wide">{label}</span>
+    </button>
+);
+
 export const MobileApp: React.FC<MobileAppProps> = ({ 
     healthStats, dashboardPrefs, onCameraClick, fuelProps, bodyProps, userRole, onLogout, onProxySelect, onVisionSync
 }) => {
@@ -175,7 +183,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                     <button onClick={goBack} className="text-slate-400 font-black uppercase text-xs tracking-widest flex items-center gap-1 hover:text-slate-900 transition-colors">
                         ← {subView ? stack : 'Dashboard'}
                     </button>
-                    <h2 className="font-black uppercase tracking-tighter text-sm">{subView || stack} Hub</h2>
+                    <h2 className="font-black uppercase tracking-tighter text-sm">{subView ? subView.replace('telemed.', '').replace('.', ' ') : stack} Hub</h2>
                     <button onClick={() => setStack('home')} className="p-2 bg-slate-100 rounded-full text-slate-500"><XIcon className="w-4 h-4" /></button>
                 </div>
 
@@ -192,23 +200,33 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                             <TeleMedicineHub view={`telemed.${subView}` as any} />
                         ) : (
                             // Render Telemed Menu
-                            <div className="grid grid-cols-2 gap-4">
-                                <button onClick={() => setSubView('weight_loss')} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center gap-3 active:scale-95 transition-transform">
-                                    <div className="p-3 bg-emerald-100 text-emerald-600 rounded-full"><ActivityIcon className="w-6 h-6" /></div>
-                                    <span className="font-black text-slate-800 text-xs uppercase tracking-wider">Weight Loss</span>
-                                </button>
-                                <button onClick={() => setSubView('rx_mens')} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center gap-3 active:scale-95 transition-transform">
-                                    <div className="p-3 bg-blue-100 text-blue-600 rounded-full"><UserCircleIcon className="w-6 h-6" /></div>
-                                    <span className="font-black text-slate-800 text-xs uppercase tracking-wider">Men's Health</span>
-                                </button>
-                                <button onClick={() => setSubView('hair_loss')} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center gap-3 active:scale-95 transition-transform">
-                                    <div className="p-3 bg-amber-100 text-amber-600 rounded-full"><UserCircleIcon className="w-6 h-6" /></div>
-                                    <span className="font-black text-slate-800 text-xs uppercase tracking-wider">Hair Loss</span>
-                                </button>
-                                <button onClick={() => setSubView('low_t')} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center gap-3 active:scale-95 transition-transform">
-                                    <div className="p-3 bg-rose-100 text-rose-600 rounded-full"><ActivityIcon className="w-6 h-6" /></div>
-                                    <span className="font-black text-slate-800 text-xs uppercase tracking-wider">Hormones</span>
-                                </button>
+                            <div className="space-y-6">
+                                <div>
+                                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Everyone</h3>
+                                    <div className="space-y-2">
+                                        <CategoryItem label="Weight Loss" icon={<ActivityIcon className="w-5 h-5 text-emerald-500" />} onClick={() => setSubView('everyone.weight_loss')} />
+                                        <CategoryItem label="Lab Test Kits" icon={<BeakerIcon className="w-5 h-5 text-indigo-500" />} onClick={() => setSubView('everyone.lab_kits')} />
+                                        <CategoryItem label="DNA Test Kits" icon={<GlobeAltIcon className="w-5 h-5 text-blue-500" />} onClick={() => setSubView('everyone.dna_kits')} />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 px-1">For Him</h3>
+                                    <div className="space-y-2">
+                                        <CategoryItem label="Hair Loss" icon={<UserCircleIcon className="w-5 h-5 text-amber-500" />} onClick={() => setSubView('him.hair_loss')} />
+                                        <CategoryItem label="Erectile Dysfunction" icon={<ActivityIcon className="w-5 h-5 text-blue-500" />} onClick={() => setSubView('him.ed')} />
+                                        <CategoryItem label="Low Testosterone" icon={<HeartIcon className="w-5 h-5 text-rose-500" />} onClick={() => setSubView('him.low_t')} />
+                                        <CategoryItem label="Premature Ejaculation" icon={<ClockIcon className="w-5 h-5 text-indigo-500" />} onClick={() => setSubView('him.pe')} />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 px-1">For Her</h3>
+                                    <div className="space-y-2">
+                                        <CategoryItem label="Menopause Support" icon={<HeartIcon className="w-5 h-5 text-pink-500" />} onClick={() => setSubView('her.menopause')} />
+                                        <CategoryItem label="Estrogen Therapy" icon={<PillIcon className="w-5 h-5 text-purple-500" />} onClick={() => setSubView('her.estrogen')} />
+                                    </div>
+                                </div>
                             </div>
                         )
                     )}

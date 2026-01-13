@@ -27,19 +27,20 @@ const NavItem: React.FC<{
     isActive: boolean; 
     onClick: () => void;
     indent?: boolean;
-}> = ({ label, icon, isActive, onClick, indent }) => (
+    superIndent?: boolean;
+}> = ({ label, icon, isActive, onClick, indent, superIndent }) => (
     <button
         onClick={onClick}
         className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-all duration-200 group ${
             isActive 
             ? 'bg-slate-900 text-white font-bold shadow-md' 
             : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-        } ${indent ? 'ml-2 w-[calc(100%-0.5rem)] text-xs' : ''}`}
+        } ${indent ? 'ml-2 w-[calc(100%-0.5rem)] text-xs' : ''} ${superIndent ? 'ml-6 w-[calc(100%-1.5rem)] text-[11px]' : ''}`}
     >
-        <span className={`${isActive ? 'text-emerald-400' : 'text-slate-400 group-hover:text-slate-600'} ${indent ? 'scale-90' : ''}`}>
+        <span className={`${isActive ? 'text-emerald-400' : 'text-slate-400 group-hover:text-slate-600'} ${indent || superIndent ? 'scale-90' : ''}`}>
             {icon}
         </span>
-        <span className={`${indent ? 'font-bold tracking-wide' : 'text-sm font-black uppercase tracking-tight'}`}>{label}</span>
+        <span className={`${indent || superIndent ? 'font-bold tracking-wide' : 'text-sm font-black uppercase tracking-tight'}`}>{label}</span>
     </button>
 );
 
@@ -58,10 +59,18 @@ const CategoryHeader: React.FC<{
     </button>
 );
 
+const SubCategoryHeader: React.FC<{
+    label: string;
+}> = ({ label }) => (
+    <div className="px-6 py-1.5 mt-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
+        {label}
+    </div>
+);
+
 export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, onLogout, selectedJourney, onJourneyChange }) => {
     // Categories state
     const [openCategories, setOpenCategories] = useState({
-        telemedicine: true, // NEW
+        telemedicine: true, 
         account: true,
         physical: true,
         nutrition: true,
@@ -100,15 +109,28 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
             <div className="flex-grow px-3 space-y-1 overflow-y-auto no-scrollbar pb-10">
                 <NavItem label="Dashboard" icon={<HomeIcon />} isActive={activeView === 'home'} onClick={() => onNavigate('home')} />
 
-                {/* 1. TELE-MEDICINE (MOVED TO TOP) */}
+                {/* 1. TELE-MEDICINE */}
                 <CategoryHeader label="Tele-Medicine" color="text-sky-600" isOpen={openCategories.telemedicine} onClick={() => toggleCategory('telemedicine')} />
                 {openCategories.telemedicine && (
                     <div className="space-y-0.5 animate-fade-in pl-2 border-l border-sky-100 ml-4">
-                        <NavItem indent label="Weight Loss" icon={<ActivityIcon />} isActive={activeView === 'telemed.weight_loss'} onClick={() => onNavigate('telemed.weight_loss')} />
-                        <NavItem indent label="RxMens" icon={<UserCircleIcon />} isActive={activeView === 'telemed.rx_mens'} onClick={() => onNavigate('telemed.rx_mens')} />
-                        <NavItem indent label="Hair Loss" icon={<UserCircleIcon />} isActive={activeView === 'telemed.hair_loss'} onClick={() => onNavigate('telemed.hair_loss')} />
-                        <NavItem indent label="Low Testosterone" icon={<ActivityIcon />} isActive={activeView === 'telemed.low_t'} onClick={() => onNavigate('telemed.low_t')} />
-                        <NavItem indent label="Order History" icon={<PillIcon />} isActive={activeView === 'account.pharmacy'} onClick={() => onNavigate('account.pharmacy')} />
+                        
+                        <SubCategoryHeader label="Everyone" />
+                        <NavItem superIndent label="Weight Loss" icon={<ActivityIcon />} isActive={activeView === 'telemed.everyone.weight_loss'} onClick={() => onNavigate('telemed.everyone.weight_loss')} />
+                        <NavItem superIndent label="Lab Test Kits" icon={<BeakerIcon />} isActive={activeView === 'telemed.everyone.lab_kits'} onClick={() => onNavigate('telemed.everyone.lab_kits')} />
+                        <NavItem superIndent label="DNA Test Kits" icon={<GlobeAltIcon />} isActive={activeView === 'telemed.everyone.dna_kits'} onClick={() => onNavigate('telemed.everyone.dna_kits')} />
+
+                        <SubCategoryHeader label="For Him" />
+                        <NavItem superIndent label="Hair Loss" icon={<UserCircleIcon />} isActive={activeView === 'telemed.him.hair_loss'} onClick={() => onNavigate('telemed.him.hair_loss')} />
+                        <NavItem superIndent label="Erectile Dysfunction" icon={<ActivityIcon />} isActive={activeView === 'telemed.him.ed'} onClick={() => onNavigate('telemed.him.ed')} />
+                        <NavItem superIndent label="Low Testosterone" icon={<HeartIcon />} isActive={activeView === 'telemed.him.low_t'} onClick={() => onNavigate('telemed.him.low_t')} />
+                        <NavItem superIndent label="Premature Ejaculation" icon={<ClockIcon />} isActive={activeView === 'telemed.him.pe'} onClick={() => onNavigate('telemed.him.pe')} />
+
+                        <SubCategoryHeader label="For Her" />
+                        <NavItem superIndent label="Menopause" icon={<HeartIcon />} isActive={activeView === 'telemed.her.menopause'} onClick={() => onNavigate('telemed.her.menopause')} />
+                        <NavItem superIndent label="Estrogen Therapy" icon={<PillIcon />} isActive={activeView === 'telemed.her.estrogen'} onClick={() => onNavigate('telemed.her.estrogen')} />
+                        
+                        <div className="my-2 border-t border-slate-100"></div>
+                        <NavItem indent label="Order History" icon={<ClipboardListIcon />} isActive={activeView === 'account.pharmacy'} onClick={() => onNavigate('account.pharmacy')} />
                     </div>
                 )}
 
@@ -172,14 +194,13 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
                     </div>
                 )}
 
-                {/* 7. MY ACCOUNT (MOVED TO BOTTOM) */}
+                {/* 7. MY ACCOUNT */}
                 <CategoryHeader label="My Account" color="text-slate-500" isOpen={openCategories.account} onClick={() => toggleCategory('account')} />
                 {openCategories.account && (
                     <div className="space-y-0.5 animate-fade-in pl-2 border-l border-slate-100 ml-4">
                         <NavItem indent label="Personalize / Setup" icon={<CogIcon />} isActive={activeView === 'account.setup'} onClick={() => onNavigate('account.setup')} />
                         <NavItem indent label="My Widgets" icon={<Squares2X2Icon />} isActive={activeView === 'account.widgets'} onClick={() => onNavigate('account.widgets')} />
                         <NavItem indent label="Device Sync" icon={<ActivityIcon />} isActive={activeView === 'account.sync'} onClick={() => onNavigate('account.sync')} />
-                        {/* Order History is now also linked in Tele-Medicine, but kept here for account completeness or can be removed if desired. For now, keeping it consistent with valid view IDs */}
                         <NavItem indent label="Pharmacy History" icon={<PillIcon />} isActive={activeView === 'account.pharmacy'} onClick={() => onNavigate('account.pharmacy')} />
                     </div>
                 )}
