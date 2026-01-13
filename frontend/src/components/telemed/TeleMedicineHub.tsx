@@ -72,27 +72,20 @@ const ProductCard: React.FC<{
 }> = ({ label, handle, desc, categoryUrl }) => {
     const [product, setProduct] = useState<ShopifyProduct | null>(null);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(false);
 
     useEffect(() => {
         let isMounted = true;
         apiService.getShopifyProduct(handle)
             .then(data => {
                 if (isMounted) {
-                    if ('error' in data) {
-                        console.warn(`Product ${handle} not found in Shopify`);
-                        setError(true);
-                    } else {
+                    if (!('error' in data)) {
                         setProduct(data);
                     }
                     setLoading(false);
                 }
             })
             .catch(() => {
-                if (isMounted) {
-                    setError(true);
-                    setLoading(false);
-                }
+                if (isMounted) setLoading(false);
             });
         return () => { isMounted = false; };
     }, [handle]);
@@ -106,11 +99,9 @@ const ProductCard: React.FC<{
                 <div className="bg-indigo-50 p-3 rounded-2xl text-indigo-600">
                     <PillIcon className="w-6 h-6" />
                 </div>
-                {product && (
-                    <span className="bg-emerald-50 text-emerald-700 font-black text-xs px-2 py-1 rounded-lg border border-emerald-100 uppercase tracking-wide">
-                        In Stock
-                    </span>
-                )}
+                <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-lg border tracking-wide ${product ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-50 text-slate-500 border-slate-100'}`}>
+                    {product ? 'In Stock' : 'Available'}
+                </span>
             </div>
             
             <h3 className="text-xl font-black text-slate-900 mb-1">{label}</h3>
@@ -120,31 +111,37 @@ const ProductCard: React.FC<{
                 <div className="h-12 bg-slate-50 rounded-2xl animate-pulse"></div>
             ) : (
                 <div className="mt-auto">
-                    {product ? (
-                        <div className="space-y-4">
-                            <div className="flex items-end gap-1">
-                                <span className="text-2xl font-black text-slate-900">${parseFloat(product.price).toFixed(0)}</span>
-                                <span className="text-xs font-bold text-slate-400 mb-1 uppercase">{product.currency}</span>
-                            </div>
-                            {product.imageUrl && (
-                                <img src={product.imageUrl} alt={label} className="w-full h-32 object-contain mb-4" />
+                    <div className="space-y-4">
+                        <div className="flex items-end gap-1">
+                            {product ? (
+                                <>
+                                    <span className="text-2xl font-black text-slate-900">${parseFloat(product.price).toFixed(0)}</span>
+                                    <span className="text-xs font-bold text-slate-400 mb-1 uppercase">{product.currency}</span>
+                                </>
+                            ) : (
+                                <span className="text-lg font-black text-slate-800 flex items-center gap-1">
+                                    View Options
+                                </span>
                             )}
-                            <a 
-                                href={buyUrl} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="block w-full py-3 bg-slate-900 text-white text-center rounded-xl font-black uppercase tracking-widest text-xs hover:bg-black transition-colors shadow-lg active:scale-95"
-                            >
-                                ORDER NOW
-                            </a>
                         </div>
-                    ) : (
-                        <div className="bg-slate-50 p-4 rounded-xl text-center">
-                            <p className="text-xs text-slate-400 font-bold uppercase">
-                                {error ? "Unavailable" : "Coming Soon"}
-                            </p>
-                        </div>
-                    )}
+                        
+                        {product?.imageUrl ? (
+                            <img src={product.imageUrl} alt={label} className="w-full h-32 object-contain mb-4" />
+                        ) : (
+                            <div className="w-full h-32 bg-slate-50 rounded-xl flex items-center justify-center text-slate-300 border border-slate-100 mb-4">
+                                <PillIcon className="w-12 h-12 opacity-20" />
+                            </div>
+                        )}
+
+                        <a 
+                            href={buyUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="block w-full py-3 bg-slate-900 text-white text-center rounded-xl font-black uppercase tracking-widest text-xs hover:bg-black transition-colors shadow-lg active:scale-95"
+                        >
+                            ORDER NOW
+                        </a>
+                    </div>
                 </div>
             )}
         </div>
