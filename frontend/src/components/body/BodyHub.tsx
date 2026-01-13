@@ -11,24 +11,64 @@ interface BodyHubProps {
     onSyncHealth: (source?: 'apple' | 'fitbit') => void;
     dashboardPrefs: UserDashboardPrefs;
     onUpdatePrefs: (prefs: UserDashboardPrefs) => void;
+    initialTab?: '3d_scan' | 'images' | 'workout' | 'form_check';
 }
 
 type BodyTab = '3d_scan' | 'images' | 'workout' | 'form_check';
-const POSE_TEMPLATES = ['Front', 'Side', 'Back'];
 
-export const BodyHub: React.FC<BodyHubProps> = ({ healthStats }) => {
-    const [activeTab, setActiveTab] = useState<BodyTab>('3d_scan');
+// Define the 10 specific poses for the 2x5 grid
+const BODY_POSE_GRID = [
+    { id: 'Front Double Bicep', label: 'Front Double Bicep', row: 1 },
+    { id: 'Front Lat Spread', label: 'Front Lat Spread', row: 1 },
+    { id: 'Side Chest Left', label: 'Side Chest Left', row: 1 },
+    { id: 'Side Chest Right', label: 'Side Chest Right', row: 1 },
+    { id: 'Abs & Thighs', label: 'Abs & Thighs', row: 1 },
+    { id: 'Back Double Bicep', label: 'Back Double Bicep', row: 2 },
+    { id: 'Back Lat Spread', label: 'Back Lat Spread', row: 2 },
+    { id: 'Side Tricep Left', label: 'Side Tricep Left', row: 2 },
+    { id: 'Side Tricep Right', label: 'Side Tricep Right', row: 2 },
+    { id: 'Most Muscular', label: 'Most Muscular', row: 2 },
+];
+
+const BodybuilderOutline: React.FC<{ pose: string; className?: string }> = ({ pose, className }) => {
+    // Simplified SVG paths representing abstract muscle outlines
+    let path = "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"; // Default User
+
+    if (pose.includes('Double Bicep')) {
+        path = "M12 2a3 3 0 100 6 3 3 0 000-6zm-5 7l-2 2-2-1 1-3 3 2zm10 0l2 2 2-1-1-3-3 2zM6 11v6l2 4h8l2-4v-6H6z"; 
+    } else if (pose.includes('Lat Spread')) {
+        path = "M12 2a3 3 0 100 6 3 3 0 000-6zM4 9l2 3 2-1-1-2-3 0zm16 0l-2 3-2-1 1-2 3 0zM7 11v8l5 3 5-3v-8H7z";
+    } else if (pose.includes('Side Chest')) {
+        path = "M12 2a3 3 0 100 6 3 3 0 000-6zM9 9l-1 4 2 6 2-6-1-4H9zm6 0l1 4-2 6-2-6 1-4h2z";
+    } else if (pose.includes('Tricep')) {
+        path = "M12 2a3 3 0 100 6 3 3 0 000-6zM10 9v10l2 3 2-3V9h-4z";
+    } else if (pose.includes('Abs')) {
+        path = "M12 2a3 3 0 100 6 3 3 0 000-6zM7 9h10v6l-5 5-5-5V9zm3 2h4v2h-4v-2z";
+    }
+
+    return (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+            <path d={path} opacity="0.2" />
+        </svg>
+    );
+};
+
+export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, initialTab = '3d_scan' }) => {
+    const [activeTab, setActiveTab] = useState<BodyTab>(initialTab);
     
     // Gallery States
     const [photos, setPhotos] = useState<BodyPhoto[]>([]);
-    const [selectedCategory, setSelectedCategory] = useState('All');
-    const [uploadImage, setUploadImage] = useState<string | null>(null); // For modal preview
-    const [uploadCategory, setUploadCategory] = useState('Front'); // Default for pose templates
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(null); // Track which grid slot is clicked
+    const [uploadImage, setUploadImage] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [viewPhotoId, setViewPhotoId] = useState<number | null>(null);
     const galleryInputRef = useRef<HTMLInputElement>(null);
 
-    // Initial Load
+    // Sync prop to state if it changes
+    useEffect(() => {
+        if (initialTab) setActiveTab(initialTab);
+    }, [initialTab]);
+
     useEffect(() => {
         loadPhotos();
     }, []);
@@ -42,12 +82,9 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats }) => {
         }
     };
 
-    // --- Actions ---
-
     const handleStartBodyScan = () => {
         const token = localStorage.getItem('embracehealth-api-token');
         const baseUrl = 'https://app.embracehealth.ai/';
-        // Use standard redirect for seamless feel between apps
         if (token) {
             window.location.href = `${baseUrl}?token=${encodeURIComponent(token)}`;
         } else {
@@ -55,7 +92,15 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats }) => {
         }
     };
 
-    // Gallery Handlers
+    const handleSlotClick = (poseId: string, existingPhotoId?: number) => {
+        if (existingPhotoId) {
+            setViewPhotoId(existingPhotoId);
+        } else {
+            setSelectedCategory(poseId);
+            galleryInputRef.current?.click();
+        }
+    };
+
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -64,16 +109,16 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats }) => {
             setUploadImage(reader.result as string);
         };
         reader.readAsDataURL(file);
-        e.target.value = ''; // Reset input
+        e.target.value = '';
     };
 
     const handleConfirmUpload = async () => {
-        if (!uploadImage) return;
+        if (!uploadImage || !selectedCategory) return;
         setIsUploading(true);
         try {
-            await apiService.uploadBodyPhoto(uploadImage, uploadCategory);
+            await apiService.uploadBodyPhoto(uploadImage, selectedCategory);
             setUploadImage(null);
-            setUploadCategory('Front');
+            setSelectedCategory(null);
             loadPhotos();
         } catch (e) {
             alert("Failed to upload photo.");
@@ -82,18 +127,10 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats }) => {
         }
     };
 
-    // Filter Logic
-    const filteredPhotos = selectedCategory === 'All' 
-        ? photos.filter(p => p.category !== '3D Scan') 
-        : photos.filter(p => p.category === selectedCategory);
-
     const scansHistory = photos.filter(p => p.category === '3D Scan');
-
-    // --- Renderers ---
 
     const render3DScan = () => (
         <div className="space-y-8 animate-fade-in">
-            {/* Hero CTA */}
             <div className="bg-gradient-to-br from-indigo-900 to-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-12 opacity-10 group-hover:scale-110 transition-transform duration-700 pointer-events-none">
                     <UserCircleIcon className="w-64 h-64" />
@@ -116,7 +153,6 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats }) => {
                 </div>
             </div>
 
-            {/* History & Future */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm">
                     <h3 className="font-black text-slate-800 uppercase tracking-widest text-xs mb-4 flex items-center gap-2">
@@ -149,61 +185,72 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats }) => {
         </div>
     );
 
-    const renderImages = () => (
-        <div className="space-y-6 animate-fade-in">
-            <div className="flex justify-between items-center">
-                <h3 className="text-xl font-black text-slate-900">Progress Gallery</h3>
-                <button 
-                    onClick={() => galleryInputRef.current?.click()}
-                    className="bg-slate-900 text-white px-6 py-3 rounded-xl font-black uppercase tracking-widest text-xs shadow-lg hover:bg-black transition-all flex items-center gap-2"
-                >
-                    <CameraIcon className="w-4 h-4" /> Capture
-                </button>
-                <input type="file" accept="image/*" capture="environment" ref={galleryInputRef} onChange={handleFileSelect} className="hidden" />
-            </div>
+    const renderImages = () => {
+        // Find latest photo for each pose
+        const latestPhotos: Record<string, BodyPhoto> = {};
+        photos.forEach(p => {
+            if (BODY_POSE_GRID.some(pose => pose.id === p.category)) {
+                // If newer or first found
+                if (!latestPhotos[p.category] || new Date(p.createdAt) > new Date(latestPhotos[p.category].createdAt)) {
+                    latestPhotos[p.category] = p;
+                }
+            }
+        });
 
-            {/* Category Filter */}
-            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
-                {['All', 'Front', 'Side', 'Back'].map(cat => (
-                    <button
-                        key={cat}
-                        onClick={() => setSelectedCategory(cat)}
-                        className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all border-2 ${
-                            selectedCategory === cat 
-                            ? 'bg-indigo-50 border-indigo-500 text-indigo-700' 
-                            : 'bg-white border-slate-100 text-slate-400 hover:border-slate-300'
-                        }`}
-                    >
-                        {cat}
-                    </button>
-                ))}
-            </div>
+        return (
+            <div className="space-y-6 animate-fade-in">
+                <div className="flex justify-between items-center px-2">
+                    <div>
+                        <h3 className="text-xl font-black text-slate-900">Physique Check-In</h3>
+                        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Update your visual progress log</p>
+                    </div>
+                    {/* Hidden input for slot clicks */}
+                    <input type="file" accept="image/*" capture="environment" ref={galleryInputRef} onChange={handleFileSelect} className="hidden" />
+                </div>
 
-            {/* Grid */}
-            {filteredPhotos.length > 0 ? (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {filteredPhotos.map(photo => (
-                        <button 
-                            key={photo.id} 
-                            onClick={() => setViewPhotoId(photo.id)}
-                            className="relative group rounded-2xl overflow-hidden shadow-sm aspect-[3/4] bg-slate-100 flex flex-col items-center justify-center p-4 transition-all hover:scale-[1.02] active:scale-95 border border-slate-200"
-                        >
-                            <div className="bg-white p-3 rounded-full shadow-sm mb-3">
-                                <CameraIcon className="w-6 h-6 text-slate-300" />
-                            </div>
-                            <span className="font-black text-slate-700 text-sm uppercase">{photo.category}</span>
-                            <span className="text-slate-400 text-xs font-bold mt-1">{new Date(photo.createdAt).toLocaleDateString()}</span>
-                        </button>
-                    ))}
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    {BODY_POSE_GRID.map((pose) => {
+                        const existing = latestPhotos[pose.id];
+                        return (
+                            <button 
+                                key={pose.id}
+                                onClick={() => handleSlotClick(pose.id, existing?.id)}
+                                className="relative aspect-[3/4] rounded-2xl bg-slate-100 overflow-hidden border-2 border-slate-200 hover:border-indigo-400 hover:shadow-lg transition-all group flex flex-col items-center justify-end p-2"
+                            >
+                                {/* Background Outline or Image */}
+                                {existing && existing.hasImage ? (
+                                    <div className="absolute inset-0 bg-slate-200">
+                                        <div className="w-full h-full flex items-center justify-center text-slate-400 font-bold bg-white">
+                                            <CameraIcon className="w-8 h-8 opacity-50" />
+                                        </div>
+                                        <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors"></div>
+                                    </div>
+                                ) : (
+                                    <div className="absolute inset-0 flex items-center justify-center p-4">
+                                        <BodybuilderOutline pose={pose.label} className="w-full h-full text-slate-300" />
+                                    </div>
+                                )}
+
+                                {/* Overlay Label */}
+                                <div className="relative z-10 w-full text-center">
+                                    {existing ? (
+                                        <span className="bg-emerald-500 text-white text-[9px] font-black uppercase px-2 py-1 rounded-full shadow-sm">
+                                            {new Date(existing.createdAt).toLocaleDateString()}
+                                        </span>
+                                    ) : (
+                                        <div className="bg-white/80 backdrop-blur-sm px-2 py-1 rounded-lg">
+                                            <PlusIcon className="w-4 h-4 mx-auto text-indigo-500 mb-0.5" />
+                                            <span className="text-[8px] font-black uppercase text-slate-600 block leading-tight">{pose.label}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </button>
+                        );
+                    })}
                 </div>
-            ) : (
-                <div className="text-center py-16 bg-slate-50 rounded-[2.5rem] border border-dashed border-slate-200">
-                    <CameraIcon className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                    <p className="text-slate-400 font-bold text-sm">No photos yet. Start tracking!</p>
-                </div>
-            )}
-        </div>
-    );
+            </div>
+        );
+    };
 
     const renderWorkout = () => (
         <div className="space-y-6 animate-fade-in">
@@ -253,20 +300,18 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats }) => {
         <div className="max-w-5xl mx-auto space-y-6 pb-20">
             {viewPhotoId && <ImageViewModal itemId={viewPhotoId} type="body" onClose={() => setViewPhotoId(null)} />}
 
-            {/* Upload Modal with Pose Templates */}
-            {uploadImage && (
+            {/* Upload Modal with Visual Template */}
+            {uploadImage && selectedCategory && (
                 <div className="fixed inset-0 bg-black/90 z-[70] flex items-center justify-center p-4">
                     <div className="bg-white rounded-[2rem] w-full max-w-sm overflow-hidden animate-slide-up relative">
                         <div className="relative">
-                            <img src={uploadImage} alt="Preview" className="w-full h-80 object-cover" />
-                            {/* SVG Overlay Template */}
-                            <div className="absolute inset-0 pointer-events-none opacity-30 border-4 border-emerald-500/50">
-                                {/* Simple outline simulation based on pose */}
-                                {uploadCategory === 'Front' && <div className="w-1/3 h-2/3 border-2 border-white absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"></div>}
-                                {uploadCategory === 'Side' && <div className="w-1/6 h-2/3 border-2 border-white absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"></div>}
-                                <div className="absolute bottom-4 left-0 right-0 text-center text-white font-black uppercase tracking-widest text-xs drop-shadow-md">
-                                    Align {uploadCategory} Pose
-                                </div>
+                            <img src={uploadImage} alt="Preview" className="w-full h-96 object-cover" />
+                            {/* Overlay Template for Alignment */}
+                            <div className="absolute inset-0 pointer-events-none opacity-40 border-4 border-emerald-500/50 flex items-center justify-center p-8">
+                                <BodybuilderOutline pose={selectedCategory} className="w-full h-full text-white drop-shadow-lg" />
+                            </div>
+                            <div className="absolute bottom-4 left-0 right-0 text-center text-white font-black uppercase tracking-widest text-xs drop-shadow-md bg-black/30 py-2">
+                                Align: {selectedCategory}
                             </div>
                             <button onClick={() => setUploadImage(null)} className="absolute top-4 right-4 bg-black/50 text-white p-2 rounded-full backdrop-blur-md">
                                 <XIcon />
@@ -274,18 +319,8 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats }) => {
                         </div>
                         
                         <div className="p-6">
-                            <h3 className="font-black text-slate-900 text-lg mb-4">Confirm Orientation</h3>
-                            <div className="flex justify-between mb-6 bg-slate-100 p-1 rounded-xl">
-                                {POSE_TEMPLATES.map(pose => (
-                                    <button
-                                        key={pose}
-                                        onClick={() => setUploadCategory(pose)}
-                                        className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${uploadCategory === pose ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400'}`}
-                                    >
-                                        {pose}
-                                    </button>
-                                ))}
-                            </div>
+                            <h3 className="font-black text-slate-900 text-lg mb-2">Confirm Upload</h3>
+                            <p className="text-sm text-slate-500 mb-6">Does this photo match the <strong>{selectedCategory}</strong> pose?</p>
                             <button 
                                 onClick={handleConfirmUpload} 
                                 disabled={isUploading}
@@ -300,13 +335,13 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats }) => {
 
             <header className="flex flex-col md:flex-row justify-between items-end gap-4">
                 <div>
-                    <h2 className="text-4xl font-black text-slate-900 tracking-tighter">Body Hub</h2>
+                    <h2 className="text-4xl font-black text-slate-900 tracking-tighter">Body + Fitness</h2>
                     <p className="text-slate-500 font-medium">Physical intelligence & recovery metrics.</p>
                 </div>
                 {/* Tab Navigation */}
                 <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200 w-full md:w-auto overflow-x-auto no-scrollbar">
                     <button onClick={() => setActiveTab('3d_scan')} className={`flex-1 md:flex-none px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === '3d_scan' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}>3D Scan</button>
-                    <button onClick={() => setActiveTab('images')} className={`flex-1 md:flex-none px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'images' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}>Images</button>
+                    <button onClick={() => setActiveTab('images')} className={`flex-1 md:flex-none px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'images' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}>Body Pics</button>
                     <button onClick={() => setActiveTab('workout')} className={`flex-1 md:flex-none px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'workout' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}>Log</button>
                     <button onClick={() => setActiveTab('form_check')} className={`flex-1 md:flex-none px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'form_check' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}>Form AI</button>
                 </div>

@@ -190,7 +190,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
             <div className="grid grid-cols-2 gap-4">
                 <HubButton label="Prescriptions" icon={<PillIcon />} onClick={() => navigateTo('telemed')} gradientFrom="from-blue-500" gradientTo="to-blue-700" iconColor="text-white border-white/40" glowColor="bg-blue-400" />
                 <HubButton label="Fuel" icon={<UtensilsIcon />} onClick={() => navigateTo('nutrition')} gradientFrom="from-emerald-500" gradientTo="to-emerald-700" iconColor="text-white border-white/40" glowColor="bg-emerald-400" />
-                <HubButton label="Body" icon={<UserCircleIcon />} onClick={() => navigateTo('physical')} gradientFrom="from-indigo-600" gradientTo="to-indigo-800" iconColor="text-white border-white/40" glowColor="bg-indigo-400" />
+                <HubButton label="Body + Fitness" icon={<UserCircleIcon />} onClick={() => navigateTo('physical')} gradientFrom="from-indigo-600" gradientTo="to-indigo-800" iconColor="text-white border-white/40" glowColor="bg-indigo-400" />
                 <HubButton label="Brain" icon={<BrainIcon />} onClick={() => navigateTo('mental')} gradientFrom="from-amber-400" gradientTo="to-amber-600" iconColor="text-white border-white/40" glowColor="bg-amber-300" />
                 <HubButton label="Social" icon={<BriefcaseIcon />} onClick={() => navigateTo('roles')} gradientFrom="from-rose-500" gradientTo="to-rose-700" iconColor="text-white border-white/40" glowColor="bg-rose-400" />
             </div>
@@ -219,13 +219,13 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                     <button onClick={goBack} className="text-slate-400 font-black uppercase text-xs tracking-widest flex items-center gap-1 hover:text-slate-900 transition-colors">
                         ← {subView ? stack : 'Dashboard'}
                     </button>
-                    <h2 className="font-black uppercase tracking-tighter text-sm">{subView ? subView.replace('telemed.', '').replace('.', ' ') : stack} Hub</h2>
+                    <h2 className="font-black uppercase tracking-tighter text-sm">{subView ? subView.replace('telemed.', '').replace('.', ' ') : (stack === 'physical' ? 'Body + Fitness' : stack)}</h2>
                     <button onClick={() => setStack('home')} className="p-2 bg-slate-100 rounded-full text-slate-500"><XIcon className="w-4 h-4" /></button>
                 </div>
 
                 <div className="flex-grow p-4 pb-24">
                     {stack === 'nutrition' && <FuelSection {...fuelProps} />}
-                    {stack === 'physical' && <BodyHub {...bodyProps} />}
+                    {stack === 'physical' && <BodyHub {...bodyProps} initialTab={subView === 'pics' ? 'images' : '3d_scan'} />}
                     {stack === 'mental' && <AssessmentHub />}
                     {stack === 'roles' && <CoachingHub userRole={userRole} onUpgrade={() => {}} onProxySelect={onProxySelect} />}
                     {stack === 'rewards' && <RewardsDashboard />}

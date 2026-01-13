@@ -7,7 +7,8 @@ import {
     UserGroupIcon, HeartIcon, TrophyIcon, 
     Squares2X2Icon, CogIcon, PillIcon, RunningIcon, 
     VideoIcon, BriefcaseIcon, BadgeCheckIcon, ClockIcon,
-    ClipboardListIcon, BookOpenIcon, BarcodeIcon, GlobeAltIcon, ChefHatIcon
+    ClipboardListIcon, BookOpenIcon, BarcodeIcon, GlobeAltIcon, ChefHatIcon,
+    CameraIcon
 } from '../icons';
 import { HealthJourney, ActiveView } from '../../types';
 import { JOURNEYS } from './AppLayout';
@@ -170,11 +171,12 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
                     </div>
                 )}
 
-                {/* 2. PHYSICAL */}
-                <CategoryHeader label="Physical" color="text-emerald-500" isOpen={openCategories.physical} onClick={() => toggleCategory('physical')} />
+                {/* 2. BODY + FITNESS (Formerly Physical) */}
+                <CategoryHeader label="Body + Fitness" color="text-emerald-500" isOpen={openCategories.physical} onClick={() => toggleCategory('physical')} />
                 {openCategories.physical && (
                     <div className="space-y-0.5 animate-fade-in pl-2 border-l border-emerald-100 ml-4">
                         <NavItem indent label="3D Body Scan" icon={<UserCircleIcon />} isActive={activeView === 'physical.scan'} onClick={() => onNavigate('physical.scan')} />
+                        <NavItem indent label="Body Pics" icon={<CameraIcon />} isActive={activeView === 'physical.pics'} onClick={() => onNavigate('physical.pics')} />
                         <NavItem indent label="Workout Log" icon={<DumbbellIcon />} isActive={activeView === 'physical.workout_log'} onClick={() => onNavigate('physical.workout_log')} />
                         <NavItem indent label="Exercise Plans" icon={<ClipboardCheckIcon />} isActive={activeView === 'physical.plans'} onClick={() => onNavigate('physical.plans')} />
                         <NavItem indent label="Form Checker" icon={<ActivityIcon />} isActive={activeView === 'physical.form_check'} onClick={() => onNavigate('physical.form_check')} />

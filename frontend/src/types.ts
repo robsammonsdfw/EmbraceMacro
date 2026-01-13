@@ -389,8 +389,9 @@ export type ActiveView =
   | 'account.widgets'
   | 'account.sync'
   | 'account.pharmacy'
-  // Physical
+  // Body + Fitness (Renamed from Physical)
   | 'physical.scan'
+  | 'physical.pics' // NEW
   | 'physical.workout_log'
   | 'physical.plans'
   | 'physical.form_check'

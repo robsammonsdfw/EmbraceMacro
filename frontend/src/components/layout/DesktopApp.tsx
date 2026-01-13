@@ -123,9 +123,11 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             case 'account.pharmacy': 
                 return <PharmacyOrders />;
 
-            // Physical Views
+            // Body + Fitness Views
             case 'physical.scan': 
-                return <BodyHub {...bodyProps} />;
+                return <BodyHub {...bodyProps} initialTab="3d_scan" />;
+            case 'physical.pics': 
+                return <BodyHub {...bodyProps} initialTab="images" />;
             case 'physical.workout_log': 
                 return <PlaceholderPage title="Workout Log" description="Track sets and reps." />;
             case 'physical.plans': 
