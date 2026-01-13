@@ -31,24 +31,63 @@ const BODY_POSE_GRID = [
 ];
 
 const BodybuilderOutline: React.FC<{ pose: string; className?: string }> = ({ pose, className }) => {
-    // Simplified SVG paths representing abstract muscle outlines
-    let path = "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"; // Default User
-
-    if (pose.includes('Double Bicep')) {
-        path = "M12 2a3 3 0 100 6 3 3 0 000-6zm-5 7l-2 2-2-1 1-3 3 2zm10 0l2 2 2-1-1-3-3 2zM6 11v6l2 4h8l2-4v-6H6z"; 
-    } else if (pose.includes('Lat Spread')) {
-        path = "M12 2a3 3 0 100 6 3 3 0 000-6zM4 9l2 3 2-1-1-2-3 0zm16 0l-2 3-2-1 1-2 3 0zM7 11v8l5 3 5-3v-8H7z";
-    } else if (pose.includes('Side Chest')) {
-        path = "M12 2a3 3 0 100 6 3 3 0 000-6zM9 9l-1 4 2 6 2-6-1-4H9zm6 0l1 4-2 6-2-6 1-4h2z";
-    } else if (pose.includes('Tricep')) {
-        path = "M12 2a3 3 0 100 6 3 3 0 000-6zM10 9v10l2 3 2-3V9h-4z";
-    } else if (pose.includes('Abs')) {
-        path = "M12 2a3 3 0 100 6 3 3 0 000-6zM7 9h10v6l-5 5-5-5V9zm3 2h4v2h-4v-2z";
+    // Specific SVG paths for each pose silhouette
+    let path = ""; 
+    let viewBox = "0 0 24 24";
+    let scale = "scale(1)";
+    
+    // These paths are stylized simplifications of the classic bodybuilding poses
+    switch (pose) {
+        case 'Front Double Bicep':
+            // Arms flexed up, symmetrical
+            path = "M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 8C21 7.4 20.6 7 20 7H17C16.4 7 16 7.4 16 8V10H15V8C15 6.3 13.7 5 12 5C10.3 5 9 6.3 9 8V10H8V8C8 7.4 7.6 7 7 7H4C3.4 7 3 7.4 3 8V10C3 11.1 3.9 12 5 12H6V16C6 16.6 6.4 17 7 17H8.5V23H10.5V17H13.5V23H15.5V17H17C17.6 17 18 16.6 18 16V12H19C20.1 12 21 11.1 21 10V8Z";
+            break;
+        case 'Front Lat Spread':
+            // Hands on hips, lats flared
+            path = "M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM18 8C18 6.3 16.7 5 15 5H13V17H15.5V23H17.5V15H18.5C19.3 15 20 14.3 20 13.5V11C20 9.3 19.1 8 18 8ZM6 8C4.9 8 4 9.3 4 11V13.5C4 14.3 4.7 15 5.5 15H6.5V23H8.5V17H11V5H9C7.3 5 6 6.3 6 8Z";
+            break;
+        case 'Side Chest Left':
+            // Profile view, hands clasped
+            path = "M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM11 7C10.4 7 10 7.4 10 8V14L12 16L14 14V8C14 7.4 13.6 7 13 7H11ZM12 17L10 15V23H14V15L12 17ZM15 9V13H17V9H15ZM7 9V13H9V9H7Z";
+            break;
+        case 'Side Chest Right':
+            // Mirror of Left
+            scale = "scale(-1, 1) translate(-24, 0)";
+            path = "M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM11 7C10.4 7 10 7.4 10 8V14L12 16L14 14V8C14 7.4 13.6 7 13 7H11ZM12 17L10 15V23H14V15L12 17ZM15 9V13H17V9H15ZM7 9V13H9V9H7Z";
+            break;
+        case 'Abs & Thighs':
+            // Hands behind head, one leg forward
+            path = "M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM7 5V8H9V12H7V15H9V23H11V15H13V23H15V12H13V8H17V5H7Z";
+            break;
+        case 'Back Double Bicep':
+            // Similar to front but broader back
+            path = "M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM22 8C22 7.4 21.6 7 21 7H18C17.4 7 17 7.4 17 8V10H16V8C16 6.3 14.7 5 13 5C11.3 5 10 6.3 10 8V10H9V8C9 7.4 8.6 7 8 7H5C4.4 7 4 7.4 4 8V10C4 11.1 4.9 12 6 12H7V16C7 17.1 7.9 18 9 18H10.5V23H12.5V18H13.5V23H15.5V18H17C18.1 18 19 17.1 19 16V12H20C21.1 12 22 11.1 22 10V8Z";
+            break;
+        case 'Back Lat Spread':
+            // Similar to front lat but broader
+            path = "M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM19 8C19 6.3 17.7 5 16 5H14V17H15.5V23H17.5V15H19.5C20.3 15 21 14.3 21 13.5V11C21 9.3 20.1 8 19 8ZM5 8C3.9 8 3 9.3 3 11V13.5C3 14.3 3.7 15 4.5 15H6.5V23H8.5V17H10V5H8C6.3 5 5 6.3 5 8Z";
+            break;
+        case 'Side Tricep Left':
+            // Arm straight down
+            path = "M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM11 7H13V16H15V23H13V17H11V23H9V16H11V7Z M8 8H10V14H8V8Z";
+            break;
+        case 'Side Tricep Right':
+            scale = "scale(-1, 1) translate(-24, 0)";
+            path = "M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM11 7H13V16H15V23H13V17H11V23H9V16H11V7Z M8 8H10V14H8V8Z";
+            break;
+        case 'Most Muscular':
+            // Hands clasped in front, traps flexed
+            path = "M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM18 7C17.4 7 17 7.4 17 8V12L15 14L12 12L9 14L7 12V8C7 7.4 6.6 7 6 7H4V12C4 13.1 4.9 14 6 14H8L12 17L16 14H18C19.1 14 20 13.1 20 12V7H18ZM10.5 18V23H12.5V18H10.5ZM13.5 18H15.5V23H13.5V18ZM8.5 18V23H6.5V18H8.5Z";
+            break;
+        default:
+            path = "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z";
     }
 
     return (
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
-            <path d={path} opacity="0.2" />
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox={viewBox} fill="currentColor" className={className}>
+            <g transform={scale}>
+                <path d={path} opacity="0.15" />
+            </g>
         </svg>
     );
 };
@@ -227,7 +266,7 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, initialTab = '3d_
                                     </div>
                                 ) : (
                                     <div className="absolute inset-0 flex items-center justify-center p-4">
-                                        <BodybuilderOutline pose={pose.label} className="w-full h-full text-slate-300" />
+                                        <BodybuilderOutline pose={pose.label} className="w-full h-full text-slate-400" />
                                     </div>
                                 )}
 
@@ -238,9 +277,9 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, initialTab = '3d_
                                             {new Date(existing.createdAt).toLocaleDateString()}
                                         </span>
                                     ) : (
-                                        <div className="bg-white/80 backdrop-blur-sm px-2 py-1 rounded-lg">
+                                        <div className="bg-white/90 backdrop-blur-sm px-2 py-1 rounded-lg shadow-sm border border-slate-100">
                                             <PlusIcon className="w-4 h-4 mx-auto text-indigo-500 mb-0.5" />
-                                            <span className="text-[8px] font-black uppercase text-slate-600 block leading-tight">{pose.label}</span>
+                                            <span className="text-[8px] font-black uppercase text-slate-700 block leading-tight">{pose.label}</span>
                                         </div>
                                     )}
                                 </div>
