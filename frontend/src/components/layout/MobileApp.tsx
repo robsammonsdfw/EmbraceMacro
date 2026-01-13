@@ -19,6 +19,9 @@ import { WidgetConfig } from '../account/WidgetConfig';
 import { PharmacyOrders } from '../account/PharmacyOrders';
 import { TeleMedicineHub } from '../telemed/TeleMedicineHub'; // NEW IMPORT
 
+// Feature Flag: Set to false to show "For Her" category
+const HIDE_FOR_HER = true;
+
 interface MobileAppProps {
     healthStats: HealthStats;
     dashboardPrefs: UserDashboardPrefs;
@@ -152,7 +155,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-                <HubButton label="Clinic" icon={<PillIcon />} onClick={() => navigateTo('telemed')} gradientFrom="from-blue-500" gradientTo="to-blue-700" iconColor="text-white border-white/40" glowColor="bg-blue-400" />
+                <HubButton label="Prescriptions" icon={<PillIcon />} onClick={() => navigateTo('telemed')} gradientFrom="from-blue-500" gradientTo="to-blue-700" iconColor="text-white border-white/40" glowColor="bg-blue-400" />
                 <HubButton label="Fuel" icon={<UtensilsIcon />} onClick={() => navigateTo('nutrition')} gradientFrom="from-emerald-500" gradientTo="to-emerald-700" iconColor="text-white border-white/40" glowColor="bg-emerald-400" />
                 <HubButton label="Body" icon={<UserCircleIcon />} onClick={() => navigateTo('physical')} gradientFrom="from-indigo-600" gradientTo="to-indigo-800" iconColor="text-white border-white/40" glowColor="bg-indigo-400" />
                 <HubButton label="Brain" icon={<BrainIcon />} onClick={() => navigateTo('mental')} gradientFrom="from-amber-400" gradientTo="to-amber-600" iconColor="text-white border-white/40" glowColor="bg-amber-300" />
@@ -220,13 +223,15 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                                     </div>
                                 </div>
 
-                                <div>
-                                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 px-1">For Her</h3>
-                                    <div className="space-y-2">
-                                        <CategoryItem label="Menopause Support" icon={<HeartIcon className="w-5 h-5 text-pink-500" />} onClick={() => setSubView('her.menopause')} />
-                                        <CategoryItem label="Estrogen Therapy" icon={<PillIcon className="w-5 h-5 text-purple-500" />} onClick={() => setSubView('her.estrogen')} />
+                                {!HIDE_FOR_HER && (
+                                    <div>
+                                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 px-1">For Her</h3>
+                                        <div className="space-y-2">
+                                            <CategoryItem label="Menopause Support" icon={<HeartIcon className="w-5 h-5 text-pink-500" />} onClick={() => setSubView('her.menopause')} />
+                                            <CategoryItem label="Estrogen Therapy" icon={<PillIcon className="w-5 h-5 text-purple-500" />} onClick={() => setSubView('her.estrogen')} />
+                                        </div>
                                     </div>
-                                </div>
+                                )}
                             </div>
                         )
                     )}

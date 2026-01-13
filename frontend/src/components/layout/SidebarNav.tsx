@@ -12,6 +12,9 @@ import {
 import { HealthJourney, ActiveView } from '../../types';
 import { JOURNEYS } from './AppLayout';
 
+// Feature Flag: Set to false to show "For Her" category
+const HIDE_FOR_HER = true;
+
 interface SidebarNavProps {
     activeView: ActiveView;
     onNavigate: (view: ActiveView) => void;
@@ -109,8 +112,8 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
             <div className="flex-grow px-3 space-y-1 overflow-y-auto no-scrollbar pb-10">
                 <NavItem label="Dashboard" icon={<HomeIcon />} isActive={activeView === 'home'} onClick={() => onNavigate('home')} />
 
-                {/* 1. TELE-MEDICINE */}
-                <CategoryHeader label="Tele-Medicine" color="text-sky-600" isOpen={openCategories.telemedicine} onClick={() => toggleCategory('telemedicine')} />
+                {/* 1. PRESCRIPTIONS - RX (Formerly Tele-Medicine) */}
+                <CategoryHeader label="Prescriptions - Rx" color="text-sky-600" isOpen={openCategories.telemedicine} onClick={() => toggleCategory('telemedicine')} />
                 {openCategories.telemedicine && (
                     <div className="space-y-0.5 animate-fade-in pl-2 border-l border-sky-100 ml-4">
                         
@@ -125,9 +128,13 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
                         <NavItem superIndent label="Low Testosterone" icon={<HeartIcon />} isActive={activeView === 'telemed.him.low_t'} onClick={() => onNavigate('telemed.him.low_t')} />
                         <NavItem superIndent label="Premature Ejaculation" icon={<ClockIcon />} isActive={activeView === 'telemed.him.pe'} onClick={() => onNavigate('telemed.him.pe')} />
 
-                        <SubCategoryHeader label="For Her" />
-                        <NavItem superIndent label="Menopause" icon={<HeartIcon />} isActive={activeView === 'telemed.her.menopause'} onClick={() => onNavigate('telemed.her.menopause')} />
-                        <NavItem superIndent label="Estrogen Therapy" icon={<PillIcon />} isActive={activeView === 'telemed.her.estrogen'} onClick={() => onNavigate('telemed.her.estrogen')} />
+                        {!HIDE_FOR_HER && (
+                            <>
+                                <SubCategoryHeader label="For Her" />
+                                <NavItem superIndent label="Menopause" icon={<HeartIcon />} isActive={activeView === 'telemed.her.menopause'} onClick={() => onNavigate('telemed.her.menopause')} />
+                                <NavItem superIndent label="Estrogen Therapy" icon={<PillIcon />} isActive={activeView === 'telemed.her.estrogen'} onClick={() => onNavigate('telemed.her.estrogen')} />
+                            </>
+                        )}
                         
                         <div className="my-2 border-t border-slate-100"></div>
                         <NavItem indent label="Order History" icon={<ClipboardListIcon />} isActive={activeView === 'account.pharmacy'} onClick={() => onNavigate('account.pharmacy')} />

@@ -155,7 +155,7 @@ export const TeleMedicineHub: React.FC<TeleMedicineHubProps> = ({ view }) => {
             case 'telemed.her.estrogen': return { title: 'Estrogen Therapy', icon: <PillIcon className="w-8 h-8" />, color: 'text-purple-500', bg: 'bg-purple-100' };
 
             default:
-                return { title: 'Tele-Medicine Clinic', icon: <PillIcon className="w-8 h-8" />, color: 'text-slate-500', bg: 'bg-slate-100' };
+                return { title: 'Prescriptions - Rx', icon: <PillIcon className="w-8 h-8" />, color: 'text-slate-500', bg: 'bg-slate-100' };
         }
     };
 
