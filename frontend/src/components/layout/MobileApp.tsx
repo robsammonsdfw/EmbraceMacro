@@ -121,11 +121,44 @@ const CategoryItem: React.FC<{ label: string; onClick: () => void; icon: React.R
     </button>
 );
 
+const CollapsibleSection: React.FC<{
+    title: string;
+    isOpen: boolean;
+    onToggle: () => void;
+    children: React.ReactNode;
+}> = ({ title, isOpen, onToggle, children }) => (
+    <div className="bg-white rounded-xl border border-slate-100 overflow-hidden shadow-sm">
+        <button 
+            onClick={onToggle}
+            className="w-full flex items-center justify-between p-4 bg-slate-50/50 hover:bg-slate-50 transition-colors"
+        >
+            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">{title}</h3>
+            <span className={`text-slate-400 transition-transform duration-200 text-xs ${isOpen ? 'rotate-180' : ''}`}>▼</span>
+        </button>
+        {isOpen && (
+            <div className="p-2 space-y-2 border-t border-slate-100 bg-white animate-fade-in">
+                {children}
+            </div>
+        )}
+    </div>
+);
+
 export const MobileApp: React.FC<MobileAppProps> = ({ 
     healthStats, dashboardPrefs, onCameraClick, fuelProps, bodyProps, userRole, onLogout, onProxySelect, onVisionSync
 }) => {
     const [stack, setStack] = useState<StackLevel>('home');
     const [subView, setSubView] = useState<string | null>(null);
+    
+    // Telemed Category State
+    const [telemedCategories, setTelemedCategories] = useState({
+        everyone: true,
+        him: false,
+        her: false
+    });
+
+    const toggleTelemedCategory = (cat: keyof typeof telemedCategories) => {
+        setTelemedCategories(prev => ({ ...prev, [cat]: !prev[cat] }));
+    };
 
     const navigateTo = (level: StackLevel, view?: string) => {
         setStack(level);
@@ -202,35 +235,38 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                             // Render specific category view
                             <TeleMedicineHub view={`telemed.${subView}` as any} />
                         ) : (
-                            // Render Telemed Menu
-                            <div className="space-y-6">
-                                <div>
-                                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Everyone</h3>
-                                    <div className="space-y-2">
-                                        <CategoryItem label="Weight Loss" icon={<ActivityIcon className="w-5 h-5 text-emerald-500" />} onClick={() => setSubView('everyone.weight_loss')} />
-                                        <CategoryItem label="Lab Test Kits" icon={<BeakerIcon className="w-5 h-5 text-indigo-500" />} onClick={() => setSubView('everyone.lab_kits')} />
-                                        <CategoryItem label="DNA Test Kits" icon={<GlobeAltIcon className="w-5 h-5 text-blue-500" />} onClick={() => setSubView('everyone.dna_kits')} />
-                                    </div>
-                                </div>
+                            // Render Telemed Menu with Collapsible Sections
+                            <div className="space-y-4">
+                                <CollapsibleSection 
+                                    title="Everyone" 
+                                    isOpen={telemedCategories.everyone} 
+                                    onToggle={() => toggleTelemedCategory('everyone')}
+                                >
+                                    <CategoryItem label="Weight Loss" icon={<ActivityIcon className="w-5 h-5 text-emerald-500" />} onClick={() => setSubView('everyone.weight_loss')} />
+                                    <CategoryItem label="Lab Test Kits" icon={<BeakerIcon className="w-5 h-5 text-indigo-500" />} onClick={() => setSubView('everyone.lab_kits')} />
+                                    <CategoryItem label="DNA Test Kits" icon={<GlobeAltIcon className="w-5 h-5 text-blue-500" />} onClick={() => setSubView('everyone.dna_kits')} />
+                                </CollapsibleSection>
 
-                                <div>
-                                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 px-1">For Him</h3>
-                                    <div className="space-y-2">
-                                        <CategoryItem label="Hair Loss" icon={<UserCircleIcon className="w-5 h-5 text-amber-500" />} onClick={() => setSubView('him.hair_loss')} />
-                                        <CategoryItem label="Erectile Dysfunction" icon={<ActivityIcon className="w-5 h-5 text-blue-500" />} onClick={() => setSubView('him.ed')} />
-                                        <CategoryItem label="Low Testosterone" icon={<HeartIcon className="w-5 h-5 text-rose-500" />} onClick={() => setSubView('him.low_t')} />
-                                        <CategoryItem label="Premature Ejaculation" icon={<ClockIcon className="w-5 h-5 text-indigo-500" />} onClick={() => setSubView('him.pe')} />
-                                    </div>
-                                </div>
+                                <CollapsibleSection 
+                                    title="For Him" 
+                                    isOpen={telemedCategories.him} 
+                                    onToggle={() => toggleTelemedCategory('him')}
+                                >
+                                    <CategoryItem label="Hair Loss" icon={<UserCircleIcon className="w-5 h-5 text-amber-500" />} onClick={() => setSubView('him.hair_loss')} />
+                                    <CategoryItem label="Erectile Dysfunction" icon={<ActivityIcon className="w-5 h-5 text-blue-500" />} onClick={() => setSubView('him.ed')} />
+                                    <CategoryItem label="Low Testosterone" icon={<HeartIcon className="w-5 h-5 text-rose-500" />} onClick={() => setSubView('him.low_t')} />
+                                    <CategoryItem label="Premature Ejaculation" icon={<ClockIcon className="w-5 h-5 text-indigo-500" />} onClick={() => setSubView('him.pe')} />
+                                </CollapsibleSection>
 
                                 {!HIDE_FOR_HER && (
-                                    <div>
-                                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 px-1">For Her</h3>
-                                        <div className="space-y-2">
-                                            <CategoryItem label="Menopause Support" icon={<HeartIcon className="w-5 h-5 text-pink-500" />} onClick={() => setSubView('her.menopause')} />
-                                            <CategoryItem label="Estrogen Therapy" icon={<PillIcon className="w-5 h-5 text-purple-500" />} onClick={() => setSubView('her.estrogen')} />
-                                        </div>
-                                    </div>
+                                    <CollapsibleSection 
+                                        title="For Her" 
+                                        isOpen={telemedCategories.her} 
+                                        onToggle={() => toggleTelemedCategory('her')}
+                                    >
+                                        <CategoryItem label="Menopause Support" icon={<HeartIcon className="w-5 h-5 text-pink-500" />} onClick={() => setSubView('her.menopause')} />
+                                        <CategoryItem label="Estrogen Therapy" icon={<PillIcon className="w-5 h-5 text-purple-500" />} onClick={() => setSubView('her.estrogen')} />
+                                    </CollapsibleSection>
                                 )}
                             </div>
                         )

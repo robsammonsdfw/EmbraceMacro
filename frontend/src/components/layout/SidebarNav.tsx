@@ -64,10 +64,16 @@ const CategoryHeader: React.FC<{
 
 const SubCategoryHeader: React.FC<{
     label: string;
-}> = ({ label }) => (
-    <div className="px-6 py-1.5 mt-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
-        {label}
-    </div>
+    isOpen: boolean;
+    onClick: () => void;
+}> = ({ label, isOpen, onClick }) => (
+    <button 
+        onClick={onClick}
+        className="w-full flex items-center justify-between px-6 py-1.5 mt-2 text-left hover:bg-slate-50 transition-colors group rounded-md"
+    >
+        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-slate-600 transition-colors">{label}</span>
+        <span className={`text-slate-300 text-[9px] transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>▼</span>
+    </button>
 );
 
 export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, onLogout, selectedJourney, onJourneyChange }) => {
@@ -82,8 +88,19 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
         rewards: true
     });
 
+    // Sub-category state for Prescriptions
+    const [openSubCategories, setOpenSubCategories] = useState({
+        everyone: true,
+        him: false,
+        her: false
+    });
+
     const toggleCategory = (cat: keyof typeof openCategories) => {
         setOpenCategories(prev => ({ ...prev, [cat]: !prev[cat] }));
+    };
+
+    const toggleSubCategory = (sub: keyof typeof openSubCategories) => {
+        setOpenSubCategories(prev => ({ ...prev, [sub]: !prev[sub] }));
     };
 
     return (
@@ -117,22 +134,34 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
                 {openCategories.telemedicine && (
                     <div className="space-y-0.5 animate-fade-in pl-2 border-l border-sky-100 ml-4">
                         
-                        <SubCategoryHeader label="Everyone" />
-                        <NavItem superIndent label="Weight Loss" icon={<ActivityIcon />} isActive={activeView === 'telemed.everyone.weight_loss'} onClick={() => onNavigate('telemed.everyone.weight_loss')} />
-                        <NavItem superIndent label="Lab Test Kits" icon={<BeakerIcon />} isActive={activeView === 'telemed.everyone.lab_kits'} onClick={() => onNavigate('telemed.everyone.lab_kits')} />
-                        <NavItem superIndent label="DNA Test Kits" icon={<GlobeAltIcon />} isActive={activeView === 'telemed.everyone.dna_kits'} onClick={() => onNavigate('telemed.everyone.dna_kits')} />
+                        <SubCategoryHeader label="Everyone" isOpen={openSubCategories.everyone} onClick={() => toggleSubCategory('everyone')} />
+                        {openSubCategories.everyone && (
+                            <div className="animate-fade-in">
+                                <NavItem superIndent label="Weight Loss" icon={<ActivityIcon />} isActive={activeView === 'telemed.everyone.weight_loss'} onClick={() => onNavigate('telemed.everyone.weight_loss')} />
+                                <NavItem superIndent label="Lab Test Kits" icon={<BeakerIcon />} isActive={activeView === 'telemed.everyone.lab_kits'} onClick={() => onNavigate('telemed.everyone.lab_kits')} />
+                                <NavItem superIndent label="DNA Test Kits" icon={<GlobeAltIcon />} isActive={activeView === 'telemed.everyone.dna_kits'} onClick={() => onNavigate('telemed.everyone.dna_kits')} />
+                            </div>
+                        )}
 
-                        <SubCategoryHeader label="For Him" />
-                        <NavItem superIndent label="Hair Loss" icon={<UserCircleIcon />} isActive={activeView === 'telemed.him.hair_loss'} onClick={() => onNavigate('telemed.him.hair_loss')} />
-                        <NavItem superIndent label="Erectile Dysfunction" icon={<ActivityIcon />} isActive={activeView === 'telemed.him.ed'} onClick={() => onNavigate('telemed.him.ed')} />
-                        <NavItem superIndent label="Low Testosterone" icon={<HeartIcon />} isActive={activeView === 'telemed.him.low_t'} onClick={() => onNavigate('telemed.him.low_t')} />
-                        <NavItem superIndent label="Premature Ejaculation" icon={<ClockIcon />} isActive={activeView === 'telemed.him.pe'} onClick={() => onNavigate('telemed.him.pe')} />
+                        <SubCategoryHeader label="For Him" isOpen={openSubCategories.him} onClick={() => toggleSubCategory('him')} />
+                        {openSubCategories.him && (
+                            <div className="animate-fade-in">
+                                <NavItem superIndent label="Hair Loss" icon={<UserCircleIcon />} isActive={activeView === 'telemed.him.hair_loss'} onClick={() => onNavigate('telemed.him.hair_loss')} />
+                                <NavItem superIndent label="Erectile Dysfunction" icon={<ActivityIcon />} isActive={activeView === 'telemed.him.ed'} onClick={() => onNavigate('telemed.him.ed')} />
+                                <NavItem superIndent label="Low Testosterone" icon={<HeartIcon />} isActive={activeView === 'telemed.him.low_t'} onClick={() => onNavigate('telemed.him.low_t')} />
+                                <NavItem superIndent label="Premature Ejaculation" icon={<ClockIcon />} isActive={activeView === 'telemed.him.pe'} onClick={() => onNavigate('telemed.him.pe')} />
+                            </div>
+                        )}
 
                         {!HIDE_FOR_HER && (
                             <>
-                                <SubCategoryHeader label="For Her" />
-                                <NavItem superIndent label="Menopause" icon={<HeartIcon />} isActive={activeView === 'telemed.her.menopause'} onClick={() => onNavigate('telemed.her.menopause')} />
-                                <NavItem superIndent label="Estrogen Therapy" icon={<PillIcon />} isActive={activeView === 'telemed.her.estrogen'} onClick={() => onNavigate('telemed.her.estrogen')} />
+                                <SubCategoryHeader label="For Her" isOpen={openSubCategories.her} onClick={() => toggleSubCategory('her')} />
+                                {openSubCategories.her && (
+                                    <div className="animate-fade-in">
+                                        <NavItem superIndent label="Menopause" icon={<HeartIcon />} isActive={activeView === 'telemed.her.menopause'} onClick={() => onNavigate('telemed.her.menopause')} />
+                                        <NavItem superIndent label="Estrogen Therapy" icon={<PillIcon />} isActive={activeView === 'telemed.her.estrogen'} onClick={() => onNavigate('telemed.her.estrogen')} />
+                                    </div>
+                                )}
                             </>
                         )}
                         
