@@ -253,7 +253,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                     {stack === 'labs' && (
                         <div className="space-y-4">
                             <CategoryItem label="View Lab Results" icon={<BeakerIcon className="w-5 h-5 text-cyan-500" />} onClick={() => setSubView('results')} />
-                            <CategoryItem label="Lab Test Kits" icon={<BeakerIcon className="w-5 h-5 text-indigo-500" />} onClick={() => setSubView('store')} />
+                            <CategoryItem label="Lab Test Kits" icon={<ShoppingCartIcon className="w-5 h-5 text-indigo-500" />} onClick={() => setSubView('store')} />
                             <CategoryItem label="DNA Test Kits" icon={<GlobeAltIcon className="w-5 h-5 text-blue-500" />} onClick={() => setSubView('store')} />
                             
                             {subView === 'results' && <HealthReportsView />}
