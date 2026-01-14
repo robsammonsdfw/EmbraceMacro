@@ -193,32 +193,45 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, initialTab = '3d_
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm">
-                    <h3 className="font-black text-slate-800 uppercase tracking-widest text-xs mb-4 flex items-center gap-2">
-                        <ClockIcon className="w-4 h-4 text-indigo-500" /> Scan History
-                    </h3>
-                    {scansHistory.length > 0 ? (
-                        <div className="space-y-3">
-                            {scansHistory.map(scan => (
-                                <div key={scan.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100">
-                                    <span className="text-sm font-bold text-slate-700">{new Date(scan.createdAt).toLocaleDateString()}</span>
-                                    <button onClick={() => setViewPhotoId(scan.id)} className="text-[10px] font-black uppercase text-indigo-600 bg-white px-3 py-1.5 rounded-lg shadow-sm">View Report</button>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="text-center py-8 text-slate-400 text-sm font-medium">No 3D scans recorded yet.</div>
-                    )}
+                <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden min-h-[240px]">
+                    {/* Visual: Before Body */}
+                    <div className="absolute -right-4 top-4 bottom-0 w-32 opacity-10 md:opacity-20 pointer-events-none">
+                        <img src="/before_body.png" alt="Body Model" className="w-full h-full object-contain object-bottom" />
+                    </div>
+
+                    <div className="relative z-10">
+                        <h3 className="font-black text-slate-800 uppercase tracking-widest text-xs mb-4 flex items-center gap-2">
+                            <ClockIcon className="w-4 h-4 text-indigo-500" /> Scan History
+                        </h3>
+                        {scansHistory.length > 0 ? (
+                            <div className="space-y-3">
+                                {scansHistory.map(scan => (
+                                    <div key={scan.id} className="flex justify-between items-center p-3 bg-slate-50/80 backdrop-blur-sm rounded-xl border border-slate-100">
+                                        <span className="text-sm font-bold text-slate-700">{new Date(scan.createdAt).toLocaleDateString()}</span>
+                                        <button onClick={() => setViewPhotoId(scan.id)} className="text-[10px] font-black uppercase text-indigo-600 bg-white px-3 py-1.5 rounded-lg shadow-sm">View Report</button>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-8 text-slate-400 text-sm font-medium">No 3D scans recorded yet.</div>
+                        )}
+                    </div>
                 </div>
 
-                <div className="bg-gradient-to-br from-fuchsia-50 to-pink-50 p-6 rounded-[2rem] border border-fuchsia-100 shadow-sm flex flex-col justify-center text-center relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 text-fuchsia-500"><GlobeAltIcon className="w-24 h-24" /></div>
-                    <h3 className="font-black text-fuchsia-900 uppercase tracking-widest text-xs mb-2">Predictive AI</h3>
-                    <h2 className="text-2xl font-black text-slate-900 mb-2">Future Me</h2>
-                    <p className="text-slate-600 text-sm mb-6">Visualize your physique based on current trajectory.</p>
-                    <button className="bg-white text-fuchsia-600 font-bold py-3 px-6 rounded-xl shadow-md text-xs uppercase tracking-widest mx-auto hover:bg-fuchsia-50 transition-colors">
-                        Generate Prediction
-                    </button>
+                <div className="bg-gradient-to-br from-fuchsia-50 to-pink-50 p-6 rounded-[2rem] border border-fuchsia-100 shadow-sm flex flex-col justify-center text-center relative overflow-hidden min-h-[240px]">
+                    {/* Visual: After Body */}
+                    <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none">
+                         <img src="/after_body.png" alt="Future Prediction" className="h-[120%] w-auto object-contain" />
+                    </div>
+                    
+                    <div className="relative z-10">
+                        <h3 className="font-black text-fuchsia-900 uppercase tracking-widest text-xs mb-2">Predictive AI</h3>
+                        <h2 className="text-2xl font-black text-slate-900 mb-2">Future Me</h2>
+                        <p className="text-slate-600 text-sm mb-6">Visualize your physique based on current trajectory.</p>
+                        <button className="bg-white text-fuchsia-600 font-bold py-3 px-6 rounded-xl shadow-md text-xs uppercase tracking-widest mx-auto hover:bg-fuchsia-50 transition-colors">
+                            Generate Prediction
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
