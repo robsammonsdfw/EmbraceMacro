@@ -95,6 +95,30 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             return <TeleMedicineHub view={activeView} />;
         }
 
+        // Handle Role Views Dynamically
+        if (activeView.startsWith('roles.')) {
+            // Map individual practitioner roles to the Coaching Hub
+            if (['roles.coach', 'roles.trainer', 'roles.nutrition', 'roles.sports', 'roles.wellness'].includes(activeView)) {
+                return <CoachingHub userRole={userRole} onUpgrade={() => {}} onProxySelect={onProxySelect} />;
+            }
+            // Map business/institutional roles to placeholders for now
+            const roleLabels: Record<string, string> = {
+                'roles.influencer': 'Influencer/Creator Portal',
+                'roles.studio': 'Studio Management',
+                'roles.gym': 'Gym Management',
+                'roles.clinic': 'Health Center Portal',
+                'roles.club': 'Fitness Club Portal',
+                'roles.rec': 'Recreation Center Portal',
+                'roles.employer': 'Corporate Wellness',
+                'roles.health_systems': 'Health Systems Integration',
+                'roles.payor': 'Payor & Insurance Portal',
+                'roles.government': 'Government Health Portal',
+                'roles.union': 'Union Benefits Portal',
+                'roles.logistics': 'Logistics & Trucking Health'
+            };
+            return <PlaceholderPage title={roleLabels[activeView] || 'Business Portal'} description="Enterprise dashboard for managing member health at scale." />;
+        }
+
         switch(activeView) {
             case 'home':
                 return (
@@ -223,22 +247,6 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             case 'labs.store': 
                 // Updated: Use live store instead of placeholder
                 return <TeleMedicineHub view="labs.store" />;
-
-            // Roles & Portals
-            case 'roles.coach': 
-                return <CoachingHub userRole={userRole} onUpgrade={() => {}} onProxySelect={onProxySelect} />;
-            case 'roles.influencer': 
-                return <PlaceholderPage title="Influencer Portal" description="Manage campaigns and followers." />;
-            case 'roles.employer': 
-                return <PlaceholderPage title="Employer Portal" description="Corporate wellness dashboard." />;
-            case 'roles.union': 
-                return <PlaceholderPage title="Union Portal" description="Member benefits management." />;
-            case 'roles.payor': 
-                return <PlaceholderPage title="Payor Portal" description="Insurance integration." />;
-            case 'roles.government':
-                return <PlaceholderPage title="Government Portal" description="Public sector health management." />;
-            case 'roles.health_systems':
-                return <PlaceholderPage title="Health Systems" description="Hospital and clinic integration." />;
 
             // Rewards & History
             case 'rewards': 

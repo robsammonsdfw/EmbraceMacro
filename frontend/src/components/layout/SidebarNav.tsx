@@ -98,12 +98,24 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
         her: false
     });
 
+    // Sub-category state for Roles
+    const [rolesSubCategories, setRolesSubCategories] = useState({
+        independent: true,
+        smb: false,
+        enterprise: false,
+        institutional: false
+    });
+
     const toggleCategory = (cat: keyof typeof openCategories) => {
         setOpenCategories(prev => ({ ...prev, [cat]: !prev[cat] }));
     };
 
     const toggleSubCategory = (sub: keyof typeof openSubCategories) => {
         setOpenSubCategories(prev => ({ ...prev, [sub]: !prev[sub] }));
+    };
+
+    const toggleRoleSubCategory = (sub: keyof typeof rolesSubCategories) => {
+        setRolesSubCategories(prev => ({ ...prev, [sub]: !prev[sub] }));
     };
 
     return (
@@ -226,17 +238,54 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
                     </div>
                 )}
 
-                {/* 7. ROLES & PORTALS */}
-                <CategoryHeader label="Roles & Portals" color="text-rose-500" isOpen={openCategories.roles} onClick={() => toggleCategory('roles')} />
+                {/* 7. ROLES & BUSINESS TYPES */}
+                <CategoryHeader label="Roles & Business Types" color="text-rose-500" isOpen={openCategories.roles} onClick={() => toggleCategory('roles')} />
                 {openCategories.roles && (
                     <div className="space-y-0.5 animate-fade-in pl-2 border-l border-rose-100 ml-4">
-                        <NavItem indent label="For Coaches" icon={<UsersIcon />} isActive={activeView === 'roles.coach'} onClick={() => onNavigate('roles.coach')} />
-                        <NavItem indent label="For Influencers" icon={<BadgeCheckIcon />} isActive={activeView === 'roles.influencer'} onClick={() => onNavigate('roles.influencer')} />
-                        <NavItem indent label="For Employers" icon={<BriefcaseIcon />} isActive={activeView === 'roles.employer'} onClick={() => onNavigate('roles.employer')} />
-                        <NavItem indent label="For Unions" icon={<UserGroupIcon />} isActive={activeView === 'roles.union'} onClick={() => onNavigate('roles.union')} />
-                        <NavItem indent label="For Government" icon={<GlobeAltIcon />} isActive={activeView === 'roles.government'} onClick={() => onNavigate('roles.government')} />
-                        <NavItem indent label="Payers / Insurers" icon={<ClipboardCheckIcon />} isActive={activeView === 'roles.payor'} onClick={() => onNavigate('roles.payor')} />
-                        <NavItem indent label="For Health Systems" icon={<HeartIcon />} isActive={activeView === 'roles.health_systems'} onClick={() => onNavigate('roles.health_systems')} />
+                        
+                        {/* Independent Coach */}
+                        <SubCategoryHeader label="Independent Coach" isOpen={rolesSubCategories.independent} onClick={() => toggleRoleSubCategory('independent')} />
+                        {rolesSubCategories.independent && (
+                            <div className="animate-fade-in">
+                                <NavItem superIndent label="Personal Trainer" icon={<UsersIcon />} isActive={activeView === 'roles.trainer'} onClick={() => onNavigate('roles.trainer')} />
+                                <NavItem superIndent label="Nutrition Coach" icon={<UtensilsIcon />} isActive={activeView === 'roles.nutrition'} onClick={() => onNavigate('roles.nutrition')} />
+                                <NavItem superIndent label="Sports Coach" icon={<TrophyIcon />} isActive={activeView === 'roles.sports'} onClick={() => onNavigate('roles.sports')} />
+                                <NavItem superIndent label="Health & Wellness" icon={<HeartIcon />} isActive={activeView === 'roles.wellness'} onClick={() => onNavigate('roles.wellness')} />
+                                <NavItem superIndent label="Influencer/Creator" icon={<BadgeCheckIcon />} isActive={activeView === 'roles.influencer'} onClick={() => onNavigate('roles.influencer')} />
+                            </div>
+                        )}
+
+                        {/* Small to Medium Business */}
+                        <SubCategoryHeader label="Small to Medium Business" isOpen={rolesSubCategories.smb} onClick={() => toggleRoleSubCategory('smb')} />
+                        {rolesSubCategories.smb && (
+                            <div className="animate-fade-in">
+                                <NavItem superIndent label="Training Studios" icon={<DumbbellIcon />} isActive={activeView === 'roles.studio'} onClick={() => onNavigate('roles.studio')} />
+                                <NavItem superIndent label="Gym" icon={<ActivityIcon />} isActive={activeView === 'roles.gym'} onClick={() => onNavigate('roles.gym')} />
+                                <NavItem superIndent label="Health Center" icon={<BeakerIcon />} isActive={activeView === 'roles.clinic'} onClick={() => onNavigate('roles.clinic')} />
+                            </div>
+                        )}
+
+                        {/* Large Business */}
+                        <SubCategoryHeader label="Large Business" isOpen={rolesSubCategories.enterprise} onClick={() => toggleRoleSubCategory('enterprise')} />
+                        {rolesSubCategories.enterprise && (
+                            <div className="animate-fade-in">
+                                <NavItem superIndent label="Fitness Club" icon={<UserGroupIcon />} isActive={activeView === 'roles.club'} onClick={() => onNavigate('roles.club')} />
+                                <NavItem superIndent label="Recreation Center" icon={<ActivityIcon />} isActive={activeView === 'roles.rec'} onClick={() => onNavigate('roles.rec')} />
+                                <NavItem superIndent label="Corporate Wellness" icon={<BriefcaseIcon />} isActive={activeView === 'roles.employer'} onClick={() => onNavigate('roles.employer')} />
+                            </div>
+                        )}
+
+                        {/* Institutional & Other */}
+                        <SubCategoryHeader label="Institutional & Other" isOpen={rolesSubCategories.institutional} onClick={() => toggleRoleSubCategory('institutional')} />
+                        {rolesSubCategories.institutional && (
+                            <div className="animate-fade-in">
+                                <NavItem superIndent label="Health Systems" icon={<HeartIcon />} isActive={activeView === 'roles.health_systems'} onClick={() => onNavigate('roles.health_systems')} />
+                                <NavItem superIndent label="Payors & Insurers" icon={<ClipboardCheckIcon />} isActive={activeView === 'roles.payor'} onClick={() => onNavigate('roles.payor')} />
+                                <NavItem superIndent label="Government" icon={<GlobeAltIcon />} isActive={activeView === 'roles.government'} onClick={() => onNavigate('roles.government')} />
+                                <NavItem superIndent label="Unions" icon={<UserGroupIcon />} isActive={activeView === 'roles.union'} onClick={() => onNavigate('roles.union')} />
+                                <NavItem superIndent label="Logistics & Trucking" icon={<BriefcaseIcon />} isActive={activeView === 'roles.logistics'} onClick={() => onNavigate('roles.logistics')} />
+                            </div>
+                        )}
                     </div>
                 )}
 

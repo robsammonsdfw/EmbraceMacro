@@ -414,14 +414,24 @@ export type ActiveView =
   // Labs
   | 'labs.results' // Lab Results
   | 'labs.store' // Buy Test Kits (DNA, etc)
-  // Roles
+  // Roles & Business Types
   | 'roles.coach'
+  | 'roles.trainer'
+  | 'roles.nutrition'
+  | 'roles.sports'
+  | 'roles.wellness'
   | 'roles.influencer'
-  | 'roles.employer'
-  | 'roles.union'
+  | 'roles.studio'
+  | 'roles.gym'
+  | 'roles.clinic'
+  | 'roles.club'
+  | 'roles.rec'
+  | 'roles.employer' // Corporate Wellness
+  | 'roles.health_systems'
   | 'roles.payor'
   | 'roles.government'
-  | 'roles.health_systems'
+  | 'roles.union'
+  | 'roles.logistics'
   // Rewards/History
   | 'rewards'
   | 'history';

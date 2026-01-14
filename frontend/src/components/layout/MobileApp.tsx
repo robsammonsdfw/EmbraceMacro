@@ -5,7 +5,8 @@ import {
     UserCircleIcon, XIcon, UtensilsIcon, BriefcaseIcon,
     HomeIcon, BookOpenIcon, PillIcon, UploadIcon, HeartIcon,
     GlobeAltIcon, BeakerIcon, ClockIcon, MoonIcon, ShoppingCartIcon,
-    ClipboardCheckIcon
+    ClipboardCheckIcon, UsersIcon, TrophyIcon, BadgeCheckIcon,
+    DumbbellIcon, UserGroupIcon
 } from '../icons';
 import type { HealthStats, UserDashboardPrefs } from '../../types';
 
@@ -160,8 +161,20 @@ export const MobileApp: React.FC<MobileAppProps> = ({
         her: false
     });
 
+    // Roles Category State
+    const [rolesCategories, setRolesCategories] = useState({
+        independent: true,
+        smb: false,
+        enterprise: false,
+        institutional: false
+    });
+
     const toggleTelemedCategory = (cat: keyof typeof telemedCategories) => {
         setTelemedCategories(prev => ({ ...prev, [cat]: !prev[cat] }));
+    };
+
+    const toggleRolesCategory = (cat: keyof typeof rolesCategories) => {
+        setRolesCategories(prev => ({ ...prev, [cat]: !prev[cat] }));
     };
 
     const navigateTo = (level: StackLevel, view?: string) => {
@@ -198,7 +211,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                 <HubButton label="Mental + Motivation" icon={<BrainIcon />} onClick={() => navigateTo('mental')} gradientFrom="from-violet-500" gradientTo="to-violet-700" iconColor="text-white border-white/40" glowColor="bg-violet-400" />
                 <HubButton label="Sleep" icon={<MoonIcon />} onClick={() => navigateTo('sleep')} gradientFrom="from-indigo-400" gradientTo="to-indigo-600" iconColor="text-white border-white/40" glowColor="bg-indigo-300" />
                 <HubButton label="Labs" icon={<BeakerIcon />} onClick={() => navigateTo('labs')} gradientFrom="from-cyan-500" gradientTo="to-cyan-700" iconColor="text-white border-white/40" glowColor="bg-cyan-400" />
-                <HubButton label="Social" icon={<BriefcaseIcon />} onClick={() => navigateTo('roles')} gradientFrom="from-rose-500" gradientTo="to-rose-700" iconColor="text-white border-white/40" glowColor="bg-rose-400" />
+                <HubButton label="Roles & Business" icon={<BriefcaseIcon />} onClick={() => navigateTo('roles')} gradientFrom="from-rose-500" gradientTo="to-rose-700" iconColor="text-white border-white/40" glowColor="bg-rose-400" />
             </div>
 
             <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm flex items-center justify-between group active:scale-95 transition-all" onClick={() => navigateTo('account')}>
@@ -208,7 +221,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                     </div>
                     <div>
                         <h4 className="font-black uppercase text-sm text-slate-800">Account Control</h4>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Setup & Device Sync</p>
+                        <p className="text-][10px] font-bold text-slate-400 uppercase tracking-widest">Setup & Device Sync</p>
                     </div>
                 </div>
                 <div className="text-slate-300">→</div>
@@ -233,8 +246,47 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                     {stack === 'nutrition' && <FuelSection {...fuelProps} />}
                     {stack === 'physical' && <BodyHub {...bodyProps} initialTab={subView === 'pics' ? 'images' : '3d_scan'} />}
                     {stack === 'mental' && <AssessmentHub />}
-                    {stack === 'roles' && <CoachingHub userRole={userRole} onUpgrade={() => {}} onProxySelect={onProxySelect} />}
                     {stack === 'rewards' && <RewardsDashboard />}
+                    
+                    {stack === 'roles' && (
+                        subView ? (
+                            <CoachingHub userRole={userRole} onUpgrade={() => {}} onProxySelect={onProxySelect} />
+                        ) : (
+                            <div className="space-y-4">
+                                {/* Independent Coach */}
+                                <CollapsibleSection title="Independent Coach" isOpen={rolesCategories.independent} onToggle={() => toggleRolesCategory('independent')}>
+                                    <CategoryItem label="Personal Trainer" icon={<UsersIcon className="w-5 h-5 text-indigo-500" />} onClick={() => setSubView('trainer')} />
+                                    <CategoryItem label="Nutrition Coach" icon={<UtensilsIcon className="w-5 h-5 text-emerald-500" />} onClick={() => setSubView('nutrition')} />
+                                    <CategoryItem label="Sports Coach" icon={<TrophyIcon className="w-5 h-5 text-amber-500" />} onClick={() => setSubView('sports')} />
+                                    <CategoryItem label="Health & Wellness" icon={<HeartIcon className="w-5 h-5 text-rose-500" />} onClick={() => setSubView('wellness')} />
+                                    <CategoryItem label="Influencer/Creator" icon={<BadgeCheckIcon className="w-5 h-5 text-blue-500" />} onClick={() => setSubView('influencer')} />
+                                </CollapsibleSection>
+
+                                {/* Small to Medium Business */}
+                                <CollapsibleSection title="Small to Medium Business" isOpen={rolesCategories.smb} onToggle={() => toggleRolesCategory('smb')}>
+                                    <CategoryItem label="Training Studios" icon={<DumbbellIcon className="w-5 h-5 text-purple-500" />} onClick={() => setSubView('studio')} />
+                                    <CategoryItem label="Gym" icon={<ActivityIcon className="w-5 h-5 text-orange-500" />} onClick={() => setSubView('gym')} />
+                                    <CategoryItem label="Health Center" icon={<BeakerIcon className="w-5 h-5 text-cyan-500" />} onClick={() => setSubView('clinic')} />
+                                </CollapsibleSection>
+
+                                {/* Large Business */}
+                                <CollapsibleSection title="Large Business" isOpen={rolesCategories.enterprise} onToggle={() => toggleRolesCategory('enterprise')}>
+                                    <CategoryItem label="Fitness Club" icon={<UserGroupIcon className="w-5 h-5 text-indigo-600" />} onClick={() => setSubView('club')} />
+                                    <CategoryItem label="Recreation Center" icon={<ActivityIcon className="w-5 h-5 text-teal-600" />} onClick={() => setSubView('rec')} />
+                                    <CategoryItem label="Corporate Wellness" icon={<BriefcaseIcon className="w-5 h-5 text-slate-600" />} onClick={() => setSubView('employer')} />
+                                </CollapsibleSection>
+
+                                {/* Institutional & Other */}
+                                <CollapsibleSection title="Institutional & Other" isOpen={rolesCategories.institutional} onToggle={() => toggleRolesCategory('institutional')}>
+                                    <CategoryItem label="Health Systems" icon={<HeartIcon className="w-5 h-5 text-red-600" />} onClick={() => setSubView('health_systems')} />
+                                    <CategoryItem label="Payors & Insurers" icon={<ClipboardCheckIcon className="w-5 h-5 text-blue-600" />} onClick={() => setSubView('payor')} />
+                                    <CategoryItem label="Government" icon={<GlobeAltIcon className="w-5 h-5 text-slate-500" />} onClick={() => setSubView('government')} />
+                                    <CategoryItem label="Unions" icon={<UserGroupIcon className="w-5 h-5 text-amber-600" />} onClick={() => setSubView('union')} />
+                                    <CategoryItem label="Logistics & Trucking" icon={<BriefcaseIcon className="w-5 h-5 text-stone-600" />} onClick={() => setSubView('logistics')} />
+                                </CollapsibleSection>
+                            </div>
+                        )
+                    )}
                     
                     {stack === 'sleep' && (
                         <div className="space-y-4">
@@ -248,7 +300,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                             )}
                             
                             {subView === 'log' && <ReadinessView />}
-                            {subView === 'order_test' && <PlaceholderPage title="Home Sleep Test" description="Order a clinical-grade sleep test." icon={<ActivityIcon className="w-12 h-12" />} />}
+                            {subView === 'order_test' && <PlaceholderPage title="Home Sleep Test" description="Order a clinical-grade sleep test delivered to your door." icon={<ActivityIcon className="w-12 h-12" />} />}
                             {subView === 'appliances' && <PlaceholderPage title="Oral Appliances" description="Custom-fitted sleep apnea solutions." />}
                             {subView === 'results' && <HealthReportsView />}
                         </div>
