@@ -4,9 +4,10 @@ import {
     ActivityIcon, CameraIcon, BrainIcon, 
     UserCircleIcon, XIcon, UtensilsIcon, BriefcaseIcon,
     HomeIcon, BookOpenIcon, PillIcon, UploadIcon, HeartIcon,
-    GlobeAltIcon, BeakerIcon, ClockIcon
+    GlobeAltIcon, BeakerIcon, ClockIcon, MoonIcon, ShoppingCartIcon,
+    ClipboardCheckIcon
 } from '../icons';
-import type { HealthStats, UserDashboardPrefs } from '../../types';
+import type { HealthStats, UserDashboardPrefs, ActiveView } from '../../types';
 
 // Import Views
 import { FuelSection } from '../sections/FuelSection';
@@ -17,7 +18,10 @@ import { RewardsDashboard } from '../RewardsDashboard';
 import { DeviceSync } from '../account/DeviceSync';
 import { WidgetConfig } from '../account/WidgetConfig';
 import { PharmacyOrders } from '../account/PharmacyOrders';
-import { TeleMedicineHub } from '../telemed/TeleMedicineHub'; // NEW IMPORT
+import { TeleMedicineHub } from '../telemed/TeleMedicineHub';
+import { ReadinessView } from '../sections/ReadinessView';
+import { HealthReportsView } from '../sections/HealthReportsView';
+import { PlaceholderPage } from '../PlaceholderPage';
 
 // Feature Flag: Set to false to show "For Her" category
 const HIDE_FOR_HER = true;
@@ -35,7 +39,7 @@ interface MobileAppProps {
     onVisionSync?: () => void;
 }
 
-type StackLevel = 'home' | 'account' | 'physical' | 'nutrition' | 'mental' | 'roles' | 'rewards' | 'telemed';
+type StackLevel = 'home' | 'account' | 'physical' | 'nutrition' | 'mental' | 'sleep' | 'labs' | 'roles' | 'rewards' | 'telemed';
 
 const VitalsStrip: React.FC<{ stats: HealthStats; prefs: UserDashboardPrefs; onVisionSync?: () => void }> = ({ stats, prefs, onVisionSync }) => {
     
@@ -109,7 +113,7 @@ const HubButton: React.FC<{
                 {React.cloneElement(icon as React.ReactElement<{ className?: string }>, { className: "w-8 h-8" })}
             </span>
         </div>
-        <span className={`text-sm font-black tracking-wider uppercase text-white z-10`}>{label}</span>
+        <span className={`text-sm font-black tracking-wider uppercase text-white z-10 text-center px-1 leading-tight`}>{label}</span>
         <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-black/40 to-transparent pointer-events-none"></div>
     </button>
 );
@@ -189,9 +193,11 @@ export const MobileApp: React.FC<MobileAppProps> = ({
 
             <div className="grid grid-cols-2 gap-4">
                 <HubButton label="Prescriptions" icon={<PillIcon />} onClick={() => navigateTo('telemed')} gradientFrom="from-blue-500" gradientTo="to-blue-700" iconColor="text-white border-white/40" glowColor="bg-blue-400" />
-                <HubButton label="Fuel" icon={<UtensilsIcon />} onClick={() => navigateTo('nutrition')} gradientFrom="from-emerald-500" gradientTo="to-emerald-700" iconColor="text-white border-white/40" glowColor="bg-emerald-400" />
+                <HubButton label="Nutrition + Meals" icon={<UtensilsIcon />} onClick={() => navigateTo('nutrition')} gradientFrom="from-emerald-500" gradientTo="to-emerald-700" iconColor="text-white border-white/40" glowColor="bg-emerald-400" />
                 <HubButton label="Body + Fitness" icon={<UserCircleIcon />} onClick={() => navigateTo('physical')} gradientFrom="from-indigo-600" gradientTo="to-indigo-800" iconColor="text-white border-white/40" glowColor="bg-indigo-400" />
-                <HubButton label="Brain" icon={<BrainIcon />} onClick={() => navigateTo('mental')} gradientFrom="from-amber-400" gradientTo="to-amber-600" iconColor="text-white border-white/40" glowColor="bg-amber-300" />
+                <HubButton label="Mental + Motivation" icon={<BrainIcon />} onClick={() => navigateTo('mental')} gradientFrom="from-violet-500" gradientTo="to-violet-700" iconColor="text-white border-white/40" glowColor="bg-violet-400" />
+                <HubButton label="Sleep" icon={<MoonIcon />} onClick={() => navigateTo('sleep')} gradientFrom="from-indigo-400" gradientTo="to-indigo-600" iconColor="text-white border-white/40" glowColor="bg-indigo-300" />
+                <HubButton label="Labs" icon={<BeakerIcon />} onClick={() => navigateTo('labs')} gradientFrom="from-cyan-500" gradientTo="to-cyan-700" iconColor="text-white border-white/40" glowColor="bg-cyan-400" />
                 <HubButton label="Social" icon={<BriefcaseIcon />} onClick={() => navigateTo('roles')} gradientFrom="from-rose-500" gradientTo="to-rose-700" iconColor="text-white border-white/40" glowColor="bg-rose-400" />
             </div>
 
@@ -230,8 +236,32 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                     {stack === 'roles' && <CoachingHub userRole={userRole} onUpgrade={() => {}} onProxySelect={onProxySelect} />}
                     {stack === 'rewards' && <RewardsDashboard />}
                     
+                    {stack === 'sleep' && (
+                        <div className="space-y-4">
+                            <CategoryItem label="Sleep Log" icon={<MoonIcon className="w-5 h-5 text-indigo-500" />} onClick={() => setSubView('log')} />
+                            <CategoryItem label="Order Home Test" icon={<ClipboardCheckIcon className="w-5 h-5 text-indigo-500" />} onClick={() => setSubView('order_test')} />
+                            <CategoryItem label="Oral Appliances" icon={<UserCircleIcon className="w-5 h-5 text-indigo-500" />} onClick={() => setSubView('appliances')} />
+                            <CategoryItem label="Test Results" icon={<ActivityIcon className="w-5 h-5 text-indigo-500" />} onClick={() => setSubView('results')} />
+                            
+                            {subView === 'log' && <ReadinessView />}
+                            {subView === 'order_test' && <PlaceholderPage title="Home Sleep Test" description="Order a clinical-grade sleep test." icon={<ActivityIcon className="w-12 h-12" />} />}
+                            {subView === 'appliances' && <PlaceholderPage title="Oral Appliances" description="Custom-fitted sleep apnea solutions." />}
+                            {subView === 'results' && <HealthReportsView />}
+                        </div>
+                    )}
+
+                    {stack === 'labs' && (
+                        <div className="space-y-4">
+                            <CategoryItem label="View Lab Results" icon={<BeakerIcon className="w-5 h-5 text-cyan-500" />} onClick={() => setSubView('results')} />
+                            <CategoryItem label="Order Test Kits" icon={<ShoppingCartIcon className="w-5 h-5 text-cyan-500" />} onClick={() => setSubView('store')} />
+                            
+                            {subView === 'results' && <HealthReportsView />}
+                            {subView === 'store' && <PlaceholderPage title="DNA & Lab Store" description="Order advanced biomarker test kits." />}
+                        </div>
+                    )}
+                    
                     {stack === 'telemed' && (
-                        subView ? (
+                        subView && subView.startsWith('everyone') || subView && subView.startsWith('him') || subView && subView.startsWith('her') ? (
                             // Render specific category view
                             <TeleMedicineHub view={`telemed.${subView}` as any} />
                         ) : (
@@ -243,8 +273,6 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                                     onToggle={() => toggleTelemedCategory('everyone')}
                                 >
                                     <CategoryItem label="Weight Loss" icon={<ActivityIcon className="w-5 h-5 text-emerald-500" />} onClick={() => setSubView('everyone.weight_loss')} />
-                                    <CategoryItem label="Lab Test Kits" icon={<BeakerIcon className="w-5 h-5 text-indigo-500" />} onClick={() => setSubView('everyone.lab_kits')} />
-                                    <CategoryItem label="DNA Test Kits" icon={<GlobeAltIcon className="w-5 h-5 text-blue-500" />} onClick={() => setSubView('everyone.dna_kits')} />
                                 </CollapsibleSection>
 
                                 <CollapsibleSection 

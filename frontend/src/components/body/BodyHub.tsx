@@ -218,17 +218,17 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, initialTab = '3d_
                     </div>
                 </div>
 
-                <div className="bg-gradient-to-br from-fuchsia-50 to-pink-50 p-6 rounded-[2rem] border border-fuchsia-100 shadow-sm flex flex-col justify-center text-center relative overflow-hidden min-h-[240px]">
-                    {/* Visual: After Body */}
-                    <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none">
-                         <img src="/after_body.png" alt="Future Prediction" className="h-[120%] w-auto object-contain" />
+                <div className="bg-gradient-to-br from-fuchsia-50 to-pink-50 p-6 rounded-[2rem] border border-fuchsia-100 shadow-sm flex flex-col justify-center items-end text-right relative overflow-hidden min-h-[240px]">
+                    {/* Visual: After Body - Moved to left to align with center */}
+                    <div className="absolute -left-4 top-4 bottom-0 w-32 opacity-30 pointer-events-none">
+                         <img src="/after_body.png" alt="Future Prediction" className="w-full h-full object-contain object-bottom" />
                     </div>
                     
-                    <div className="relative z-10">
+                    <div className="relative z-10 max-w-[70%]">
                         <h3 className="font-black text-fuchsia-900 uppercase tracking-widest text-xs mb-2">Predictive AI</h3>
                         <h2 className="text-2xl font-black text-slate-900 mb-2">Future Me</h2>
                         <p className="text-slate-600 text-sm mb-6">Visualize your physique based on current trajectory.</p>
-                        <button className="bg-white text-fuchsia-600 font-bold py-3 px-6 rounded-xl shadow-md text-xs uppercase tracking-widest mx-auto hover:bg-fuchsia-50 transition-colors">
+                        <button className="bg-white text-fuchsia-600 font-bold py-3 px-6 rounded-xl shadow-md text-xs uppercase tracking-widest hover:bg-fuchsia-50 transition-colors">
                             Generate Prediction
                         </button>
                     </div>

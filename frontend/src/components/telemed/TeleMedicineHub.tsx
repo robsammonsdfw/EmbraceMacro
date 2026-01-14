@@ -15,13 +15,7 @@ const PRODUCT_MAP: Record<string, { label: string, handle: string, desc: string 
         { label: 'Semaglutide', handle: 'semaglutide', desc: 'GLP-1 Agonist for weight management.' },
         { label: 'Tirzepatide', handle: 'tirzepatide', desc: 'Dual GIP/GLP-1 receptor agonist.' }
     ],
-    'telemed.everyone.lab_kits': [
-        { label: 'Comprehensive Panel', handle: 'comprehensive-lab-kit', desc: 'Full body biometric analysis.' },
-        { label: 'Hormone Panel', handle: 'hormone-lab-kit', desc: 'Detailed hormone profile check.' }
-    ],
-    'telemed.everyone.dna_kits': [
-        { label: 'Ancestry & Health', handle: 'dna-test-kit', desc: 'Genetic predisposition analysis.' }
-    ],
+    // Removed kits from here
 
     // For Him
     'telemed.him.hair_loss': [
@@ -54,8 +48,6 @@ const PRODUCT_MAP: Record<string, { label: string, handle: string, desc: string 
 // Map views to external collection URLs
 const CATEGORY_URLS: Record<string, string> = {
     'telemed.everyone.weight_loss': 'https://embracehealth.ai/collections/weight-loss',
-    'telemed.everyone.lab_kits': 'https://embracehealth.ai/collections/lab-test-kits',
-    'telemed.everyone.dna_kits': 'https://embracehealth.ai/collections/dna-test-kits',
     'telemed.him.hair_loss': 'https://embracehealth.ai/collections/hair-loss',
     'telemed.him.ed': 'https://embracehealth.ai/collections/erectile-dysfunction',
     'telemed.him.low_t': 'https://embracehealth.ai/collections/low-testosterone',
@@ -153,8 +145,6 @@ export const TeleMedicineHub: React.FC<TeleMedicineHubProps> = ({ view }) => {
         switch(view) {
             // Everyone
             case 'telemed.everyone.weight_loss': return { title: 'Weight Loss', icon: <ActivityIcon className="w-8 h-8" />, color: 'text-emerald-500', bg: 'bg-emerald-100' };
-            case 'telemed.everyone.lab_kits': return { title: 'Lab Kits', icon: <BeakerIcon className="w-8 h-8" />, color: 'text-indigo-500', bg: 'bg-indigo-100' };
-            case 'telemed.everyone.dna_kits': return { title: 'DNA Test Kits', icon: <GlobeAltIcon className="w-8 h-8" />, color: 'text-blue-500', bg: 'bg-blue-100' };
             
             // Him
             case 'telemed.him.hair_loss': return { title: 'Hair Restoration', icon: <UserCircleIcon className="w-8 h-8" />, color: 'text-amber-500', bg: 'bg-amber-100' };

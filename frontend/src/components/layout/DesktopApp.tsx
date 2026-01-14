@@ -22,7 +22,7 @@ import { MasterChefView } from '../nutrition/MasterChefView';
 import { DeviceSync } from '../account/DeviceSync';
 import { WidgetConfig } from '../account/WidgetConfig';
 import { PharmacyOrders } from '../account/PharmacyOrders';
-import { TeleMedicineHub } from '../telemed/TeleMedicineHub'; // NEW IMPORT
+import { TeleMedicineHub } from '../telemed/TeleMedicineHub'; 
 import { ActivityIcon, CameraIcon } from '../icons';
 
 interface DesktopAppProps {
@@ -181,7 +181,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             case 'physical.run': 
                 return <PlaceholderPage title="Running App" description="GPS tracking and pace coaching." />;
 
-            // Nutrition Views
+            // Nutrition + Meals Views
             case 'nutrition.planner': 
                 return <FuelSection {...fuelProps} defaultTab="plan" />;
             case 'nutrition.pantry': 
@@ -195,17 +195,38 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             case 'nutrition.videos': 
                 return <PlaceholderPage title="Meal Prep Videos" description="Community generated cooking guides." />;
 
-            // Mental & Labs Views
-            case 'mental.sleep': 
-                return <ReadinessView />;
-            case 'mental.readiness': 
-                return <ReadinessView />;
+            // Mental + Motivation Views
             case 'mental.assessments': 
                 return <AssessmentHub />;
-            case 'mental.labs': 
+            case 'mental.readiness': 
+                return <ReadinessView />;
+
+            // Sleep Views
+            case 'sleep.log':
+                return <ReadinessView />; // Reuse Readiness view for sleep logging for now
+            case 'sleep.order_test':
+                return (
+                    <PlaceholderPage 
+                        title="Home Sleep Test" 
+                        description="Order a clinical-grade sleep test delivered to your door." 
+                        icon={<ActivityIcon className="w-12 h-12" />} 
+                    />
+                );
+            case 'sleep.appliances':
+                return <PlaceholderPage title="Oral Appliances" description="Custom-fitted solutions for sleep apnea and snoring." />;
+            case 'sleep.results':
+                return <HealthReportsView />; // Reuse health reports for results
+
+            // Labs Views
+            case 'labs.results': 
                 return <HealthReportsView />;
-            case 'mental.store': 
-                return <PlaceholderPage title="Lab Store" description="Order biomarker test kits." />;
+            case 'labs.store': 
+                return (
+                    <PlaceholderPage 
+                        title="DNA & Lab Store" 
+                        description="Order advanced biomarker and genetic test kits." 
+                    />
+                );
 
             // Roles & Portals
             case 'roles.coach': 

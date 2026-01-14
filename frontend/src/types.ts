@@ -376,8 +376,8 @@ export type ActiveView =
   | 'hub' 
   // Tele-Medicine
   | 'telemed.everyone.weight_loss'
-  | 'telemed.everyone.lab_kits'
-  | 'telemed.everyone.dna_kits'
+  // | 'telemed.everyone.lab_kits' -- MOVED TO LABS
+  // | 'telemed.everyone.dna_kits' -- MOVED TO LABS
   | 'telemed.him.hair_loss'
   | 'telemed.him.ed'
   | 'telemed.him.low_t'
@@ -389,26 +389,31 @@ export type ActiveView =
   | 'account.widgets'
   | 'account.sync'
   | 'account.pharmacy'
-  // Body + Fitness (Renamed from Physical)
+  // Body + Fitness
   | 'physical.scan'
-  | 'physical.pics' // NEW
+  | 'physical.pics'
   | 'physical.workout_log'
   | 'physical.plans'
   | 'physical.form_check'
   | 'physical.run'
-  // Nutrition
+  // Nutrition + Meals
   | 'nutrition.planner'
   | 'nutrition.pantry'
   | 'nutrition.pantry_chef'
   | 'nutrition.dining'
   | 'nutrition.library'
   | 'nutrition.videos'
-  // Mental
-  | 'mental.sleep'
-  | 'mental.readiness'
-  | 'mental.assessments'
-  | 'mental.labs'
-  | 'mental.store'
+  // Mental + Motivation
+  | 'mental.assessments' // Psych quizzes
+  | 'mental.readiness' // Readiness
+  // Sleep
+  | 'sleep.log' // Sleep log
+  | 'sleep.order_test' // Order Home Sleep Test
+  | 'sleep.appliances' // Oral Appliances
+  | 'sleep.results' // Test Results
+  // Labs
+  | 'labs.results' // Lab Results
+  | 'labs.store' // Buy Test Kits (DNA, etc)
   // Roles
   | 'roles.coach'
   | 'roles.influencer'
