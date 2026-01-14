@@ -238,10 +238,14 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                     
                     {stack === 'sleep' && (
                         <div className="space-y-4">
-                            <CategoryItem label="Sleep Log" icon={<MoonIcon className="w-5 h-5 text-indigo-500" />} onClick={() => setSubView('log')} />
-                            <CategoryItem label="Order Home Test" icon={<ClipboardCheckIcon className="w-5 h-5 text-indigo-500" />} onClick={() => setSubView('order_test')} />
-                            <CategoryItem label="Oral Appliances" icon={<UserCircleIcon className="w-5 h-5 text-indigo-500" />} onClick={() => setSubView('appliances')} />
-                            <CategoryItem label="Test Results" icon={<ActivityIcon className="w-5 h-5 text-indigo-500" />} onClick={() => setSubView('results')} />
+                            {!subView && (
+                                <>
+                                    <CategoryItem label="Sleep Log" icon={<MoonIcon className="w-5 h-5 text-indigo-500" />} onClick={() => setSubView('log')} />
+                                    <CategoryItem label="Order Home Test" icon={<ClipboardCheckIcon className="w-5 h-5 text-indigo-500" />} onClick={() => setSubView('order_test')} />
+                                    <CategoryItem label="Oral Appliances" icon={<UserCircleIcon className="w-5 h-5 text-indigo-500" />} onClick={() => setSubView('appliances')} />
+                                    <CategoryItem label="Test Results" icon={<ActivityIcon className="w-5 h-5 text-indigo-500" />} onClick={() => setSubView('results')} />
+                                </>
+                            )}
                             
                             {subView === 'log' && <ReadinessView />}
                             {subView === 'order_test' && <PlaceholderPage title="Home Sleep Test" description="Order a clinical-grade sleep test." icon={<ActivityIcon className="w-12 h-12" />} />}
@@ -252,17 +256,22 @@ export const MobileApp: React.FC<MobileAppProps> = ({
 
                     {stack === 'labs' && (
                         <div className="space-y-4">
-                            <CategoryItem label="View Lab Results" icon={<BeakerIcon className="w-5 h-5 text-cyan-500" />} onClick={() => setSubView('results')} />
-                            <CategoryItem label="Lab Test Kits" icon={<ShoppingCartIcon className="w-5 h-5 text-indigo-500" />} onClick={() => setSubView('store')} />
-                            <CategoryItem label="DNA Test Kits" icon={<GlobeAltIcon className="w-5 h-5 text-blue-500" />} onClick={() => setSubView('store')} />
+                            {!subView && (
+                                <>
+                                    <CategoryItem label="View Lab Results" icon={<BeakerIcon className="w-5 h-5 text-cyan-500" />} onClick={() => setSubView('results')} />
+                                    <CategoryItem label="Lab Test Kits" icon={<ShoppingCartIcon className="w-5 h-5 text-indigo-500" />} onClick={() => setSubView('lab_kits')} />
+                                    <CategoryItem label="DNA Test Kits" icon={<GlobeAltIcon className="w-5 h-5 text-blue-500" />} onClick={() => setSubView('dna_kits')} />
+                                </>
+                            )}
                             
                             {subView === 'results' && <HealthReportsView />}
-                            {subView === 'store' && <PlaceholderPage title="DNA & Lab Store" description="Order advanced biomarker and genetic test kits." />}
+                            {subView === 'lab_kits' && <TeleMedicineHub view="telemed.everyone.lab_kits" />}
+                            {subView === 'dna_kits' && <TeleMedicineHub view="telemed.everyone.dna_kits" />}
                         </div>
                     )}
                     
                     {stack === 'telemed' && (
-                        subView && subView.startsWith('everyone') || subView && subView.startsWith('him') || subView && subView.startsWith('her') ? (
+                        subView && (subView.startsWith('everyone') || subView.startsWith('him') || subView.startsWith('her')) ? (
                             // Render specific category view
                             <TeleMedicineHub view={`telemed.${subView}` as any} />
                         ) : (

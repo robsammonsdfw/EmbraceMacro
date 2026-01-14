@@ -376,8 +376,8 @@ export type ActiveView =
   | 'hub' 
   // Tele-Medicine
   | 'telemed.everyone.weight_loss'
-  // | 'telemed.everyone.lab_kits' -- MOVED TO LABS
-  // | 'telemed.everyone.dna_kits' -- MOVED TO LABS
+  | 'telemed.everyone.lab_kits'
+  | 'telemed.everyone.dna_kits'
   | 'telemed.him.hair_loss'
   | 'telemed.him.ed'
   | 'telemed.him.low_t'
