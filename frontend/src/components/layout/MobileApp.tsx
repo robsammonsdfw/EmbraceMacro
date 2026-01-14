@@ -7,7 +7,7 @@ import {
     GlobeAltIcon, BeakerIcon, ClockIcon, MoonIcon, ShoppingCartIcon,
     ClipboardCheckIcon
 } from '../icons';
-import type { HealthStats, UserDashboardPrefs, ActiveView } from '../../types';
+import type { HealthStats, UserDashboardPrefs } from '../../types';
 
 // Import Views
 import { FuelSection } from '../sections/FuelSection';
@@ -253,10 +253,11 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                     {stack === 'labs' && (
                         <div className="space-y-4">
                             <CategoryItem label="View Lab Results" icon={<BeakerIcon className="w-5 h-5 text-cyan-500" />} onClick={() => setSubView('results')} />
-                            <CategoryItem label="Order Test Kits" icon={<ShoppingCartIcon className="w-5 h-5 text-cyan-500" />} onClick={() => setSubView('store')} />
+                            <CategoryItem label="Lab Test Kits" icon={<BeakerIcon className="w-5 h-5 text-indigo-500" />} onClick={() => setSubView('store')} />
+                            <CategoryItem label="DNA Test Kits" icon={<GlobeAltIcon className="w-5 h-5 text-blue-500" />} onClick={() => setSubView('store')} />
                             
                             {subView === 'results' && <HealthReportsView />}
-                            {subView === 'store' && <PlaceholderPage title="DNA & Lab Store" description="Order advanced biomarker test kits." />}
+                            {subView === 'store' && <PlaceholderPage title="DNA & Lab Store" description="Order advanced biomarker and genetic test kits." />}
                         </div>
                     )}
                     

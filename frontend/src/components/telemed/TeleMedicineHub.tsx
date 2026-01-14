@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { PillIcon, ShoppingCartIcon, ActivityIcon, UserCircleIcon, HeartIcon, BeakerIcon, GlobeAltIcon, ClockIcon } from '../icons';
+import { PillIcon, ShoppingCartIcon, ActivityIcon, UserCircleIcon, HeartIcon, ClockIcon } from '../icons';
 import { ShopifyProduct, ActiveView } from '../../types';
 import * as apiService from '../../services/apiService';
 
