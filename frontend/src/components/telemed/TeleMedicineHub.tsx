@@ -24,6 +24,14 @@ const PRODUCT_MAP: Record<string, { label: string, handle: string, desc: string 
         { label: 'EmbraceDNA Genetic Test', handle: 'dna-test-kit', desc: 'Unlock your genetic blueprint for nutrition.' },
         { label: 'Epigenetic Age Test', handle: 'biological-age-test', desc: 'Measure your true biological age.' }
     ],
+    // Combined Store View for Desktop
+    'labs.store': [
+        { label: 'Comprehensive Male Panel', handle: 'male-hormone-panel', desc: 'Complete biomarker analysis for men.' },
+        { label: 'Comprehensive Female Panel', handle: 'female-hormone-panel', desc: 'Complete biomarker analysis for women.' },
+        { label: 'Metabolic Health Panel', handle: 'metabolic-panel', desc: 'Insulin, Glucose, and Lipid analysis.' },
+        { label: 'EmbraceDNA Genetic Test', handle: 'dna-test-kit', desc: 'Unlock your genetic blueprint for nutrition.' },
+        { label: 'Epigenetic Age Test', handle: 'biological-age-test', desc: 'Measure your true biological age.' }
+    ],
 
     // For Him
     'telemed.him.hair_loss': [
@@ -58,6 +66,7 @@ const CATEGORY_URLS: Record<string, string> = {
     'telemed.everyone.weight_loss': 'https://embracehealth.ai/collections/weight-loss',
     'telemed.everyone.lab_kits': 'https://embracehealth.ai/collections/lab-tests',
     'telemed.everyone.dna_kits': 'https://embracehealth.ai/collections/dna-tests',
+    'labs.store': 'https://embracehealth.ai/collections/all-tests',
     'telemed.him.hair_loss': 'https://embracehealth.ai/collections/hair-loss',
     'telemed.him.ed': 'https://embracehealth.ai/collections/erectile-dysfunction',
     'telemed.him.low_t': 'https://embracehealth.ai/collections/low-testosterone',
@@ -157,6 +166,7 @@ export const TeleMedicineHub: React.FC<TeleMedicineHubProps> = ({ view }) => {
             case 'telemed.everyone.weight_loss': return { title: 'Weight Loss', icon: <ActivityIcon className="w-8 h-8" />, color: 'text-emerald-500', bg: 'bg-emerald-100' };
             case 'telemed.everyone.lab_kits': return { title: 'Lab Diagnostics', icon: <BeakerIcon className="w-8 h-8" />, color: 'text-indigo-500', bg: 'bg-indigo-100' };
             case 'telemed.everyone.dna_kits': return { title: 'Genetics & DNA', icon: <GlobeAltIcon className="w-8 h-8" />, color: 'text-blue-500', bg: 'bg-blue-100' };
+            case 'labs.store': return { title: 'Diagnostic Lab Store', icon: <ShoppingCartIcon className="w-8 h-8" />, color: 'text-cyan-500', bg: 'bg-cyan-100' };
             
             // Him
             case 'telemed.him.hair_loss': return { title: 'Hair Restoration', icon: <UserCircleIcon className="w-8 h-8" />, color: 'text-amber-500', bg: 'bg-amber-100' };

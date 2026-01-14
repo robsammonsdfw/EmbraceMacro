@@ -221,12 +221,8 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             case 'labs.results': 
                 return <HealthReportsView />;
             case 'labs.store': 
-                return (
-                    <PlaceholderPage 
-                        title="DNA & Lab Store" 
-                        description="Order advanced biomarker and genetic test kits." 
-                    />
-                );
+                // Updated: Use live store instead of placeholder
+                return <TeleMedicineHub view="labs.store" />;
 
             // Roles & Portals
             case 'roles.coach': 
