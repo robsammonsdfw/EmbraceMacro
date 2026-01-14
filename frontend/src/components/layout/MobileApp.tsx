@@ -156,7 +156,6 @@ export const MobileApp: React.FC<MobileAppProps> = ({
     
     // Telemed Category State
     const [telemedCategories, setTelemedCategories] = useState({
-        everyone: true,
         him: false,
         her: false
     });
@@ -329,13 +328,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                         ) : (
                             // Render Telemed Menu with Collapsible Sections
                             <div className="space-y-4">
-                                <CollapsibleSection 
-                                    title="Everyone" 
-                                    isOpen={telemedCategories.everyone} 
-                                    onToggle={() => toggleTelemedCategory('everyone')}
-                                >
-                                    <CategoryItem label="Weight Loss" icon={<ActivityIcon className="w-5 h-5 text-emerald-500" />} onClick={() => setSubView('everyone.weight_loss')} />
-                                </CollapsibleSection>
+                                <CategoryItem label="Weight Loss" icon={<ActivityIcon className="w-5 h-5 text-emerald-500" />} onClick={() => setSubView('everyone.weight_loss')} />
 
                                 <CollapsibleSection 
                                     title="For Him" 

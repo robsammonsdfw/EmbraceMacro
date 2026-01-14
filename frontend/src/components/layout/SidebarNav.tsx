@@ -93,7 +93,6 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
 
     // Sub-category state for Prescriptions
     const [openSubCategories, setOpenSubCategories] = useState({
-        everyone: true,
         him: false,
         her: false
     });
@@ -149,12 +148,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
                 {openCategories.telemedicine && (
                     <div className="space-y-0.5 animate-fade-in pl-2 border-l border-sky-100 ml-4">
                         
-                        <SubCategoryHeader label="Everyone" isOpen={openSubCategories.everyone} onClick={() => toggleSubCategory('everyone')} />
-                        {openSubCategories.everyone && (
-                            <div className="animate-fade-in">
-                                <NavItem superIndent label="Weight Loss" icon={<ActivityIcon />} isActive={activeView === 'telemed.everyone.weight_loss'} onClick={() => onNavigate('telemed.everyone.weight_loss')} />
-                            </div>
-                        )}
+                        <NavItem indent label="Weight Loss" icon={<ActivityIcon />} isActive={activeView === 'telemed.everyone.weight_loss'} onClick={() => onNavigate('telemed.everyone.weight_loss')} />
 
                         <SubCategoryHeader label="For Him" isOpen={openSubCategories.him} onClick={() => toggleSubCategory('him')} />
                         {openSubCategories.him && (
