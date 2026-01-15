@@ -5,8 +5,10 @@ import { Login } from './components/Login';
 import { Loader } from './components/Loader';
 import { DesktopApp } from './components/layout/DesktopApp';
 import { MobileApp } from './components/layout/MobileApp';
+import { AnalysisResultModal } from './components/AnalysisResultModal';
 import * as apiService from './services/apiService';
-import { HealthStats, UserDashboardPrefs, SavedMeal, MealLogEntry, MealPlan, NutritionInfo } from './types';
+import { getProductByBarcode } from './services/openFoodFactsService';
+import { HealthStats, UserDashboardPrefs, SavedMeal, MealLogEntry, MealPlan, NutritionInfo, Recipe } from './types';
 import { CaptureFlow } from './components/CaptureFlow';
 
 const App: React.FC = () => {
@@ -34,6 +36,12 @@ const App: React.FC = () => {
   // UI State
   const [showCapture, setShowCapture] = useState(false);
   const [captureMode, setCaptureMode] = useState<'meal' | 'barcode' | 'pantry' | 'restaurant' | 'search' | 'vitals'>('meal');
+  
+  // Analysis State
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<NutritionInfo | null>(null);
+  const [analysisRecipes, setAnalysisRecipes] = useState<Recipe[] | null>(null);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -84,6 +92,7 @@ const App: React.FC = () => {
       
       if (mode === 'vitals' && img) {
           // Trigger Vision Sync
+          setIsAnalyzing(true);
           try {
               const base64 = img.startsWith('data:') ? img.split(',')[1] : img;
               const analyzedStats = await apiService.analyzeHealthScreenshot(base64);
@@ -95,19 +104,126 @@ const App: React.FC = () => {
           } catch (e) {
               console.error("Vision Sync Failed", e);
               alert("Failed to analyze health screenshot. Please try again.");
+          } finally {
+              setIsAnalyzing(false);
           }
-      } else {
-          console.log("Captured:", mode, img ? "Image present" : "No image", barcode, searchQuery);
-          // Other modes would be handled here or by specific components listening to state changes
-          // For this app architecture, specific analysis modals usually handle the logic,
-          // but 'vitals' is global so handled here.
+          return;
+      }
+
+      // Food & Nutrition Analysis Logic
+      setIsAnalyzing(true);
+      setAnalysisResult(null);
+      setAnalysisRecipes(null);
+
+      try {
+          let result: NutritionInfo | null = null;
+          let recipes: Recipe[] | null = null;
+
+          if (mode === 'barcode' && barcode) {
+              result = await getProductByBarcode(barcode);
+          } else if (mode === 'search' && searchQuery) {
+              result = await apiService.searchFood(searchQuery);
+          } else if (img) {
+              const base64 = img.startsWith('data:') ? img.split(',')[1] : img;
+              const mimeType = img.startsWith('data:') ? img.split(';')[0].split(':')[1] : 'image/jpeg';
+
+              if (mode === 'meal') {
+                  result = await apiService.analyzeImageWithGemini(base64, mimeType);
+              } else if (mode === 'restaurant') {
+                  result = await apiService.analyzeRestaurantMeal(base64, mimeType);
+              } else if (mode === 'pantry') {
+                  recipes = await apiService.getRecipesFromImage(base64, mimeType);
+              }
+          }
+
+          if (result) {
+              setAnalysisResult(result);
+              setShowAnalysisModal(true);
+          } else if (recipes && recipes.length > 0) {
+              setAnalysisRecipes(recipes);
+              setShowAnalysisModal(true);
+          } else {
+              if (mode !== 'search' && mode !== 'barcode' && !img) {
+                  // User cancelled or no input, do nothing
+                  return;
+              }
+              alert("Could not analyze input. Please try again.");
+          }
+
+      } catch (e) {
+          console.error("Analysis failed", e);
+          alert("Analysis failed. Please check your connection and try again.");
+      } finally {
+          setIsAnalyzing(false);
+      }
+  };
+
+  const handleAnalysisSave = async (data: any) => {
+      try {
+          // Normalize data for saving
+          let mealToSave: NutritionInfo = data;
+          
+          // If it's a raw recipe from Pantry Chef, wrap it
+          if (!data.ingredients && data.recipeName) {
+             mealToSave = {
+                mealName: data.recipeName,
+                totalCalories: data.nutrition.totalCalories,
+                totalProtein: data.nutrition.totalProtein,
+                totalCarbs: data.nutrition.totalCarbs,
+                totalFat: data.nutrition.totalFat,
+                ingredients: [], 
+                recipe: data,
+                source: 'pantry'
+             };
+          }
+
+          await apiService.saveMeal(mealToSave);
+          await loadAllData();
+          setShowAnalysisModal(false);
+          alert("Saved to Library!");
+      } catch (e) {
+          alert("Failed to save.");
+      }
+  };
+
+  const handleAnalysisAddToPlan = async (data: any) => {
+      if (!activePlanId) {
+          alert("Please create or select a meal plan first.");
+          return;
+      }
+
+      try {
+          // 1. Save meal first (backend requirement for relational integrity)
+          let mealToSave: NutritionInfo = data;
+          if (!data.ingredients && data.recipeName) {
+             mealToSave = {
+                mealName: data.recipeName,
+                totalCalories: data.nutrition.totalCalories,
+                totalProtein: data.nutrition.totalProtein,
+                totalCarbs: data.nutrition.totalCarbs,
+                totalFat: data.nutrition.totalFat,
+                ingredients: [],
+                recipe: data,
+                source: 'pantry'
+             };
+          }
+
+          const saved = await apiService.saveMeal(mealToSave);
+          
+          // 2. Add to Plan
+          await apiService.addMealToPlan(activePlanId, saved.id, { day: 'Today', slot: 'Snack' });
+          
+          await loadAllData();
+          setShowAnalysisModal(false);
+          alert("Added to Plan!");
+      } catch (e) {
+          alert("Failed to add to plan.");
       }
   };
 
   const onProxySelect = (client: { id: string; name: string }) => {
       console.log("Proxy selected:", client);
       alert(`Switching to proxy view for ${client.name}. This is a simulation of coach access.`);
-      // In a real implementation, this would switch the auth context or data context to the client's ID.
   };
 
   // --- Handlers ---
@@ -181,8 +297,10 @@ const App: React.FC = () => {
       onRemoveFromPlan: handleRemoveFromPlan, onQuickAdd: handleQuickAdd, 
       onGenerateMedical: handleGenerateMedical, medicalPlannerState, 
       onAddMealToLibrary: handleSaveMeal, onDeleteMeal: handleDeleteMeal, 
-      onSelectMeal: () => {}, 
-      onScanClick: () => handleCaptureClick('meal')
+      onSelectMeal: (meal: NutritionInfo) => { setAnalysisResult(meal); setShowAnalysisModal(true); }, 
+      onScanClick: () => handleCaptureClick('meal'),
+      onManualLibraryAdd: (q: string) => handleCaptureComplete(null, 'search', undefined, q),
+      onManualLogAdd: (q: string) => handleCaptureComplete(null, 'search', undefined, q)
   };
 
   const bodyProps = {
@@ -202,7 +320,23 @@ const App: React.FC = () => {
 
   return (
     <>
+        {isAnalyzing && (
+            <div className="fixed inset-0 z-[120] bg-white/80 backdrop-blur-sm flex items-center justify-center">
+                <Loader message="AI Processing..." />
+            </div>
+        )}
+
         {showCapture && <CaptureFlow onClose={() => setShowCapture(false)} onCapture={handleCaptureComplete} initialMode={captureMode} />}
+        
+        {showAnalysisModal && (
+            <AnalysisResultModal 
+                nutritionData={analysisResult}
+                recipeData={analysisRecipes}
+                onClose={() => setShowAnalysisModal(false)}
+                onSave={handleAnalysisSave}
+                onAddToPlan={handleAnalysisAddToPlan}
+            />
+        )}
         
         {isMobile ? (
             <MobileApp 

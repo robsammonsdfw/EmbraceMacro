@@ -350,6 +350,16 @@ export const handler = async (event) => {
             return sendResponse(200, await callGemini(prompt, base64Image, mimeType));
         }
 
+        // --- SEARCH FOOD (NEW) ---
+        if (path.includes('/search-food') && httpMethod === 'GET') {
+            const query = event.queryStringParameters?.q;
+            if (!query) return sendResponse(400, {error: "Query required"});
+            const prompt = `Provide nutritional info for: ${query}. Return JSON: { "mealName": "${query}", "totalCalories": number, "totalProtein": number, "totalCarbs": number, "totalFat": number, "ingredients": [ { "name": "${query}", "weightGrams": 100, "calories": number, "protein": number, "carbs": number, "fat": number } ] }`;
+            const model = 'gemini-3-flash-preview'; 
+            const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json" } });
+            return sendResponse(200, JSON.parse(response.text));
+        }
+
         // --- FALLBACK ---
         return sendResponse(404, { error: `Route not found: ${httpMethod} ${path}` });
 
