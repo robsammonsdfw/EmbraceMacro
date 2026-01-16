@@ -12,8 +12,8 @@ const CORS_HEADERS = {
 
 const JWT_SECRET = 'embrace-health-secret'; // In prod, use process.env.JWT_SECRET
 
-// Initialize Gemini
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Initialize Gemini - prioritize user's specific key variable
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || process.env.API_KEY });
 
 const sendResponse = (statusCode, body) => ({
     statusCode,
