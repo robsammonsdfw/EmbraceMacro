@@ -16,7 +16,30 @@ To prevent `413 Request Entity Too Large` errors, **NEVER** return Base64 image 
 
 ---
 
-## 1. `backend/index.mjs` (Router Checklist)
+## 1. Feature Regression Checklist (Production Bible)
+*Every code update MUST verify these JSON structures are maintained.*
+
+### 📸 MacrosChef (`POST /analyze-image`)
+- [ ] **Meal Name & Macros:** Returns `mealName`, `totalCalories`, `totalProtein`, `totalCarbs`, `totalFat`.
+- [ ] **Ingredients:** Returns `ingredients` array (used by Macros Tab).
+- [ ] **Recipe Integration:** Returns `recipe` object with `instructions` array and `ingredients` array (used by Recipe Tab).
+- [ ] **Kitchen Tools:** Returns `kitchenTools` array of objects `{name, use, essential}` (used by Tools Tab).
+
+### 👨‍🍳 MasterChef (`POST /analyze-restaurant-meal`)
+- [ ] **Consistent Structure:** Must return **exact same structure** as MacrosChef, especially `recipe` and `kitchenTools`.
+- [ ] **Source Tagging:** Frontend handles `source: 'restaurant'` but backend structure must remain identical for the modal to work.
+
+### 🥫 PantryChef (`POST /get-recipes-from-image`)
+- [ ] **Array Return:** Must return an **Array** of recipe objects (not a single object).
+- [ ] **Recipe Objects:** Each item must contain `recipeName`, `description`, `ingredients`, `instructions`, `nutrition`.
+
+### 💪 Form AI (`POST /analyze-form`)
+- [ ] **Scoring:** Returns `score` (0-100) and `feedback` string.
+- [ ] **Boolean:** Returns `isCorrect` boolean.
+
+---
+
+## 2. `backend/index.mjs` (Router Checklist)
 *Ensure all the following route patterns exist and match their HTTP methods.*
 
 ### 🟢 Core & Auth
@@ -90,7 +113,7 @@ To prevent `413 Request Entity Too Large` errors, **NEVER** return Base64 image 
 
 ---
 
-## 2. `backend/services/databaseService.mjs` (Export Checklist)
+## 3. `backend/services/databaseService.mjs` (Export Checklist)
 *Ensure these functions are exported. If modifying SQL, ALWAYS check the "Strip Image" logic.*
 
 ### Core
@@ -134,7 +157,7 @@ To prevent `413 Request Entity Too Large` errors, **NEVER** return Base64 image 
 
 ---
 
-## 3. Shopify Authentication Rules
+## 4. Shopify Authentication Rules
 *Strict guidelines for `backend/services/shopifyService.mjs`.*
 
 - [ ] **Customer API Usage:** Authentication and customer-facing interactions **MUST** use the Shopify **Customer API (Storefront API)** context.
@@ -143,9 +166,9 @@ To prevent `413 Request Entity Too Large` errors, **NEVER** return Base64 image 
 
 ---
 
-## 4. Gemini AI Model Standards
+## 5. Gemini AI Model Standards
 *Ensure `backend/index.mjs` uses the correct models for tasks.*
 
-- [ ] **Vision Tasks (Food/Body/Pantry):** Use `gemini-2.5-flash-image`. It is optimized for low latency and high accuracy in image recognition.
-- [ ] **Text Tasks (Chat/Reasoning):** Use `gemini-3-flash-preview` or `gemini-3-pro-preview` if deep reasoning is required.
+- [ ] **Vision Tasks (Food/Body/Pantry):** Use `gemini-2.5-flash`. Do not use experimental or deprecated models.
+- [ ] **Text Tasks (Chat/Reasoning):** Use `gemini-2.5-flash` or `gemini-3-flash-preview`.
 - [ ] **Initialization:** Always use `new GoogleGenAI({ apiKey: process.env.API_KEY })`.
