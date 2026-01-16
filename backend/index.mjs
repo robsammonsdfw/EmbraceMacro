@@ -67,7 +67,9 @@ const parseBody = (event) => {
 
 // Helper for Gemini Calls
 const callGemini = async (prompt, imageBase64, mimeType = 'image/jpeg') => {
-    const model = 'gemini-2.5-flash-image';
+    // Switch to a general multimodal model for analysis. 
+    // 'gemini-2.5-flash-image' is primarily for generation and has stricter preview quotas.
+    const model = 'gemini-3-flash-preview'; 
     console.log(`DEBUG: callGemini invoked. Model: ${model}`);
     
     try {
