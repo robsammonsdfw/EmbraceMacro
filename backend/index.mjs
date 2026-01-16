@@ -18,16 +18,9 @@ const API_KEY_ENV = process.env.API_KEY;
 
 const mask = (k) => k ? `${k.substring(0, 5)}...${k.substring(k.length - 4)}` : "UNDEFINED";
 
-console.log("--- SERVER STARTUP DEBUG ---");
+// Log once on cold start
+console.log("--- SERVER COLD START ---");
 console.log(`DEBUG: GEMINI_API_KEY Status: ${GEMINI_KEY_ENV ? 'Present' : 'Missing'} (${mask(GEMINI_KEY_ENV)})`);
-console.log(`DEBUG: API_KEY Status: ${API_KEY_ENV ? 'Present' : 'Missing'} (${mask(API_KEY_ENV)})`);
-
-// Initialize Gemini - prioritize user's specific key variable
-// We create the instance here, but we will also log before usage to be sure.
-const activeKey = GEMINI_KEY_ENV || API_KEY_ENV;
-console.log(`DEBUG: Initializing GoogleGenAI with key: ${mask(activeKey)}`);
-
-const ai = new GoogleGenAI({ apiKey: activeKey });
 
 const sendResponse = (statusCode, body) => ({
     statusCode,
@@ -65,14 +58,22 @@ const parseBody = (event) => {
     }
 };
 
-// Helper for Gemini Calls
+// Helper for Gemini Calls - moved AI init here for safety
 const callGemini = async (prompt, imageBase64, mimeType = 'image/jpeg') => {
-    // Switch to a general multimodal model for analysis. 
-    // 'gemini-2.5-flash-image' is primarily for generation and has stricter preview quotas.
-    const model = 'gemini-3-flash-preview'; 
+    // Model Selection Strategy:
+    // 'gemini-3-flash-preview' is excellent but bleeding edge. 
+    // 'gemini-2.0-flash-exp' is very stable for vision.
+    // 'gemini-2.5-flash-image' caused 429s.
+    // We will try 2.0 Flash Exp for stability.
+    const model = 'gemini-2.0-flash-exp'; 
     console.log(`DEBUG: callGemini invoked. Model: ${model}`);
     
     try {
+        const activeKey = GEMINI_KEY_ENV || API_KEY_ENV;
+        if (!activeKey) throw new Error("API Key is missing in handler.");
+        
+        const ai = new GoogleGenAI({ apiKey: activeKey });
+
         const imagePart = {
             inlineData: {
                 mimeType: mimeType,
@@ -87,15 +88,17 @@ const callGemini = async (prompt, imageBase64, mimeType = 'image/jpeg') => {
         return JSON.parse(response.text);
     } catch (e) {
         console.error("Gemini Critical Error:", JSON.stringify(e, null, 2));
-        // Check for specific error codes to give better feedback in CloudWatch
         if (e.message && e.message.includes('429')) {
-             console.error("DEBUG: Quota Exceeded. Please verify the API Key has billing enabled.");
+             console.error("DEBUG: Quota Exceeded.");
         }
-        throw new Error("AI Processing Failed");
+        throw new Error("AI Processing Failed: " + (e.message || "Unknown"));
     }
 };
 
 export const handler = async (event) => {
+    // IMMEDIATE LOGGING to catch blocked requests
+    console.log(`HANDLER ENTRY: ${event.httpMethod} ${event.path}`);
+
     // Robustly handle different API Gateway payload formats (v1.0 vs v2.0)
     let path = event.path || event.rawPath || "";
     let httpMethod = event.httpMethod || event.requestContext?.http?.method || "";
@@ -339,6 +342,7 @@ export const handler = async (event) => {
         // --- AI ANALYSIS ROUTES ---
         if (path.endsWith('/analyze-image') && httpMethod === 'POST') {
             const { base64Image, mimeType } = parseBody(event);
+            console.log(`Processing image analysis. Payload size check: ${base64Image ? base64Image.length : 0} chars.`);
             const prompt = `Analyze this food. Identify the meal name, and provide nutritional estimates (calories, protein, carbs, fat) and a list of ingredients with their estimated weights. 
             Return JSON: { "mealName": string, "totalCalories": number, "totalProtein": number, "totalCarbs": number, "totalFat": number, "ingredients": [ { "name": string, "weightGrams": number, "calories": number, "protein": number, "carbs": number, "fat": number } ] }`;
             return sendResponse(200, await callGemini(prompt, base64Image, mimeType));
@@ -377,6 +381,8 @@ export const handler = async (event) => {
             const query = event.queryStringParameters?.q;
             if (!query) return sendResponse(400, {error: "Query required"});
             const prompt = `Provide nutritional info for: ${query}. Return JSON: { "mealName": "${query}", "totalCalories": number, "totalProtein": number, "totalCarbs": number, "totalFat": number, "ingredients": [ { "name": "${query}", "weightGrams": 100, "calories": number, "protein": number, "carbs": number, "fat": number } ] }`;
+            const activeKey = GEMINI_KEY_ENV || API_KEY_ENV;
+            const ai = new GoogleGenAI({ apiKey: activeKey });
             const model = 'gemini-3-flash-preview'; 
             console.log(`DEBUG: Using text model ${model}`);
             const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json" } });
@@ -401,6 +407,8 @@ export const handler = async (event) => {
               "justification": string
             }]`;
             
+            const activeKey = GEMINI_KEY_ENV || API_KEY_ENV;
+            const ai = new GoogleGenAI({ apiKey: activeKey });
             const model = 'gemini-3-flash-preview';
             console.log(`DEBUG: Using text model ${model}`);
             const response = await ai.models.generateContent({

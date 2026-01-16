@@ -47,8 +47,9 @@ const compressImage = async (base64: string, mimeType: string = 'image/jpeg'): P
 
             img.onload = () => {
                 const canvas = document.createElement('canvas');
-                const MAX_WIDTH = 800; // Limit to 800px to ensure <6MB payload
-                const MAX_HEIGHT = 800;
+                // REDUCED: Max 600px to keep payload small (<1MB target)
+                const MAX_WIDTH = 600; 
+                const MAX_HEIGHT = 600;
                 let width = img.width;
                 let height = img.height;
 
@@ -69,15 +70,14 @@ const compressImage = async (base64: string, mimeType: string = 'image/jpeg'): P
                 const ctx = canvas.getContext('2d');
                 
                 if (!ctx) {
-                    // Fallback to original if context fails
                     resolve(base64.startsWith('data:') ? base64.split(',')[1] : base64);
                     return;
                 }
                 
                 ctx.drawImage(img, 0, 0, width, height);
                 
-                // Compress to JPEG 0.7 quality
-                const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                // REDUCED: 0.5 quality for maximum compression
+                const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.5);
                 
                 // Return raw base64 string without prefix
                 resolve(compressedDataUrl.split(',')[1]);
