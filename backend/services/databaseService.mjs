@@ -108,14 +108,27 @@ const ensureTables = async (client) => {
             created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
             metadata JSONB DEFAULT '{}'
         );
+        CREATE TABLE IF NOT EXISTS grocery_lists (
+            id SERIAL PRIMARY KEY,
+            user_id VARCHAR(255) NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            is_active BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
         CREATE TABLE IF NOT EXISTS grocery_list_items (
             id SERIAL PRIMARY KEY,
             user_id VARCHAR(255) NOT NULL,
+            list_id INT, 
             name VARCHAR(255) NOT NULL,
             checked BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         );
     `);
+
+    // Migration: Add list_id to items if it doesn't exist
+    try {
+        await client.query(`ALTER TABLE grocery_list_items ADD COLUMN IF NOT EXISTS list_id INT;`);
+    } catch (e) { console.warn("Skipping migration for grocery_list_items", e.message); }
 
     // Logs (Pantry, Restaurant, Body, Form)
     await client.query(`
@@ -584,36 +597,105 @@ export const removeMealFromPlanItem = async (userId, planItemId) => {
 
 // --- Grocery List Persistence ---
 
-export const getGroceryList = async (userId) => {
+export const getGroceryLists = async (userId) => {
     const client = await pool.connect();
     try {
-        // Ensure table exists
         await ensureTables(client);
         
+        // If no lists exist, create a default one
+        const check = await client.query('SELECT id FROM grocery_lists WHERE user_id = $1 LIMIT 1', [userId]);
+        if (check.rows.length === 0) {
+            await client.query(`INSERT INTO grocery_lists (user_id, name, is_active) VALUES ($1, 'Main List', TRUE)`, [userId]);
+        }
+
         const query = `
-            SELECT id, name, checked FROM grocery_list_items 
+            SELECT id, name, is_active, created_at 
+            FROM grocery_lists 
             WHERE user_id = $1 
-            ORDER BY name ASC;
+            ORDER BY created_at DESC;
         `;
         const res = await client.query(query, [userId]);
         return res.rows;
     } catch (err) {
-        console.error('Database error in getGroceryList:', err);
-        throw new Error('Could not retrieve grocery list.');
+        console.error('Database error in getGroceryLists:', err);
+        throw new Error('Could not retrieve grocery lists.');
     } finally {
         client.release();
     }
 };
 
-export const addGroceryItem = async (userId, name) => {
+export const getGroceryListItems = async (userId, listId) => {
     const client = await pool.connect();
     try {
         const query = `
-            INSERT INTO grocery_list_items (user_id, name, checked)
-            VALUES ($1, $2, FALSE)
-            RETURNING id, name, checked;
+            SELECT id, name, checked FROM grocery_list_items 
+            WHERE user_id = $1 AND list_id = $2
+            ORDER BY name ASC;
+        `;
+        const res = await client.query(query, [userId, listId]);
+        return res.rows;
+    } catch (err) {
+        console.error('Database error in getGroceryListItems:', err);
+        throw new Error('Could not retrieve grocery items.');
+    } finally {
+        client.release();
+    }
+};
+
+// Legacy fallback
+export const getGroceryList = async (userId) => {
+    // Falls back to the first active list if no ID provided
+    const lists = await getGroceryLists(userId);
+    if (lists.length > 0) return getGroceryListItems(userId, lists[0].id);
+    return [];
+};
+
+export const createGroceryList = async (userId, name) => {
+    const client = await pool.connect();
+    try {
+        // Set others to inactive first
+        await client.query(`UPDATE grocery_lists SET is_active = FALSE WHERE user_id = $1`, [userId]);
+        
+        const query = `
+            INSERT INTO grocery_lists (user_id, name, is_active)
+            VALUES ($1, $2, TRUE)
+            RETURNING id, name, is_active;
         `;
         const res = await client.query(query, [userId, name]);
+        return res.rows[0];
+    } catch (err) {
+        console.error('Database error in createGroceryList:', err);
+        throw new Error('Could not create grocery list.');
+    } finally {
+        client.release();
+    }
+};
+
+export const deleteGroceryList = async (userId, listId) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        await client.query(`DELETE FROM grocery_list_items WHERE list_id = $1 AND user_id = $2`, [listId, userId]);
+        await client.query(`DELETE FROM grocery_lists WHERE id = $1 AND user_id = $2`, [listId, userId]);
+        await client.query('COMMIT');
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Database error in deleteGroceryList:', err);
+        throw new Error('Could not delete grocery list.');
+    } finally {
+        client.release();
+    }
+};
+
+export const addGroceryItem = async (userId, listId, name) => {
+    const client = await pool.connect();
+    try {
+        const query = `
+            INSERT INTO grocery_list_items (user_id, list_id, name, checked)
+            VALUES ($1, $2, $3, FALSE)
+            RETURNING id, name, checked;
+        `;
+        const res = await client.query(query, [userId, listId, name]);
         return res.rows[0];
     } catch (err) {
         console.error('Database error in addGroceryItem:', err);
@@ -635,10 +717,10 @@ export const removeGroceryItem = async (userId, itemId) => {
     }
 };
 
-export const generateGroceryList = async (userId, planIds = []) => {
+export const generateGroceryList = async (userId, listId, planIds = []) => {
     const client = await pool.connect();
     if (planIds.length === 0) {
-        return getGroceryList(userId);
+        return getGroceryListItems(userId, listId);
     }
     
     try {
@@ -663,11 +745,21 @@ export const generateGroceryList = async (userId, planIds = []) => {
         
         if (uniqueIngredientNames.length > 0) {
              for (const name of uniqueIngredientNames) {
-                 await client.query(`INSERT INTO grocery_list_items (user_id, name) VALUES ($1, $2)`, [userId, name]);
+                 // Check dupe in list
+                 const check = await client.query(
+                     `SELECT id FROM grocery_list_items WHERE user_id = $1 AND list_id = $2 AND name = $3`,
+                     [userId, listId, name]
+                 );
+                 if (check.rows.length === 0) {
+                     await client.query(
+                         `INSERT INTO grocery_list_items (user_id, list_id, name) VALUES ($1, $2, $3)`, 
+                         [userId, listId, name]
+                     );
+                 }
              }
         }
         await client.query('COMMIT');
-        return getGroceryList(userId);
+        return getGroceryListItems(userId, listId);
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Database transaction error in generateGroceryList:', err);
@@ -696,18 +788,18 @@ export const updateGroceryListItem = async (userId, itemId, checked) => {
     }
 };
 
-export const clearGroceryList = async (userId, type) => {
+export const clearGroceryList = async (userId, listId, type) => {
     const client = await pool.connect();
     try {
         let query;
         if (type === 'checked') {
-            query = `DELETE FROM grocery_list_items WHERE user_id = $1 AND checked = TRUE;`;
+            query = `DELETE FROM grocery_list_items WHERE user_id = $1 AND list_id = $2 AND checked = TRUE;`;
         } else if (type === 'all') {
-            query = `DELETE FROM grocery_list_items WHERE user_id = $1;`;
+            query = `DELETE FROM grocery_list_items WHERE user_id = $1 AND list_id = $2;`;
         } else {
             throw new Error("Invalid clear type.");
         }
-        await client.query(query, [userId]);
+        await client.query(query, [userId, listId]);
     } catch (err) {
         console.error('Database error in clearGroceryList:', err);
         throw new Error('Could not clear grocery list.');

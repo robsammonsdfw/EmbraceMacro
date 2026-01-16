@@ -187,19 +187,29 @@ export const handler = async (event) => {
 
         // --- GROCERY LISTS ---
         if (path.endsWith('/grocery/lists') && httpMethod === 'GET') {
-             return sendResponse(200, [{ id: 1, name: "Main List", is_active: true }]);
+             // REAL IMPLEMENTATION: Query the database
+             return sendResponse(200, await db.getGroceryLists(userId));
         }
         if (path.endsWith('/grocery/lists') && httpMethod === 'POST') {
-             return sendResponse(200, { id: 1, name: "Main List", is_active: true });
+             // REAL IMPLEMENTATION: Create in database
+             const { name } = parseBody(event);
+             return sendResponse(200, await db.createGroceryList(userId, name));
         }
 
         const listItemsMatch = path.match(/\/grocery\/lists\/(\d+)\/items$/);
         if (listItemsMatch) {
-            if (httpMethod === 'GET') return sendResponse(200, await db.getGroceryList(userId));
+            const listId = parseInt(listItemsMatch[1]);
+            if (httpMethod === 'GET') return sendResponse(200, await db.getGroceryListItems(userId, listId));
             if (httpMethod === 'POST') {
                 const { name } = parseBody(event);
-                return sendResponse(200, await db.addGroceryItem(userId, name));
+                return sendResponse(200, await db.addGroceryItem(userId, listId, name));
             }
+        }
+        
+        // Legacy/Fallback for endpoints without list ID
+        if (path.endsWith('/grocery/items') && httpMethod === 'GET') {
+             // Default to fetching from the first available list
+             return sendResponse(200, await db.getGroceryList(userId));
         }
 
         const groceryItemMatch = path.match(/\/grocery\/items\/(\d+)$/);
@@ -214,17 +224,27 @@ export const handler = async (event) => {
                 return sendResponse(200, { success: true });
             }
         }
+        
+        // List deletion
+        const groceryListDeleteMatch = path.match(/\/grocery\/lists\/(\d+)$/);
+        if (groceryListDeleteMatch && httpMethod === 'DELETE') {
+            const listId = parseInt(groceryListDeleteMatch[1]);
+            await db.deleteGroceryList(userId, listId);
+            return sendResponse(200, { success: true });
+        }
 
         const importMatch = path.match(/\/grocery\/lists\/(\d+)\/import$/);
         if (importMatch && httpMethod === 'POST') {
+            const listId = parseInt(importMatch[1]);
             const { planIds } = parseBody(event);
-            return sendResponse(200, await db.generateGroceryList(userId, planIds));
+            return sendResponse(200, await db.generateGroceryList(userId, listId, planIds));
         }
 
         const clearMatch = path.match(/\/grocery\/lists\/(\d+)\/clear$/);
         if (clearMatch && httpMethod === 'POST') {
+            const listId = parseInt(clearMatch[1]);
             const { type } = parseBody(event);
-            await db.clearGroceryList(userId, type);
+            await db.clearGroceryList(userId, listId, type);
             return sendResponse(200, { success: true });
         }
 
