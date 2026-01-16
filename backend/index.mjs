@@ -431,7 +431,24 @@ export const handler = async (event) => {
 
         if (path.endsWith('/analyze-health-screenshot') && httpMethod === 'POST') {
             const { base64Image, mimeType } = parseBody(event);
-            const prompt = `Analyze this screenshot of a health app. Extract key metrics if available: steps, active calories, resting calories, distance (miles), flights climbed, heart rate, resting heart rate, sleep minutes, sleep score, spo2, vo2 max, water (oz), mindfulness minutes, blood pressure (systolic/diastolic), body fat %, weight (lbs), bmi, glucose. Return JSON matching the structure: { steps: number, activeCalories: number, ... }. Omit fields not found.`;
+            // Strict prompt to ensure matching keys for the DB mapper
+            const prompt = `Analyze this screenshot of a health app (Apple Health, Fitbit, etc.). 
+            Extract any visible metrics. Return a valid JSON object using strictly these camelCase keys where available:
+            - steps (number)
+            - activeCalories (number)
+            - restingCalories (number)
+            - distanceMiles (number)
+            - flightsClimbed (number)
+            - heartRate (number)
+            - restingHeartRate (number)
+            - bloodPressure (string, e.g. "120/80")
+            - weightLbs (number)
+            - bodyFatPercentage (number)
+            - bmi (number)
+            - sleepScore (number)
+            - vo2Max (number)
+            
+            Ignore metrics not present in the image.`;
             return sendResponse(200, await callGemini(prompt, base64Image, mimeType));
         }
 

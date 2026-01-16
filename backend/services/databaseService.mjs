@@ -148,6 +148,44 @@ const ensureTables = async (client) => {
             created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         );
     `);
+
+    // Health Metrics - Expanded Schema
+    await client.query(`
+        CREATE TABLE IF NOT EXISTS health_metrics (
+            user_id VARCHAR(255) PRIMARY KEY,
+            steps INT DEFAULT 0,
+            active_calories INT DEFAULT 0,
+            resting_calories INT DEFAULT 0,
+            distance_miles FLOAT DEFAULT 0,
+            flights_climbed INT DEFAULT 0,
+            heart_rate INT DEFAULT 0,
+            resting_heart_rate INT DEFAULT 0,
+            blood_pressure_systolic INT DEFAULT 0,
+            blood_pressure_diastolic INT DEFAULT 0,
+            weight_lbs FLOAT DEFAULT 0,
+            body_fat_percentage FLOAT DEFAULT 0,
+            bmi FLOAT DEFAULT 0,
+            sleep_score INT DEFAULT 0,
+            vo2_max FLOAT DEFAULT 0,
+            last_synced TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+    `);
+    
+    // Attempt to add missing columns if table already exists (Migration Logic)
+    const addColumnSafe = async (col, type) => {
+        try {
+            await client.query(`ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS ${col} ${type};`);
+        } catch (e) { console.warn(`Skipping col add ${col}`, e.message); }
+    };
+    
+    await addColumnSafe('resting_heart_rate', 'INT DEFAULT 0');
+    await addColumnSafe('blood_pressure_systolic', 'INT DEFAULT 0');
+    await addColumnSafe('blood_pressure_diastolic', 'INT DEFAULT 0');
+    await addColumnSafe('weight_lbs', 'FLOAT DEFAULT 0');
+    await addColumnSafe('body_fat_percentage', 'FLOAT DEFAULT 0');
+    await addColumnSafe('bmi', 'FLOAT DEFAULT 0');
+    await addColumnSafe('sleep_score', 'INT DEFAULT 0');
+    await addColumnSafe('vo2_max', 'FLOAT DEFAULT 0');
 };
 
 export const getShopifyCustomerId = async (userId) => {
@@ -1012,6 +1050,9 @@ export const getSleepRecords = async (userId) => {
 export const getHealthMetrics = async (userId) => {
     const client = await pool.connect();
     try { 
+        // Ensure tables exist before querying
+        await ensureTables(client);
+        
         const res = await client.query(`
             SELECT 
                 steps, 
@@ -1020,44 +1061,115 @@ export const getHealthMetrics = async (userId) => {
                 distance_miles as "distanceMiles", 
                 flights_climbed as "flightsClimbed", 
                 heart_rate as "heartRate", 
+                resting_heart_rate as "restingHeartRate",
+                blood_pressure_systolic as "bloodPressureSystolic",
+                blood_pressure_diastolic as "bloodPressureDiastolic",
+                weight_lbs as "weightLbs",
+                body_fat_percentage as "bodyFatPercentage",
+                bmi as "bmi",
+                sleep_score as "sleepScore",
+                vo2_max as "vo2Max",
                 last_synced as "lastSynced"
             FROM health_metrics WHERE user_id = $1
         `, [userId]);
-        return res.rows[0] || { steps: 0, activeCalories: 0, restingCalories: 0, distanceMiles: 0, flightsClimbed: 0, heartRate: 0 }; 
+        return res.rows[0] || { 
+            steps: 0, activeCalories: 0, restingCalories: 0, distanceMiles: 0, 
+            flightsClimbed: 0, heartRate: 0, restingHeartRate: 0,
+            bloodPressureSystolic: 0, bloodPressureDiastolic: 0, weightLbs: 0, 
+            bodyFatPercentage: 0, bmi: 0, sleepScore: 0, vo2Max: 0
+        }; 
     } finally { client.release(); }
 };
 
 export const syncHealthMetrics = async (userId, stats) => {
     const client = await pool.connect();
     try {
-        const q = `INSERT INTO health_metrics (user_id, steps, active_calories, resting_calories, distance_miles, flights_climbed, heart_rate, last_synced)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
-                   ON CONFLICT (user_id) DO UPDATE SET 
-                        steps = GREATEST(health_metrics.steps, EXCLUDED.steps), 
-                        active_calories = GREATEST(health_metrics.active_calories, EXCLUDED.active_calories),
-                        resting_calories = GREATEST(health_metrics.resting_calories, EXCLUDED.resting_calories),
-                        distance_miles = GREATEST(health_metrics.distance_miles, EXCLUDED.distance_miles),
-                        flights_climbed = GREATEST(health_metrics.flights_climbed, EXCLUDED.flights_climbed),
-                        heart_rate = GREATEST(health_metrics.heart_rate, EXCLUDED.heart_rate),
-                        last_synced = CURRENT_TIMESTAMP 
-                   RETURNING 
-                        steps, 
-                        active_calories as "activeCalories", 
-                        resting_calories as "restingCalories", 
-                        distance_miles as "distanceMiles", 
-                        flights_climbed as "flightsClimbed", 
-                        heart_rate as "heartRate", 
-                        last_synced as "lastSynced"`;
+        await ensureTables(client);
+
+        // Normalize keys (handle spaces, snake_case, etc.)
+        const normalize = (key) => key.toLowerCase().replace(/[\s_]+/g, '');
+        const map = {};
+        Object.keys(stats).forEach(k => map[normalize(k)] = stats[k]);
+
+        // Helper to find value from map
+        const getVal = (keys) => {
+            for (const k of keys) {
+                if (map[normalize(k)] !== undefined) return map[normalize(k)];
+            }
+            return 0;
+        };
+
+        // Parse BP String (e.g. "120/80")
+        let bpSys = getVal(['bloodPressureSystolic', 'systolic']);
+        let bpDia = getVal(['bloodPressureDiastolic', 'diastolic']);
+        const bpString = getVal(['bloodPressure', 'bp']);
+        if (typeof bpString === 'string' && bpString.includes('/')) {
+            const parts = bpString.split('/');
+            bpSys = parseInt(parts[0]) || 0;
+            bpDia = parseInt(parts[1]) || 0;
+        }
+
+        const q = `INSERT INTO health_metrics (
+            user_id, steps, active_calories, resting_calories, distance_miles, flights_climbed, 
+            heart_rate, resting_heart_rate, blood_pressure_systolic, blood_pressure_diastolic,
+            weight_lbs, body_fat_percentage, bmi, sleep_score, vo2_max, last_synced
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, CURRENT_TIMESTAMP)
+        ON CONFLICT (user_id) DO UPDATE SET 
+            steps = GREATEST(health_metrics.steps, EXCLUDED.steps), 
+            active_calories = GREATEST(health_metrics.active_calories, EXCLUDED.active_calories),
+            resting_calories = GREATEST(health_metrics.resting_calories, EXCLUDED.resting_calories),
+            distance_miles = GREATEST(health_metrics.distance_miles, EXCLUDED.distance_miles),
+            flights_climbed = GREATEST(health_metrics.flights_climbed, EXCLUDED.flights_climbed),
+            heart_rate = CASE WHEN EXCLUDED.heart_rate > 0 THEN EXCLUDED.heart_rate ELSE health_metrics.heart_rate END,
+            resting_heart_rate = CASE WHEN EXCLUDED.resting_heart_rate > 0 THEN EXCLUDED.resting_heart_rate ELSE health_metrics.resting_heart_rate END,
+            blood_pressure_systolic = CASE WHEN EXCLUDED.blood_pressure_systolic > 0 THEN EXCLUDED.blood_pressure_systolic ELSE health_metrics.blood_pressure_systolic END,
+            blood_pressure_diastolic = CASE WHEN EXCLUDED.blood_pressure_diastolic > 0 THEN EXCLUDED.blood_pressure_diastolic ELSE health_metrics.blood_pressure_diastolic END,
+            weight_lbs = CASE WHEN EXCLUDED.weight_lbs > 0 THEN EXCLUDED.weight_lbs ELSE health_metrics.weight_lbs END,
+            body_fat_percentage = CASE WHEN EXCLUDED.body_fat_percentage > 0 THEN EXCLUDED.body_fat_percentage ELSE health_metrics.body_fat_percentage END,
+            bmi = CASE WHEN EXCLUDED.bmi > 0 THEN EXCLUDED.bmi ELSE health_metrics.bmi END,
+            sleep_score = CASE WHEN EXCLUDED.sleep_score > 0 THEN EXCLUDED.sleep_score ELSE health_metrics.sleep_score END,
+            vo2_max = CASE WHEN EXCLUDED.vo2_max > 0 THEN EXCLUDED.vo2_max ELSE health_metrics.vo2_max END,
+            last_synced = CURRENT_TIMESTAMP 
+        RETURNING *`;
+
         const res = await client.query(q, [
             userId, 
-            stats.steps || 0, 
-            stats.activeCalories || 0, 
-            stats.restingCalories || 0, 
-            stats.distanceMiles || 0, 
-            stats.flightsClimbed || 0, 
-            stats.heartRate || 0
+            getVal(['steps', 'stepcount']), 
+            getVal(['activeCalories', 'activeEnergy']), 
+            getVal(['restingCalories', 'restingEnergy']), 
+            getVal(['distanceMiles', 'distance']), 
+            getVal(['flightsClimbed', 'flights']), 
+            getVal(['heartRate', 'hr', 'pulse']), 
+            getVal(['restingHeartRate', 'rhr']),
+            bpSys, 
+            bpDia,
+            getVal(['weight', 'weightLbs', 'bodyMass']),
+            getVal(['bodyFat', 'bodyFatPercentage']),
+            getVal(['bmi', 'bodyMassIndex']),
+            getVal(['sleepScore', 'sleepQuality']),
+            getVal(['vo2Max', 'cardioFitness'])
         ]);
-        return res.rows[0];
+        
+        // Map back to camelCase for frontend
+        const r = res.rows[0];
+        return {
+            steps: r.steps,
+            activeCalories: r.active_calories,
+            restingCalories: r.resting_calories,
+            distanceMiles: r.distance_miles,
+            flightsClimbed: r.flights_climbed,
+            heartRate: r.heart_rate,
+            restingHeartRate: r.resting_heart_rate,
+            bloodPressureSystolic: r.blood_pressure_systolic,
+            bloodPressureDiastolic: r.blood_pressure_diastolic,
+            weightLbs: r.weight_lbs,
+            bodyFatPercentage: r.body_fat_percentage,
+            bmi: r.bmi,
+            sleepScore: r.sleep_score,
+            vo2Max: r.vo2_max,
+            lastSynced: r.last_synced
+        };
     } finally { client.release(); }
 };
 
