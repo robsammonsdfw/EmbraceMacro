@@ -354,15 +354,63 @@ export const handler = async (event) => {
         if (path.endsWith('/analyze-image') && httpMethod === 'POST') {
             const { base64Image, mimeType } = parseBody(event);
             console.log(`Processing image analysis. Payload size check: ${base64Image ? base64Image.length : 0} chars.`);
-            const prompt = `Analyze this food. Identify the meal name, and provide nutritional estimates (calories, protein, carbs, fat) and a list of ingredients with their estimated weights. 
-            Return JSON: { "mealName": string, "totalCalories": number, "totalProtein": number, "totalCarbs": number, "totalFat": number, "ingredients": [ { "name": string, "weightGrams": number, "calories": number, "protein": number, "carbs": number, "fat": number } ] }`;
+            
+            // EXPANDED PROMPT: Explicitly request 'recipe' and 'kitchenTools'
+            const prompt = `Analyze this food image. 
+            1. Identify the meal name.
+            2. Estimate total calories, protein, carbs, fat.
+            3. List ingredients with estimated weights and individual macros.
+            4. Reverse-engineer a recipe to cook this dish (description, ingredients list with quantities, step-by-step instructions).
+            5. List the kitchen tools/utensils required to cook this (e.g., 'Frying Pan', 'Blender').
+
+            Return valid JSON matching this structure:
+            {
+              "mealName": "string",
+              "totalCalories": number,
+              "totalProtein": number,
+              "totalCarbs": number,
+              "totalFat": number,
+              "ingredients": [
+                { "name": "string", "weightGrams": number, "calories": number, "protein": number, "carbs": number, "fat": number }
+              ],
+              "recipe": {
+                "recipeName": "string",
+                "description": "string",
+                "ingredients": [ { "name": "string", "quantity": "string" } ],
+                "instructions": [ "string" ],
+                "nutrition": { "totalCalories": number, "totalProtein": number, "totalCarbs": number, "totalFat": number }
+              },
+              "kitchenTools": [
+                { "name": "string", "use": "string", "essential": boolean }
+              ]
+            }`;
+            
             return sendResponse(200, await callGemini(prompt, base64Image, mimeType));
         }
 
         if (path.endsWith('/analyze-restaurant-meal') && httpMethod === 'POST') {
             const { base64Image, mimeType } = parseBody(event);
-            const prompt = `Analyze this restaurant dish. Reverse engineer it into a recipe.
-            Return JSON: { "mealName": string, "totalCalories": number, "totalProtein": number, "totalCarbs": number, "totalFat": number, "recipe": { "recipeName": string, "description": string, "ingredients": [{"name": string, "quantity": string}], "instructions": [string], "nutrition": { "totalCalories": number, "totalProtein": number, "totalCarbs": number, "totalFat": number } } }`;
+            
+            // EXPANDED PROMPT for Restaurant Meal to match consistent structure
+            const prompt = `Analyze this restaurant dish. Reverse engineer it into a home-cookable recipe.
+            Return JSON: 
+            { 
+                "mealName": string, 
+                "totalCalories": number, 
+                "totalProtein": number, 
+                "totalCarbs": number, 
+                "totalFat": number, 
+                "recipe": { 
+                    "recipeName": string, 
+                    "description": string, 
+                    "ingredients": [{"name": string, "quantity": string}], 
+                    "instructions": [string], 
+                    "nutrition": { "totalCalories": number, "totalProtein": number, "totalCarbs": number, "totalFat": number } 
+                },
+                "kitchenTools": [
+                    { "name": "string", "use": "string", "essential": boolean }
+                ]
+            }`;
             return sendResponse(200, await callGemini(prompt, base64Image, mimeType));
         }
 
