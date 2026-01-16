@@ -360,6 +360,33 @@ export const handler = async (event) => {
             return sendResponse(200, JSON.parse(response.text));
         }
 
+        // --- MEDICAL PLANNER (NEW) ---
+        if (path.endsWith('/meal-suggestions') && httpMethod === 'POST') {
+            const { conditions, cuisine, duration } = parseBody(event);
+            const prompt = `Generate 3 diverse meal suggestions suitable for someone with the following conditions: ${conditions.join(', ')}. 
+            The cuisine preference is ${cuisine}. Duration focus: ${duration}.
+            For each meal, provide a detailed nutritional breakdown (total calories, protein, carbs, fat) and a list of ingredients with their individual nutritional info. 
+            Also, include a brief justification for why the meal is appropriate.
+            Return a JSON Array of objects matching this structure:
+            [{
+              "mealName": string,
+              "totalCalories": number,
+              "totalProtein": number,
+              "totalCarbs": number,
+              "totalFat": number,
+              "ingredients": [{ "name": string, "weightGrams": number, "calories": number, "protein": number, "carbs": number, "fat": number }],
+              "justification": string
+            }]`;
+            
+            const model = 'gemini-3-flash-preview';
+            const response = await ai.models.generateContent({
+                model,
+                contents: prompt,
+                config: { responseMimeType: "application/json" }
+            });
+            return sendResponse(200, JSON.parse(response.text));
+        }
+
         // --- FALLBACK ---
         return sendResponse(404, { error: `Route not found: ${httpMethod} ${path}` });
 
