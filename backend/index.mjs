@@ -62,8 +62,8 @@ const parseBody = (event) => {
 // Helper for Gemini Calls - moved AI init here for safety
 const callGemini = async (prompt, imageBase64, mimeType = 'image/jpeg') => {
     // Model Selection Strategy:
-    // 'gemini-3-flash-preview' is the current recommended multimodal model.
-    const model = 'gemini-3-flash-preview'; 
+    // User confirmed 'gemini-2.5-flash' works on their key tier.
+    const model = 'gemini-2.5-flash'; 
     console.log(`DEBUG: callGemini invoked. Model: ${model}`);
     
     try {
@@ -395,7 +395,7 @@ export const handler = async (event) => {
             
             const activeKey = API_KEY_ENV || GEMINI_KEY_ENV;
             const ai = new GoogleGenAI({ apiKey: activeKey });
-            const model = 'gemini-3-flash-preview'; 
+            const model = 'gemini-2.5-flash'; 
             console.log(`DEBUG: Using text model ${model}`);
             const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json" } });
             return sendResponse(200, JSON.parse(response.text));
@@ -421,7 +421,7 @@ export const handler = async (event) => {
             
             const activeKey = API_KEY_ENV || GEMINI_KEY_ENV;
             const ai = new GoogleGenAI({ apiKey: activeKey });
-            const model = 'gemini-3-flash-preview';
+            const model = 'gemini-2.5-flash';
             console.log(`DEBUG: Using text model ${model}`);
             const response = await ai.models.generateContent({
                 model,
