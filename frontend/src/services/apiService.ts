@@ -78,9 +78,12 @@ const compressImage = async (base64: string, mimeType: string = 'image/jpeg'): P
                 
                 // REDUCED: 0.5 quality for maximum compression
                 const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.5);
+                const rawBase64 = compressedDataUrl.split(',')[1];
+                
+                console.log(`Image Compressed. Original: ${base64.length} chars. Compressed: ${rawBase64.length} chars.`);
                 
                 // Return raw base64 string without prefix
-                resolve(compressedDataUrl.split(',')[1]);
+                resolve(rawBase64);
             };
 
             img.onerror = (e) => {

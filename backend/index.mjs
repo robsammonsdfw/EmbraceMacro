@@ -21,6 +21,7 @@ const mask = (k) => k ? `${k.substring(0, 5)}...${k.substring(k.length - 4)}` : 
 // Log once on cold start
 console.log("--- SERVER COLD START ---");
 console.log(`DEBUG: GEMINI_API_KEY Status: ${GEMINI_KEY_ENV ? 'Present' : 'Missing'} (${mask(GEMINI_KEY_ENV)})`);
+console.log(`DEBUG: API_KEY Status: ${API_KEY_ENV ? 'Present' : 'Missing'} (${mask(API_KEY_ENV)})`);
 
 const sendResponse = (statusCode, body) => ({
     statusCode,
@@ -61,16 +62,18 @@ const parseBody = (event) => {
 // Helper for Gemini Calls - moved AI init here for safety
 const callGemini = async (prompt, imageBase64, mimeType = 'image/jpeg') => {
     // Model Selection Strategy:
-    // 'gemini-3-flash-preview' is excellent but bleeding edge. 
-    // 'gemini-2.0-flash-exp' is very stable for vision.
-    // 'gemini-2.5-flash-image' caused 429s.
-    // We will try 2.0 Flash Exp for stability.
-    const model = 'gemini-2.0-flash-exp'; 
+    // 'gemini-3-flash-preview' is the current recommended multimodal model.
+    const model = 'gemini-3-flash-preview'; 
     console.log(`DEBUG: callGemini invoked. Model: ${model}`);
     
     try {
-        const activeKey = GEMINI_KEY_ENV || API_KEY_ENV;
-        if (!activeKey) throw new Error("API Key is missing in handler.");
+        // Prioritize API_KEY as per standard, fallback to GEMINI_API_KEY
+        const activeKey = API_KEY_ENV || GEMINI_KEY_ENV;
+        
+        if (!activeKey) {
+            console.error("CRITICAL: No API Key found in process.env.API_KEY or process.env.GEMINI_API_KEY");
+            throw new Error("Server Misconfiguration: Missing API Key");
+        }
         
         const ai = new GoogleGenAI({ apiKey: activeKey });
 
@@ -85,13 +88,21 @@ const callGemini = async (prompt, imageBase64, mimeType = 'image/jpeg') => {
             contents: { parts: [imagePart, { text: prompt }] },
             config: { responseMimeType: "application/json" }
         });
+        
+        if (!response.text) {
+            throw new Error("Empty response text from Gemini");
+        }
+
         return JSON.parse(response.text);
     } catch (e) {
-        console.error("Gemini Critical Error:", JSON.stringify(e, null, 2));
+        // FIX: Log the actual error message and stack, not just stringify (which returns {} for Error objects)
+        console.error("Gemini Critical Error Message:", e.message);
+        console.error("Gemini Critical Error Stack:", e.stack);
+        
         if (e.message && e.message.includes('429')) {
              console.error("DEBUG: Quota Exceeded.");
         }
-        throw new Error("AI Processing Failed: " + (e.message || "Unknown"));
+        throw new Error("AI Processing Failed: " + (e.message || "Unknown Error"));
     }
 };
 
@@ -381,7 +392,8 @@ export const handler = async (event) => {
             const query = event.queryStringParameters?.q;
             if (!query) return sendResponse(400, {error: "Query required"});
             const prompt = `Provide nutritional info for: ${query}. Return JSON: { "mealName": "${query}", "totalCalories": number, "totalProtein": number, "totalCarbs": number, "totalFat": number, "ingredients": [ { "name": "${query}", "weightGrams": 100, "calories": number, "protein": number, "carbs": number, "fat": number } ] }`;
-            const activeKey = GEMINI_KEY_ENV || API_KEY_ENV;
+            
+            const activeKey = API_KEY_ENV || GEMINI_KEY_ENV;
             const ai = new GoogleGenAI({ apiKey: activeKey });
             const model = 'gemini-3-flash-preview'; 
             console.log(`DEBUG: Using text model ${model}`);
@@ -407,7 +419,7 @@ export const handler = async (event) => {
               "justification": string
             }]`;
             
-            const activeKey = GEMINI_KEY_ENV || API_KEY_ENV;
+            const activeKey = API_KEY_ENV || GEMINI_KEY_ENV;
             const ai = new GoogleGenAI({ apiKey: activeKey });
             const model = 'gemini-3-flash-preview';
             console.log(`DEBUG: Using text model ${model}`);
