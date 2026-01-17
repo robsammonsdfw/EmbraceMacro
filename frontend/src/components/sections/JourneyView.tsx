@@ -7,10 +7,10 @@ import * as apiService from '../../services/apiService';
 
 interface JourneyViewProps {
     dashboardPrefs: UserDashboardPrefs;
-    onOpenWizard: () => void; // Legacy wizard (can keep or remove, keeping for backwards compat if needed elsewhere)
+    onOpenWizard: () => void; // Keeping in interface for potential future use or prop passing consistency, but removed from destructuring to silence warning
 }
 
-export const JourneyView: React.FC<JourneyViewProps> = ({ dashboardPrefs, onOpenWizard }) => {
+export const JourneyView: React.FC<JourneyViewProps> = ({ dashboardPrefs }) => {
     const [showIntake, setShowIntake] = useState(false);
 
     const handleSaveIntake = async (data: any) => {

@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { SidebarNav } from './SidebarNav';
-import { MenuIcon, XIcon, ActivityIcon } from '../icons';
+import { MenuIcon, XIcon } from '../icons';
 import { HealthJourney, ActiveView } from '../../types';
 
 interface AppLayoutProps {

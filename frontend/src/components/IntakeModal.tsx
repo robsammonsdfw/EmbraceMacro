@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { XIcon, ActivityIcon, CheckIcon } from './icons';
+import { XIcon, ActivityIcon } from './icons';
 import { JOURNEYS } from './layout/AppLayout';
 import type { HealthJourney } from '../types';
 
