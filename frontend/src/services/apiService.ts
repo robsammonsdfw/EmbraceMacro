@@ -221,3 +221,7 @@ export const getHealthMetrics = (): Promise<HealthStats> => callApi('/health-met
 export const getDashboardPrefs = (): Promise<UserDashboardPrefs> => callApi('/body/dashboard-prefs', 'GET');
 export const saveDashboardPrefs = (prefs: UserDashboardPrefs): Promise<void> => callApi('/body/dashboard-prefs', 'POST', prefs);
 export const saveIntakeData = (intakeData: any): Promise<void> => callApi('/account/intake', 'POST', { intakeData });
+
+// --- MEDICAL INTAKE ---
+export const getMedicalIntake = (): Promise<{ step: number; data: any }> => callApi('/account/medical-intake', 'GET');
+export const updateMedicalIntake = (step: number, answerKey: string, answerValue: any, isReset: boolean = false): Promise<void> => callApi('/account/medical-intake', 'POST', { step, answerKey, answerValue, isReset });

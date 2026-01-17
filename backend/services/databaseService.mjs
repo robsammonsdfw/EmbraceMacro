@@ -1309,6 +1309,59 @@ export const getIntakeData = async (userId) => {
     }
 };
 
+// --- EXTENSIVE MEDICAL INTAKE (NEW) ---
+
+export const getMedicalIntake = async (userId) => {
+    const client = await pool.connect();
+    try {
+        // Ensure columns exist (Migration logic inline)
+        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS medical_intake_data JSONB DEFAULT '{}';`);
+        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS medical_intake_step INT DEFAULT 0;`);
+
+        const res = await client.query(`SELECT medical_intake_data, medical_intake_step FROM users WHERE id = $1`, [userId]);
+        const row = res.rows[0] || {};
+        return {
+            step: row.medical_intake_step || 0,
+            data: row.medical_intake_data || {}
+        };
+    } finally {
+        client.release();
+    }
+};
+
+export const updateMedicalIntake = async (userId, step, answerKey, answerValue, isReset = false) => {
+    const client = await pool.connect();
+    try {
+        // If reset, clear everything
+        if (isReset) {
+            await client.query(`UPDATE users SET medical_intake_data = '{}', medical_intake_step = 0 WHERE id = $1`, [userId]);
+            return { success: true };
+        }
+
+        // Standard update: Merge new key/value into JSONB and update step
+        // PostgreSQL jsonb_set or || operator for merging
+        // We fetch current, merge in JS, save back to be DB-agnostic safe
+        const currentRes = await client.query(`SELECT medical_intake_data FROM users WHERE id = $1`, [userId]);
+        const currentData = currentRes.rows[0]?.medical_intake_data || {};
+        
+        // Merge new answer
+        if (answerKey) {
+            currentData[answerKey] = answerValue;
+        }
+
+        await client.query(`
+            UPDATE users 
+            SET medical_intake_data = $1, medical_intake_step = $2 
+            WHERE id = $3
+        `, [currentData, step, userId]);
+
+        return { success: true };
+    } finally {
+        client.release();
+    }
+};
+
+
 export const logRecoveryStats = async (userId, data) => {
     const client = await pool.connect();
     try {

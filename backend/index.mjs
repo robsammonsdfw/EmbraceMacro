@@ -362,11 +362,19 @@ export const handler = async (event) => {
         if (path.endsWith('/body/dashboard-prefs') && httpMethod === 'GET') return sendResponse(200, await db.getDashboardPrefs(userId));
         if (path.endsWith('/body/dashboard-prefs') && httpMethod === 'POST') return sendResponse(200, await db.saveDashboardPrefs(userId, parseBody(event)));
 
-        // --- ACCOUNT INTAKE (NEW) ---
+        // --- ACCOUNT INTAKE ---
         if (path.endsWith('/account/intake') && httpMethod === 'GET') return sendResponse(200, await db.getIntakeData(userId));
         if (path.endsWith('/account/intake') && httpMethod === 'POST') {
             const { intakeData } = parseBody(event);
             await db.saveIntakeResponses(userId, intakeData);
+            return sendResponse(200, { success: true });
+        }
+
+        // --- MEDICAL INTAKE (NEW) ---
+        if (path.endsWith('/account/medical-intake') && httpMethod === 'GET') return sendResponse(200, await db.getMedicalIntake(userId));
+        if (path.endsWith('/account/medical-intake') && httpMethod === 'POST') {
+            const { step, answerKey, answerValue, isReset } = parseBody(event);
+            await db.updateMedicalIntake(userId, step, answerKey, answerValue, isReset);
             return sendResponse(200, { success: true });
         }
 
