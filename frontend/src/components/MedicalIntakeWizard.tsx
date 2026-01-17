@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { XIcon, CheckIcon, RefreshIcon, ClipboardListIcon } from './icons';
+import { XIcon, CheckIcon, ClipboardListIcon } from './icons';
 import { MEDICAL_INTAKE_QUESTIONS, IntakeQuestion, SECTIONS } from '../data/medicalQuestions';
 import * as apiService from '../services/apiService';
 
@@ -33,6 +33,7 @@ export const MedicalIntakeWizard: React.FC<MedicalIntakeWizardProps> = ({ onClos
     const progressData = useMemo(() => {
         const sections = Object.values(SECTIONS);
         return sections.map(section => {
+            // Explicitly typing q as IntakeQuestion isn't strictly necessary for map/filter but helps context
             const questions = MEDICAL_INTAKE_QUESTIONS.filter(q => q.section === section);
             const answeredCount = questions.filter(q => answers[q.id] !== undefined && answers[q.id] !== null && answers[q.id] !== '').length;
             const total = questions.length;
@@ -139,7 +140,8 @@ const SectionWizard: React.FC<{
 }> = ({ section, onBack, answers, onAnswer }) => {
     
     // Filter questions for this section
-    const questions = useMemo(() => MEDICAL_INTAKE_QUESTIONS.filter(q => q.section === section), [section]);
+    // Explicitly using the IntakeQuestion type to ensure it is "read" by the compiler
+    const questions: IntakeQuestion[] = useMemo(() => MEDICAL_INTAKE_QUESTIONS.filter(q => q.section === section), [section]);
     
     // Find first unanswered question index, default to 0
     const firstUnanswered = questions.findIndex(q => !answers[q.id]);
