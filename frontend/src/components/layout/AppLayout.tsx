@@ -64,11 +64,12 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             <div className="flex-grow flex flex-col md:flex-row min-w-0">
                 <main className="flex-1 overflow-y-auto w-full h-[calc(100vh-64px)] md:h-screen">
                     <div className="hidden md:flex bg-white/80 backdrop-blur-md border-b border-slate-200 px-8 py-3 items-center justify-between sticky top-0 z-20">
-                        <div className="flex items-center gap-2 text-slate-500"><ActivityIcon className="w-4 h-4" /><span className="text-xs font-bold uppercase tracking-widest">Active Journey</span></div>
-                        <div className="flex items-center gap-3">
-                            <select value={selectedJourney} onChange={(e) => onJourneyChange(e.target.value as HealthJourney)} className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-black text-slate-700 outline-none hover:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all shadow-sm cursor-pointer">
-                                {JOURNEYS.map(j => (<option key={j.id} value={j.id}>{j.label}</option>))}
-                            </select>
+                        {/* 
+                           REMOVED: The inline Active Journey selector. 
+                           The active journey is now managed via the "Personalize/Setup" -> "My Journey" page.
+                        */}
+                        <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase tracking-widest">
+                            EMBRACE HEALTH AI <span className="text-slate-300">|</span> CLINICAL DASHBOARD
                         </div>
                     </div>
                     <div className="p-4 md:p-8 max-w-6xl mx-auto">{children}</div>

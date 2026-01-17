@@ -187,11 +187,9 @@ export const handler = async (event) => {
 
         // --- GROCERY LISTS ---
         if (path.endsWith('/grocery/lists') && httpMethod === 'GET') {
-             // REAL IMPLEMENTATION: Query the database
              return sendResponse(200, await db.getGroceryLists(userId));
         }
         if (path.endsWith('/grocery/lists') && httpMethod === 'POST') {
-             // REAL IMPLEMENTATION: Create in database
              const { name } = parseBody(event);
              return sendResponse(200, await db.createGroceryList(userId, name));
         }
@@ -208,7 +206,6 @@ export const handler = async (event) => {
         
         // Legacy/Fallback for endpoints without list ID
         if (path.endsWith('/grocery/items') && httpMethod === 'GET') {
-             // Default to fetching from the first available list
              return sendResponse(200, await db.getGroceryList(userId));
         }
 
@@ -225,7 +222,6 @@ export const handler = async (event) => {
             }
         }
         
-        // List deletion
         const groceryListDeleteMatch = path.match(/\/grocery\/lists\/(\d+)$/);
         if (groceryListDeleteMatch && httpMethod === 'DELETE') {
             const listId = parseInt(groceryListDeleteMatch[1]);
@@ -366,6 +362,14 @@ export const handler = async (event) => {
         if (path.endsWith('/body/dashboard-prefs') && httpMethod === 'GET') return sendResponse(200, await db.getDashboardPrefs(userId));
         if (path.endsWith('/body/dashboard-prefs') && httpMethod === 'POST') return sendResponse(200, await db.saveDashboardPrefs(userId, parseBody(event)));
 
+        // --- ACCOUNT INTAKE (NEW) ---
+        if (path.endsWith('/account/intake') && httpMethod === 'GET') return sendResponse(200, await db.getIntakeData(userId));
+        if (path.endsWith('/account/intake') && httpMethod === 'POST') {
+            const { intakeData } = parseBody(event);
+            await db.saveIntakeResponses(userId, intakeData);
+            return sendResponse(200, { success: true });
+        }
+
         // --- COACHING ---
         if (path.includes('/coaching/relations') && httpMethod === 'GET') return sendResponse(200, []);
         if (path.includes('/coaching/invites') && httpMethod === 'POST') return sendResponse(200, { success: true });
@@ -373,7 +377,6 @@ export const handler = async (event) => {
         // --- AI ANALYSIS ROUTES ---
         if (path.endsWith('/analyze-image') && httpMethod === 'POST') {
             const { base64Image, mimeType } = parseBody(event);
-            console.log(`Processing image analysis. Payload size check: ${base64Image ? base64Image.length : 0} chars.`);
             
             // EXPANDED PROMPT: Explicitly request 'recipe' and 'kitchenTools'
             const prompt = `Analyze this food image. 

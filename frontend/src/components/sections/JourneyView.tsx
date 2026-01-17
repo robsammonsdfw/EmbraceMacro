@@ -1,16 +1,39 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { HeartIcon, ActivityIcon, CheckIcon } from '../icons';
 import type { UserDashboardPrefs } from '../../types';
+import { IntakeModal } from '../IntakeModal';
+import * as apiService from '../../services/apiService';
 
 interface JourneyViewProps {
     dashboardPrefs: UserDashboardPrefs;
-    onOpenWizard: () => void;
+    onOpenWizard: () => void; // Legacy wizard (can keep or remove, keeping for backwards compat if needed elsewhere)
 }
 
 export const JourneyView: React.FC<JourneyViewProps> = ({ dashboardPrefs, onOpenWizard }) => {
+    const [showIntake, setShowIntake] = useState(false);
+
+    const handleSaveIntake = async (data: any) => {
+        await apiService.saveIntakeData(data);
+    };
+
+    const handleUpdateJourney = async (journey: any) => {
+        const newPrefs = { ...dashboardPrefs, selectedJourney: journey };
+        await apiService.saveDashboardPrefs(newPrefs);
+        // Force refresh of parent state would be ideal here, but for now we rely on the next load
+        window.location.reload(); 
+    };
+
     return (
         <div className="max-w-3xl mx-auto space-y-8 pb-20 animate-fade-in">
+            {showIntake && (
+                <IntakeModal 
+                    onClose={() => setShowIntake(false)}
+                    onSaveJourney={handleUpdateJourney}
+                    onSaveIntake={handleSaveIntake}
+                />
+            )}
+
             <header className="text-center">
                 <div className="mx-auto w-20 h-20 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mb-6 shadow-inner">
                     <HeartIcon className="w-10 h-10" />
@@ -41,15 +64,18 @@ export const JourneyView: React.FC<JourneyViewProps> = ({ dashboardPrefs, onOpen
                         </div>
                     </div>
 
-                    <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-[2rem] p-8 text-white text-center relative overflow-hidden group cursor-pointer" onClick={onOpenWizard}>
+                    <div 
+                        className="bg-gradient-to-br from-indigo-900 to-slate-900 rounded-[2rem] p-8 text-white text-center relative overflow-hidden group cursor-pointer" 
+                        onClick={() => setShowIntake(true)}
+                    >
                         <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform duration-500">
                             <ActivityIcon className="w-32 h-32" />
                         </div>
                         <div className="relative z-10">
-                            <h4 className="font-black text-lg mb-2">Recalculate Goals</h4>
-                            <p className="text-slate-400 text-sm mb-6">Update your weight, age, or activity level to get a fresh metabolic baseline.</p>
-                            <button className="bg-emerald-500 hover:bg-emerald-400 text-white font-black uppercase tracking-widest text-[10px] py-3 px-6 rounded-xl transition-all shadow-lg active:scale-95">
-                                Launch Wizard
+                            <h4 className="font-black text-lg mb-2">Config Active Journey</h4>
+                            <p className="text-indigo-200 text-sm mb-6">Launch the personalization wizard to set your health focus and baselines.</p>
+                            <button className="bg-white text-indigo-900 font-black uppercase tracking-widest text-[10px] py-3 px-6 rounded-xl transition-all shadow-lg active:scale-95">
+                                Personalize My Journey
                             </button>
                         </div>
                     </div>

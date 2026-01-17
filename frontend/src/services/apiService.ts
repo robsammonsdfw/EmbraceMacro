@@ -220,3 +220,4 @@ export const syncHealthStatsToDB = (stats: Partial<HealthStats>): Promise<Health
 export const getHealthMetrics = (): Promise<HealthStats> => callApi('/health-metrics', 'GET');
 export const getDashboardPrefs = (): Promise<UserDashboardPrefs> => callApi('/body/dashboard-prefs', 'GET');
 export const saveDashboardPrefs = (prefs: UserDashboardPrefs): Promise<void> => callApi('/body/dashboard-prefs', 'POST', prefs);
+export const saveIntakeData = (intakeData: any): Promise<void> => callApi('/account/intake', 'POST', { intakeData });

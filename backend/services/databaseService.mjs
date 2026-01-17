@@ -1278,6 +1278,37 @@ export const saveDashboardPrefs = async (userId, prefs) => {
     try { await client.query(`UPDATE users SET dashboard_prefs = $1 WHERE id = $2`, [prefs, userId]); } finally { client.release(); }
 };
 
+// NEW: Intake Data Persistence
+export const saveIntakeResponses = async (userId, intakeData) => {
+    const client = await pool.connect();
+    try {
+        // Ensure column exists
+        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS intake_data JSONB DEFAULT '{}';`);
+        
+        // Merge with existing data
+        const currentRes = await client.query(`SELECT intake_data FROM users WHERE id = $1`, [userId]);
+        const currentData = currentRes.rows[0]?.intake_data || {};
+        const newData = { ...currentData, ...intakeData };
+        
+        await client.query(`UPDATE users SET intake_data = $1 WHERE id = $2`, [newData, userId]);
+    } catch (err) {
+        console.error('Database error in saveIntakeResponses:', err);
+        throw new Error('Could not save intake data.');
+    } finally {
+        client.release();
+    }
+};
+
+export const getIntakeData = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT intake_data FROM users WHERE id = $1`, [userId]);
+        return res.rows[0]?.intake_data || {};
+    } finally {
+        client.release();
+    }
+};
+
 export const logRecoveryStats = async (userId, data) => {
     const client = await pool.connect();
     try {
