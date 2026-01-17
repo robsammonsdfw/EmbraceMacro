@@ -6,7 +6,7 @@ import {
     HomeIcon, BookOpenIcon, PillIcon, UploadIcon, HeartIcon,
     GlobeAltIcon, BeakerIcon, ClockIcon, MoonIcon, ShoppingCartIcon,
     ClipboardCheckIcon, UsersIcon, TrophyIcon, BadgeCheckIcon,
-    DumbbellIcon, UserGroupIcon, VideoIcon
+    DumbbellIcon, UserGroupIcon
 } from '../icons';
 import type { HealthStats, UserDashboardPrefs } from '../../types';
 

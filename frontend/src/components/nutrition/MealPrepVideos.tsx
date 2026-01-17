@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { VideoIcon, UserGroupIcon, GlobeAltIcon, FireIcon, ClockIcon, PlusIcon, HeartIcon, ChatIcon } from '../icons';
+import { VideoIcon, UserGroupIcon, GlobeAltIcon, PlusIcon, HeartIcon, ChatIcon } from '../icons';
 
 interface Video {
     id: string;

@@ -4,8 +4,9 @@ import { MealPlanManager } from '../MealPlanManager';
 import { MealLibrary } from '../MealLibrary';
 import { GroceryList } from '../GroceryList';
 import { MealHistory } from '../MealHistory';
+import { MealPrepVideos } from '../nutrition/MealPrepVideos';
 import type { MealPlan, SavedMeal, NutritionInfo, MealLogEntry } from '../../types';
-import { PlusIcon, BookOpenIcon, ClipboardListIcon, ClockIcon } from '../icons';
+import { PlusIcon, BookOpenIcon, ClipboardListIcon, ClockIcon, VideoIcon } from '../icons';
 
 interface FuelSectionProps {
     plans: MealPlan[];
@@ -24,7 +25,7 @@ interface FuelSectionProps {
     onManualLibraryAdd?: (query: string) => void;
     onManualLogAdd?: (query: string) => void;
     onScanClick?: () => void;
-    defaultTab?: 'plan' | 'library' | 'grocery' | 'history';
+    defaultTab?: 'plan' | 'library' | 'grocery' | 'history' | 'videos';
 }
 
 export const FuelSection: React.FC<FuelSectionProps> = ({
@@ -32,7 +33,7 @@ export const FuelSection: React.FC<FuelSectionProps> = ({
     onQuickAdd, onGenerateMedical, medicalPlannerState, onAddMealToLibrary, onDeleteMeal, onSelectMeal,
     onManualLibraryAdd, onManualLogAdd, onScanClick, defaultTab
 }) => {
-    const [activeTab, setActiveTab] = useState<'plan' | 'library' | 'grocery' | 'history'>('plan');
+    const [activeTab, setActiveTab] = useState<'plan' | 'library' | 'grocery' | 'history' | 'videos'>('plan');
 
     // Sync defaultTab prop to local state when it changes
     useEffect(() => {
@@ -51,10 +52,10 @@ export const FuelSection: React.FC<FuelSectionProps> = ({
     return (
         <div className="space-y-6 animate-fade-in pb-20">
             {/* Sub-navigation Tabs */}
-            <div className="flex p-1 bg-slate-200 rounded-xl w-full md:w-fit mx-auto md:mx-0 overflow-x-auto">
+            <div className="flex p-1 bg-slate-200 rounded-xl w-full md:w-fit mx-auto md:mx-0 overflow-x-auto no-scrollbar">
                 <button 
                     onClick={() => setActiveTab('plan')}
-                    className={`flex-1 md:flex-none px-6 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
+                    className={`flex-1 md:flex-none px-5 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
                         activeTab === 'plan' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                     }`}
                 >
@@ -62,7 +63,7 @@ export const FuelSection: React.FC<FuelSectionProps> = ({
                 </button>
                 <button 
                     onClick={() => setActiveTab('library')}
-                    className={`flex-1 md:flex-none px-6 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
+                    className={`flex-1 md:flex-none px-5 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
                         activeTab === 'library' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                     }`}
                 >
@@ -70,7 +71,7 @@ export const FuelSection: React.FC<FuelSectionProps> = ({
                 </button>
                 <button 
                     onClick={() => setActiveTab('history')}
-                    className={`flex-1 md:flex-none px-6 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
+                    className={`flex-1 md:flex-none px-5 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
                         activeTab === 'history' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                     }`}
                 >
@@ -78,11 +79,19 @@ export const FuelSection: React.FC<FuelSectionProps> = ({
                 </button>
                 <button 
                     onClick={() => setActiveTab('grocery')}
-                    className={`flex-1 md:flex-none px-6 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
+                    className={`flex-1 md:flex-none px-5 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
                         activeTab === 'grocery' ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                     }`}
                 >
                     <ClipboardListIcon className="w-4 h-4" /> Grocery
+                </button>
+                <button 
+                    onClick={() => setActiveTab('videos')}
+                    className={`flex-1 md:flex-none px-5 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
+                        activeTab === 'videos' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                >
+                    <VideoIcon className="w-4 h-4" /> TV
                 </button>
             </div>
 
@@ -123,6 +132,9 @@ export const FuelSection: React.FC<FuelSectionProps> = ({
                 )}
                 {activeTab === 'grocery' && (
                     <GroceryList mealPlans={plans} />
+                )}
+                {activeTab === 'videos' && (
+                    <MealPrepVideos />
                 )}
             </div>
         </div>
