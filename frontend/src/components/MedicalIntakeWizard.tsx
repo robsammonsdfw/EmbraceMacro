@@ -84,7 +84,8 @@ export const MedicalIntakeWizard: React.FC<MedicalIntakeWizardProps> = ({ onClos
         );
     }
 
-    const question = MEDICAL_INTAKE_QUESTIONS[currentStep];
+    // Explicitly using IntakeQuestion type
+    const question: IntakeQuestion = MEDICAL_INTAKE_QUESTIONS[currentStep];
     const isComplete = currentStep >= MEDICAL_INTAKE_QUESTIONS.length;
 
     // Render Completion Screen
@@ -146,21 +147,41 @@ export const MedicalIntakeWizard: React.FC<MedicalIntakeWizardProps> = ({ onClos
                     <div className="space-y-4">
                         {question.type === 'text' && (
                             <form onSubmit={(e) => { e.preventDefault(); const val = (e.currentTarget.elements[0] as HTMLInputElement).value; if(val) handleAnswer(val); }}>
-                                <input type="text" autoFocus className="w-full p-5 text-lg border-2 border-slate-200 rounded-2xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 outline-none transition-all font-medium text-slate-800 placeholder-slate-300" placeholder="Type your answer..." />
+                                {/* Using answers state to pre-fill if navigating back */}
+                                <input 
+                                    key={question.id} 
+                                    type="text" 
+                                    autoFocus 
+                                    defaultValue={answers[question.id] || ''}
+                                    className="w-full p-5 text-lg border-2 border-slate-200 rounded-2xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 outline-none transition-all font-medium text-slate-800 placeholder-slate-300" 
+                                    placeholder="Type your answer..." 
+                                />
                                 <button type="submit" disabled={isSaving} className="mt-4 w-full bg-slate-900 text-white font-black uppercase tracking-widest py-4 rounded-2xl hover:bg-black transition-all">Next</button>
                             </form>
                         )}
 
                         {question.type === 'number' && (
                             <form onSubmit={(e) => { e.preventDefault(); const val = (e.currentTarget.elements[0] as HTMLInputElement).value; if(val) handleAnswer(parseInt(val)); }}>
-                                <input type="number" autoFocus className="w-full p-5 text-lg border-2 border-slate-200 rounded-2xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 outline-none transition-all font-medium text-slate-800" placeholder="0" />
+                                <input 
+                                    key={question.id}
+                                    type="number" 
+                                    autoFocus 
+                                    defaultValue={answers[question.id] || ''}
+                                    className="w-full p-5 text-lg border-2 border-slate-200 rounded-2xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 outline-none transition-all font-medium text-slate-800" 
+                                    placeholder="0" 
+                                />
                                 <button type="submit" disabled={isSaving} className="mt-4 w-full bg-slate-900 text-white font-black uppercase tracking-widest py-4 rounded-2xl hover:bg-black transition-all">Next</button>
                             </form>
                         )}
 
                         {question.type === 'date' && (
                             <form onSubmit={(e) => { e.preventDefault(); const val = (e.currentTarget.elements[0] as HTMLInputElement).value; if(val) handleAnswer(val); }}>
-                                <input type="date" className="w-full p-5 text-lg border-2 border-slate-200 rounded-2xl focus:border-indigo-500 outline-none font-medium text-slate-800" />
+                                <input 
+                                    key={question.id}
+                                    type="date" 
+                                    defaultValue={answers[question.id] || ''}
+                                    className="w-full p-5 text-lg border-2 border-slate-200 rounded-2xl focus:border-indigo-500 outline-none font-medium text-slate-800" 
+                                />
                                 <button type="submit" disabled={isSaving} className="mt-4 w-full bg-slate-900 text-white font-black uppercase tracking-widest py-4 rounded-2xl hover:bg-black transition-all">Next</button>
                             </form>
                         )}
@@ -170,7 +191,11 @@ export const MedicalIntakeWizard: React.FC<MedicalIntakeWizardProps> = ({ onClos
                                 key={opt} 
                                 onClick={() => handleAnswer(opt)}
                                 disabled={isSaving}
-                                className="w-full p-5 text-left text-lg font-bold text-slate-700 bg-white border-2 border-slate-100 rounded-2xl hover:border-indigo-500 hover:bg-indigo-50 hover:text-indigo-700 transition-all shadow-sm active:scale-[0.98]"
+                                className={`w-full p-5 text-left text-lg font-bold rounded-2xl border-2 transition-all shadow-sm active:scale-[0.98] ${
+                                    answers[question.id] === opt 
+                                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700' 
+                                    : 'bg-white border-slate-100 text-slate-700 hover:border-indigo-500 hover:bg-indigo-50 hover:text-indigo-700'
+                                }`}
                             >
                                 {opt}
                             </button>
@@ -178,7 +203,9 @@ export const MedicalIntakeWizard: React.FC<MedicalIntakeWizardProps> = ({ onClos
 
                         {question.type === 'multiselect' && (
                             <MultiSelect 
+                                key={question.id}
                                 options={question.options || []} 
+                                initialSelected={answers[question.id] || []}
                                 onSubmit={handleAnswer} 
                                 isSaving={isSaving} 
                             />
@@ -196,8 +223,13 @@ export const MedicalIntakeWizard: React.FC<MedicalIntakeWizardProps> = ({ onClos
 };
 
 // Sub-component for MultiSelect to manage internal state before submitting
-const MultiSelect: React.FC<{ options: string[]; onSubmit: (val: string[]) => void; isSaving: boolean }> = ({ options, onSubmit, isSaving }) => {
-    const [selected, setSelected] = useState<string[]>([]);
+const MultiSelect: React.FC<{ 
+    options: string[]; 
+    initialSelected: string[];
+    onSubmit: (val: string[]) => void; 
+    isSaving: boolean 
+}> = ({ options, initialSelected, onSubmit, isSaving }) => {
+    const [selected, setSelected] = useState<string[]>(initialSelected);
 
     const toggle = (opt: string) => {
         setSelected(prev => prev.includes(opt) ? prev.filter(p => p !== opt) : [...prev, opt]);
