@@ -6,7 +6,7 @@ import {
     HomeIcon, BookOpenIcon, PillIcon, UploadIcon, HeartIcon,
     GlobeAltIcon, BeakerIcon, ClockIcon, MoonIcon, ShoppingCartIcon,
     ClipboardCheckIcon, UsersIcon, TrophyIcon, BadgeCheckIcon,
-    DumbbellIcon, UserGroupIcon
+    DumbbellIcon, UserGroupIcon, VideoIcon
 } from '../icons';
 import type { HealthStats, UserDashboardPrefs } from '../../types';
 
@@ -16,6 +16,7 @@ import { BodyHub } from '../body/BodyHub';
 import { AssessmentHub } from '../tests/AssessmentHub';
 import { CoachingHub } from '../coaching/CoachingHub';
 import { RewardsDashboard } from '../RewardsDashboard';
+import { SocialManager } from '../social/SocialManager';
 import { DeviceSync } from '../account/DeviceSync';
 import { WidgetConfig } from '../account/WidgetConfig';
 import { PharmacyOrders } from '../account/PharmacyOrders';
@@ -23,6 +24,7 @@ import { TeleMedicineHub } from '../telemed/TeleMedicineHub';
 import { ReadinessView } from '../sections/ReadinessView';
 import { HealthReportsView } from '../sections/HealthReportsView';
 import { PlaceholderPage } from '../PlaceholderPage';
+import { MealPrepVideos } from '../nutrition/MealPrepVideos';
 
 // Feature Flag: Set to false to show "For Her" category
 const HIDE_FOR_HER = true;
@@ -40,7 +42,7 @@ interface MobileAppProps {
     onVisionSync?: () => void;
 }
 
-type StackLevel = 'home' | 'account' | 'physical' | 'nutrition' | 'mental' | 'sleep' | 'labs' | 'roles' | 'rewards' | 'telemed';
+type StackLevel = 'home' | 'account' | 'physical' | 'nutrition' | 'mental' | 'sleep' | 'labs' | 'roles' | 'rewards' | 'telemed' | 'social';
 
 const VitalsStrip: React.FC<{ stats: HealthStats; prefs: UserDashboardPrefs; onVisionSync?: () => void }> = ({ stats, prefs, onVisionSync }) => {
     
@@ -216,6 +218,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                 <HubButton label="Sleep" icon={<MoonIcon />} onClick={() => navigateTo('sleep')} gradientFrom="from-indigo-400" gradientTo="to-indigo-600" iconColor="text-white border-white/40" glowColor="bg-indigo-300" />
                 <HubButton label="Labs" icon={<BeakerIcon />} onClick={() => navigateTo('labs')} gradientFrom="from-cyan-500" gradientTo="to-cyan-700" iconColor="text-white border-white/40" glowColor="bg-cyan-400" />
                 <HubButton label="Roles & Business" icon={<BriefcaseIcon />} onClick={() => navigateTo('roles')} gradientFrom="from-rose-500" gradientTo="to-rose-700" iconColor="text-white border-white/40" glowColor="bg-rose-400" />
+                <HubButton label="Social & Community" icon={<UserGroupIcon />} onClick={() => navigateTo('social')} gradientFrom="from-pink-500" gradientTo="to-pink-700" iconColor="text-white border-white/40" glowColor="bg-pink-400" />
             </div>
 
             <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm flex items-center justify-between group active:scale-95 transition-all" onClick={() => navigateTo('account')}>
@@ -247,10 +250,17 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                 </div>
 
                 <div className="flex-grow p-4 pb-24">
-                    {stack === 'nutrition' && <FuelSection {...fuelProps} />}
+                    {stack === 'nutrition' && (
+                        subView ? (
+                            subView === 'videos' && <MealPrepVideos />
+                        ) : (
+                            <FuelSection {...fuelProps} />
+                        )
+                    )}
                     {stack === 'physical' && <BodyHub {...bodyProps} initialTab={subView === 'pics' ? 'images' : '3d_scan'} />}
                     {stack === 'mental' && <AssessmentHub />}
-                    {stack === 'rewards' && <RewardsDashboard />}
+                    {stack === 'rewards' && <RewardsDashboard onNavigate={navigateTo as any} />}
+                    {stack === 'social' && <SocialManager />}
                     
                     {stack === 'roles' && (
                         subView ? (

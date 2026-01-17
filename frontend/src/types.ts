@@ -432,6 +432,8 @@ export type ActiveView =
   | 'roles.government'
   | 'roles.union'
   | 'roles.logistics'
+  // Social
+  | 'social'
   // Rewards/History
   | 'rewards'
   | 'history';

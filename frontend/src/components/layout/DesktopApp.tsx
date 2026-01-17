@@ -14,11 +14,13 @@ import { AssessmentHub } from '../tests/AssessmentHub';
 import { CoachingHub } from '../coaching/CoachingHub';
 import { JourneyView } from '../sections/JourneyView';
 import { RewardsDashboard } from '../RewardsDashboard';
+import { SocialManager } from '../social/SocialManager';
 import { Hub } from '../Hub';
 import { PlaceholderPage } from '../PlaceholderPage';
 import { FormAnalysis } from '../body/FormAnalysis';
 import { PantryChefView } from '../nutrition/PantryChefView';
 import { MasterChefView } from '../nutrition/MasterChefView';
+import { MealPrepVideos } from '../nutrition/MealPrepVideos';
 import { DeviceSync } from '../account/DeviceSync';
 import { WidgetConfig } from '../account/WidgetConfig';
 import { PharmacyOrders } from '../account/PharmacyOrders';
@@ -217,7 +219,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             case 'nutrition.library': 
                 return <FuelSection {...fuelProps} defaultTab="library" />;
             case 'nutrition.videos': 
-                return <PlaceholderPage title="Meal Prep Videos" description="Community generated cooking guides." />;
+                return <MealPrepVideos />;
 
             // Mental + Motivation Views
             case 'mental.assessments': 
@@ -248,9 +250,13 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
                 // Updated: Use live store instead of placeholder
                 return <TeleMedicineHub view="labs.store" />;
 
+            // Social
+            case 'social':
+                return <SocialManager />;
+
             // Rewards & History
             case 'rewards': 
-                return <RewardsDashboard />;
+                return <RewardsDashboard onNavigate={setActiveView} />;
             case 'history': 
                 return <FuelSection {...fuelProps} defaultTab="history" />;
 

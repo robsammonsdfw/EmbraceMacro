@@ -8,7 +8,7 @@ import {
     Squares2X2Icon, CogIcon, PillIcon, RunningIcon, 
     VideoIcon, BriefcaseIcon, BadgeCheckIcon, ClockIcon,
     ClipboardListIcon, BookOpenIcon, BarcodeIcon, GlobeAltIcon, ChefHatIcon,
-    CameraIcon, MoonIcon, ShoppingCartIcon
+    CameraIcon, MoonIcon, ShoppingCartIcon, PlusIcon
 } from '../icons';
 import { HealthJourney, ActiveView } from '../../types';
 import { JOURNEYS } from './AppLayout';
@@ -88,6 +88,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
         sleep: true,
         labs: true,
         roles: true,
+        social: true,
         rewards: true
     });
 
@@ -232,7 +233,16 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
                     </div>
                 )}
 
-                {/* 7. ROLES & BUSINESS TYPES */}
+                {/* 7. SOCIAL & COMMUNITY (RESTORED) */}
+                <CategoryHeader label="Social & Community" color="text-pink-500" isOpen={openCategories.social} onClick={() => toggleCategory('social')} />
+                {openCategories.social && (
+                    <div className="space-y-0.5 animate-fade-in pl-2 border-l border-pink-100 ml-4">
+                        <NavItem indent label="Social Hub" icon={<UserGroupIcon />} isActive={activeView === 'social'} onClick={() => onNavigate('social')} />
+                        <NavItem indent label="Invite Friends" icon={<PlusIcon />} isActive={activeView === 'social'} onClick={() => onNavigate('social')} />
+                    </div>
+                )}
+
+                {/* 8. ROLES & BUSINESS TYPES */}
                 <CategoryHeader label="Roles & Business Types" color="text-rose-500" isOpen={openCategories.roles} onClick={() => toggleCategory('roles')} />
                 {openCategories.roles && (
                     <div className="space-y-0.5 animate-fade-in pl-2 border-l border-rose-100 ml-4">
@@ -283,7 +293,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
                     </div>
                 )}
 
-                {/* 8. REWARDS & HISTORY */}
+                {/* 9. REWARDS & HISTORY */}
                 <CategoryHeader label="Rewards & History" color="text-blue-500" isOpen={openCategories.rewards} onClick={() => toggleCategory('rewards')} />
                 {openCategories.rewards && (
                     <div className="space-y-0.5 animate-fade-in pl-2 border-l border-blue-100 ml-4">
@@ -292,7 +302,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
                     </div>
                 )}
 
-                {/* 9. MY ACCOUNT */}
+                {/* 10. MY ACCOUNT */}
                 <CategoryHeader label="My Account" color="text-slate-500" isOpen={openCategories.account} onClick={() => toggleCategory('account')} />
                 {openCategories.account && (
                     <div className="space-y-0.5 animate-fade-in pl-2 border-l border-slate-100 ml-4">

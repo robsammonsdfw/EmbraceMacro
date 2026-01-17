@@ -1,12 +1,16 @@
 
 import React, { useEffect, useState } from 'react';
-import type { RewardsSummary } from '../types';
+import type { RewardsSummary, ActiveView } from '../types';
 import * as apiService from '../services/apiService';
 import { StarIcon, TrophyIcon, UserCircleIcon, ActivityIcon } from './icons';
 
 interface DataPoint {
     date: string;
     total: number;
+}
+
+interface RewardsDashboardProps {
+    onNavigate?: (view: ActiveView) => void;
 }
 
 // Simple SVG Line Chart Component
@@ -97,7 +101,7 @@ const RewardsChart: React.FC<{ history: any[] }> = ({ history }) => {
     );
 };
 
-export const RewardsDashboard: React.FC = () => {
+export const RewardsDashboard: React.FC<RewardsDashboardProps> = ({ onNavigate }) => {
     const [rewardsData, setRewardsData] = useState<RewardsSummary | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -184,7 +188,10 @@ export const RewardsDashboard: React.FC = () => {
                                 </p>
                             </div>
                         </div>
-                        <button className="bg-rose-500 hover:bg-rose-600 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-md flex items-center space-x-2 whitespace-nowrap">
+                        <button 
+                            onClick={() => onNavigate?.('social')}
+                            className="bg-rose-500 hover:bg-rose-600 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-md flex items-center space-x-2 whitespace-nowrap"
+                        >
                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                             </svg>
