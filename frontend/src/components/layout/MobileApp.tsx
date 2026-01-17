@@ -75,6 +75,11 @@ const VitalsStrip: React.FC<{ stats: HealthStats; prefs: UserDashboardPrefs; onV
 
     return (
         <div className="flex gap-4 overflow-x-auto no-scrollbar py-4 px-4 bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-0 z-30 items-center">
+            {/* Branding Logo */}
+            <div className="flex-shrink-0 pr-4 border-r border-slate-100 mr-1">
+                <img src="/logo.png" alt="EmbraceHealth" className="h-8 w-auto object-contain" />
+            </div>
+
             {widgetsToShow.map(item => (
                 <div key={item.id} className="flex flex-col items-center min-w-[70px] flex-shrink-0 animate-fade-in">
                     <span className={`text-xl font-black ${item.color}`}>{item.value}</span>
@@ -83,7 +88,7 @@ const VitalsStrip: React.FC<{ stats: HealthStats; prefs: UserDashboardPrefs; onV
             ))}
             <button 
                 onClick={onVisionSync}
-                className="flex flex-col items-center min-w-[80px] justify-center text-slate-500 hover:text-emerald-500 transition-colors ml-auto border-l border-slate-100 pl-4"
+                className="flex flex-col items-center min-w-[80px] justify-center text-slate-500 hover:text-emerald-500 transition-colors ml-auto border-l border-slate-100 pl-4 flex-shrink-0"
             >
                 <div className="bg-slate-900 text-white p-2 rounded-xl mb-1 shadow-md">
                     <UploadIcon className="w-4 h-4" />
