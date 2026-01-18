@@ -238,7 +238,6 @@ const ensureTables = async (client) => {
     `);
 
     // Pulse / Articles (Knowledge Hub)
-    // Updated schema support manually added columns (author_id, is_squad_exclusive)
     await client.query(`
         CREATE TABLE IF NOT EXISTS articles (
             id SERIAL PRIMARY KEY,
@@ -254,6 +253,12 @@ const ensureTables = async (client) => {
             created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         );
     `);
+
+    // Migration for Articles Table: Add new columns if they don't exist
+    try {
+        await client.query(`ALTER TABLE articles ADD COLUMN IF NOT EXISTS author_id INT`);
+        await client.query(`ALTER TABLE articles ADD COLUMN IF NOT EXISTS is_squad_exclusive BOOLEAN DEFAULT FALSE`);
+    } catch (e) { console.warn("Article column migration skipped", e.message); }
 
     // Seed Data Check for Articles
     const artCount = await client.query('SELECT COUNT(*) FROM articles');
@@ -302,7 +307,6 @@ const ensureTables = async (client) => {
                 image_url: "https://images.unsplash.com/photo-1628771065518-0d82f1938462?auto=format&fit=crop&w=800&q=80",
                 author_name: "Dr. Spencer Nadolsky",
                 author_avatar: "bg-indigo-500",
-                // UPDATED: Now links directly to the shopping collection
                 embedded_actions: { type: 'OPEN_LINK', url: 'https://embracehealth.ai/collections/weight-loss', label: 'Shop GLP-1 Program' }
             }
         ];

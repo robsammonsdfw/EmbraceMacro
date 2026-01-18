@@ -61,6 +61,13 @@ const callGemini = async (prompt, imageBase64, mimeType = 'image/jpeg') => {
 
 export const handler = async (event) => {
     let path = event.path || event.rawPath || "";
+    
+    // CRITICAL FIX: Normalize path by stripping stage name if present (e.g. /default/path -> /path)
+    // This fixes the 404 errors caused by API Gateway stage mapping
+    if (path.startsWith('/default')) {
+        path = path.replace('/default', '');
+    }
+
     let httpMethod = event.httpMethod || event.requestContext?.http?.method || "";
     httpMethod = httpMethod.toUpperCase();
 
@@ -221,7 +228,7 @@ export const handler = async (event) => {
         const productMatch = path.match(/\/shopify\/products\/(.+)$/);
         if (productMatch && httpMethod === 'GET') return sendResponse(200, await getProductByHandle(productMatch[1]));
 
-        return sendResponse(404, { error: "Not Found" });
+        return sendResponse(404, { error: "Not Found", path: path });
 
     } catch (e) {
         console.error("Handler Error:", e);
