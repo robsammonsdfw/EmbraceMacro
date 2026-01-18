@@ -242,13 +242,34 @@ export const MobileApp: React.FC<MobileAppProps> = ({
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-                <HubButton label="Pulse" icon={<NewspaperIcon />} onClick={() => navigateTo('pulse')} gradientFrom="from-amber-500" gradientTo="to-orange-600" iconColor="text-white border-white/40" glowColor="bg-amber-400" />
-                <HubButton label="Nutrition + Meals" icon={<UtensilsIcon />} onClick={() => navigateTo('nutrition')} gradientFrom="from-emerald-500" gradientTo="to-emerald-700" iconColor="text-white border-white/40" glowColor="bg-emerald-400" />
+                {/* 1. Prescriptions (Money Maker) */}
+                <HubButton label="Prescriptions" icon={<PillIcon />} onClick={() => navigateTo('telemed')} gradientFrom="from-blue-600" gradientTo="to-blue-800" iconColor="text-white border-white/40" glowColor="bg-blue-400" />
+                
+                {/* 2. Body (Money Maker) */}
                 <HubButton label="Body + Fitness" icon={<UserCircleIcon />} onClick={() => navigateTo('physical')} gradientFrom="from-indigo-600" gradientTo="to-indigo-800" iconColor="text-white border-white/40" glowColor="bg-indigo-400" />
-                <HubButton label="Prescriptions" icon={<PillIcon />} onClick={() => navigateTo('telemed')} gradientFrom="from-blue-500" gradientTo="to-blue-700" iconColor="text-white border-white/40" glowColor="bg-blue-400" />
-                <HubButton label="Mental + Motivation" icon={<BrainIcon />} onClick={() => navigateTo('mental')} gradientFrom="from-violet-500" gradientTo="to-violet-700" iconColor="text-white border-white/40" glowColor="bg-violet-400" />
+                
+                {/* 3. Nutrition */}
+                <HubButton label="Nutrition + Meals" icon={<UtensilsIcon />} onClick={() => navigateTo('nutrition')} gradientFrom="from-emerald-500" gradientTo="to-emerald-700" iconColor="text-white border-white/40" glowColor="bg-emerald-400" />
+                
+                {/* 4. Pulse */}
+                <HubButton label="Pulse" icon={<NewspaperIcon />} onClick={() => navigateTo('pulse')} gradientFrom="from-amber-500" gradientTo="to-orange-600" iconColor="text-white border-white/40" glowColor="bg-amber-400" />
+                
+                {/* 5. Sleep */}
                 <HubButton label="Sleep" icon={<MoonIcon />} onClick={() => navigateTo('sleep')} gradientFrom="from-indigo-400" gradientTo="to-indigo-600" iconColor="text-white border-white/40" glowColor="bg-indigo-300" />
+                
+                {/* 6. Labs */}
                 <HubButton label="Labs" icon={<BeakerIcon />} onClick={() => navigateTo('labs')} gradientFrom="from-cyan-500" gradientTo="to-cyan-700" iconColor="text-white border-white/40" glowColor="bg-cyan-400" />
+                
+                {/* 7. Mental */}
+                <HubButton label="Mental + Motivation" icon={<BrainIcon />} onClick={() => navigateTo('mental')} gradientFrom="from-violet-500" gradientTo="to-violet-700" iconColor="text-white border-white/40" glowColor="bg-violet-400" />
+                
+                {/* 8. Social (Added) */}
+                <HubButton label="Social & Friends" icon={<UserGroupIcon />} onClick={() => navigateTo('social')} gradientFrom="from-pink-500" gradientTo="to-rose-600" iconColor="text-white border-white/40" glowColor="bg-pink-400" />
+                
+                {/* 9. Rewards (Added) */}
+                <HubButton label="Rewards" icon={<TrophyIcon />} onClick={() => navigateTo('rewards')} gradientFrom="from-yellow-500" gradientTo="to-amber-600" iconColor="text-white border-white/40" glowColor="bg-yellow-400" />
+
+                {/* 10. Roles */}
                 <HubButton label="Roles & Business" icon={<BriefcaseIcon />} onClick={() => navigateTo('roles')} gradientFrom="from-rose-500" gradientTo="to-rose-700" iconColor="text-white border-white/40" glowColor="bg-rose-400" />
             </div>
 
