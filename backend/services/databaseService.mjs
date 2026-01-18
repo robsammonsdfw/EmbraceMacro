@@ -180,6 +180,26 @@ const ensureTables = async (client) => {
         );
     `);
 
+    // Ensure Friendships Table (Restored)
+    await client.query(`
+        CREATE TABLE IF NOT EXISTS friendships (
+            id SERIAL PRIMARY KEY,
+            requester_id VARCHAR(255) NOT NULL,
+            receiver_id VARCHAR(255) NOT NULL,
+            status VARCHAR(50) DEFAULT 'pending',
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(requester_id, receiver_id)
+        );
+    `);
+
+    // User Column Migrations (Restored)
+    try {
+        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_mode VARCHAR(50) DEFAULT 'private'`);
+        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT`);
+        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR(255)`);
+        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name VARCHAR(255)`);
+    } catch (e) { console.warn("User column migration skipped", e.message); }
+
     // Migration: Add list_id to items if it doesn't exist
     try {
         await client.query(`ALTER TABLE grocery_list_items ADD COLUMN IF NOT EXISTS list_id INT;`);

@@ -80,18 +80,15 @@ export const handler = async (event) => {
 
         const userId = getUserFromEvent(event);
 
-        // --- CONTENT / PULSE (Updated) ---
+        // --- CONTENT / PULSE ---
         if (path === '/content/pulse' && httpMethod === 'GET') {
             const articles = await db.getArticles(userId);
             return sendResponse(200, articles);
         }
-        
-        // NEW: Create Article
         if (path === '/content/pulse' && httpMethod === 'POST') {
             const article = await db.createArticle(userId, parseBody(event));
             return sendResponse(200, article);
         }
-        
         const actionMatch = path.match(/\/content\/pulse\/(\d+)\/action$/);
         if (actionMatch && httpMethod === 'POST') {
             const articleId = parseInt(actionMatch[1]);
@@ -156,6 +153,7 @@ export const handler = async (event) => {
         if (formMatch && httpMethod === 'GET') return sendResponse(200, await db.getFormCheckById(parseInt(formMatch[1])));
 
         // --- SOCIAL ---
+        // RESTORED: Explicit social routes. Order matters.
         if (path === '/social/profile' && httpMethod === 'GET') return sendResponse(200, await db.getSocialProfile(userId));
         if (path === '/social/profile' && httpMethod === 'PATCH') return sendResponse(200, await db.updateSocialProfile(userId, parseBody(event)));
         if (path === '/social/friends' && httpMethod === 'GET') return sendResponse(200, await db.getFriends(userId));
