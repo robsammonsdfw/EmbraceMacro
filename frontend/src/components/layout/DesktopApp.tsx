@@ -25,6 +25,7 @@ import { DeviceSync } from '../account/DeviceSync';
 import { WidgetConfig } from '../account/WidgetConfig';
 import { PharmacyOrders } from '../account/PharmacyOrders';
 import { TeleMedicineHub } from '../telemed/TeleMedicineHub'; 
+import { PulseFeed } from '../content/PulseFeed';
 import { ActivityIcon, CameraIcon } from '../icons';
 
 interface DesktopAppProps {
@@ -139,6 +140,10 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
                     />
                 );
             
+            // Knowledge Hub
+            case 'pulse':
+                return <PulseFeed />;
+
             // Account Views
             case 'account.setup': 
                 return <JourneyView dashboardPrefs={dashboardPrefs} onOpenWizard={() => {}} />;

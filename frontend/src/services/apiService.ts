@@ -5,7 +5,7 @@ import {
     Assessment, AssessmentState, PartnerBlueprint, MatchProfile, 
     CoachingRelation, NutritionInfo, RestaurantActivity, PantryLogEntry,
     Recipe, SavedMeal, MealLogEntry, HealthStats, RewardsSummary, UserDashboardPrefs,
-    ShopifyProduct
+    ShopifyProduct, Article
 } from '../types';
 
 const API_BASE_URL = 'https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default';
@@ -108,6 +108,9 @@ export interface BulkInviteResult {
     friendsAdded: number;
     pointsAwarded: number;
 }
+
+// --- PULSE (KNOWLEDGE HUB) ---
+export const getArticles = (): Promise<Article[]> => callApi('/content/pulse', 'GET');
 
 // --- PLANS ---
 export const getMealPlans = (): Promise<MealPlan[]> => callApi('/meal-plans', 'GET');

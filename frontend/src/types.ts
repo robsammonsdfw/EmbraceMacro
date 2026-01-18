@@ -370,10 +370,24 @@ export interface ShopifyProduct {
     url?: string;
 }
 
+// --- Pulse / Articles ---
+export interface Article {
+    id: number;
+    title: string;
+    summary: string;
+    content: string;
+    image_url?: string;
+    author_name?: string;
+    author_avatar?: string;
+    embedded_actions?: any;
+    created_at: string;
+}
+
 export type ActiveView = 
   // Core
   | 'home'
-  | 'hub' 
+  | 'hub'
+  | 'pulse' // Knowledge Hub
   // Tele-Medicine
   | 'telemed.everyone.weight_loss'
   | 'telemed.everyone.lab_kits'

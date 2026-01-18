@@ -8,7 +8,7 @@ import {
     Squares2X2Icon, CogIcon, PillIcon, RunningIcon, 
     VideoIcon, BriefcaseIcon, BadgeCheckIcon, ClockIcon,
     ClipboardListIcon, BookOpenIcon, BarcodeIcon, GlobeAltIcon, ChefHatIcon,
-    CameraIcon, MoonIcon, ShoppingCartIcon, PlusIcon
+    CameraIcon, MoonIcon, ShoppingCartIcon, PlusIcon, NewspaperIcon
 } from '../icons';
 import { HealthJourney, ActiveView } from '../../types';
 import { JOURNEYS } from './AppLayout';
@@ -143,6 +143,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onNavigate, 
             {/* Navigation Content */}
             <div className="flex-grow px-3 space-y-1 overflow-y-auto no-scrollbar pb-10">
                 <NavItem label="Dashboard" icon={<HomeIcon />} isActive={activeView === 'home'} onClick={() => onNavigate('home')} />
+                <NavItem label="Pulse" icon={<NewspaperIcon />} isActive={activeView === 'pulse'} onClick={() => onNavigate('pulse')} />
 
                 {/* 1. PRESCRIPTIONS - RX */}
                 <CategoryHeader label="Prescriptions - Rx" color="text-sky-600" isOpen={openCategories.telemedicine} onClick={() => toggleCategory('telemedicine')} />

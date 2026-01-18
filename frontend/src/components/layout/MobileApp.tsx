@@ -6,7 +6,7 @@ import {
     HomeIcon, BookOpenIcon, PillIcon, UploadIcon, HeartIcon,
     GlobeAltIcon, BeakerIcon, ClockIcon, MoonIcon, ShoppingCartIcon,
     ClipboardCheckIcon, UsersIcon, TrophyIcon, BadgeCheckIcon,
-    DumbbellIcon, UserGroupIcon
+    DumbbellIcon, UserGroupIcon, NewspaperIcon
 } from '../icons';
 import type { HealthStats, UserDashboardPrefs } from '../../types';
 
@@ -25,6 +25,7 @@ import { ReadinessView } from '../sections/ReadinessView';
 import { HealthReportsView } from '../sections/HealthReportsView';
 import { PlaceholderPage } from '../PlaceholderPage';
 import { MealPrepVideos } from '../nutrition/MealPrepVideos';
+import { PulseFeed } from '../content/PulseFeed';
 
 // Feature Flag: Set to false to show "For Her" category
 const HIDE_FOR_HER = true;
@@ -42,7 +43,7 @@ interface MobileAppProps {
     onVisionSync?: () => void;
 }
 
-type StackLevel = 'home' | 'account' | 'physical' | 'nutrition' | 'mental' | 'sleep' | 'labs' | 'roles' | 'rewards' | 'telemed' | 'social';
+type StackLevel = 'home' | 'account' | 'physical' | 'nutrition' | 'mental' | 'sleep' | 'labs' | 'roles' | 'rewards' | 'telemed' | 'social' | 'pulse';
 
 const VitalsStrip: React.FC<{ stats: HealthStats; prefs: UserDashboardPrefs; onVisionSync?: () => void }> = ({ stats, prefs, onVisionSync }) => {
     
@@ -211,14 +212,14 @@ export const MobileApp: React.FC<MobileAppProps> = ({
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-                <HubButton label="Prescriptions" icon={<PillIcon />} onClick={() => navigateTo('telemed')} gradientFrom="from-blue-500" gradientTo="to-blue-700" iconColor="text-white border-white/40" glowColor="bg-blue-400" />
+                <HubButton label="Pulse" icon={<NewspaperIcon />} onClick={() => navigateTo('pulse')} gradientFrom="from-amber-500" gradientTo="to-orange-600" iconColor="text-white border-white/40" glowColor="bg-amber-400" />
                 <HubButton label="Nutrition + Meals" icon={<UtensilsIcon />} onClick={() => navigateTo('nutrition')} gradientFrom="from-emerald-500" gradientTo="to-emerald-700" iconColor="text-white border-white/40" glowColor="bg-emerald-400" />
                 <HubButton label="Body + Fitness" icon={<UserCircleIcon />} onClick={() => navigateTo('physical')} gradientFrom="from-indigo-600" gradientTo="to-indigo-800" iconColor="text-white border-white/40" glowColor="bg-indigo-400" />
+                <HubButton label="Prescriptions" icon={<PillIcon />} onClick={() => navigateTo('telemed')} gradientFrom="from-blue-500" gradientTo="to-blue-700" iconColor="text-white border-white/40" glowColor="bg-blue-400" />
                 <HubButton label="Mental + Motivation" icon={<BrainIcon />} onClick={() => navigateTo('mental')} gradientFrom="from-violet-500" gradientTo="to-violet-700" iconColor="text-white border-white/40" glowColor="bg-violet-400" />
                 <HubButton label="Sleep" icon={<MoonIcon />} onClick={() => navigateTo('sleep')} gradientFrom="from-indigo-400" gradientTo="to-indigo-600" iconColor="text-white border-white/40" glowColor="bg-indigo-300" />
                 <HubButton label="Labs" icon={<BeakerIcon />} onClick={() => navigateTo('labs')} gradientFrom="from-cyan-500" gradientTo="to-cyan-700" iconColor="text-white border-white/40" glowColor="bg-cyan-400" />
                 <HubButton label="Roles & Business" icon={<BriefcaseIcon />} onClick={() => navigateTo('roles')} gradientFrom="from-rose-500" gradientTo="to-rose-700" iconColor="text-white border-white/40" glowColor="bg-rose-400" />
-                <HubButton label="Social & Community" icon={<UserGroupIcon />} onClick={() => navigateTo('social')} gradientFrom="from-pink-500" gradientTo="to-pink-700" iconColor="text-white border-white/40" glowColor="bg-pink-400" />
             </div>
 
             <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm flex items-center justify-between group active:scale-95 transition-all" onClick={() => navigateTo('account')}>
@@ -228,7 +229,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                     </div>
                     <div>
                         <h4 className="font-black uppercase text-sm text-slate-800">Account Control</h4>
-                        <p className="text-][10px] font-bold text-slate-400 uppercase tracking-widest">Setup & Device Sync</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Setup & Device Sync</p>
                     </div>
                 </div>
                 <div className="text-slate-300">→</div>
@@ -250,6 +251,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                 </div>
 
                 <div className="flex-grow p-4 pb-24">
+                    {stack === 'pulse' && <PulseFeed />}
                     {stack === 'nutrition' && (
                         subView ? (
                             subView === 'videos' && <MealPrepVideos />
