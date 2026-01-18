@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Article, Recipe } from '../../types';
-import { XIcon, ActivityIcon, BeakerIcon, UtensilsIcon, UserCircleIcon, UserGroupIcon, PlusIcon } from '../icons';
+import { XIcon, ActivityIcon, BeakerIcon, UtensilsIcon, UserCircleIcon, UserGroupIcon, PlusIcon, ShoppingCartIcon } from '../icons';
 import { CookModeModal } from '../CookModeModal';
 import * as apiService from '../../services/apiService';
 
@@ -21,6 +21,7 @@ export const ArticleViewer: React.FC<ArticleViewerProps> = ({ article, onClose, 
             case 'OPEN_FORM_CHECK': return <ActivityIcon className="w-5 h-5" />;
             case 'GENERATE_MEDICAL_PLAN': return <BeakerIcon className="w-5 h-5" />;
             case 'OPEN_COOK_MODE': return <UtensilsIcon className="w-5 h-5" />;
+            case 'OPEN_LINK': return <ShoppingCartIcon className="w-5 h-5" />;
             default: return <PlusIcon className="w-5 h-5" />;
         }
     };
@@ -38,6 +39,8 @@ export const ArticleViewer: React.FC<ArticleViewerProps> = ({ article, onClose, 
 
         if (action.type === 'OPEN_COOK_MODE') {
             setIsCooking(true);
+        } else if (action.type === 'OPEN_LINK') {
+            window.open(action.url, '_blank');
         } else {
             // Delegate other actions to the parent (Desktop/Mobile App)
             onAction(action.type, action);

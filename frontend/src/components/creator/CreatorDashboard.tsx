@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { NewspaperIcon, PlusIcon, UserGroupIcon, TrophyIcon, ActivityIcon, UserCircleIcon } from '../icons';
+import { NewspaperIcon, PlusIcon, UserGroupIcon, TrophyIcon, ActivityIcon } from '../icons';
 import { Article } from '../../types';
 import * as apiService from '../../services/apiService';
 import { ArticleEditorModal } from './ArticleEditorModal';

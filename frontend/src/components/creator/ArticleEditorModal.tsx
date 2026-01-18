@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { XIcon, ActivityIcon, BeakerIcon, UtensilsIcon, CheckIcon } from '../icons';
+import { XIcon, ActivityIcon, BeakerIcon, UtensilsIcon, GlobeAltIcon } from '../icons';
 import { Article } from '../../types';
 
 interface ArticleEditorModalProps {
@@ -9,7 +9,6 @@ interface ArticleEditorModalProps {
 }
 
 export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({ onClose, onPublish }) => {
-    const [step, setStep] = useState(1);
     const [title, setTitle] = useState('');
     const [summary, setSummary] = useState('');
     const [content, setContent] = useState('');
@@ -26,6 +25,7 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({ onClose,
         if (type === 'OPEN_FORM_CHECK') setActionConfig({ exercise: 'Squat', label: 'Check Form' });
         if (type === 'GENERATE_MEDICAL_PLAN') setActionConfig({ conditions: ['Diabetes'], label: 'Get Plan' });
         if (type === 'OPEN_COOK_MODE') setActionConfig({ label: 'Start Cooking', recipe: { recipeName: 'Sample Recipe', ingredients: [], instructions: [], nutrition: { totalCalories: 0, totalProtein: 0, totalCarbs: 0, totalFat: 0 } } });
+        if (type === 'OPEN_LINK') setActionConfig({ label: 'Visit Link', url: 'https://' });
     };
 
     const handlePublish = () => {
@@ -93,27 +93,34 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({ onClose,
 
                         <div>
                             <h4 className="font-black text-slate-800 uppercase tracking-widest text-xs mb-3">Smart Action Embed</h4>
-                            <div className="grid grid-cols-3 gap-3">
+                            <div className="grid grid-cols-4 gap-3">
                                 <button 
                                     onClick={() => handleActionSelect('OPEN_FORM_CHECK')}
                                     className={`p-3 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${actionType === 'OPEN_FORM_CHECK' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-100 hover:bg-slate-50 text-slate-500'}`}
                                 >
                                     <ActivityIcon />
-                                    <span className="text-[10px] font-black uppercase">Form Check</span>
+                                    <span className="text-[9px] font-black uppercase text-center">Form Check</span>
                                 </button>
                                 <button 
                                     onClick={() => handleActionSelect('GENERATE_MEDICAL_PLAN')}
                                     className={`p-3 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${actionType === 'GENERATE_MEDICAL_PLAN' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 hover:bg-slate-50 text-slate-500'}`}
                                 >
                                     <BeakerIcon />
-                                    <span className="text-[10px] font-black uppercase">Meal Plan</span>
+                                    <span className="text-[9px] font-black uppercase text-center">Meal Plan</span>
                                 </button>
                                 <button 
                                     onClick={() => handleActionSelect('OPEN_COOK_MODE')}
                                     className={`p-3 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${actionType === 'OPEN_COOK_MODE' ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-slate-100 hover:bg-slate-50 text-slate-500'}`}
                                 >
                                     <UtensilsIcon />
-                                    <span className="text-[10px] font-black uppercase">Cook Mode</span>
+                                    <span className="text-[9px] font-black uppercase text-center">Cook Mode</span>
+                                </button>
+                                <button 
+                                    onClick={() => handleActionSelect('OPEN_LINK')}
+                                    className={`p-3 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${actionType === 'OPEN_LINK' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-100 hover:bg-slate-50 text-slate-500'}`}
+                                >
+                                    <GlobeAltIcon />
+                                    <span className="text-[9px] font-black uppercase text-center">External Link</span>
                                 </button>
                             </div>
                             
@@ -145,6 +152,29 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({ onClose,
                                         <option value="Hypertension">Hypertension</option>
                                         <option value="Celiac">Celiac Disease</option>
                                     </select>
+                                </div>
+                            )}
+
+                            {actionType === 'OPEN_LINK' && (
+                                <div className="mt-4 animate-fade-in space-y-3">
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-500 uppercase">Button Label</label>
+                                        <input 
+                                            type="text"
+                                            className="w-full mt-1 p-2 border rounded-lg text-sm bg-white"
+                                            value={actionConfig.label}
+                                            onChange={e => setActionConfig({...actionConfig, label: e.target.value})}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-500 uppercase">Destination URL</label>
+                                        <input 
+                                            type="text"
+                                            className="w-full mt-1 p-2 border rounded-lg text-sm bg-white"
+                                            value={actionConfig.url}
+                                            onChange={e => setActionConfig({...actionConfig, url: e.target.value})}
+                                        />
+                                    </div>
                                 </div>
                             )}
                         </div>

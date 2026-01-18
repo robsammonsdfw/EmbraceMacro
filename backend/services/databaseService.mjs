@@ -240,41 +240,50 @@ const ensureTables = async (client) => {
     if (parseInt(artCount.rows[0].count) === 0) {
         const seedArticles = [
             {
-                title: "Fix Your Squat Form in 5 Minutes",
-                summary: "Knee pain? Back pain? It might be your form. Use our AI analyzer to correct your posture instantly.",
-                content: "Squatting is the king of exercises, but doing it wrong causes injury. The most common mistakes are knee valgus (caving in) and rounding the back. Our Vision AI can detect these micro-movements in real-time.",
-                image_url: "https://images.unsplash.com/photo-1574680096145-d05b474e2155?auto=format&fit=crop&w=800&q=80",
-                author_name: "Dr. Squat",
-                author_avatar: "bg-emerald-500",
-                embedded_actions: { type: 'OPEN_FORM_CHECK', exercise: 'Squat', label: 'Analyze My Squat' }
+                title: "Good Morning Squats: What They Are & How to Fix Them",
+                summary: "Stop turning your squats into back exercises. Learn why the 'good morning squat' happens and how to fix your form for heavier, safer lifts.",
+                content: `The "good morning squat" is a common error where your hips rise faster than your chest coming out of the hole, turning the movement into a hybrid squat-good morning. \n\n Why it happens: Often attributed to a weak lower back, it's usually actually due to weak quads. When your quads can't extend the knee against the load, your body shifts the weight to the posterior chain (hamstrings and glutes) to finish the lift. \n\n How to fix it: \n1. Strengthen your quads with front squats and leg presses. \n2. Focus on the cue "chest up" or "drive your back into the bar" as you ascend. \n3. Reduce the weight until your form is perfect.`,
+                image_url: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=800&q=80",
+                author_name: "Michael Matthews",
+                author_avatar: "bg-slate-900",
+                embedded_actions: { type: 'OPEN_FORM_CHECK', exercise: 'Squat', label: 'Analyze Squat Form' }
             },
             {
-                title: "Eating for Diabetes & Hypertension",
-                summary: "A scientifically backed meal plan strategy to manage blood sugar and pressure simultaneously.",
-                content: "Managing comorbidity requires precision. We prioritize low-sodium options to manage blood pressure while strictly controlling glycemic load for insulin sensitivity. This plan uses the Mediterranean framework.",
-                image_url: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=800&q=80",
-                author_name: "Clinical Nutritionist",
-                author_avatar: "bg-blue-500",
-                embedded_actions: { type: 'GENERATE_MEDICAL_PLAN', conditions: ['Diabetes', 'Hypertension'], cuisine: 'Mediterranean', duration: 'week', label: 'Generate Medical Plan' }
+                title: "The Best Inner Thigh Workout for Stronger, Tighter Legs",
+                summary: "Tone and strengthen your adductors with these scientifically backed exercises. It's not just about the adductor machine.",
+                content: `Many people neglect their inner thighs (adductors), leading to muscle imbalances and potential injury. Strong adductors contribute to squat stability and overall leg power. \n\n Top Exercises: \n1. **Sumo Deadlift**: The wide stance heavily recruits the adductors. \n2. **Lateral Lunges**: Moves you through the frontal plane, stretching and strengthening the inner thigh. \n3. **Copenhagen Plank**: An advanced isometric hold that isolates the adductor muscles. \n\n Incorporate these into your leg day for complete development.`,
+                image_url: "https://images.unsplash.com/photo-1434608519344-49d77a699ded?auto=format&fit=crop&w=800&q=80",
+                author_name: "Legion Athletics",
+                author_avatar: "bg-blue-600",
+                embedded_actions: { type: 'OPEN_FORM_CHECK', exercise: 'Squat', label: 'Check Leg Day Form' }
             },
             {
-                title: "The Perfect Pan-Seared Steak",
-                summary: "Gordon Ramsay style. Butter, garlic, thyme. Simple yet perfect.",
-                content: "The maillard reaction is your best friend. Ensure the steak is dry before searing. Basting with butter solids adds the nutty flavor profile essential for a steakhouse quality finish.",
-                image_url: "https://images.unsplash.com/photo-1600891964092-4316c288032e?auto=format&fit=crop&w=800&q=80",
-                author_name: "Chef Mike",
-                author_avatar: "bg-orange-500",
-                embedded_actions: { 
-                    type: 'OPEN_COOK_MODE', 
-                    label: 'Start Cooking', 
-                    recipe: { 
-                        recipeName: "Perfect Pan-Seared Steak", 
-                        description: "Classic butter-basted steak.", 
-                        ingredients: [{name: "Ribeye Steak", quantity: "1 (12oz)"}, {name: "Butter", quantity: "2 tbsp"}, {name: "Garlic", quantity: "2 cloves"}, {name: "Thyme", "quantity": "2 sprigs"}], 
-                        instructions: ["Pat steak dry with paper towels.", "Season heavily with salt and pepper.", "Heat pan until smoking.", "Add oil and steak. Sear 2 mins.", "Flip, add butter, garlic, thyme.", "Baste for 2 mins.", "Rest for 5 mins."], 
-                        nutrition: {totalCalories: 650, totalProtein: 45, totalCarbs: 2, totalFat: 50} 
-                    } 
-                }
+                title: "Cycle Syncing Workouts & Diet: What Science Really Says",
+                summary: "Should you change your diet and training based on your menstrual cycle? We dive into the research to separate hype from reality.",
+                content: `Cycle syncing involves adjusting your exercise and nutrition to match the phases of your menstrual cycle (follicular, ovulatory, luteal, menstrual). \n\n **The Theory:** Hormonal fluctuations affect energy, strength, and metabolism. For example, some claim you should lift heavy during the follicular phase and stick to yoga during the menstrual phase. \n\n **The Science:** Research is mixed. While body temperature and metabolic rate do rise slightly in the luteal phase (burning ~100-300 more calories), strength performance remains largely stable for most women. \n\n **The Takeaway:** Listen to your body. If you feel weaker or tired during your period, auto-regulate your weights down. But you don't need to overhaul your entire program based on the calendar.`,
+                image_url: "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=800&q=80",
+                author_name: "Legion Team",
+                author_avatar: "bg-pink-500",
+                embedded_actions: null
+            },
+            {
+                title: "Army Body Fat Calculator: One-Site Tape Test",
+                summary: "The Navy Seal formula vs the new One-Site Tape Test. How accurate are they, and how can you measure yourself at home?",
+                content: `Measuring body fat accurately is notoriously difficult. The gold standard (DXA scans) is expensive. The US Army recently updated their tape test method to a simpler "One-Site" test involving a waist measurement relative to body weight (and height). \n\n **How to Measure:** \n1. Stand straight, relaxed. \n2. Measure the circumference of your waist at the belly button. \n\n While convenient, tape tests can have a margin of error of 3-5%. For tracking progress, consistency is key—measure at the same time, under the same conditions, every week.`,
+                image_url: "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?auto=format&fit=crop&w=800&q=80",
+                author_name: "Data Team",
+                author_avatar: "bg-emerald-600",
+                embedded_actions: null
+            },
+            {
+                title: "Ozempic Has Ended the Weight Loss Debate",
+                summary: "GLP-1 agonists have changed the landscape of obesity treatment. What does this mean for the future of fitness and natural weight loss?",
+                content: `Ozempic (Semaglutide) and other GLP-1 agonists work by mimicking a hormone that signals fullness to the brain and slows gastric emptying. The results are undeniable: significant weight loss in a majority of patients. \n\n **The Debate:** Does this make diet and exercise obsolete? \n\n **The Reality:** Absolutely not. Rapid weight loss often results in significant muscle loss (sarcopenia) if not paired with: \n1. **High Protein Diet**: To spare lean tissue. \n2. **Resistance Training**: To signal muscle retention. \n\n Without these lifestyle pillars, patients risk becoming "skinny fat" with a lowered metabolic rate.`,
+                image_url: "https://images.unsplash.com/photo-1628771065518-0d82f1938462?auto=format&fit=crop&w=800&q=80",
+                author_name: "Dr. Spencer Nadolsky",
+                author_avatar: "bg-indigo-500",
+                // UPDATED: Now links directly to the shopping collection
+                embedded_actions: { type: 'OPEN_LINK', url: 'https://embracehealth.ai/collections/weight-loss', label: 'Shop GLP-1 Program' }
             }
         ];
 
