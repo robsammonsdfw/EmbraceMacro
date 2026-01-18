@@ -102,6 +102,13 @@ export interface JudgeResult {
     feedback: string;
 }
 
+export interface BulkInviteResult {
+    invitesSent: number;
+    requestsSent: number;
+    friendsAdded: number;
+    pointsAwarded: number;
+}
+
 // --- PLANS ---
 export const getMealPlans = (): Promise<MealPlan[]> => callApi('/meal-plans', 'GET');
 export const createMealPlan = (name: string): Promise<MealPlan> => callApi('/meal-plans', 'POST', { name });
@@ -134,6 +141,7 @@ export const getFriendRequests = (): Promise<any[]> => callApi('/social/requests
 export const updateSocialProfile = (updates: Partial<UserProfile>): Promise<UserProfile> => callApi('/social/profile', 'PATCH', updates);
 export const sendFriendRequest = (email: string): Promise<void> => callApi('/social/requests', 'POST', { email });
 export const respondToFriendRequest = (requestId: number, status: 'accepted' | 'rejected'): Promise<void> => callApi(`/social/requests/${requestId}`, 'POST', { status });
+export const sendBulkInvites = (contacts: { name: string; email: string }[]): Promise<BulkInviteResult> => callApi('/social/bulk-invite', 'POST', { contacts });
 
 // --- PHYSICAL & FORM ---
 export const calculateReadiness = (stats: RecoveryData): Promise<ReadinessScore> => callApi('/calculate-readiness', 'POST', stats);

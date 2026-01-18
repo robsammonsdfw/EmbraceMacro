@@ -135,7 +135,8 @@ export const handler = async (event) => {
             if (!body.email) {
                 return sendResponse(400, { error: "Email is required" });
             }
-            const user = await db.findOrCreateUserByEmail(body.email);
+            // Pass inviteCode if present for referral rewards
+            const user = await db.findOrCreateUserByEmail(body.email, body.inviteCode);
             const token = jwt.sign({ 
                 userId: user.id, 
                 email: user.email,
@@ -311,6 +312,10 @@ export const handler = async (event) => {
             const { email } = parseBody(event);
             await db.sendFriendRequest(userId, email);
             return sendResponse(200, { success: true });
+        }
+        if (path.endsWith('/social/bulk-invite') && httpMethod === 'POST') {
+            const { contacts } = parseBody(event);
+            return sendResponse(200, await db.processBulkInvites(userId, contacts));
         }
         const reqRespondMatch = path.match(/\/social\/requests\/(\d+)$/);
         if (reqRespondMatch && httpMethod === 'POST') {

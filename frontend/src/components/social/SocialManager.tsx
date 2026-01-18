@@ -1,8 +1,8 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import * as apiService from '../../services/apiService';
 import { UserProfile, Friendship } from '../../types';
-import { UserCircleIcon, UserGroupIcon, PlusIcon, XIcon } from '../icons';
+import { UserCircleIcon, UserGroupIcon, PlusIcon, XIcon, UploadIcon, CheckIcon } from '../icons';
 
 export const SocialManager: React.FC = () => {
     const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -10,6 +10,8 @@ export const SocialManager: React.FC = () => {
     const [requests, setRequests] = useState<any[]>([]);
     const [searchEmail, setSearchEmail] = useState('');
     const [isLoading, setIsLoading] = useState(true);
+    const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const loadData = async () => {
         try {
@@ -53,6 +55,45 @@ export const SocialManager: React.FC = () => {
         loadData();
     };
 
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+            const text = ev.target?.result as string;
+            const lines = text.split('\n');
+            const contacts: { name: string; email: string }[] = [];
+            
+            lines.forEach(line => {
+                const parts = line.split(',');
+                if (parts.length >= 2) {
+                    const name = parts[0].trim();
+                    const email = parts[1].trim();
+                    if (email.includes('@')) {
+                        contacts.push({ name, email });
+                    }
+                }
+            });
+
+            if (contacts.length === 0) {
+                alert("No valid contacts found. Please format as: Name, Email");
+                return;
+            }
+
+            setUploadStatus('Processing...');
+            try {
+                const result = await apiService.sendBulkInvites(contacts);
+                setUploadStatus(`Processed ${contacts.length} contacts! Sent ${result.invitesSent} invites, ${result.requestsSent} requests, and added ${result.friendsAdded} new friends. Earned ${result.pointsAwarded} points!`);
+                loadData();
+            } catch (err) {
+                setUploadStatus('Failed to process upload.');
+            }
+        };
+        reader.readAsText(file);
+        e.target.value = ''; // Reset
+    };
+
     if (isLoading) return <div className="p-8 text-center text-slate-500">Loading social hub...</div>;
 
     return (
@@ -86,9 +127,28 @@ export const SocialManager: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                        <PlusIcon /> Add Friends
-                    </h3>
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                            <PlusIcon /> Add Friends
+                        </h3>
+                        <div className="relative">
+                            <button 
+                                onClick={() => fileInputRef.current?.click()} 
+                                className="text-emerald-600 bg-emerald-50 p-2 rounded-lg hover:bg-emerald-100 transition-colors" 
+                                title="Import Contacts (CSV)"
+                            >
+                                <UploadIcon className="w-5 h-5" />
+                            </button>
+                            <input type="file" ref={fileInputRef} accept=".csv,.txt" className="hidden" onChange={handleFileUpload} />
+                        </div>
+                    </div>
+                    
+                    {uploadStatus && (
+                        <div className="mb-4 p-3 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-lg border border-indigo-100">
+                            {uploadStatus}
+                        </div>
+                    )}
+
                     <form onSubmit={handleSendRequest} className="flex gap-2 mb-4">
                         <input 
                             type="email" 

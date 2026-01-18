@@ -34,6 +34,12 @@ To prevent `413 Request Entity Too Large` errors, **NEVER** return Base64 image 
 - [ ] **Storage:** "Active Journey" is stored in `dashboard_prefs.selectedJourney`.
 - [ ] **Questionnaire:** Additional health answers are stored in `users.intake_data` JSONB column.
 
+### 🌐 Social Hub & Referrals
+- [ ] **Bulk Invite:** `POST /social/bulk-invite` processes contact lists.
+- [ ] **Privacy Logic:** Checks `privacy_mode` before auto-friending.
+- [ ] **Referral Rewards:** Awards 50 pts on invite, 450 pts on join.
+- [ ] **Token Logic:** `invitations` table stores unique tokens redeemed via `POST /auth/customer-login`.
+
 ---
 
 ## 2. `backend/index.mjs` (Router Checklist)

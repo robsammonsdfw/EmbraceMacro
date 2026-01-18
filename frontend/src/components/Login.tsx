@@ -18,13 +18,14 @@ export const Login: React.FC = () => {
 
         try {
             const normalizedEmail = email.toLowerCase().trim();
+            const inviteCode = localStorage.getItem('pending_invite_code');
 
             const response = await fetch(`${API_BASE_URL}/auth/customer-login`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ email: normalizedEmail, password }),
+                body: JSON.stringify({ email: normalizedEmail, password, inviteCode }),
             });
 
             const data = await response.json();
@@ -34,6 +35,8 @@ export const Login: React.FC = () => {
             }
 
             if (data.token) {
+                // Clear code on successful use
+                if (inviteCode) localStorage.removeItem('pending_invite_code');
                 login(data.token);
             } else {
                 throw new Error('No access token received');

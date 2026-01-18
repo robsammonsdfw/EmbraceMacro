@@ -41,6 +41,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const tokenFromUrl = urlParams.get('token');
+    const inviteToken = urlParams.get('invite_token');
+
+    // Store invite token for later redemption during login/signup
+    if (inviteToken) {
+        localStorage.setItem('pending_invite_code', inviteToken);
+    }
 
     if (tokenFromUrl) {
       setToken(tokenFromUrl);

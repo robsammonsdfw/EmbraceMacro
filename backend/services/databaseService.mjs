@@ -1,5 +1,6 @@
 
 import pg from 'pg';
+import crypto from 'crypto';
 
 const { Pool } = pg;
 const pool = new Pool({
@@ -52,7 +53,7 @@ const processMealDataForList = (mealData, externalHasImage = false) => {
     return dataForList;
 };
 
-export const findOrCreateUserByEmail = async (email) => {
+export const findOrCreateUserByEmail = async (email, inviteCode = null) => {
     const client = await pool.connect();
     try {
         const insertQuery = `
@@ -70,6 +71,8 @@ export const findOrCreateUserByEmail = async (email) => {
             throw new Error("Failed to find or create user after insert operation.");
         }
         
+        const user = res.rows[0];
+
         // Ensure ALL application tables exist
         await ensureTables(client);
         
@@ -78,15 +81,60 @@ export const findOrCreateUserByEmail = async (email) => {
             INSERT INTO rewards_balances (user_id, points_total, points_available, tier)
             VALUES ($1, 0, 0, 'Bronze')
             ON CONFLICT (user_id) DO NOTHING;
-        `, [res.rows[0].id]);
+        `, [user.id]);
 
-        return res.rows[0];
+        // Process Invite Code if provided (Referral Fulfillment)
+        if (inviteCode) {
+            await processReferral(client, user.id, inviteCode);
+        }
+
+        return user;
 
     } catch (err) {
         console.error('Database error in findOrCreateUserByEmail:', err);
         throw new Error('Could not save or retrieve user data from the database.');
     } finally {
         client.release();
+    }
+};
+
+const processReferral = async (client, newUserId, code) => {
+    try {
+        // Find invitation
+        const invRes = await client.query(`SELECT id, inviter_id, status FROM invitations WHERE token = $1`, [code]);
+        if (invRes.rows.length === 0) return; // Invalid code
+        
+        const invite = invRes.rows[0];
+        if (invite.status === 'joined') return; // Already used
+
+        // 1. Mark joined
+        await client.query(`UPDATE invitations SET status = 'joined' WHERE id = $1`, [invite.id]);
+
+        // 2. Award Inviter 450 pts
+        // We use the existing awardPoints logic but need to call it within this transaction context ideally, 
+        // but for simplicity we'll replicate the insert here to keep the client connection.
+        await client.query(`
+            INSERT INTO rewards_ledger (user_id, event_type, points_delta, metadata)
+            VALUES ($1, 'referral.join', 450, $2)
+        `, [invite.inviter_id, JSON.stringify({ new_user_id: newUserId })]);
+
+        await client.query(`
+            UPDATE rewards_balances
+            SET points_total = points_total + 450, points_available = points_available + 450
+            WHERE user_id = $1
+        `, [invite.inviter_id]);
+
+        // 3. Create bidirectional friendship
+        // Status 'accepted' because it was an invite
+        const friendshipQ = `
+            INSERT INTO friendships (requester_id, receiver_id, status)
+            VALUES ($1, $2, 'accepted'), ($2, $1, 'accepted')
+            ON CONFLICT DO NOTHING
+        `;
+        await client.query(friendshipQ, [invite.inviter_id, newUserId]);
+
+    } catch (e) {
+        console.error("Referral processing error:", e);
     }
 };
 
@@ -121,6 +169,15 @@ const ensureTables = async (client) => {
             list_id INT, 
             name VARCHAR(255) NOT NULL,
             checked BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS invitations (
+            id SERIAL PRIMARY KEY,
+            inviter_id VARCHAR(255) NOT NULL,
+            email VARCHAR(255) NOT NULL,
+            name VARCHAR(255),
+            token VARCHAR(64) UNIQUE NOT NULL,
+            status VARCHAR(50) DEFAULT 'pending',
             created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         );
     `);
@@ -1072,6 +1129,81 @@ export const updateSocialProfile = async (userId, updates) => {
         await client.query(`UPDATE users SET ${fields.join(', ')} WHERE id = $${values.length}`, values);
         return getSocialProfile(userId);
     } finally { client.release(); }
+};
+
+// --- Bulk Invite Logic ---
+
+export const processBulkInvites = async (userId, contacts) => {
+    const client = await pool.connect();
+    try {
+        await ensureTables(client); // Ensure invitation table exists
+        
+        let invitesSent = 0;
+        let requestsSent = 0;
+        let friendsAdded = 0;
+        let pointsAwarded = 0;
+
+        for (const contact of contacts) {
+            const email = contact.email.toLowerCase().trim();
+            if (email === '') continue;
+
+            // 1. Check if user exists
+            const userRes = await client.query(`SELECT id, privacy_mode FROM users WHERE email = $1`, [email]);
+            const existingUser = userRes.rows[0];
+
+            if (existingUser) {
+                if (existingUser.id === userId) continue; // Skip self
+
+                // Check existing friendship
+                const friendRes = await client.query(`
+                    SELECT status FROM friendships 
+                    WHERE (requester_id = $1 AND receiver_id = $2) OR (requester_id = $2 AND receiver_id = $1)
+                `, [userId, existingUser.id]);
+
+                if (friendRes.rows.length === 0) {
+                    if (existingUser.privacy_mode === 'public') {
+                        // Public: Add as friend (accepted)
+                        await client.query(`INSERT INTO friendships (requester_id, receiver_id, status) VALUES ($1, $2, 'accepted')`, [userId, existingUser.id]);
+                        friendsAdded++;
+                    } else {
+                        // Private: Send Request
+                        await client.query(`INSERT INTO friendships (requester_id, receiver_id, status) VALUES ($1, $2, 'pending')`, [userId, existingUser.id]);
+                        requestsSent++;
+                    }
+                }
+            } else {
+                // 2. New User - Send Invite
+                // Check if invite already exists
+                const inviteRes = await client.query(`SELECT id FROM invitations WHERE inviter_id = $1 AND email = $2`, [userId, email]);
+                
+                if (inviteRes.rows.length === 0) {
+                    const token = crypto.randomBytes(16).toString('hex');
+                    await client.query(`
+                        INSERT INTO invitations (inviter_id, email, name, token)
+                        VALUES ($1, $2, $3, $4)
+                    `, [userId, email, contact.name, token]);
+                    
+                    invitesSent++;
+                    pointsAwarded += 50;
+                    
+                    // In real app: Send Email with link: https://embracehealth.ai?invite_token=${token}
+                    console.log(`[MOCK EMAIL] To: ${email}, Link: https://main.embracehealth.ai?invite_token=${token}`);
+                }
+            }
+        }
+
+        if (pointsAwarded > 0) {
+            await awardPoints(userId, 'referral.invite', pointsAwarded);
+        }
+
+        return { invitesSent, requestsSent, friendsAdded, pointsAwarded };
+
+    } catch (e) {
+        console.error("Bulk Invite Error:", e);
+        throw new Error("Failed to process bulk invites.");
+    } finally {
+        client.release();
+    }
 };
 
 // --- Sleep Records ---

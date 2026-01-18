@@ -43,6 +43,8 @@ This document serves as the "Production Bible" for frontend updates. Any change 
 ### 👥 Social & Coaching
 - [ ] **Proxy Banner:** When a Coach enters `onProxySelect`, the yellow `CoachProxyBanner` must appear at the top of the app.
 - [ ] **Read-Only Mode:** Ensure `CoachProxyUI` components correctly disable "Delete" or "Sensitive" actions when in read-only mode.
+- [ ] **Bulk Invite:** `SocialManager.tsx` allows CSV upload of contacts.
+- [ ] **Referral Link:** `AuthContext.tsx` correctly captures `invite_token` from URL for new users.
 
 ---
 
