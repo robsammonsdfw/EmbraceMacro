@@ -112,6 +112,7 @@ export interface BulkInviteResult {
 // --- PULSE (KNOWLEDGE HUB) ---
 export const getArticles = (): Promise<Article[]> => callApi('/content/pulse', 'GET');
 export const completeArticleAction = (articleId: number, actionType: string): Promise<any> => callApi(`/content/pulse/${articleId}/action`, 'POST', { actionType });
+export const publishArticle = (article: Partial<Article>): Promise<Article> => callApi('/content/pulse', 'POST', article);
 
 // --- PLANS ---
 export const getMealPlans = (): Promise<MealPlan[]> => callApi('/meal-plans', 'GET');

@@ -345,13 +345,6 @@ export const getArticles = async (userId) => {
     try {
         await ensureTables(client);
         
-        // This query:
-        // 1. Fetches all articles.
-        // 2. Joins with 'users' to get author details (if author_id is set).
-        // 3. Checks 'friendships' to see if the current user is a "squad member" of the author.
-        //    (Squad membership assumed if friend status is 'accepted').
-        // 4. Calculates is_locked based on exclusivity and squad status.
-        
         const query = `
             SELECT 
                 a.*,
@@ -382,7 +375,6 @@ export const getArticles = async (userId) => {
         const res = await client.query(query, [userId]);
         
         return res.rows.map(row => {
-            // If locked, mask content
             const content = row.is_locked 
                 ? row.content.substring(0, 150) + "..." 
                 : row.content;
@@ -395,7 +387,7 @@ export const getArticles = async (userId) => {
                 image_url: row.image_url,
                 author_name: row.author_first_name ? `${row.author_first_name} ${row.author_last_name || ''}`.trim() : row.author_name,
                 author_avatar: row.author_avatar,
-                author_id: row.author_user_id, // Expose ID for attribution
+                author_id: row.author_user_id, 
                 embedded_actions: row.embedded_actions,
                 is_locked: row.is_locked,
                 is_squad_exclusive: row.is_squad_exclusive,
@@ -405,6 +397,43 @@ export const getArticles = async (userId) => {
     } catch (e) {
         console.error("Error fetching articles:", e);
         return [];
+    } finally {
+        client.release();
+    }
+};
+
+// NEW: Create Article for Creators
+export const createArticle = async (userId, articleData) => {
+    const client = await pool.connect();
+    try {
+        await ensureTables(client);
+        const { title, summary, content, image_url, embedded_actions, is_squad_exclusive } = articleData;
+        
+        // Fetch user details for author name
+        const userRes = await client.query('SELECT first_name, last_name FROM users WHERE id = $1', [userId]);
+        const authorName = userRes.rows[0] ? `${userRes.rows[0].first_name} ${userRes.rows[0].last_name || ''}`.trim() : 'Creator';
+
+        const query = `
+            INSERT INTO articles (title, summary, content, image_url, author_name, author_avatar, embedded_actions, author_id, is_squad_exclusive)
+            VALUES ($1, $2, $3, $4, $5, 'bg-indigo-600', $6, $7, $8)
+            RETURNING id, title, created_at
+        `;
+        
+        const res = await client.query(query, [
+            title, 
+            summary, 
+            content, 
+            image_url, 
+            authorName, 
+            embedded_actions || {}, 
+            userId, 
+            is_squad_exclusive || false
+        ]);
+        
+        return res.rows[0];
+    } catch (e) {
+        console.error("Error creating article:", e);
+        throw new Error("Failed to publish article");
     } finally {
         client.release();
     }

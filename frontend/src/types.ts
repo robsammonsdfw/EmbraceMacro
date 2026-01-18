@@ -381,6 +381,7 @@ export interface Article {
     author_avatar?: string;
     embedded_actions?: any;
     created_at: string;
+    is_squad_exclusive?: boolean;
 }
 
 export type ActiveView = 

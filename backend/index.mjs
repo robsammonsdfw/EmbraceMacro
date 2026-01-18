@@ -86,6 +86,12 @@ export const handler = async (event) => {
             return sendResponse(200, articles);
         }
         
+        // NEW: Create Article
+        if (path === '/content/pulse' && httpMethod === 'POST') {
+            const article = await db.createArticle(userId, parseBody(event));
+            return sendResponse(200, article);
+        }
+        
         const actionMatch = path.match(/\/content\/pulse\/(\d+)\/action$/);
         if (actionMatch && httpMethod === 'POST') {
             const articleId = parseInt(actionMatch[1]);

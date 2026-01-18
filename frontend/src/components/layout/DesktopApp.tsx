@@ -12,6 +12,7 @@ import { HealthReportsView } from '../sections/HealthReportsView';
 import { ReadinessView } from '../sections/ReadinessView';
 import { AssessmentHub } from '../tests/AssessmentHub';
 import { CoachingHub } from '../coaching/CoachingHub';
+import { CreatorDashboard } from '../creator/CreatorDashboard';
 import { JourneyView } from '../sections/JourneyView';
 import { RewardsDashboard } from '../RewardsDashboard';
 import { SocialManager } from '../social/SocialManager';
@@ -135,9 +136,13 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             if (['roles.coach', 'roles.trainer', 'roles.nutrition', 'roles.sports', 'roles.wellness'].includes(activeView)) {
                 return <CoachingHub userRole={userRole} onUpgrade={() => {}} onProxySelect={onProxySelect} />;
             }
+            // Map Influencer role to Creator Dashboard
+            if (activeView === 'roles.influencer') {
+                return <CreatorDashboard />;
+            }
+            
             // Map business/institutional roles to placeholders for now
             const roleLabels: Record<string, string> = {
-                'roles.influencer': 'Influencer/Creator Portal',
                 'roles.studio': 'Studio Management',
                 'roles.gym': 'Gym Management',
                 'roles.clinic': 'Health Center Portal',

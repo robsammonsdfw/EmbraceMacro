@@ -15,6 +15,7 @@ import { FuelSection } from '../sections/FuelSection';
 import { BodyHub } from '../body/BodyHub';
 import { AssessmentHub } from '../tests/AssessmentHub';
 import { CoachingHub } from '../coaching/CoachingHub';
+import { CreatorDashboard } from '../creator/CreatorDashboard';
 import { RewardsDashboard } from '../RewardsDashboard';
 import { SocialManager } from '../social/SocialManager';
 import { DeviceSync } from '../account/DeviceSync';
@@ -312,7 +313,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                     
                     {stack === 'roles' && (
                         subView ? (
-                            <CoachingHub userRole={userRole} onUpgrade={() => {}} onProxySelect={onProxySelect} />
+                            subView === 'influencer' ? <CreatorDashboard /> : <CoachingHub userRole={userRole} onUpgrade={() => {}} onProxySelect={onProxySelect} />
                         ) : (
                             <div className="space-y-4">
                                 {/* Independent Coach */}
