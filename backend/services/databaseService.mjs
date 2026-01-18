@@ -111,8 +111,6 @@ const processReferral = async (client, newUserId, code) => {
         await client.query(`UPDATE invitations SET status = 'joined' WHERE id = $1`, [invite.id]);
 
         // 2. Award Inviter 450 pts
-        // We use the existing awardPoints logic but need to call it within this transaction context ideally, 
-        // but for simplicity we'll replicate the insert here to keep the client connection.
         await client.query(`
             INSERT INTO rewards_ledger (user_id, event_type, points_delta, metadata)
             VALUES ($1, 'referral.join', 450, $2)
@@ -220,6 +218,7 @@ const ensureTables = async (client) => {
     `);
 
     // Pulse / Articles (Knowledge Hub)
+    // Updated schema support manually added columns (author_id, is_squad_exclusive)
     await client.query(`
         CREATE TABLE IF NOT EXISTS articles (
             id SERIAL PRIMARY KEY,
@@ -230,6 +229,8 @@ const ensureTables = async (client) => {
             author_name VARCHAR(100),
             author_avatar TEXT,
             embedded_actions JSONB DEFAULT '{}',
+            author_id INT, 
+            is_squad_exclusive BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         );
     `);
@@ -338,12 +339,99 @@ export const getShopifyCustomerId = async (userId) => {
 };
 
 // --- Pulse / Articles Accessor ---
-export const getArticles = async () => {
+// UPDATED: Now supports Squad Locking and Author Details
+export const getArticles = async (userId) => {
     const client = await pool.connect();
     try {
-        await ensureTables(client); // Ensure table exists and is seeded
-        const res = await client.query(`SELECT * FROM articles ORDER BY created_at DESC`);
-        return res.rows;
+        await ensureTables(client);
+        
+        // This query:
+        // 1. Fetches all articles.
+        // 2. Joins with 'users' to get author details (if author_id is set).
+        // 3. Checks 'friendships' to see if the current user is a "squad member" of the author.
+        //    (Squad membership assumed if friend status is 'accepted').
+        // 4. Calculates is_locked based on exclusivity and squad status.
+        
+        const query = `
+            SELECT 
+                a.*,
+                u.first_name as author_first_name, 
+                u.last_name as author_last_name,
+                u.id as author_user_id,
+                CASE 
+                    WHEN f.id IS NOT NULL THEN true 
+                    WHEN a.author_id = $1 THEN true -- User is the author
+                    ELSE false 
+                END as is_squad_member,
+                CASE 
+                    WHEN a.is_squad_exclusive = true AND 
+                         f.id IS NULL AND 
+                         (a.author_id IS NOT NULL AND a.author_id != $1) 
+                    THEN true 
+                    ELSE false 
+                END as is_locked
+            FROM articles a
+            LEFT JOIN users u ON a.author_id = u.id
+            LEFT JOIN friendships f ON 
+                ((f.requester_id = $1 AND f.receiver_id = a.author_id) OR 
+                 (f.receiver_id = $1 AND f.requester_id = a.author_id)) 
+                AND f.status = 'accepted'
+            ORDER BY a.created_at DESC
+        `;
+
+        const res = await client.query(query, [userId]);
+        
+        return res.rows.map(row => {
+            // If locked, mask content
+            const content = row.is_locked 
+                ? row.content.substring(0, 150) + "..." 
+                : row.content;
+
+            return {
+                id: row.id,
+                title: row.title,
+                summary: row.summary,
+                content: content,
+                image_url: row.image_url,
+                author_name: row.author_first_name ? `${row.author_first_name} ${row.author_last_name || ''}`.trim() : row.author_name,
+                author_avatar: row.author_avatar,
+                author_id: row.author_user_id, // Expose ID for attribution
+                embedded_actions: row.embedded_actions,
+                is_locked: row.is_locked,
+                is_squad_exclusive: row.is_squad_exclusive,
+                created_at: row.created_at
+            };
+        });
+    } catch (e) {
+        console.error("Error fetching articles:", e);
+        return [];
+    } finally {
+        client.release();
+    }
+};
+
+// NEW: Complete Action Endpoint Logic
+export const completeArticleAction = async (userId, articleId, actionType) => {
+    const client = await pool.connect();
+    try {
+        // 1. Get Article Author
+        const articleRes = await client.query(`SELECT author_id FROM articles WHERE id = $1`, [articleId]);
+        if (articleRes.rows.length === 0) throw new Error("Article not found");
+        
+        const authorId = articleRes.rows[0].author_id;
+
+        // 2. Award Points to User (Engagement)
+        await awardPoints(userId, 'user.action_completed', 50, { article_id: articleId, action: actionType });
+
+        // 3. Award Points to Creator (Attribution) - if author exists and isn't self
+        if (authorId && authorId != userId) {
+            await awardPoints(authorId, 'creator.action_completed', 100, { article_id: articleId, performed_by: userId });
+        }
+
+        return { success: true, pointsAwarded: 50 };
+    } catch (e) {
+        console.error("Error completing action:", e);
+        throw e;
     } finally {
         client.release();
     }

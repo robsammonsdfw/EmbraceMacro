@@ -3,6 +3,7 @@ import React from 'react';
 import { Article, Recipe } from '../../types';
 import { XIcon, ActivityIcon, BeakerIcon, UtensilsIcon, UserCircleIcon, UserGroupIcon, PlusIcon } from '../icons';
 import { CookModeModal } from '../CookModeModal';
+import * as apiService from '../../services/apiService';
 
 interface ArticleViewerProps {
     article: Article;
@@ -24,9 +25,16 @@ export const ArticleViewer: React.FC<ArticleViewerProps> = ({ article, onClose, 
         }
     };
 
-    const handleMainAction = () => {
+    const handleMainAction = async () => {
         const action = article.embedded_actions;
         if (!action) return;
+
+        // NEW: Complete the action to award points
+        try {
+            await apiService.completeArticleAction(article.id, action.type);
+        } catch (e) {
+            console.error("Failed to log action completion", e);
+        }
 
         if (action.type === 'OPEN_COOK_MODE') {
             setIsCooking(true);
