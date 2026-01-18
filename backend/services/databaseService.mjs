@@ -219,6 +219,72 @@ const ensureTables = async (client) => {
         );
     `);
 
+    // Pulse / Articles (Knowledge Hub)
+    await client.query(`
+        CREATE TABLE IF NOT EXISTS articles (
+            id SERIAL PRIMARY KEY,
+            title VARCHAR(255) NOT NULL,
+            summary TEXT,
+            content TEXT,
+            image_url TEXT,
+            author_name VARCHAR(100),
+            author_avatar TEXT,
+            embedded_actions JSONB DEFAULT '{}',
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+    `);
+
+    // Seed Data Check for Articles
+    const artCount = await client.query('SELECT COUNT(*) FROM articles');
+    if (parseInt(artCount.rows[0].count) === 0) {
+        const seedArticles = [
+            {
+                title: "Fix Your Squat Form in 5 Minutes",
+                summary: "Knee pain? Back pain? It might be your form. Use our AI analyzer to correct your posture instantly.",
+                content: "Squatting is the king of exercises, but doing it wrong causes injury. The most common mistakes are knee valgus (caving in) and rounding the back. Our Vision AI can detect these micro-movements in real-time.",
+                image_url: "https://images.unsplash.com/photo-1574680096145-d05b474e2155?auto=format&fit=crop&w=800&q=80",
+                author_name: "Dr. Squat",
+                author_avatar: "bg-emerald-500",
+                embedded_actions: { type: 'OPEN_FORM_CHECK', exercise: 'Squat', label: 'Analyze My Squat' }
+            },
+            {
+                title: "Eating for Diabetes & Hypertension",
+                summary: "A scientifically backed meal plan strategy to manage blood sugar and pressure simultaneously.",
+                content: "Managing comorbidity requires precision. We prioritize low-sodium options to manage blood pressure while strictly controlling glycemic load for insulin sensitivity. This plan uses the Mediterranean framework.",
+                image_url: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=800&q=80",
+                author_name: "Clinical Nutritionist",
+                author_avatar: "bg-blue-500",
+                embedded_actions: { type: 'GENERATE_MEDICAL_PLAN', conditions: ['Diabetes', 'Hypertension'], cuisine: 'Mediterranean', duration: 'week', label: 'Generate Medical Plan' }
+            },
+            {
+                title: "The Perfect Pan-Seared Steak",
+                summary: "Gordon Ramsay style. Butter, garlic, thyme. Simple yet perfect.",
+                content: "The maillard reaction is your best friend. Ensure the steak is dry before searing. Basting with butter solids adds the nutty flavor profile essential for a steakhouse quality finish.",
+                image_url: "https://images.unsplash.com/photo-1600891964092-4316c288032e?auto=format&fit=crop&w=800&q=80",
+                author_name: "Chef Mike",
+                author_avatar: "bg-orange-500",
+                embedded_actions: { 
+                    type: 'OPEN_COOK_MODE', 
+                    label: 'Start Cooking', 
+                    recipe: { 
+                        recipeName: "Perfect Pan-Seared Steak", 
+                        description: "Classic butter-basted steak.", 
+                        ingredients: [{name: "Ribeye Steak", quantity: "1 (12oz)"}, {name: "Butter", quantity: "2 tbsp"}, {name: "Garlic", quantity: "2 cloves"}, {name: "Thyme", "quantity": "2 sprigs"}], 
+                        instructions: ["Pat steak dry with paper towels.", "Season heavily with salt and pepper.", "Heat pan until smoking.", "Add oil and steak. Sear 2 mins.", "Flip, add butter, garlic, thyme.", "Baste for 2 mins.", "Rest for 5 mins."], 
+                        nutrition: {totalCalories: 650, totalProtein: 45, totalCarbs: 2, totalFat: 50} 
+                    } 
+                }
+            }
+        ];
+
+        for (const art of seedArticles) {
+            await client.query(
+                `INSERT INTO articles (title, summary, content, image_url, author_name, author_avatar, embedded_actions) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                [art.title, art.summary, art.content, art.image_url, art.author_name, art.author_avatar, art.embedded_actions]
+            );
+        }
+    }
+
     // Health Metrics - Expanded Schema
     await client.query(`
         CREATE TABLE IF NOT EXISTS health_metrics (
@@ -266,6 +332,18 @@ export const getShopifyCustomerId = async (userId) => {
     } catch (err) {
         console.error('Error getting shopify customer id:', err);
         return null;
+    } finally {
+        client.release();
+    }
+};
+
+// --- Pulse / Articles Accessor ---
+export const getArticles = async () => {
+    const client = await pool.connect();
+    try {
+        await ensureTables(client); // Ensure table exists and is seeded
+        const res = await client.query(`SELECT * FROM articles ORDER BY created_at DESC`);
+        return res.rows;
     } finally {
         client.release();
     }

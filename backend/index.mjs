@@ -252,6 +252,11 @@ export const handler = async (event) => {
             return sendResponse(200, result);
         }
 
+        // --- PULSE (Content) ---
+        if (path.endsWith('/content/pulse') && httpMethod === 'GET') {
+            return sendResponse(200, await db.getArticles());
+        }
+
         // --- PANTRY LOG ---
         if (path.endsWith('/nutrition/pantry-log') && httpMethod === 'GET') return sendResponse(200, await db.getPantryLog(userId));
         if (path.endsWith('/nutrition/pantry-log') && httpMethod === 'POST') {
