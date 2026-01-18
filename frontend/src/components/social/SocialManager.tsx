@@ -131,16 +131,6 @@ export const SocialManager: React.FC = () => {
                         <h3 className="font-bold text-slate-800 flex items-center gap-2">
                             <PlusIcon /> Add Friends
                         </h3>
-                        <div className="relative">
-                            <button 
-                                onClick={() => fileInputRef.current?.click()} 
-                                className="text-emerald-600 bg-emerald-50 p-2 rounded-lg hover:bg-emerald-100 transition-colors" 
-                                title="Import Contacts (CSV)"
-                            >
-                                <UploadIcon className="w-5 h-5" />
-                            </button>
-                            <input type="file" ref={fileInputRef} accept=".csv,.txt" className="hidden" onChange={handleFileUpload} />
-                        </div>
                     </div>
                     
                     {uploadStatus && (
@@ -149,7 +139,7 @@ export const SocialManager: React.FC = () => {
                         </div>
                     )}
 
-                    <form onSubmit={handleSendRequest} className="flex gap-2 mb-4">
+                    <form onSubmit={handleSendRequest} className="flex gap-2 mb-6">
                         <input 
                             type="email" 
                             placeholder="Friend's email" 
@@ -159,8 +149,24 @@ export const SocialManager: React.FC = () => {
                         />
                         <button type="submit" className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold">Invite</button>
                     </form>
+
+                    {/* Bulk Upload Section - Moved Below Input */}
+                    <div className="mb-6 pt-6 border-t border-slate-100">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Or import contacts</p>
+                        <button 
+                            onClick={() => fileInputRef.current?.click()} 
+                            className="w-full flex items-center justify-center gap-2 p-3 bg-slate-50 hover:bg-emerald-50 hover:text-emerald-700 border border-slate-200 hover:border-emerald-200 rounded-xl text-slate-600 font-bold text-sm transition-all" 
+                            title="Import Contacts (CSV)"
+                        >
+                            <UploadIcon className="w-5 h-5" />
+                            <span>Upload CSV List</span>
+                        </button>
+                        <input type="file" ref={fileInputRef} accept=".csv,.txt" className="hidden" onChange={handleFileUpload} />
+                        <p className="text-[10px] text-slate-400 mt-2 text-center">Format: Name, Email (one per line)</p>
+                    </div>
+
                     {requests.length > 0 && (
-                        <div className="mt-4 space-y-2">
+                        <div className="mt-4 space-y-2 border-t border-slate-100 pt-4">
                             <p className="text-xs font-bold text-slate-400 uppercase">Requests</p>
                             {requests.map(req => (
                                 <div key={req.id} className="flex items-center justify-between p-2 bg-slate-50 rounded">
