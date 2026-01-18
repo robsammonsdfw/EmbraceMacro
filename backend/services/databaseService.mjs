@@ -1327,7 +1327,15 @@ export const sendFriendRequest = async (userId, email) => {
     const client = await pool.connect();
     try {
         const target = await client.query(`SELECT id FROM users WHERE email = $1`, [email.toLowerCase().trim()]);
-        if (target.rows.length === 0) throw new Error("User not found");
+        
+        // Updated logic: if user doesn't exist, we should trigger an invite flow instead of throwing error.
+        // For simple compatibility with existing singular invite flow:
+        if (target.rows.length === 0) {
+             // Reuse bulk invite logic for consistency
+             await processBulkInvites(userId, [{ name: '', email }]);
+             return;
+        }
+        
         await client.query(`INSERT INTO friendships (requester_id, receiver_id, status) VALUES ($1, $2, 'pending') ON CONFLICT DO NOTHING`, [userId, target.rows[0].id]);
     } finally { client.release(); }
 };

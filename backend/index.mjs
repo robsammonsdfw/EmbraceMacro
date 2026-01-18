@@ -80,7 +80,10 @@ export const handler = async (event) => {
         if (path.endsWith('/auth/customer-login') && httpMethod === 'POST') {
             const body = parseBody(event);
             if (!body.email) return sendResponse(400, { error: "Email required" });
+            
+            // Pass inviteCode if present to fulfill referrals
             const user = await db.findOrCreateUserByEmail(body.email, body.inviteCode);
+            
             const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '30d' });
             return sendResponse(200, { token, user });
         }
@@ -160,12 +163,19 @@ export const handler = async (event) => {
         if (formMatch && httpMethod === 'GET') return sendResponse(200, await db.getFormCheckById(parseInt(formMatch[1])));
 
         // --- SOCIAL ---
-        // RESTORED: Explicit social routes. Order matters.
         if (path === '/social/profile' && httpMethod === 'GET') return sendResponse(200, await db.getSocialProfile(userId));
         if (path === '/social/profile' && httpMethod === 'PATCH') return sendResponse(200, await db.updateSocialProfile(userId, parseBody(event)));
         if (path === '/social/friends' && httpMethod === 'GET') return sendResponse(200, await db.getFriends(userId));
         if (path === '/social/requests' && httpMethod === 'GET') return sendResponse(200, await db.getFriendRequests(userId));
-        if (path === '/social/requests' && httpMethod === 'POST') { await db.sendFriendRequest(userId, parseBody(event).email); return sendResponse(200, { success: true }); }
+        
+        // Single invite now uses the same robust logic as bulk invite to handle new users vs existing
+        if (path === '/social/requests' && httpMethod === 'POST') { 
+            const email = parseBody(event).email;
+            // Treat as a bulk invite of 1 to reuse logic (handles new users + privacy settings)
+            const result = await db.processBulkInvites(userId, [{ name: '', email }]);
+            return sendResponse(200, result); 
+        }
+        
         const reqMatch = path.match(/\/social\/requests\/(\d+)$/);
         if (reqMatch && httpMethod === 'POST') { await db.respondToFriendRequest(userId, parseInt(reqMatch[1]), parseBody(event).status); return sendResponse(200, { success: true }); }
         if (path === '/social/bulk-invite' && httpMethod === 'POST') return sendResponse(200, await db.processBulkInvites(userId, parseBody(event).contacts));

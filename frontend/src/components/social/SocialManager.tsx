@@ -41,12 +41,18 @@ export const SocialManager: React.FC = () => {
 
     const handleSendRequest = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!searchEmail.includes('@')) {
+            alert("Please enter a valid email.");
+            return;
+        }
         try {
+            // This now handles both existing (Friend Request) and new (Email Invite) users
             await apiService.sendFriendRequest(searchEmail);
-            alert("Request sent!");
+            alert(`Invite/Request sent to ${searchEmail}!`);
             setSearchEmail('');
+            loadData(); // Refresh to see if they were auto-added (if public)
         } catch (e) {
-            alert("Could not find user.");
+            alert("Failed to send invite.");
         }
     };
 
@@ -84,7 +90,7 @@ export const SocialManager: React.FC = () => {
             setUploadStatus('Processing...');
             try {
                 const result = await apiService.sendBulkInvites(contacts);
-                setUploadStatus(`Processed ${contacts.length} contacts! Sent ${result.invitesSent} invites, ${result.requestsSent} requests, and added ${result.friendsAdded} new friends. Earned ${result.pointsAwarded} points!`);
+                setUploadStatus(`Processed ${contacts.length} contacts! Sent ${result.invitesSent} new invites, ${result.requestsSent} requests, and added ${result.friendsAdded} new friends. Earned ${result.pointsAwarded} points!`);
                 loadData();
             } catch (err) {
                 setUploadStatus('Failed to process upload.');
@@ -150,7 +156,7 @@ export const SocialManager: React.FC = () => {
                         <button type="submit" className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold">Invite</button>
                     </form>
 
-                    {/* Bulk Upload Section - Moved Below Input */}
+                    {/* Bulk Upload Section */}
                     <div className="mb-6 pt-6 border-t border-slate-100">
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Or import contacts</p>
                         <button 
@@ -185,16 +191,22 @@ export const SocialManager: React.FC = () => {
                     <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
                         <UserGroupIcon /> Friends ({friends.length})
                     </h3>
-                    <div className="space-y-3">
-                        {friends.map(friend => (
-                            <div key={friend.friendId} className="flex items-center gap-3 p-2 bg-slate-50 rounded-lg">
-                                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-500 font-bold">
-                                    {friend.email[0].toUpperCase()}
+                    {friends.length === 0 ? (
+                        <div className="text-center py-8 text-slate-400 text-sm">
+                            No friends yet. Invite someone!
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {friends.map(friend => (
+                                <div key={friend.friendId} className="flex items-center gap-3 p-2 bg-slate-50 rounded-lg">
+                                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-500 font-bold">
+                                        {friend.email[0].toUpperCase()}
+                                    </div>
+                                    <span className="text-sm font-medium">{friend.email}</span>
                                 </div>
-                                <span className="text-sm font-medium">{friend.email}</span>
-                            </div>
-                        ))}
-                    </div>
+                            ))}
+                        </div>
+                    )}
                 </section>
             </div>
         </div>

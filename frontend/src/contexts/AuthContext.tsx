@@ -46,6 +46,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Store invite token for later redemption during login/signup
     if (inviteToken) {
         localStorage.setItem('pending_invite_code', inviteToken);
+        // We don't clean URL immediately so the user can see it if debugging, 
+        // but traditionally we would. Leaving it here for clarity.
     }
 
     if (tokenFromUrl) {
