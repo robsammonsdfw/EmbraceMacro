@@ -21,7 +21,7 @@ export const CookModeModal: React.FC<CookModeModalProps> = ({ recipe, onClose })
     };
 
     return (
-        <div className="fixed inset-0 bg-slate-900 z-50 flex flex-col animate-fade-in text-white">
+        <div className="fixed inset-0 bg-slate-900 z-[80] flex flex-col animate-fade-in text-white">
             {/* Header */}
             <div className="flex justify-between items-center p-6 border-b border-slate-700 bg-slate-800">
                 <h2 className="text-2xl font-bold truncate pr-4">{recipe.recipeName}</h2>

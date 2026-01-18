@@ -166,6 +166,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
     // Feature States
     const [medicalActionParams, setMedicalActionParams] = useState<{ conditions: string[], cuisine: string, duration: string } | undefined>(undefined);
     const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
+    const [formAnalysisExercise, setFormAnalysisExercise] = useState<string | undefined>(undefined);
 
     // Telemed Category State
     const [telemedCategories, setTelemedCategories] = useState({
@@ -208,9 +209,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
         
         switch (type) {
             case 'OPEN_FORM_CHECK':
-                // We'll handle this by setting subView in 'physical' stack
-                // NOTE: Mobile BodyHub doesn't currently support `initialExercise` prop like Desktop
-                // So we just navigate. In a real app, BodyHub would need to read from a global or passed prop.
+                setFormAnalysisExercise(payload.exercise);
                 setStack('physical');
                 setSubView('form_check'); 
                 break;
@@ -221,7 +220,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                     duration: payload.duration || 'day'
                 });
                 setStack('nutrition');
-                setSubView('plan'); // Assuming FuelSection uses defaultTab='plan' logic
+                setSubView('plan');
                 break;
             default:
                 console.warn("Unknown action type on mobile:", type);
@@ -301,7 +300,11 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                         )
                     )}
                     {stack === 'physical' && (
-                        <BodyHub {...bodyProps} initialTab={subView === 'pics' ? 'images' : subView === 'form_check' ? 'form_check' : '3d_scan'} />
+                        <BodyHub 
+                            {...bodyProps} 
+                            initialTab={subView === 'pics' ? 'images' : subView === 'form_check' ? 'form_check' : '3d_scan'}
+                            initialExercise={formAnalysisExercise}
+                        />
                     )}
                     {stack === 'mental' && <AssessmentHub />}
                     {stack === 'rewards' && <RewardsDashboard onNavigate={navigateTo as any} />}

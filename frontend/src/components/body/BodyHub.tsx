@@ -12,6 +12,7 @@ interface BodyHubProps {
     dashboardPrefs: UserDashboardPrefs;
     onUpdatePrefs: (prefs: UserDashboardPrefs) => void;
     initialTab?: '3d_scan' | 'images' | 'workout' | 'form_check';
+    initialExercise?: string;
 }
 
 type BodyTab = '3d_scan' | 'images' | 'workout' | 'form_check';
@@ -92,7 +93,7 @@ const BodybuilderOutline: React.FC<{ pose: string; className?: string }> = ({ po
     );
 };
 
-export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, initialTab = '3d_scan' }) => {
+export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, initialTab = '3d_scan', initialExercise }) => {
     const [activeTab, setActiveTab] = useState<BodyTab>(initialTab);
     
     // Gallery States
@@ -406,7 +407,10 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, initialTab = '3d_
                 {activeTab === 'workout' && renderWorkout()}
                 {activeTab === 'form_check' && (
                     <div className="h-[600px] relative rounded-[2.5rem] overflow-hidden border border-slate-200 shadow-sm">
-                        <FormAnalysis onClose={() => setActiveTab('3d_scan')} />
+                        <FormAnalysis 
+                            onClose={() => setActiveTab('3d_scan')} 
+                            initialExercise={initialExercise} 
+                        />
                     </div>
                 )}
             </div>
