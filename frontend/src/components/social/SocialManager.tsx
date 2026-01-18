@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import * as apiService from '../../services/apiService';
 import { UserProfile, Friendship } from '../../types';
-import { UserCircleIcon, UserGroupIcon, PlusIcon, XIcon, UploadIcon, CheckIcon } from '../icons';
+import { UserCircleIcon, UserGroupIcon, PlusIcon, XIcon, UploadIcon } from '../icons';
 
 export const SocialManager: React.FC = () => {
     const [profile, setProfile] = useState<UserProfile | null>(null);
