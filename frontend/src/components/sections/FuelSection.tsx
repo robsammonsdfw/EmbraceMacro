@@ -26,12 +26,13 @@ interface FuelSectionProps {
     onManualLogAdd?: (query: string) => void;
     onScanClick?: () => void;
     defaultTab?: 'plan' | 'library' | 'grocery' | 'history' | 'videos';
+    initialMedicalParams?: { conditions: string[], cuisine: string, duration: string };
 }
 
 export const FuelSection: React.FC<FuelSectionProps> = ({
     plans, activePlanId, savedMeals, mealLog, onPlanChange, onCreatePlan, onRemoveFromPlan, 
     onQuickAdd, onGenerateMedical, medicalPlannerState, onAddMealToLibrary, onDeleteMeal, onSelectMeal,
-    onManualLibraryAdd, onManualLogAdd, onScanClick, defaultTab
+    onManualLibraryAdd, onManualLogAdd, onScanClick, defaultTab, initialMedicalParams
 }) => {
     const [activeTab, setActiveTab] = useState<'plan' | 'library' | 'grocery' | 'history' | 'videos'>('plan');
 
@@ -108,6 +109,7 @@ export const FuelSection: React.FC<FuelSectionProps> = ({
                         onQuickAdd={onQuickAdd}
                         onGenerateMedical={onGenerateMedical}
                         medicalPlannerState={medicalPlannerState}
+                        initialMedicalParams={initialMedicalParams}
                     />
                 )}
                 {activeTab === 'library' && (

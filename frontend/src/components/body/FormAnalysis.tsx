@@ -6,15 +6,20 @@ import type { FormAnalysisResult } from '../../types';
 
 type ViewMode = 'categories' | 'gallery' | 'camera' | 'analysis';
 
-export const FormAnalysis: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+interface FormAnalysisProps {
+    onClose: () => void;
+    initialExercise?: string;
+}
+
+export const FormAnalysis: React.FC<FormAnalysisProps> = ({ onClose, initialExercise }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [stream, setStream] = useState<MediaStream | null>(null);
     
     // States
-    const [view, setView] = useState<ViewMode>('categories');
-    const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
+    const [view, setView] = useState<ViewMode>(initialExercise ? 'gallery' : 'categories');
+    const [selectedExercise, setSelectedExercise] = useState<string | null>(initialExercise || null);
     const [savedChecks, setSavedChecks] = useState<any[]>([]);
     
     // Analysis
@@ -25,8 +30,11 @@ export const FormAnalysis: React.FC<{ onClose: () => void }> = ({ onClose }) => 
 
     // Initial load
     useEffect(() => {
+        if (initialExercise) {
+            loadSavedChecks(initialExercise);
+        }
         return () => stopCamera();
-    }, []);
+    }, [initialExercise]);
 
     const stopCamera = () => {
         if (stream) {

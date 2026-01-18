@@ -31,9 +31,6 @@ export const PulseFeed: React.FC<PulseFeedProps> = ({ onArticleSelect }) => {
     const handleSelect = (article: Article) => {
         if (onArticleSelect) {
             onArticleSelect(article);
-        } else {
-            // Phase 2 Placeholder Action
-            alert(`Opening "${article.title}"... (Viewer coming in Phase 3)`);
         }
     };
 

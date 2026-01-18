@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CHRONIC_DISEASES, DiseaseTemplate } from '../data/chronicDiseases';
 import { XIcon, BeakerIcon, TrophyIcon, StarIcon } from './icons';
 
@@ -10,21 +10,32 @@ interface MedicalPlannerModalProps {
     progress?: number;
     status?: string;
     recommendations?: any[];
+    initialDiseases?: string[]; // Array of disease IDs
 }
 
 const CUISINES = ['American', 'Italian', 'Mexican', 'Asian', 'Mediterranean', 'Indian', 'French'];
 
 export const MedicalPlannerModal: React.FC<MedicalPlannerModalProps> = ({ 
-    onClose, onGenerate, isLoading, progress = 0, status = '', recommendations = [] 
+    onClose, onGenerate, isLoading, progress = 0, status = '', recommendations = [], initialDiseases = []
 }) => {
-    const [selectedDiseases, setSelectedDiseases] = useState<string[]>([]);
+    const [selectedDiseases, setSelectedDiseases] = useState<string[]>(initialDiseases);
     const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null); // For recommended flow
     const [cuisine, setCuisine] = useState<string>('American');
     const [duration, setDuration] = useState<'day' | 'week'>('day');
 
-    // If recommendations exist, default view is "Recommended" mode
+    // If recommendations exist, default view is "Recommended" mode. 
+    // If initialDiseases exist (from Article), force "manual" mode.
     const hasRecommendations = recommendations.length > 0;
-    const [viewMode, setViewMode] = useState<'recommended' | 'manual'>(hasRecommendations ? 'recommended' : 'manual');
+    const [viewMode, setViewMode] = useState<'recommended' | 'manual'>(
+        hasRecommendations && initialDiseases.length === 0 ? 'recommended' : 'manual'
+    );
+
+    useEffect(() => {
+        if (initialDiseases.length > 0) {
+            setSelectedDiseases(initialDiseases);
+            setViewMode('manual');
+        }
+    }, [initialDiseases]);
 
     const handleToggleDisease = (id: string) => {
         setSelectedDiseases(prev => 
@@ -55,7 +66,11 @@ export const MedicalPlannerModal: React.FC<MedicalPlannerModalProps> = ({
             }
         } else {
             // Manual selection
-            diseasesToUse = CHRONIC_DISEASES.filter(d => selectedDiseases.includes(d.id));
+            // Map selected IDs to full DiseaseTemplate objects based on CHRONIC_DISEASES data
+            // Also supports custom IDs passed via initialDiseases that might map to existing templates
+            diseasesToUse = CHRONIC_DISEASES.filter(d => 
+                selectedDiseases.some(sel => sel.toLowerCase() === d.id.toLowerCase() || sel.toLowerCase() === d.name.toLowerCase())
+            );
         }
 
         onGenerate(diseasesToUse, cuisine, duration);

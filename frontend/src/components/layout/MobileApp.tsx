@@ -8,7 +8,7 @@ import {
     ClipboardCheckIcon, UsersIcon, TrophyIcon, BadgeCheckIcon,
     DumbbellIcon, UserGroupIcon, NewspaperIcon
 } from '../icons';
-import type { HealthStats, UserDashboardPrefs } from '../../types';
+import type { HealthStats, UserDashboardPrefs, Article } from '../../types';
 
 // Import Views
 import { FuelSection } from '../sections/FuelSection';
@@ -26,6 +26,7 @@ import { HealthReportsView } from '../sections/HealthReportsView';
 import { PlaceholderPage } from '../PlaceholderPage';
 import { MealPrepVideos } from '../nutrition/MealPrepVideos';
 import { PulseFeed } from '../content/PulseFeed';
+import { ArticleViewer } from '../content/ArticleViewer';
 
 // Feature Flag: Set to false to show "For Her" category
 const HIDE_FOR_HER = true;
@@ -162,6 +163,10 @@ export const MobileApp: React.FC<MobileAppProps> = ({
     const [stack, setStack] = useState<StackLevel>('home');
     const [subView, setSubView] = useState<string | null>(null);
     
+    // Feature States
+    const [medicalActionParams, setMedicalActionParams] = useState<{ conditions: string[], cuisine: string, duration: string } | undefined>(undefined);
+    const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
+
     // Telemed Category State
     const [telemedCategories, setTelemedCategories] = useState({
         him: false,
@@ -195,6 +200,31 @@ export const MobileApp: React.FC<MobileAppProps> = ({
             setSubView(null);
         } else {
             setStack('home');
+        }
+    };
+
+    const handleArticleAction = (type: string, payload: any) => {
+        setSelectedArticle(null); // Close viewer
+        
+        switch (type) {
+            case 'OPEN_FORM_CHECK':
+                // We'll handle this by setting subView in 'physical' stack
+                // NOTE: Mobile BodyHub doesn't currently support `initialExercise` prop like Desktop
+                // So we just navigate. In a real app, BodyHub would need to read from a global or passed prop.
+                setStack('physical');
+                setSubView('form_check'); 
+                break;
+            case 'GENERATE_MEDICAL_PLAN':
+                setMedicalActionParams({
+                    conditions: payload.conditions || [],
+                    cuisine: payload.cuisine || 'Mediterranean',
+                    duration: payload.duration || 'day'
+                });
+                setStack('nutrition');
+                setSubView('plan'); // Assuming FuelSection uses defaultTab='plan' logic
+                break;
+            default:
+                console.warn("Unknown action type on mobile:", type);
         }
     };
 
@@ -251,15 +281,28 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                 </div>
 
                 <div className="flex-grow p-4 pb-24">
-                    {stack === 'pulse' && <PulseFeed />}
+                    {stack === 'pulse' && (
+                        <>
+                            {selectedArticle && (
+                                <ArticleViewer 
+                                    article={selectedArticle} 
+                                    onClose={() => setSelectedArticle(null)}
+                                    onAction={handleArticleAction}
+                                />
+                            )}
+                            <PulseFeed onArticleSelect={setSelectedArticle} />
+                        </>
+                    )}
                     {stack === 'nutrition' && (
                         subView ? (
-                            subView === 'videos' && <MealPrepVideos />
+                            subView === 'videos' ? <MealPrepVideos /> : <FuelSection {...fuelProps} defaultTab={subView === 'plan' ? 'plan' : undefined} initialMedicalParams={medicalActionParams} />
                         ) : (
                             <FuelSection {...fuelProps} />
                         )
                     )}
-                    {stack === 'physical' && <BodyHub {...bodyProps} initialTab={subView === 'pics' ? 'images' : '3d_scan'} />}
+                    {stack === 'physical' && (
+                        <BodyHub {...bodyProps} initialTab={subView === 'pics' ? 'images' : subView === 'form_check' ? 'form_check' : '3d_scan'} />
+                    )}
                     {stack === 'mental' && <AssessmentHub />}
                     {stack === 'rewards' && <RewardsDashboard onNavigate={navigateTo as any} />}
                     {stack === 'social' && <SocialManager />}

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { MealPlan, SavedMeal } from '../types';
 import { BeakerIcon, PlusIcon, TrashIcon, BookOpenIcon, CameraOffIcon, SearchIcon, XIcon, UtensilsIcon } from './icons';
 import { MedicalPlannerModal } from './MedicalPlannerModal';
@@ -14,6 +14,7 @@ interface MealPlanManagerProps {
     onQuickAdd: (planId: number, meal: SavedMeal, day: string, slot: string) => void;
     onGenerateMedical: (diseases: any[], cuisine: string, duration: 'day' | 'week') => Promise<void>;
     medicalPlannerState: { isLoading: boolean; progress: number; status: string };
+    initialMedicalParams?: { conditions: string[], cuisine: string, duration: string };
 }
 
 const FIXED_SLOTS = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
@@ -21,7 +22,7 @@ const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
 
 export const MealPlanManager: React.FC<MealPlanManagerProps> = ({ 
     plans, activePlanId, savedMeals, onPlanChange, onCreatePlan, onRemoveFromPlan, onQuickAdd,
-    onGenerateMedical, medicalPlannerState
+    onGenerateMedical, medicalPlannerState, initialMedicalParams
 }) => {
     const [isMedicalModalOpen, setIsMedicalModalOpen] = useState(false);
     const [newPlanName, setNewPlanName] = useState('');
@@ -31,6 +32,13 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
     const [selectedDay, setSelectedDay] = useState<string>(DAYS[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1]);
     const [isMobileLibraryOpen, setIsMobileLibraryOpen] = useState(false);
     const [pendingSlot, setPendingSlot] = useState<string | null>(null);
+
+    // Auto-launch medical planner if params provided (e.g. from Article)
+    useEffect(() => {
+        if (initialMedicalParams) {
+            setIsMedicalModalOpen(true);
+        }
+    }, [initialMedicalParams]);
 
     const activePlan = plans.find(p => p.id === activePlanId);
 
@@ -166,6 +174,7 @@ export const MealPlanManager: React.FC<MealPlanManagerProps> = ({
                     isLoading={medicalPlannerState.isLoading}
                     progress={medicalPlannerState.progress}
                     status={medicalPlannerState.status}
+                    initialDiseases={initialMedicalParams?.conditions}
                 />
             )}
 

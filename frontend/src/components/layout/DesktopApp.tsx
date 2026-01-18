@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { AppLayout } from './AppLayout';
-import { ActiveView, HealthStats, UserDashboardPrefs, HealthJourney } from '../../types';
+import { ActiveView, HealthStats, UserDashboardPrefs, HealthJourney, Article } from '../../types';
 import * as apiService from '../../services/apiService';
 
 // Import Views
@@ -26,6 +26,7 @@ import { WidgetConfig } from '../account/WidgetConfig';
 import { PharmacyOrders } from '../account/PharmacyOrders';
 import { TeleMedicineHub } from '../telemed/TeleMedicineHub'; 
 import { PulseFeed } from '../content/PulseFeed';
+import { ArticleViewer } from '../content/ArticleViewer';
 import { ActivityIcon, CameraIcon } from '../icons';
 
 interface DesktopAppProps {
@@ -46,8 +47,15 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
     const [activeView, setActiveView] = useState<ActiveView>('home');
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [rewardsBalance, setRewardsBalance] = useState(0);
+    
+    // Feature States
     const [showFormAnalysis, setShowFormAnalysis] = useState(false);
+    const [formAnalysisExercise, setFormAnalysisExercise] = useState<string | undefined>(undefined);
     const [recentFormChecks, setRecentFormChecks] = useState<any[]>([]);
+    
+    // Article Action States
+    const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
+    const [medicalActionParams, setMedicalActionParams] = useState<{ conditions: string[], cuisine: string, duration: string } | undefined>(undefined);
 
     // Calculate Daily Macros
     const today = new Date().toDateString();
@@ -89,6 +97,29 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
     const handleUpdateJourney = (j: HealthJourney) => {
         if (bodyProps.onUpdatePrefs) {
             bodyProps.onUpdatePrefs({ ...dashboardPrefs, selectedJourney: j });
+        }
+    };
+
+    const handleArticleAction = (type: string, payload: any) => {
+        setSelectedArticle(null); // Close viewer to proceed
+        
+        switch (type) {
+            case 'OPEN_FORM_CHECK':
+                setFormAnalysisExercise(payload.exercise);
+                setShowFormAnalysis(true);
+                setActiveView('physical.form_check');
+                break;
+            case 'GENERATE_MEDICAL_PLAN':
+                setMedicalActionParams({
+                    conditions: payload.conditions || [],
+                    cuisine: payload.cuisine || 'Mediterranean',
+                    duration: payload.duration || 'day'
+                });
+                setActiveView('nutrition.planner');
+                break;
+            // OPEN_COOK_MODE is handled internally by ArticleViewer, but we could add global handling here if needed
+            default:
+                console.warn("Unknown action type:", type);
         }
     };
 
@@ -142,7 +173,18 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             
             // Knowledge Hub
             case 'pulse':
-                return <PulseFeed />;
+                return (
+                    <>
+                        {selectedArticle && (
+                            <ArticleViewer 
+                                article={selectedArticle} 
+                                onClose={() => setSelectedArticle(null)}
+                                onAction={handleArticleAction}
+                            />
+                        )}
+                        <PulseFeed onArticleSelect={setSelectedArticle} />
+                    </>
+                );
 
             // Account Views
             case 'account.setup': 
@@ -172,7 +214,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
                                 <h2 className="text-3xl font-black mb-4">AI Form Coach</h2>
                                 <p className="text-slate-400 mb-8 max-w-md mx-auto">Get real-time feedback on your squats, pushups, and deadlifts using computer vision.</p>
                                 <button 
-                                    onClick={() => setShowFormAnalysis(true)} 
+                                    onClick={() => { setFormAnalysisExercise(undefined); setShowFormAnalysis(true); }} 
                                     className="bg-emerald-500 hover:bg-emerald-400 text-white px-10 py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg transition-all active:scale-95"
                                 >
                                     Launch Analysis
@@ -180,7 +222,12 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
                             </div>
                         </div>
 
-                        {showFormAnalysis && <FormAnalysis onClose={() => setShowFormAnalysis(false)} />}
+                        {showFormAnalysis && (
+                            <FormAnalysis 
+                                onClose={() => { setShowFormAnalysis(false); setFormAnalysisExercise(undefined); }} 
+                                initialExercise={formAnalysisExercise}
+                            />
+                        )}
 
                         <div className="mt-8 flex-grow">
                             <h3 className="font-black text-slate-800 uppercase tracking-widest text-xs mb-4 flex items-center gap-2">
@@ -214,7 +261,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
 
             // Nutrition + Meals Views
             case 'nutrition.planner': 
-                return <FuelSection {...fuelProps} defaultTab="plan" />;
+                return <FuelSection {...fuelProps} defaultTab="plan" initialMedicalParams={medicalActionParams} />;
             case 'nutrition.pantry': 
                 return <FuelSection {...fuelProps} defaultTab="grocery" />; 
             case 'nutrition.pantry_chef':
