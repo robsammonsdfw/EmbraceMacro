@@ -1,6 +1,7 @@
 
 import pg from 'pg';
 import crypto from 'crypto';
+import nodemailer from 'nodemailer';
 
 const { Pool } = pg;
 const pool = new Pool({
@@ -8,6 +9,53 @@ const pool = new Pool({
         rejectUnauthorized: false
     }
 });
+
+// --- EMAIL CONFIGURATION ---
+const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
+    auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+    },
+});
+
+const sendInviteEmail = async (toEmail, token, inviterName) => {
+    if (!process.env.SMTP_HOST) {
+        console.warn("SMTP_HOST not set. Email skipped. Token:", token);
+        return;
+    }
+
+    const inviteLink = `https://main.embracehealth.ai?invite_token=${token}`;
+    const sender = process.env.SENDER_EMAIL || '"EmbraceHealth" <no-reply@embracehealth.ai>';
+
+    try {
+        await transporter.sendMail({
+            from: sender,
+            to: toEmail,
+            subject: `${inviterName || 'A friend'} invited you to EmbraceHealth`,
+            text: `You have been invited to join EmbraceHealth! Use this link to get started: ${inviteLink}`,
+            html: `
+                <div style="font-family: sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
+                    <div style="text-align: center; padding: 20px;">
+                        <h2 style="color: #10b981;">You're Invited!</h2>
+                        <p style="font-size: 16px;">${inviterName || 'A friend'} wants to connect with you on EmbraceHealth to track nutrition and fitness goals together.</p>
+                        <br/>
+                        <a href="${inviteLink}" style="display: inline-block; padding: 14px 28px; background-color: #10b981; color: white; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">Accept Invitation</a>
+                        <br/><br/>
+                        <p style="font-size: 12px; color: #666;">Or copy this link into your browser:</p>
+                        <p style="font-size: 12px; color: #666; word-break: break-all;">${inviteLink}</p>
+                    </div>
+                </div>
+            `
+        });
+        console.log(`Email sent to ${toEmail}`);
+    } catch (error) {
+        console.error(`Failed to send email to ${toEmail}:`, error);
+        // We do not throw here to prevent one bad email from failing a bulk batch
+    }
+};
 
 /**
  * Helper function to prepare meal data for database insertion.
@@ -1374,6 +1422,11 @@ export const processBulkInvites = async (userId, contacts) => {
     try {
         await ensureTables(client); // Ensure invitation table exists
         
+        // Get inviter details for email template
+        const inviterRes = await client.query(`SELECT first_name, email FROM users WHERE id = $1`, [userId]);
+        const inviter = inviterRes.rows[0];
+        const inviterName = inviter?.first_name || inviter?.email || 'A friend';
+        
         let invitesSent = 0;
         let requestsSent = 0;
         let friendsAdded = 0;
@@ -1410,10 +1463,11 @@ export const processBulkInvites = async (userId, contacts) => {
             } else {
                 // 2. New User - Send Invite
                 // Check if invite already exists
-                const inviteRes = await client.query(`SELECT id FROM invitations WHERE inviter_id = $1 AND email = $2`, [userId, email]);
+                const inviteRes = await client.query(`SELECT id, token FROM invitations WHERE inviter_id = $1 AND email = $2`, [userId, email]);
                 
+                let token;
                 if (inviteRes.rows.length === 0) {
-                    const token = crypto.randomBytes(16).toString('hex');
+                    token = crypto.randomBytes(16).toString('hex');
                     await client.query(`
                         INSERT INTO invitations (inviter_id, email, name, token)
                         VALUES ($1, $2, $3, $4)
@@ -1421,10 +1475,12 @@ export const processBulkInvites = async (userId, contacts) => {
                     
                     invitesSent++;
                     pointsAwarded += 50;
-                    
-                    // In real app: Send Email with link: https://embracehealth.ai?invite_token=${token}
-                    console.log(`[MOCK EMAIL] To: ${email}, Link: https://main.embracehealth.ai?invite_token=${token}`);
+                } else {
+                    token = inviteRes.rows[0].token;
                 }
+                
+                // Send Real Email via SMTP
+                await sendInviteEmail(email, token, inviterName);
             }
         }
 
