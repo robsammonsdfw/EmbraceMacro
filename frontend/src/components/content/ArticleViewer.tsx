@@ -42,7 +42,7 @@ export const ArticleViewer: React.FC<ArticleViewerProps> = ({ article, onClose, 
     };
 
     if (isCooking && article.embedded_actions?.recipe) {
-        return <CookModeModal recipe={article.embedded_actions.recipe} onClose={() => setIsCooking(false)} />;
+        return <CookModeModal recipe={article.embedded_actions.recipe as Recipe} onClose={() => setIsCooking(false)} />;
     }
 
     return (
