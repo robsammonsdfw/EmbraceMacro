@@ -62,8 +62,7 @@ const callGemini = async (prompt, imageBase64, mimeType = 'image/jpeg') => {
 export const handler = async (event) => {
     let path = event.path || event.rawPath || "";
     
-    // CRITICAL FIX: Normalize path by stripping stage name if present (e.g. /default/path -> /path)
-    // This fixes the 404 errors caused by API Gateway stage mapping
+    // Normalize path
     if (path.startsWith('/default')) {
         path = path.replace('/default', '');
     }
@@ -80,10 +79,7 @@ export const handler = async (event) => {
         if (path.endsWith('/auth/customer-login') && httpMethod === 'POST') {
             const body = parseBody(event);
             if (!body.email) return sendResponse(400, { error: "Email required" });
-            
-            // Pass inviteCode if present to fulfill referrals
             const user = await db.findOrCreateUserByEmail(body.email, body.inviteCode);
-            
             const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '30d' });
             return sendResponse(200, { token, user });
         }
@@ -99,6 +95,7 @@ export const handler = async (event) => {
             const article = await db.createArticle(userId, parseBody(event));
             return sendResponse(200, article);
         }
+        // Regex for pulse actions
         const actionMatch = path.match(/\/content\/pulse\/(\d+)\/action$/);
         if (actionMatch && httpMethod === 'POST') {
             const articleId = parseInt(actionMatch[1]);
@@ -110,6 +107,7 @@ export const handler = async (event) => {
         // --- SAVED MEALS ---
         if (path === '/saved-meals' && httpMethod === 'GET') return sendResponse(200, await db.getSavedMeals(userId));
         if (path === '/saved-meals' && httpMethod === 'POST') return sendResponse(200, await db.saveMeal(userId, parseBody(event)));
+        
         const mealMatch = path.match(/\/saved-meals\/(\d+)$/);
         if (mealMatch && httpMethod === 'GET') return sendResponse(200, await db.getSavedMealById(mealMatch[1]));
         if (mealMatch && httpMethod === 'DELETE') { await db.deleteMeal(userId, parseInt(mealMatch[1])); return sendResponse(200, { success: true }); }
@@ -117,21 +115,27 @@ export const handler = async (event) => {
         // --- MEAL PLANS ---
         if (path === '/meal-plans' && httpMethod === 'GET') return sendResponse(200, await db.getMealPlans(userId));
         if (path === '/meal-plans' && httpMethod === 'POST') return sendResponse(200, await db.createMealPlan(userId, parseBody(event).name));
+        
         const planItemMatch = path.match(/\/meal-plans\/(\d+)\/items$/);
         if (planItemMatch && httpMethod === 'POST') return sendResponse(200, await db.addMealToPlanItem(userId, parseInt(planItemMatch[1]), parseBody(event).savedMealId, parseBody(event).metadata));
+        
         const deleteItemMatch = path.match(/\/meal-plans\/items\/(\d+)$/);
         if (deleteItemMatch && httpMethod === 'DELETE') { await db.removeMealFromPlanItem(userId, parseInt(deleteItemMatch[1])); return sendResponse(200, { success: true }); }
 
         // --- GROCERY ---
         if (path === '/grocery/lists' && httpMethod === 'GET') return sendResponse(200, await db.getGroceryLists(userId));
         if (path === '/grocery/lists' && httpMethod === 'POST') return sendResponse(200, await db.createGroceryList(userId, parseBody(event).name));
+        
         const listItemsMatch = path.match(/\/grocery\/lists\/(\d+)\/items$/);
         if (listItemsMatch && httpMethod === 'GET') return sendResponse(200, await db.getGroceryListItems(userId, parseInt(listItemsMatch[1])));
         if (listItemsMatch && httpMethod === 'POST') return sendResponse(200, await db.addGroceryItem(userId, parseInt(listItemsMatch[1]), parseBody(event).name));
+        
         const listImportMatch = path.match(/\/grocery\/lists\/(\d+)\/import$/);
         if (listImportMatch && httpMethod === 'POST') return sendResponse(200, await db.generateGroceryList(userId, parseInt(listImportMatch[1]), parseBody(event).planIds));
+        
         const listClearMatch = path.match(/\/grocery\/lists\/(\d+)\/clear$/);
         if (listClearMatch && httpMethod === 'POST') { await db.clearGroceryList(userId, parseInt(listClearMatch[1]), parseBody(event).type); return sendResponse(200, { success: true }); }
+        
         const itemMatch = path.match(/\/grocery\/items\/(\d+)$/);
         if (itemMatch && httpMethod === 'PATCH') return sendResponse(200, await db.updateGroceryListItem(userId, parseInt(itemMatch[1]), parseBody(event).checked));
         if (itemMatch && httpMethod === 'DELETE') { await db.removeGroceryItem(userId, parseInt(itemMatch[1])); return sendResponse(200, { success: true }); }
@@ -167,15 +171,11 @@ export const handler = async (event) => {
         if (path === '/social/profile' && httpMethod === 'PATCH') return sendResponse(200, await db.updateSocialProfile(userId, parseBody(event)));
         if (path === '/social/friends' && httpMethod === 'GET') return sendResponse(200, await db.getFriends(userId));
         if (path === '/social/requests' && httpMethod === 'GET') return sendResponse(200, await db.getFriendRequests(userId));
-        
-        // Single invite now uses the same robust logic as bulk invite to handle new users vs existing
         if (path === '/social/requests' && httpMethod === 'POST') { 
             const email = parseBody(event).email;
-            // Treat as a bulk invite of 1 to reuse logic (handles new users + privacy settings)
             const result = await db.processBulkInvites(userId, [{ name: '', email }]);
             return sendResponse(200, result); 
         }
-        
         const reqMatch = path.match(/\/social\/requests\/(\d+)$/);
         if (reqMatch && httpMethod === 'POST') { await db.respondToFriendRequest(userId, parseInt(reqMatch[1]), parseBody(event).status); return sendResponse(200, { success: true }); }
         if (path === '/social/bulk-invite' && httpMethod === 'POST') return sendResponse(200, await db.processBulkInvites(userId, parseBody(event).contacts));
@@ -183,11 +183,118 @@ export const handler = async (event) => {
         // --- REWARDS ---
         if (path === '/rewards' && httpMethod === 'GET') return sendResponse(200, await db.getRewardsSummary(userId));
 
-        // --- ACCOUNT ---
+        // --- SHOPIFY ---
+        if (path === '/shopify/orders' && httpMethod === 'GET') return sendResponse(200, await fetchCustomerOrders(userId));
+        const productMatch = path.match(/\/shopify\/products\/(.+)$/);
+        if (productMatch && httpMethod === 'GET') return sendResponse(200, await getProductByHandle(productMatch[1]));
+
+        // --- AI VISION ROUTES ---
+        // 1. Vision Sync (Health Dashboard)
+        if (path === '/analyze-health-screenshot' && httpMethod === 'POST') {
+            const { base64Image, mimeType } = parseBody(event);
+            const prompt = `
+                Analyze this health dashboard screenshot (e.g. Apple Health, Fitbit, Google Fit). 
+                Extract the following daily metrics if visible. Return JSON only.
+                Keys:
+                - steps (number)
+                - activeCalories (number)
+                - restingCalories (number)
+                - distanceMiles (number)
+                - flightsClimbed (number)
+                - heartRate (number, latest or average)
+                - restingHeartRate (number)
+                - bloodPressureSystolic (number)
+                - bloodPressureDiastolic (number)
+                - weightLbs (number)
+                - bodyFatPercentage (number)
+                - bmi (number)
+                - sleepScore (number 0-100)
+                - vo2Max (number)
+                
+                If a value is not found, use null.
+            `;
+            const data = await callGemini(prompt, base64Image, mimeType || 'image/jpeg');
+            const updatedStats = await db.syncHealthMetrics(userId, data);
+            return sendResponse(200, updatedStats);
+        }
+
+        // 2. MacrosChef (Standard Meal)
+        if (path === '/analyze-image' && httpMethod === 'POST') {
+            const { base64Image, mimeType, prompt } = parseBody(event);
+            const p = prompt || "Analyze this meal. Return JSON with mealName, totalCalories, totalProtein, totalCarbs, totalFat, and ingredients array.";
+            const data = await callGemini(p, base64Image, mimeType || 'image/jpeg');
+            return sendResponse(200, data);
+        }
+
+        // 3. MasterChef (Restaurant Meal)
+        if (path === '/analyze-restaurant-meal' && httpMethod === 'POST') {
+             const { base64Image, mimeType } = parseBody(event);
+             const prompt = `
+                You are a professional chef. Analyze this restaurant dish photo.
+                1. Identify the dish name.
+                2. Reverse-engineer the likely recipe (ingredients and instructions) to cook this at home.
+                3. Estimate the nutritional content (calories, macros).
+                4. List any kitchen tools needed.
+                
+                Return JSON:
+                {
+                    "mealName": string,
+                    "totalCalories": number,
+                    "totalProtein": number,
+                    "totalCarbs": number,
+                    "totalFat": number,
+                    "recipe": {
+                        "recipeName": string,
+                        "description": string,
+                        "ingredients": [{ "name": string, "quantity": string }],
+                        "instructions": [string],
+                        "nutrition": { "totalCalories": number, "totalProtein": number, "totalCarbs": number, "totalFat": number }
+                    },
+                    "kitchenTools": [{ "name": string, "use": string, "essential": boolean }]
+                }
+             `;
+             const data = await callGemini(prompt, base64Image, mimeType || 'image/jpeg');
+             return sendResponse(200, data);
+        }
+
+        // 4. PantryChef (Ingredients -> Recipes)
+        if (path === '/get-recipes-from-image' && httpMethod === 'POST') {
+            const { base64Image, mimeType } = parseBody(event);
+            const prompt = `
+                Identify the food ingredients in this photo (fridge/pantry). 
+                Suggest 3 healthy recipes using these ingredients + common staples.
+                Return a JSON Array of Recipe objects:
+                [{
+                    "recipeName": string,
+                    "description": string,
+                    "ingredients": [{ "name": string, "quantity": string }],
+                    "instructions": [string],
+                    "nutrition": { "totalCalories": number, "totalProtein": number, "totalCarbs": number, "totalFat": number }
+                }]
+            `;
+            const data = await callGemini(prompt, base64Image, mimeType || 'image/jpeg');
+            return sendResponse(200, data);
+        }
+
+        // --- ACCOUNT & SYNC ---
+        if (path === '/health-metrics' && httpMethod === 'GET') return sendResponse(200, await db.getHealthMetrics(userId));
+        if (path === '/sync-health' && httpMethod === 'POST') return sendResponse(200, await db.syncHealthMetrics(userId, parseBody(event)));
         if (path === '/account/intake' && httpMethod === 'POST') { await db.saveIntakeResponses(userId, parseBody(event).intakeData); return sendResponse(200, { success: true }); }
         if (path === '/body/dashboard-prefs' && httpMethod === 'GET') return sendResponse(200, await db.getDashboardPrefs(userId));
         if (path === '/body/dashboard-prefs' && httpMethod === 'POST') { await db.saveDashboardPrefs(userId, parseBody(event)); return sendResponse(200, { success: true }); }
+        
         if (path === '/account/medical-intake' && httpMethod === 'GET') return sendResponse(200, await db.getMedicalIntake(userId));
         if (path === '/account/medical-intake' && httpMethod === 'POST') { 
             const b = parseBody(event); 
-            await db.updateMedicalIntake(userId, b.step, b.
+            await db.updateMedicalIntake(userId, b.step, b.answerKey, b.answerValue, b.isReset);
+            return sendResponse(200, { success: true });
+        }
+
+        // Fallback
+        return sendResponse(404, { error: 'Route not found' });
+
+    } catch (err) {
+        console.error('Handler error:', err);
+        return sendResponse(500, { error: err.message });
+    }
+};
