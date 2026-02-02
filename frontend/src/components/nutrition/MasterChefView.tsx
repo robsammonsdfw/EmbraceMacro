@@ -124,7 +124,10 @@ export const MasterChefView: React.FC<MasterChefViewProps> = ({ savedMeals, onSa
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <NutritionCard data={analysisResult} onSaveToHistory={() => handleSaveAnalyzed(analysisResult)} />
                         {analysisResult.recipe && (
-                            <RecipeCard recipe={analysisResult.recipe} onAddToPlan={() => handleSaveAnalyzed(analysisResult)} />
+                            <RecipeCard 
+                                recipe={analysisResult.recipe} 
+                                onAddToPlan={(updatedRecipe) => handleSaveAnalyzed({ ...analysisResult, recipe: updatedRecipe, imageUrl: updatedRecipe.imageUrl || analysisResult.imageUrl })} 
+                            />
                         )}
                     </div>
                 </div>

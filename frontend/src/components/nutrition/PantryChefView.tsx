@@ -78,6 +78,7 @@ export const PantryChefView: React.FC<PantryChefViewProps> = ({ savedMeals, onSa
             totalProtein: recipe.nutrition.totalProtein,
             totalCarbs: recipe.nutrition.totalCarbs,
             totalFat: recipe.nutrition.totalFat,
+            imageUrl: recipe.imageUrl, // Capture the AI generated image if it exists
             ingredients: recipe.ingredients.map(i => ({ 
                 name: i.name, 
                 weightGrams: 0, 
@@ -141,7 +142,7 @@ export const PantryChefView: React.FC<PantryChefViewProps> = ({ savedMeals, onSa
                             <RecipeCard 
                                 key={idx} 
                                 recipe={recipe} 
-                                onAddToPlan={() => handleSaveRecipe(recipe)} 
+                                onAddToPlan={(updatedRecipe) => handleSaveRecipe(updatedRecipe)} 
                             />
                         ))}
                     </div>

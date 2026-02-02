@@ -224,6 +224,9 @@ export const judgeRecipeAttempt = async (base64: string, recipeContext: string, 
     const compressed = await compressImage(base64);
     return callApi('/judge-recipe', 'POST', { base64: compressed, recipeContext, recipeId });
 };
+export const generateRecipeImage = async (description: string): Promise<{ base64Image: string }> => {
+    return callApi('/generate-recipe-image', 'POST', { description });
+};
 
 // --- REWARDS ---
 export const getRewardsSummary = (): Promise<RewardsSummary> => callApi('/rewards', 'GET');

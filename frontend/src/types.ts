@@ -49,6 +49,7 @@ export interface Recipe {
   };
   prepTimeMinutes?: number;
   cookTimeMinutes?: number;
+  imageUrl?: string;
 }
 
 export interface NutritionInfo {

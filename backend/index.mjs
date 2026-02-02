@@ -276,6 +276,39 @@ export const handler = async (event) => {
             return sendResponse(200, data);
         }
 
+        // 5. Recipe Image Generation (New)
+        if (path === '/generate-recipe-image' && httpMethod === 'POST') {
+            const { description } = parseBody(event);
+            if (!description) return sendResponse(400, { error: "Description required" });
+            
+            const ai = new GoogleGenAI({ apiKey: GEMINI_KEY });
+            const model = 'gemini-2.5-flash-image';
+            
+            const prompt = `Photorealistic, high-quality professional food photography of: ${description}. Soft lighting, 4k resolution, appetizing presentation. No text, no people.`;
+            
+            try {
+                const response = await ai.models.generateContent({
+                    model,
+                    contents: { parts: [{ text: prompt }] },
+                    config: { imageConfig: { aspectRatio: "1:1" } }
+                });
+                
+                let base64Image = null;
+                for (const part of response.candidates[0].content.parts) {
+                    if (part.inlineData) {
+                        base64Image = part.inlineData.data;
+                        break;
+                    }
+                }
+                
+                if (!base64Image) throw new Error("Image generation failed - no inline data");
+                return sendResponse(200, { base64Image });
+            } catch (e) {
+                console.error("Recipe Image Gen Error:", e);
+                return sendResponse(500, { error: "Failed to generate AI image." });
+            }
+        }
+
         // --- ACCOUNT & SYNC ---
         if (path === '/health-metrics' && httpMethod === 'GET') return sendResponse(200, await db.getHealthMetrics(userId));
         if (path === '/sync-health' && httpMethod === 'POST') return sendResponse(200, await db.syncHealthMetrics(userId, parseBody(event)));

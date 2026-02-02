@@ -83,7 +83,7 @@ export const AnalysisResultModal: React.FC<AnalysisResultModalProps> = ({
                         {nutritionData.recipe ? (
                             <RecipeCard 
                                 recipe={nutritionData.recipe} 
-                                onAddToPlan={() => onAddToPlan(nutritionData)} 
+                                onAddToPlan={(updatedRecipe) => onAddToPlan({ ...nutritionData, recipe: updatedRecipe, imageUrl: updatedRecipe.imageUrl || nutritionData.imageUrl })} 
                             />
                         ) : (
                             <div className="bg-white rounded-3xl p-8 text-center min-h-[300px] flex flex-col items-center justify-center">
@@ -145,7 +145,7 @@ export const AnalysisResultModal: React.FC<AnalysisResultModalProps> = ({
                             <div key={idx}>
                                 <RecipeCard 
                                     recipe={recipe} 
-                                    onAddToPlan={() => onAddToPlan(recipe)} 
+                                    onAddToPlan={(updatedRecipe) => onAddToPlan(updatedRecipe)} 
                                 />
                             </div>
                         ))}
