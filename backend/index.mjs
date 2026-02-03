@@ -1,8 +1,7 @@
-
 import * as db from './services/databaseService.mjs';
 import { fetchCustomerOrders, getProductByHandle } from './services/shopifyService.mjs';
 import jwt from 'jsonwebtoken';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 
 const CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
@@ -11,7 +10,7 @@ const CORS_HEADERS = {
 };
 
 const JWT_SECRET = process.env.JWT_SECRET || 'embrace-health-secret';
-const GEMINI_KEY = process.env.API_KEY || process.env.GEMINI_API_KEY;
+const GEMINI_KEY = process.env.API_KEY;
 
 const sendResponse = (statusCode, body) => ({
     statusCode,
@@ -39,9 +38,74 @@ const parseBody = (event) => {
     catch (e) { return {}; }
 };
 
+// --- SCHEMA DEFINITIONS ---
+const unifiedNutritionSchema = {
+    type: Type.OBJECT,
+    properties: {
+        mealName: { type: Type.STRING },
+        totalCalories: { type: Type.NUMBER },
+        totalProtein: { type: Type.NUMBER },
+        totalCarbs: { type: Type.NUMBER },
+        totalFat: { type: Type.NUMBER },
+        ingredients: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    name: { type: Type.STRING },
+                    weightGrams: { type: Type.NUMBER },
+                    calories: { type: Type.NUMBER },
+                    protein: { type: Type.NUMBER },
+                    carbs: { type: Type.NUMBER },
+                    fat: { type: Type.NUMBER }
+                },
+                required: ["name", "weightGrams", "calories", "protein", "carbs", "fat"]
+            }
+        },
+        recipe: {
+            type: Type.OBJECT,
+            properties: {
+                recipeName: { type: Type.STRING },
+                description: { type: Type.STRING },
+                ingredients: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: { name: { type: Type.STRING }, quantity: { type: Type.STRING } }
+                    }
+                },
+                instructions: { type: Type.ARRAY, items: { type: Type.STRING } },
+                nutrition: {
+                    type: Type.OBJECT,
+                    properties: {
+                        totalCalories: { type: Type.NUMBER },
+                        totalProtein: { type: Type.NUMBER },
+                        totalCarbs: { type: Type.NUMBER },
+                        totalFat: { type: Type.NUMBER }
+                    },
+                    required: ["totalCalories", "totalProtein", "totalCarbs", "totalFat"]
+                }
+            },
+            required: ["recipeName", "description", "ingredients", "instructions", "nutrition"]
+        },
+        kitchenTools: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    name: { type: Type.STRING },
+                    use: { type: Type.STRING },
+                    essential: { type: Type.BOOLEAN }
+                },
+                required: ["name", "use", "essential"]
+            }
+        }
+    },
+    required: ["mealName", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "ingredients", "recipe", "kitchenTools"]
+};
+
 // AI Helper
-const callGemini = async (prompt, imageBase64, mimeType = 'image/jpeg') => {
-    if (!GEMINI_KEY) throw new Error("Missing API Key");
+const callGemini = async (prompt, imageBase64, mimeType = 'image/jpeg', schema = null) => {
     const ai = new GoogleGenAI({ apiKey: GEMINI_KEY });
     const model = 'gemini-3-flash-preview';
     
@@ -50,15 +114,29 @@ const callGemini = async (prompt, imageBase64, mimeType = 'image/jpeg') => {
             ? { parts: [{ inlineData: { mimeType, data: imageBase64 } }, { text: prompt }] }
             : { parts: [{ text: prompt }] };
 
+        const config = { 
+            responseMimeType: "application/json",
+            ...(schema ? { responseSchema: schema } : {})
+        };
+
         const response = await ai.models.generateContent({
             model,
             contents,
-            config: { responseMimeType: "application/json" }
+            config
         });
-        return JSON.parse(response.text);
+        
+        const result = JSON.parse(response.text);
+        
+        // Data Integrity Check for Unified Schema
+        if (schema === unifiedNutritionSchema) {
+            if (!result.recipe) result.recipe = { recipeName: "Not identified", description: "Could not generate recipe", ingredients: [], instructions: [], nutrition: { totalCalories: result.totalCalories || 0, totalProtein: result.totalProtein || 0, totalCarbs: result.totalCarbs || 0, totalFat: result.totalFat || 0 } };
+            if (!result.kitchenTools) result.kitchenTools = [];
+        }
+        
+        return result;
     } catch (e) {
         console.error("Gemini Error:", e);
-        throw new Error("AI Processing Failed");
+        throw new Error("AI Processing Failed: " + e.message);
     }
 };
 
@@ -76,56 +154,38 @@ export const handler = async (event) => {
         if (path.endsWith('/auth/customer-login') && httpMethod === 'POST') {
             const body = parseBody(event);
             if (!body.email) return sendResponse(400, { error: "Email required" });
-            const user = await db.findOrCreateUserByEmail(body.email);
+            const user = await db.findOrCreateUserByEmail(body.email, body.inviteCode);
             const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '30d' });
             return sendResponse(200, { token, user });
         }
 
         const userId = getUserFromEvent(event);
 
-        // --- AI VISION ROUTES ---
-        
-        // Unified 3-Tab Analysis (Macros, Recipe, Tools)
-        if (path === '/analyze-image' && httpMethod === 'POST') {
-            const { base64Image, mimeType, prompt: userPrompt } = parseBody(event);
-            const systemPrompt = `
-                You are a world-class clinical nutritionist and executive chef. Analyze this meal image.
-                Provide a UNIFIED analysis for a 3-tab UI. 
-                Return JSON only with these keys:
-                1. mealName, totalCalories, totalProtein, totalCarbs, totalFat.
-                2. ingredients: array of {name, weightGrams, calories, protein, carbs, fat}.
-                3. recipe: object with {recipeName, description, ingredients: [{name, quantity}], instructions: [string], nutrition: {totalCalories, totalProtein, totalCarbs, totalFat}}.
-                4. kitchenTools: array of {name, use, essential: boolean}.
-                
-                Focus on accuracy for calories and macros. Ensure instructions are step-by-step.
-            `;
-            const data = await callGemini(userPrompt || systemPrompt, base64Image, mimeType || 'image/jpeg');
-            return sendResponse(200, data);
-        }
+        // --- PULSE / ARTICLES ---
+        if (path === '/content/pulse' && httpMethod === 'GET') return sendResponse(200, await db.getArticles(userId));
+        if (path === '/content/pulse' && httpMethod === 'POST') return sendResponse(200, await db.createArticle(userId, parseBody(event)));
+        const pulseActionMatch = path.match(/\/content\/pulse\/(\d+)\/action$/);
+        if (pulseActionMatch && httpMethod === 'POST') return sendResponse(200, await db.completeArticleAction(userId, parseInt(pulseActionMatch[1]), parseBody(event).actionType));
 
-        // Restaurant Analysis (Deconstruct into Recipe)
-        if (path === '/analyze-restaurant-meal' && httpMethod === 'POST') {
-             const { base64Image, mimeType } = parseBody(event);
-             const prompt = `
-                Professional chef analysis. Identify dish name from the photo.
-                Reverse-engineer the recipe so the user can cook it at home.
-                Return JSON with:
-                - mealName, totalCalories, totalProtein, totalCarbs, totalFat.
-                - recipe: {recipeName, description, ingredients: [{name, quantity}], instructions: [string], nutrition}.
-                - kitchenTools: [{name, use, essential}].
-             `;
-             const data = await callGemini(prompt, base64Image, mimeType || 'image/jpeg');
-             return sendResponse(200, data);
-        }
+        // --- MEALS & LOGS ---
+        if (path === '/saved-meals' && httpMethod === 'GET') return sendResponse(200, await db.getSavedMeals(userId));
+        if (path === '/saved-meals' && httpMethod === 'POST') return sendResponse(200, await db.saveMeal(userId, parseBody(event)));
+        const mealMatch = path.match(/\/saved-meals\/(\d+)$/);
+        if (mealMatch && httpMethod === 'DELETE') { await db.deleteMeal(userId, parseInt(mealMatch[1])); return sendResponse(200, { success: true }); }
+        if (mealMatch && httpMethod === 'GET') return sendResponse(200, await db.getSavedMealById(parseInt(mealMatch[1])));
 
-        // Recipe Image Generation
+        if (path === '/meal-log' && httpMethod === 'GET') return sendResponse(200, await db.getMealLogEntries(userId));
+        const mealLogByIdMatch = path.match(/\/meal-log\/(\d+)$/);
+        if (mealLogByIdMatch && httpMethod === 'GET') return sendResponse(200, await db.getMealLogEntryById(parseInt(mealLogByIdMatch[1])));
+
+        // --- RECIPE IMAGE GENERATION ---
         if (path === '/generate-recipe-image' && httpMethod === 'POST') {
             const { description } = parseBody(event);
             if (!description) return sendResponse(400, { error: "Description required" });
             
             const ai = new GoogleGenAI({ apiKey: GEMINI_KEY });
             const model = 'gemini-2.5-flash-image';
-            const prompt = `Professional food photography, high-end plating, appetizing natural lighting, 4k, photorealistic of: ${description}. Background should be a clean kitchen or rustic wooden table. No text, no people.`;
+            const prompt = `Extreme photorealistic, professional food photography, high-end plating, soft appetizing lighting, 4k, delicious-looking of: ${description}. Soft kitchen background, no people, no text.`;
             
             const response = await ai.models.generateContent({
                 model,
@@ -144,36 +204,80 @@ export const handler = async (event) => {
             return sendResponse(200, { base64Image });
         }
 
-        // ... [Rest of database routes kept for regression]
-        if (path === '/meal-log' && httpMethod === 'GET') return sendResponse(200, await db.getMealLogEntries(userId));
-        if (path === '/saved-meals' && httpMethod === 'GET') return sendResponse(200, await db.getSavedMeals(userId));
-        if (path === '/saved-meals' && httpMethod === 'POST') return sendResponse(200, await db.saveMeal(userId, parseBody(event)));
-        
-        const mealMatch = path.match(/\/saved-meals\/(\d+)$/);
-        if (mealMatch && httpMethod === 'DELETE') { await db.deleteMeal(userId, parseInt(mealMatch[1])); return sendResponse(200, { success: true }); }
-        if (mealMatch && httpMethod === 'GET') return sendResponse(200, await db.getSavedMealById(parseInt(mealMatch[1])));
+        // --- AI VISION (3-TAB RESTORATION) ---
+        if (path === '/analyze-image' && httpMethod === 'POST') {
+            const { base64Image, mimeType, prompt: userPrompt } = parseBody(event);
+            const systemPrompt = `You are a Executive Chef and Clinical Nutritionist. Analyze this meal image. 
+            Provide a UNIFIED analysis including precise Macros, a detailed Recipe with instructions/ingredients, and a list of Kitchen Tools needed. 
+            You MUST return a valid JSON object following the schema provided. DO NOT OMIT the recipe or kitchenTools fields.`;
+            const data = await callGemini(userPrompt || systemPrompt, base64Image, mimeType || 'image/jpeg', unifiedNutritionSchema);
+            return sendResponse(200, data);
+        }
+
+        if (path === '/analyze-restaurant-meal' && httpMethod === 'POST') {
+             const { base64Image, mimeType } = parseBody(event);
+             const prompt = `Deconstruct this restaurant dish. Identify it, estimate nutrition, and reverse-engineer the EXACT recipe and tools needed for home replication. 
+             You MUST return a valid JSON object following the schema provided.`;
+             const data = await callGemini(prompt, base64Image, mimeType || 'image/jpeg', unifiedNutritionSchema);
+             return sendResponse(200, data);
+        }
+
+        // --- OTHER ROUTES ---
+        if (path === '/get-recipes-from-image' && httpMethod === 'POST') {
+            const { base64Image, mimeType } = parseBody(event);
+            const prompt = "Identify ingredients in photo. Suggest 3 healthy recipes. Return an ARRAY of recipe objects.";
+            const data = await callGemini(prompt, base64Image, mimeType || 'image/jpeg', { type: Type.ARRAY, items: unifiedNutritionSchema.properties.recipe });
+            return sendResponse(200, data);
+        }
+
+        if (path === '/analyze-health-screenshot' && httpMethod === 'POST') {
+            const { base64Image, mimeType } = parseBody(event);
+            const prompt = "Extract daily health metrics from this screenshot (steps, activeCalories, etc.). Return JSON.";
+            const data = await callGemini(prompt, base64Image, mimeType || 'image/jpeg');
+            const updatedStats = await db.syncHealthMetrics(userId, data);
+            return sendResponse(200, updatedStats);
+        }
 
         if (path === '/meal-plans' && httpMethod === 'GET') return sendResponse(200, await db.getMealPlans(userId));
         if (path === '/meal-plans' && httpMethod === 'POST') return sendResponse(200, await db.createMealPlan(userId, parseBody(event).name));
-        
         const planItemMatch = path.match(/\/meal-plans\/(\d+)\/items$/);
         if (planItemMatch && httpMethod === 'POST') return sendResponse(200, await db.addMealToPlanItem(userId, parseInt(planItemMatch[1]), parseBody(event).savedMealId, parseBody(event).metadata));
-        
         const deleteItemMatch = path.match(/\/meal-plans\/items\/(\d+)$/);
         if (deleteItemMatch && httpMethod === 'DELETE') { await db.removeMealFromPlanItem(userId, parseInt(deleteItemMatch[1])); return sendResponse(200, { success: true }); }
 
+        if (path === '/grocery/lists' && httpMethod === 'GET') return sendResponse(200, await db.getGroceryLists(userId));
+        if (path === '/grocery/lists' && httpMethod === 'POST') return sendResponse(200, await db.createGroceryList(userId, parseBody(event).name));
+        const groceryItemsMatch = path.match(/\/grocery\/lists\/(\d+)\/items$/);
+        if (groceryItemsMatch && httpMethod === 'GET') return sendResponse(200, await db.getGroceryListItems(userId, parseInt(groceryItemsMatch[1])));
+        if (groceryItemsMatch && httpMethod === 'POST') return sendResponse(200, await db.addGroceryItem(userId, parseInt(groceryItemsMatch[1]), parseBody(event).name));
+        const listImportMatch = path.match(/\/grocery\/lists\/(\d+)\/import$/);
+        if (listImportMatch && httpMethod === 'POST') return sendResponse(200, await db.generateGroceryList(userId, parseInt(listImportMatch[1]), parseBody(event).planIds));
+        const listClearMatch = path.match(/\/grocery\/lists\/(\d+)\/clear$/);
+        if (listClearMatch && httpMethod === 'POST') { await db.clearGroceryList(userId, parseInt(listClearMatch[1]), parseBody(event).type); return sendResponse(200, { success: true }); }
+        const itemMatch = path.match(/\/grocery\/items\/(\d+)$/);
+        if (itemMatch && httpMethod === 'PATCH') return sendResponse(200, await db.updateGroceryListItem(userId, parseInt(itemMatch[1]), parseBody(event).checked));
+        if (itemMatch && httpMethod === 'DELETE') { await db.removeGroceryItem(userId, parseInt(itemMatch[1])); return sendResponse(200, { success: true }); }
+
         if (path === '/rewards' && httpMethod === 'GET') return sendResponse(200, await db.getRewardsSummary(userId));
         if (path === '/health-metrics' && httpMethod === 'GET') return sendResponse(200, await db.getHealthMetrics(userId));
+        if (path === '/sync-health' && httpMethod === 'POST') return sendResponse(200, await db.syncHealthMetrics(userId, parseBody(event)));
         if (path === '/body/dashboard-prefs' && httpMethod === 'GET') return sendResponse(200, await db.getDashboardPrefs(userId));
         if (path === '/body/dashboard-prefs' && httpMethod === 'POST') { await db.saveDashboardPrefs(userId, parseBody(event)); return sendResponse(200, { success: true }); }
+        
         if (path === '/account/medical-intake' && httpMethod === 'GET') return sendResponse(200, await db.getMedicalIntake(userId));
         if (path === '/account/medical-intake' && httpMethod === 'POST') {
             const { step, answerKey, answerValue, isReset } = parseBody(event);
             return sendResponse(200, await db.updateMedicalIntake(userId, step, answerKey, answerValue, isReset));
         }
 
-        return sendResponse(404, { error: 'Route not found' });
+        if (path === '/social/friends' && httpMethod === 'GET') return sendResponse(200, await db.getFriends(userId));
+        if (path === '/social/profile' && httpMethod === 'GET') return sendResponse(200, await db.getSocialProfile(userId));
+        if (path === '/social/requests' && httpMethod === 'GET') return sendResponse(200, await db.getFriendRequests(userId));
+        if (path === '/shopify/orders' && httpMethod === 'GET') return sendResponse(200, await fetchCustomerOrders(userId));
+        const shopifyProductMatch = path.match(/\/shopify\/products\/([a-zA-Z0-9-]+)$/);
+        if (shopifyProductMatch && httpMethod === 'GET') return sendResponse(200, await getProductByHandle(shopifyProductMatch[1]));
 
+        return sendResponse(404, { error: 'Route not found' });
     } catch (err) {
         console.error('Handler error:', err);
         return sendResponse(500, { error: err.message });

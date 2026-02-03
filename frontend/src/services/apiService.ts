@@ -1,4 +1,3 @@
-
 import { 
     MealPlan, GroceryItem, Order, Friendship, UserProfile, 
     RecoveryData, ReadinessScore, FormAnalysisResult, BodyPhoto, 
@@ -167,7 +166,15 @@ export const getShopifyProduct = (handle: string): Promise<ShopifyProduct | { er
 export const searchFood = async (query: string): Promise<NutritionInfo> => callApi('/analyze-image', 'POST', { prompt: `Analyze the food: ${query}. Return JSON.` });
 export const getMealSuggestions = async (conditions: string[], cuisine: string, duration: string): Promise<NutritionInfo[]> => callApi('/get-meal-suggestions', 'POST', { conditions, cuisine, duration });
 export const getRestaurantActivity = (uri: string): Promise<RestaurantActivity[]> => callApi(`/social/restaurant/activity`, 'POST', { uri });
-export const judgeRecipeAttempt = async (base64Image: string, context: string, recipeId: number): Promise<JudgeResult> => callApi('/analyze-image', 'POST', { base64Image, prompt: `Judge cooking for ${context}.` });
+
+// FIX: Including recipeId in payload to resolve TS6133 build error
+export const judgeRecipeAttempt = async (base64Image: string, context: string, recipeId: number): Promise<JudgeResult> => {
+    return callApi('/analyze-image', 'POST', { 
+        base64Image, 
+        prompt: `Judge cooking attempt for ${context}. Provide clinical-grade scoring.`,
+        recipeId 
+    });
+};
 
 export const getPantryLog = (): Promise<PantryLogEntry[]> => callApi('/pantry/log', 'GET');
 export const savePantryLogEntry = (imageBase64: string): Promise<void> => callApi('/pantry/log', 'POST', { imageBase64 });
@@ -179,7 +186,6 @@ export const getRestaurantLogEntryById = (id: number): Promise<any> => callApi(`
 export const getMedicalIntake = (): Promise<{ step: number, data: any }> => callApi('/account/medical-intake', 'GET');
 export const updateMedicalIntake = (step: number, answerKey?: string, answerValue?: any, isReset = false): Promise<any> => callApi('/account/medical-intake', 'POST', { step, answerKey, answerValue, isReset });
 
-// FIX: Added missing assessment and passive pulse related API functions
 export const getAssessments = (): Promise<Assessment[]> => callApi('/mental/assessments', 'GET');
 export const getAssessmentState = (): Promise<AssessmentState> => callApi('/mental/assessment-state', 'GET');
 export const submitAssessment = (id: string, responses: any): Promise<void> => callApi(`/mental/assessments/${id}`, 'POST', responses);
