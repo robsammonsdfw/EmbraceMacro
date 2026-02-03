@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { XIcon, BeakerIcon, UtensilsIcon, ClipboardListIcon, CheckIcon, SparklesIcon, CameraIcon } from './icons';
+import { XIcon, BeakerIcon, UtensilsIcon, ClipboardListIcon, CheckIcon, SparklesIcon } from './icons';
 import type { NutritionInfo, Recipe } from '../types';
 import { NutritionCard } from './NutritionCard';
 import { RecipeCard } from './RecipeCard';
@@ -27,7 +27,7 @@ export const AnalysisResultModal: React.FC<AnalysisResultModalProps> = ({
         if (!nutritionData) return;
         setIsGenerating(true);
         try {
-            const prompt = `${nutritionData.mealName}. Ingredients: ${nutritionData.ingredients.map(i => i.name).join(', ')}`;
+            const prompt = `${nutritionData.mealName}. Photorealistic food photography, 4k. Ingredients: ${nutritionData.ingredients.map(i => i.name).join(', ')}`;
             const result = await apiService.generateRecipeImage(prompt);
             setNutritionData({ ...nutritionData, imageUrl: `data:image/jpeg;base64,${result.base64Image}` });
         } catch (e) {
@@ -85,21 +85,18 @@ export const AnalysisResultModal: React.FC<AnalysisResultModalProps> = ({
                     </div>
                 )}
 
-                {isUnified && nutritionData && (
-                    <div className="mb-4 flex justify-end">
-                        <button 
-                            onClick={handleGenerateImage}
-                            disabled={isGenerating}
-                            className="bg-white/10 text-white hover:bg-white/20 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 backdrop-blur-sm border border-white/10 disabled:opacity-50"
-                        >
-                            <SparklesIcon className="w-4 h-4" />
-                            {isGenerating ? 'AI Generating...' : nutritionData.imageUrl ? 'Regenerate Photo' : 'Generate AI Photo'}
-                        </button>
-                    </div>
-                )}
-
                 {isUnified && activeTab === 'nutrition' && nutritionData && (
                     <div className="space-y-4 animate-fade-in">
+                        <div className="flex justify-end mb-2">
+                             <button 
+                                onClick={handleGenerateImage}
+                                disabled={isGenerating}
+                                className="bg-indigo-600 text-white px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-lg hover:bg-indigo-700 transition-all disabled:opacity-50"
+                            >
+                                <SparklesIcon className="w-4 h-4" />
+                                {isGenerating ? 'Plating...' : nutritionData.imageUrl ? 'Regenerate Photo' : 'Generate AI Photo'}
+                            </button>
+                        </div>
                         <NutritionCard 
                             data={nutritionData} 
                             onSaveToHistory={() => onSave(nutritionData)}
@@ -121,13 +118,14 @@ export const AnalysisResultModal: React.FC<AnalysisResultModalProps> = ({
                                     <UtensilsIcon className="w-12 h-12 text-indigo-400" />
                                 </div>
                                 <h3 className="text-xl font-black text-slate-800 mb-2">Recipe Missing</h3>
-                                <p className="text-slate-500 font-medium mb-8">This log entry doesn't have a generated recipe yet.</p>
+                                <p className="text-slate-500 font-medium mb-8">This metabolic record is missing a culinary reconstruction.</p>
                                 <button 
                                     onClick={handleGenerateMissingMetadata}
                                     disabled={isGenerating}
-                                    className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 shadow-lg disabled:opacity-50"
+                                    className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 shadow-lg disabled:opacity-50 flex items-center gap-2"
                                 >
-                                    {isGenerating ? 'Generating...' : 'Generate Recipe via AI'}
+                                    <SparklesIcon className="w-4 h-4" />
+                                    {isGenerating ? 'Chef AI Thinking...' : 'Reconstruct Recipe via AI'}
                                 </button>
                             </div>
                         )}
@@ -162,12 +160,14 @@ export const AnalysisResultModal: React.FC<AnalysisResultModalProps> = ({
                                     ))}
                                 </div>
                             ) : (
-                                <div className="text-center py-12">
+                                <div className="text-center py-12 flex flex-col items-center">
+                                    <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px] mb-6">Tools analysis pending</p>
                                     <button 
                                         onClick={handleGenerateMissingMetadata}
                                         disabled={isGenerating}
-                                        className="bg-amber-500 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-amber-600 shadow-lg disabled:opacity-50"
+                                        className="bg-amber-500 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-amber-600 shadow-lg disabled:opacity-50 flex items-center gap-2"
                                     >
+                                        <SparklesIcon className="w-4 h-4" />
                                         Identify Tools via AI
                                     </button>
                                 </div>

@@ -170,11 +170,11 @@ export const searchFood = async (query: string): Promise<NutritionInfo> => callA
 export const getMealSuggestions = async (conditions: string[], cuisine: string, duration: string): Promise<NutritionInfo[]> => callApi('/get-meal-suggestions', 'POST', { conditions, cuisine, duration });
 export const getRestaurantActivity = (uri: string): Promise<RestaurantActivity[]> => callApi(`/social/restaurant/activity`, 'POST', { uri });
 
-// FIX: recipeId mapped to request payload
+// FIX: Satisfied TS6133 by including recipeId in payload
 export const judgeRecipeAttempt = async (base64Image: string, context: string, recipeId: number): Promise<JudgeResult> => {
     return callApi('/analyze-image', 'POST', { 
         base64Image, 
-        prompt: `Judge cooking attempt for ${context}. Provide clinical-grade scoring.`,
+        prompt: `Judge cooking attempt for ${context}.`, 
         recipeId 
     });
 };
