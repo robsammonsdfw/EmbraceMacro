@@ -1,28 +1,54 @@
-
 import React, { useState } from 'react';
-import { XIcon, BeakerIcon, UtensilsIcon, ClipboardListIcon, CheckIcon } from './icons';
+import { XIcon, BeakerIcon, UtensilsIcon, ClipboardListIcon, CheckIcon, SparklesIcon, CameraIcon } from './icons';
 import type { NutritionInfo, Recipe } from '../types';
 import { NutritionCard } from './NutritionCard';
 import { RecipeCard } from './RecipeCard';
+import * as apiService from '../services/apiService';
 
 interface AnalysisResultModalProps {
     nutritionData?: NutritionInfo | null;
-    recipeData?: Recipe[] | null; // Keeps backward compat for PantryChef suggestions
+    recipeData?: Recipe[] | null; 
     onClose: () => void;
     onAddToPlan: (data: any) => void;
     onSave: (data: any) => void;
 }
 
 export const AnalysisResultModal: React.FC<AnalysisResultModalProps> = ({ 
-    nutritionData, recipeData, onClose, onAddToPlan, onSave 
+    nutritionData: initialNutritionData, recipeData, onClose, onAddToPlan, onSave 
 }) => {
+    const [nutritionData, setNutritionData] = useState<NutritionInfo | null>(initialNutritionData || null);
     const [activeTab, setActiveTab] = useState<'nutrition' | 'recipe' | 'tools'>('nutrition');
+    const [isGenerating, setIsGenerating] = useState(false);
 
-    // Scenario A: Pantry Chef (Returns multiple recipes, no unified 3-tab view)
     const isPantryChef = !!recipeData && recipeData.length > 0;
-    
-    // Scenario B: MacrosChef/MasterChef (Returns unified 3-tab view)
     const isUnified = !!nutritionData;
+
+    const handleGenerateImage = async () => {
+        if (!nutritionData) return;
+        setIsGenerating(true);
+        try {
+            const prompt = `${nutritionData.mealName}. Ingredients: ${nutritionData.ingredients.map(i => i.name).join(', ')}`;
+            const result = await apiService.generateRecipeImage(prompt);
+            setNutritionData({ ...nutritionData, imageUrl: `data:image/jpeg;base64,${result.base64Image}` });
+        } catch (e) {
+            alert("Failed to generate image.");
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    const handleGenerateMissingMetadata = async () => {
+        if (!nutritionData) return;
+        setIsGenerating(true);
+        try {
+            const updated = await apiService.generateMissingMetadata(nutritionData.mealName);
+            setNutritionData({ ...nutritionData, ...updated });
+        } catch (e) {
+            alert("Failed to generate recipe data.");
+        } finally {
+            setIsGenerating(false);
+        }
+    };
 
     if (!isUnified && !isPantryChef) return null;
 
@@ -36,7 +62,6 @@ export const AnalysisResultModal: React.FC<AnalysisResultModalProps> = ({
                     <XIcon />
                 </button>
 
-                {/* 3-Tab Switcher (Only for Unified View) */}
                 {isUnified && (
                     <div className="flex bg-white/10 backdrop-blur-md p-1 rounded-2xl mb-6 border border-white/20 shadow-lg">
                         <button 
@@ -60,15 +85,21 @@ export const AnalysisResultModal: React.FC<AnalysisResultModalProps> = ({
                     </div>
                 )}
 
-                {/* CONTENT AREA */}
-                
-                {/* 1. Nutrition Tab */}
+                {isUnified && nutritionData && (
+                    <div className="mb-4 flex justify-end">
+                        <button 
+                            onClick={handleGenerateImage}
+                            disabled={isGenerating}
+                            className="bg-white/10 text-white hover:bg-white/20 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 backdrop-blur-sm border border-white/10 disabled:opacity-50"
+                        >
+                            <SparklesIcon className="w-4 h-4" />
+                            {isGenerating ? 'AI Generating...' : nutritionData.imageUrl ? 'Regenerate Photo' : 'Generate AI Photo'}
+                        </button>
+                    </div>
+                )}
+
                 {isUnified && activeTab === 'nutrition' && nutritionData && (
                     <div className="space-y-4 animate-fade-in">
-                        <div className="text-center text-white mb-2">
-                            <h2 className="text-2xl font-black uppercase tracking-tight">Macro Analysis</h2>
-                            <p className="text-emerald-400 font-bold uppercase tracking-widest text-xs">AI Confidence: 98%</p>
-                        </div>
                         <NutritionCard 
                             data={nutritionData} 
                             onSaveToHistory={() => onSave(nutritionData)}
@@ -77,24 +108,32 @@ export const AnalysisResultModal: React.FC<AnalysisResultModalProps> = ({
                     </div>
                 )}
 
-                {/* 2. Recipe Tab */}
                 {isUnified && activeTab === 'recipe' && nutritionData && (
                     <div className="animate-fade-in h-full">
-                        {nutritionData.recipe ? (
+                        {nutritionData.recipe && nutritionData.recipe.instructions.length > 0 ? (
                             <RecipeCard 
                                 recipe={nutritionData.recipe} 
                                 onAddToPlan={(updatedRecipe) => onAddToPlan({ ...nutritionData, recipe: updatedRecipe, imageUrl: updatedRecipe.imageUrl || nutritionData.imageUrl })} 
                             />
                         ) : (
-                            <div className="bg-white rounded-3xl p-8 text-center min-h-[300px] flex flex-col items-center justify-center">
-                                <UtensilsIcon className="w-12 h-12 text-slate-200 mb-4" />
-                                <p className="text-slate-500 font-bold">No recipe data available for this scan.</p>
+                            <div className="bg-white rounded-[2.5rem] p-10 text-center min-h-[400px] flex flex-col items-center justify-center border border-slate-100 shadow-xl">
+                                <div className="bg-indigo-50 p-6 rounded-full mb-6">
+                                    <UtensilsIcon className="w-12 h-12 text-indigo-400" />
+                                </div>
+                                <h3 className="text-xl font-black text-slate-800 mb-2">Recipe Missing</h3>
+                                <p className="text-slate-500 font-medium mb-8">This log entry doesn't have a generated recipe yet.</p>
+                                <button 
+                                    onClick={handleGenerateMissingMetadata}
+                                    disabled={isGenerating}
+                                    className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 shadow-lg disabled:opacity-50"
+                                >
+                                    {isGenerating ? 'Generating...' : 'Generate Recipe via AI'}
+                                </button>
                             </div>
                         )}
                     </div>
                 )}
 
-                {/* 3. Kitchen Tools Tab */}
                 {isUnified && activeTab === 'tools' && nutritionData && (
                     <div className="animate-fade-in">
                         <div className="bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 p-8 min-h-[400px]">
@@ -121,20 +160,22 @@ export const AnalysisResultModal: React.FC<AnalysisResultModalProps> = ({
                                             </div>
                                         </div>
                                     ))}
-                                    <div className="mt-8 p-4 bg-indigo-50 border border-indigo-100 rounded-2xl text-center">
-                                        <p className="text-indigo-600 text-xs font-bold uppercase tracking-wide">Gear Check Complete</p>
-                                    </div>
                                 </div>
                             ) : (
                                 <div className="text-center py-12">
-                                    <p className="text-slate-400 font-bold">No specific tools required.</p>
+                                    <button 
+                                        onClick={handleGenerateMissingMetadata}
+                                        disabled={isGenerating}
+                                        className="bg-amber-500 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-amber-600 shadow-lg disabled:opacity-50"
+                                    >
+                                        Identify Tools via AI
+                                    </button>
                                 </div>
                             )}
                         </div>
                     </div>
                 )}
 
-                {/* Legacy Pantry Chef View (No Tabs) */}
                 {isPantryChef && (
                     <div className="space-y-6 animate-fade-in">
                         <div className="text-center text-white mb-6">

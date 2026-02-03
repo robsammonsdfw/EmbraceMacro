@@ -104,6 +104,9 @@ export const getRecipesFromImage = async (base64Image: string, mimeType: string)
 export const generateRecipeImage = async (description: string): Promise<{ base64Image: string }> => {
     return callApi('/generate-recipe-image', 'POST', { description });
 };
+export const generateMissingMetadata = async (mealName: string): Promise<NutritionInfo> => {
+    return callApi('/analyze-image', 'POST', { mealName });
+};
 export const analyzeHealthScreenshot = async (base64Image: string): Promise<Partial<HealthStats>> => {
     const compressed = await compressImage(base64Image);
     return callApi('/analyze-health-screenshot', 'POST', { base64Image: compressed });
@@ -167,7 +170,7 @@ export const searchFood = async (query: string): Promise<NutritionInfo> => callA
 export const getMealSuggestions = async (conditions: string[], cuisine: string, duration: string): Promise<NutritionInfo[]> => callApi('/get-meal-suggestions', 'POST', { conditions, cuisine, duration });
 export const getRestaurantActivity = (uri: string): Promise<RestaurantActivity[]> => callApi(`/social/restaurant/activity`, 'POST', { uri });
 
-// FIX: Including recipeId in payload to resolve TS6133 build error
+// FIX: recipeId mapped to request payload
 export const judgeRecipeAttempt = async (base64Image: string, context: string, recipeId: number): Promise<JudgeResult> => {
     return callApi('/analyze-image', 'POST', { 
         base64Image, 

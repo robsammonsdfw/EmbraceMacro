@@ -49,9 +49,8 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onAddToPlan }) =
             />
         )}
         
-        <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden animate-fade-in flex flex-col h-full">
-          {/* Top Image Section */}
-          <div className="relative h-56 bg-slate-100 overflow-hidden group">
+        <div className="bg-white rounded-[2rem] shadow-xl border border-slate-100 overflow-hidden animate-fade-in flex flex-col h-full">
+          <div className="relative h-64 bg-slate-50 overflow-hidden group">
               {currentRecipe.imageUrl ? (
                   <img src={currentRecipe.imageUrl} alt={currentRecipe.recipeName} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
               ) : (
@@ -60,7 +59,7 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onAddToPlan }) =
                       {!isGeneratingImage && (
                           <button 
                               onClick={handleGenerateImage}
-                              className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-all flex items-center gap-2"
+                              className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-all flex items-center gap-2"
                           >
                               <SparklesIcon className="w-4 h-4" />
                               Generate AI Photo
@@ -77,32 +76,24 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onAddToPlan }) =
               )}
           </div>
 
-          <div className="p-6 flex-grow">
-            <div className="flex justify-between items-start mb-2">
-                <h3 className="text-2xl font-bold text-slate-800 leading-tight">{currentRecipe.recipeName}</h3>
+          <div className="p-8 flex-grow">
+            <div className="flex justify-between items-start mb-4">
+                <h3 className="text-2xl font-black text-slate-800 leading-tight uppercase tracking-tight">{currentRecipe.recipeName}</h3>
                 <div className="flex gap-2">
                     <button 
                         onClick={() => setIsCookOff(true)}
-                        className="text-orange-500 hover:text-orange-600 bg-orange-50 p-2 rounded-lg transition-colors group"
+                        className="text-orange-500 hover:text-orange-600 bg-orange-50 p-2 rounded-xl transition-colors group"
                         title="Join Cook-Off"
                     >
                         <FireIcon className="group-hover:scale-110 transition-transform" />
                     </button>
-                    <button 
-                        onClick={() => setIsCookMode(true)}
-                        className="text-indigo-600 hover:text-indigo-800 bg-indigo-50 p-2 rounded-lg transition-colors"
-                        title="Enter Cook Mode"
-                    >
-                        <UtensilsIcon />
-                    </button>
                 </div>
             </div>
             
-            <p className="text-slate-600 mt-1 mb-4 line-clamp-3">{currentRecipe.description}</p>
+            <p className="text-slate-500 font-medium mb-6 line-clamp-3">{currentRecipe.description}</p>
 
-            {/* AI Image Generation Link below description if image exists */}
             {currentRecipe.imageUrl && (
-                <div className="mb-4">
+                <div className="mb-6">
                     <button 
                         onClick={handleGenerateImage}
                         disabled={isGeneratingImage}
@@ -114,10 +105,10 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onAddToPlan }) =
                 </div>
             )}
 
-            <div className="grid grid-cols-4 gap-2 mb-6">
-              <div className="text-center p-2 rounded-lg bg-emerald-500">
-                  <p className="text-xs font-medium text-white/90">Cals</p>
-                  <p className="text-lg font-bold text-white">{Math.round(currentRecipe.nutrition.totalCalories)}</p>
+            <div className="grid grid-cols-4 gap-2 mb-8">
+              <div className="text-center p-2 rounded-xl bg-emerald-500">
+                  <p className="text-[9px] font-black text-white/90 uppercase">Cals</p>
+                  <p className="text-lg font-black text-white">{Math.round(currentRecipe.nutrition.totalCalories)}</p>
               </div>
               <MacroPill label="Pro" value={currentRecipe.nutrition.totalProtein} unit="g" color="bg-sky-500" />
               <MacroPill label="Carb" value={currentRecipe.nutrition.totalCarbs} unit="g" color="bg-amber-500" />
@@ -125,45 +116,46 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onAddToPlan }) =
             </div>
 
             <div className="space-y-3">
-                <details className="bg-slate-50 p-3 rounded-lg open:ring-2 open:ring-emerald-200 group">
-                    <summary className="font-semibold text-slate-700 cursor-pointer text-sm flex items-center justify-between">
+                <details className="bg-slate-50 p-4 rounded-2xl open:ring-2 open:ring-indigo-100 group transition-all">
+                    <summary className="font-black text-slate-700 cursor-pointer text-xs uppercase tracking-widest flex items-center justify-between">
                         <span>Ingredients ({currentRecipe.ingredients.length})</span>
-                        <span className="text-slate-400 text-xs group-open:rotate-180 transition-transform">▼</span>
+                        <span className="text-slate-300 text-xs group-open:rotate-180 transition-transform">▼</span>
                     </summary>
-                    <ul className="mt-3 list-disc list-inside space-y-1 text-slate-600 text-sm">
+                    <ul className="mt-4 space-y-2 text-slate-600 text-sm font-medium">
                         {currentRecipe.ingredients.map((ing, index) => (
-                            <li key={index}>
-                               <span className="font-medium text-slate-800">{ing.name}:</span> {ing.quantity}
+                            <li key={index} className="flex justify-between border-b border-slate-100 pb-1">
+                               <span className="text-slate-800">{ing.name}</span>
+                               <span className="text-indigo-600 font-bold">{ing.quantity}</span>
                             </li>
                         ))}
                     </ul>
                 </details>
-                <details className="bg-slate-50 p-3 rounded-lg open:ring-2 open:ring-emerald-200 group">
-                    <summary className="font-semibold text-slate-700 cursor-pointer text-sm flex items-center justify-between">
+                <details className="bg-slate-50 p-4 rounded-2xl open:ring-2 open:ring-indigo-100 group transition-all">
+                    <summary className="font-black text-slate-700 cursor-pointer text-xs uppercase tracking-widest flex items-center justify-between">
                         <span>Instructions ({currentRecipe.instructions.length} steps)</span>
-                        <span className="text-slate-400 text-xs group-open:rotate-180 transition-transform">▼</span>
+                        <span className="text-slate-300 text-xs group-open:rotate-180 transition-transform">▼</span>
                     </summary>
-                    <ol className="mt-3 list-decimal list-inside space-y-2 text-slate-600 text-sm">
+                    <ol className="mt-4 list-decimal list-inside space-y-3 text-slate-600 text-sm font-medium">
                         {currentRecipe.instructions.map((step, index) => (
-                            <li key={index} className="pl-1">{step}</li>
+                            <li key={index} className="pl-1 leading-relaxed">{step}</li>
                         ))}
                     </ol>
                 </details>
             </div>
           </div>
-           <div className="p-4 bg-slate-50 border-t border-slate-200 flex gap-3">
+           <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
             <button
               onClick={() => setIsCookMode(true)}
-              className="flex-1 bg-indigo-100 text-indigo-700 font-bold py-3 px-4 rounded-lg hover:bg-indigo-200 transition-colors flex items-center justify-center space-x-2"
+              className="flex-1 bg-white border border-slate-200 text-slate-900 font-black uppercase tracking-widest text-[10px] py-4 rounded-2xl hover:bg-slate-100 transition-all flex items-center justify-center gap-2 shadow-sm"
             >
-              <UtensilsIcon />
+              <UtensilsIcon className="w-4 h-4" />
               <span>Cook Mode</span>
             </button>
             <button
               onClick={() => onAddToPlan(currentRecipe)}
-              className="flex-1 bg-emerald-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-emerald-600 transition-colors flex items-center justify-center space-x-2"
+              className="flex-1 bg-emerald-500 text-white font-black uppercase tracking-widest text-[10px] py-4 rounded-2xl hover:bg-emerald-600 transition-all flex items-center justify-center gap-2 shadow-lg active:scale-95"
             >
-              <PlusIcon />
+              <PlusIcon className="w-4 h-4" />
               <span>Plan It</span>
             </button>
           </div>

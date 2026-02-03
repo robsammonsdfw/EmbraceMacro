@@ -129,7 +129,7 @@ const callGemini = async (prompt, imageBase64, mimeType = 'image/jpeg', schema =
         
         // Data Integrity Check for Unified Schema
         if (schema === unifiedNutritionSchema) {
-            if (!result.recipe) result.recipe = { recipeName: "Not identified", description: "Could not generate recipe", ingredients: [], instructions: [], nutrition: { totalCalories: result.totalCalories || 0, totalProtein: result.totalProtein || 0, totalCarbs: result.totalCarbs || 0, totalFat: result.totalFat || 0 } };
+            if (!result.recipe) result.recipe = { recipeName: result.mealName || "Not identified", description: "Generating recipe...", ingredients: [], instructions: [], nutrition: { totalCalories: result.totalCalories || 0, totalProtein: result.totalProtein || 0, totalCarbs: result.totalCarbs || 0, totalFat: result.totalFat || 0 } };
             if (!result.kitchenTools) result.kitchenTools = [];
         }
         
@@ -206,8 +206,17 @@ export const handler = async (event) => {
 
         // --- AI VISION (3-TAB RESTORATION) ---
         if (path === '/analyze-image' && httpMethod === 'POST') {
-            const { base64Image, mimeType, prompt: userPrompt } = parseBody(event);
-            const systemPrompt = `You are a Executive Chef and Clinical Nutritionist. Analyze this meal image. 
+            const { base64Image, mimeType, prompt: userPrompt, mealName } = parseBody(event);
+            
+            // If we have a mealName but no image, we are regenerating metadata for an old meal
+            if (mealName && !base64Image) {
+                const prompt = `You are an Executive Chef. Provide a complete Recipe and list of Kitchen Tools for the dish: "${mealName}". 
+                You MUST return a valid JSON object matching the full nutrition schema, including estimated macros for this specific dish.`;
+                const data = await callGemini(prompt, null, null, unifiedNutritionSchema);
+                return sendResponse(200, data);
+            }
+
+            const systemPrompt = `You are an Executive Chef and Clinical Nutritionist. Analyze this meal image. 
             Provide a UNIFIED analysis including precise Macros, a detailed Recipe with instructions/ingredients, and a list of Kitchen Tools needed. 
             You MUST return a valid JSON object following the schema provided. DO NOT OMIT the recipe or kitchenTools fields.`;
             const data = await callGemini(userPrompt || systemPrompt, base64Image, mimeType || 'image/jpeg', unifiedNutritionSchema);
