@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import type { Recipe } from '../types';
 import { PlusIcon, UtensilsIcon, FireIcon, CameraIcon, SparklesIcon } from './icons';
@@ -32,7 +31,8 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onAddToPlan }) =
           const fullImageUrl = `data:image/jpeg;base64,${result.base64Image}`;
           setCurrentRecipe(prev => ({ ...prev, imageUrl: fullImageUrl }));
       } catch (err) {
-          alert("Failed to generate image. Please try again.");
+          console.error("Image Gen Error", err);
+          alert("Failed to generate photorealistic image. Please try again.");
       } finally {
           setIsGeneratingImage(false);
       }
@@ -43,7 +43,7 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onAddToPlan }) =
         {isCookMode && <CookModeModal recipe={currentRecipe} onClose={() => setIsCookMode(false)} />}
         {isCookOff && (
             <CookOffModal 
-                recipeContext={`Recipe Name: ${currentRecipe.recipeName}. Ingredients: ${JSON.stringify(currentRecipe.ingredients)}. Instructions: ${JSON.stringify(currentRecipe.instructions)}`} 
+                recipeContext={`Recipe Name: ${currentRecipe.recipeName}. Description: ${currentRecipe.description}`} 
                 recipeId={999} 
                 onClose={() => setIsCookOff(false)} 
             />
@@ -53,14 +53,14 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onAddToPlan }) =
           {/* Top Image Section */}
           <div className="relative h-56 bg-slate-100 overflow-hidden group">
               {currentRecipe.imageUrl ? (
-                  <img src={currentRecipe.imageUrl} alt={currentRecipe.recipeName} className="w-full h-full object-cover" />
+                  <img src={currentRecipe.imageUrl} alt={currentRecipe.recipeName} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
               ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center text-slate-300">
                       <CameraIcon className="w-12 h-12 mb-2 opacity-20" />
                       {!isGeneratingImage && (
                           <button 
                               onClick={handleGenerateImage}
-                              className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-all flex items-center gap-2"
+                              className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-all flex items-center gap-2"
                           >
                               <SparklesIcon className="w-4 h-4" />
                               Generate AI Photo
@@ -70,21 +70,10 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onAddToPlan }) =
               )}
 
               {isGeneratingImage && (
-                  <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm flex flex-col items-center justify-center z-10">
+                  <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm flex flex-col items-center justify-center z-10 text-white">
                       <div className="w-10 h-10 border-4 border-indigo-400 border-t-transparent rounded-full animate-spin mb-3"></div>
-                      <p className="text-indigo-200 font-black uppercase text-[10px] tracking-widest">AI Plating Dish...</p>
+                      <p className="font-black uppercase text-[10px] tracking-widest">AI Plating Dish...</p>
                   </div>
-              )}
-              
-              {/* Optional: Regenerate Trigger inside hover */}
-              {currentRecipe.imageUrl && !isGeneratingImage && (
-                  <button 
-                    onClick={handleGenerateImage}
-                    className="absolute top-4 right-4 bg-white/20 hover:bg-white/40 backdrop-blur-md p-2 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="Regenerate Image"
-                  >
-                    <SparklesIcon className="w-4 h-4" />
-                  </button>
               )}
           </div>
 
@@ -111,6 +100,20 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onAddToPlan }) =
             
             <p className="text-slate-600 mt-1 mb-4 line-clamp-3">{currentRecipe.description}</p>
 
+            {/* AI Image Generation Link below description if image exists */}
+            {currentRecipe.imageUrl && (
+                <div className="mb-4">
+                    <button 
+                        onClick={handleGenerateImage}
+                        disabled={isGeneratingImage}
+                        className="text-indigo-600 text-[10px] font-black uppercase tracking-widest hover:underline flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                        <SparklesIcon className="w-3 h-3" />
+                        {isGeneratingImage ? 'Plating...' : 'Regenerate Photorealistic Photo'}
+                    </button>
+                </div>
+            )}
+
             <div className="grid grid-cols-4 gap-2 mb-6">
               <div className="text-center p-2 rounded-lg bg-emerald-500">
                   <p className="text-xs font-medium text-white/90">Cals</p>
@@ -120,20 +123,6 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onAddToPlan }) =
               <MacroPill label="Carb" value={currentRecipe.nutrition.totalCarbs} unit="g" color="bg-amber-500" />
               <MacroPill label="Fat" value={currentRecipe.nutrition.totalFat} unit="g" color="bg-rose-500" />
             </div>
-
-            {/* Generate Link below description if image exists */}
-            {currentRecipe.imageUrl && (
-                <div className="mb-4">
-                    <button 
-                        onClick={handleGenerateImage}
-                        disabled={isGeneratingImage}
-                        className="text-indigo-600 text-[10px] font-black uppercase tracking-widest hover:underline flex items-center gap-1.5 disabled:opacity-50"
-                    >
-                        <SparklesIcon className="w-3 h-3" />
-                        {isGeneratingImage ? 'Plating...' : 'Regenerate Photorealistic Image'}
-                    </button>
-                </div>
-            )}
 
             <div className="space-y-3">
                 <details className="bg-slate-50 p-3 rounded-lg open:ring-2 open:ring-emerald-200 group">
