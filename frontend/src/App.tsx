@@ -8,7 +8,7 @@ import { MobileApp } from './components/layout/MobileApp';
 import { AnalysisResultModal } from './components/AnalysisResultModal';
 import * as apiService from './services/apiService';
 import { getProductByBarcode } from './services/openFoodFactsService';
-import { HealthStats, UserDashboardPrefs, SavedMeal, MealLogEntry, MealPlan, NutritionInfo, UserProfile, Recipe } from './types';
+import { HealthStats, UserDashboardPrefs, SavedMeal, MealLogEntry, MealPlan, NutritionInfo, Recipe } from './types';
 import { CaptureFlow } from './components/CaptureFlow';
 
 const App: React.FC = () => {
@@ -234,7 +234,7 @@ const App: React.FC = () => {
 
   const bodyProps = {
       healthStats, 
-      onSyncHealth: async (source?: 'apple' | 'fitbit') => { 
+      onSyncHealth: async () => { 
           setIsAnalyzing(true);
           try {
              // In a web environment, we trigger a prompt for "Vision Sync" 
