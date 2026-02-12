@@ -74,14 +74,53 @@ const ensureTables = async (client) => {
         );
     `);
 
-    // Ensure Fitbit columns exist on users table
+    // Added missing tables for meal planning and logging
+    await client.query(`
+        CREATE TABLE IF NOT EXISTS saved_meals (
+            id SERIAL PRIMARY KEY,
+            user_id VARCHAR(255) NOT NULL,
+            meal_data JSONB NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+    `);
+
+    await client.query(`
+        CREATE TABLE IF NOT EXISTS meal_log_entries (
+            id SERIAL PRIMARY KEY,
+            user_id VARCHAR(255) NOT NULL,
+            meal_data JSONB NOT NULL,
+            image_base64 TEXT,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+    `);
+
+    await client.query(`
+        CREATE TABLE IF NOT EXISTS meal_plans (
+            id SERIAL PRIMARY KEY,
+            user_id VARCHAR(255) NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+    `);
+
+    await client.query(`
+        CREATE TABLE IF NOT EXISTS meal_plan_items (
+            id SERIAL PRIMARY KEY,
+            user_id VARCHAR(255) NOT NULL,
+            meal_plan_id INTEGER REFERENCES meal_plans(id) ON DELETE CASCADE,
+            saved_meal_id INTEGER REFERENCES saved_meals(id) ON DELETE CASCADE,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+    `);
+
+    // Ensure Fitbit columns and dashboard preferences exist on users table
     try {
         await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS fitbit_access_token TEXT`);
         await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS fitbit_refresh_token TEXT`);
         await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS fitbit_token_expires TIMESTAMPTZ`);
         await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS fitbit_user_id VARCHAR(255)`);
-        // Added shopify_customer_id to ensure schema completeness
         await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS shopify_customer_id VARCHAR(255)`);
+        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dashboard_prefs JSONB`);
     } catch (e) {
         console.warn("User column migration skipped", e.message);
     }
@@ -156,7 +195,53 @@ export const getSavedMeals = async (userId) => {
     try {
         const res = await client.query(`SELECT id, meal_data FROM saved_meals WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
         return res.rows.map(row => ({ id: row.id, ...processMealDataForClient(row.meal_data) }));
+    } finally {
+        client.release();
+    }
+};
+
+// FIX: Added getMealLogEntries to retrieve historical meal data
+export const getMealLogEntries = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const query = `
+            SELECT id, meal_data, image_base64, created_at 
+            FROM meal_log_entries
+            WHERE user_id = $1 
+            ORDER BY created_at DESC;
+        `;
+        const res = await client.query(query, [userId]);
+        return res.rows.map(row => {
+            const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
+            return {
+                id: row.id,
+                ...mealData,
+                imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
+                createdAt: row.created_at,
+                hasImage: !!row.image_base64
+            };
+        });
+    } catch (err) {
+        console.error('Database error in getMealLogEntries:', err);
+        throw new Error('Could not retrieve meal history.');
+    } finally {
+        client.release();
+    }
+};
+
+// FIX: Added getDashboardPrefs for user UI configuration
+export const getDashboardPrefs = async (userId) => {
+    const client = await pool.connect();
+    try { 
+        const res = await client.query(`SELECT dashboard_prefs FROM users WHERE id = $1`, [userId]);
+        return res.rows[0]?.dashboard_prefs || { selectedWidgets: ['steps', 'activeCalories', 'distanceMiles'] }; 
     } finally { client.release(); }
+};
+
+// FIX: Added saveDashboardPrefs to persist user UI configuration
+export const saveDashboardPrefs = async (userId, prefs) => {
+    const client = await pool.connect();
+    try { await client.query(`UPDATE users SET dashboard_prefs = $1 WHERE id = $2`, [prefs, userId]); } finally { client.release(); }
 };
 
 export const getMealPlans = async (userId) => {
@@ -164,7 +249,9 @@ export const getMealPlans = async (userId) => {
     try {
         const res = await client.query(`SELECT id, name FROM meal_plans WHERE user_id = $1`, [userId]);
         return res.rows.map(row => ({ id: row.id, name: row.name, items: [] }));
-    } finally { client.release(); }
+    } finally {
+        client.release();
+    }
 };
 
 export const createMealPlan = async (userId, name) => {
@@ -172,24 +259,23 @@ export const createMealPlan = async (userId, name) => {
     try {
         const res = await client.query(`INSERT INTO meal_plans (user_id, name) VALUES ($1, $2) RETURNING id, name`, [userId, name]);
         return { id: res.rows[0].id, name: res.rows[0].name, items: [] };
-    } finally { client.release(); }
+    } finally {
+        client.release();
+    }
 };
 
-// FIX: Added getArticles to resolve error in backend/index.mjs
 export const getArticles = async (userId) => {
     const client = await pool.connect();
     try {
         const res = await client.query(`SELECT * FROM pulse_articles ORDER BY created_at DESC`);
         return res.rows;
     } catch (e) {
-        console.warn("Articles table might not exist, returning empty array", e.message);
         return [];
     } finally {
         client.release();
     }
 };
 
-// FIX: Added getShopifyCustomerId to resolve error in backend/services/shopifyService.mjs
 export const getShopifyCustomerId = async (userId) => {
     const client = await pool.connect();
     try {

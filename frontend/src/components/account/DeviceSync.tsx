@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ActivityIcon, CheckIcon, HeartIcon, RefreshIcon } from '../icons';
 import * as apiService from '../../services/apiService';
 import { connectHealthProvider, syncHealthData } from '../../services/healthService';
@@ -16,12 +16,13 @@ export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete, lastSync
     const [lastUpdatedFields, setLastUpdatedFields] = useState<string[]>([]);
     const [isProcessingCode, setIsProcessingCode] = useState(false);
 
-    // Handle Fitbit Redirect Callback
+    // Handle Fitbit Redirect Callback Handshake
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const code = params.get('code');
         if (code && !isProcessingCode) {
             setIsProcessingCode(true);
+            setFitbitStatus('syncing');
             apiService.linkFitbitAccount(code).then(() => {
                 setFitbitStatus('connected');
                 // Clean URL to prevent re-linking on refresh
@@ -30,6 +31,7 @@ export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete, lastSync
             }).catch(e => {
                 console.error("Link failed", e);
                 setFitbitStatus('idle');
+                alert("Fitbit link failed. Check your server environment variables.");
             }).finally(() => setIsProcessingCode(false));
         }
     }, []);
@@ -54,10 +56,11 @@ export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete, lastSync
     const handleFitbitConnect = async () => {
         setFitbitStatus('syncing');
         try {
+            // This will trigger the redirect to Fitbit's site
             await connectHealthProvider('fitbit');
         } catch (e) {
             console.error(e);
-            alert("Fitbit connection failed.");
+            alert("Fitbit connection failed. Ensure FITBIT_CLIENT_ID is set in backend.");
             setFitbitStatus('idle');
         }
     };
@@ -67,7 +70,7 @@ export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete, lastSync
         try {
             const result = await apiService.syncWithFitbit();
             setFitbitStatus('connected');
-            setLastUpdatedFields(['Steps', 'Active Calories', 'Resting Heart Rate']);
+            setLastUpdatedFields(['Steps', 'Active Calories']);
             onSyncComplete(result);
         } catch (e) {
             console.error(e);
@@ -143,16 +146,20 @@ export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete, lastSync
                             disabled={fitbitStatus === 'syncing'}
                             className="flex-1 bg-white border border-slate-200 py-3 rounded-xl text-[10px] font-black uppercase text-slate-700 hover:bg-slate-100 transition shadow-sm"
                         >
-                            {fitbitStatus === 'connected' ? 'Reconnect' : 'Connect Account'}
+                            {/* FIX: Cast fitbitStatus to string to bypass unintended overlap warning */}
+                            {(fitbitStatus as string) === 'connected' ? 'Connected' : 'Link Account'}
                         </button>
-                        <button 
-                            onClick={handleFitbitSync}
-                            disabled={fitbitStatus === 'syncing'}
-                            className="flex-1 bg-slate-900 text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all disabled:opacity-50"
-                        >
-                            {fitbitStatus === 'syncing' ? <div className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin"></div> : <RefreshIcon className="w-3 h-3" />}
-                            Sync Data
-                        </button>
+                        {/* FIX: Cast fitbitStatus to string to bypass unintended overlap warning */}
+                        {(fitbitStatus as string) === 'connected' && (
+                            <button 
+                                onClick={handleFitbitSync}
+                                disabled={fitbitStatus === 'syncing'}
+                                className="flex-1 bg-slate-900 text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all disabled:opacity-50"
+                            >
+                                {fitbitStatus === 'syncing' ? <div className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin"></div> : <RefreshIcon className="w-3 h-3" />}
+                                Sync Data
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>

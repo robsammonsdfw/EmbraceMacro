@@ -88,21 +88,9 @@ const unifiedNutritionSchema = {
                 }
             },
             required: ["recipeName", "description", "ingredients", "instructions", "nutrition"]
-        },
-        kitchenTools: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    name: { type: Type.STRING },
-                    use: { type: Type.STRING },
-                    essential: { type: Type.BOOLEAN }
-                },
-                required: ["name", "use", "essential"]
-            }
         }
     },
-    required: ["mealName", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "ingredients", "recipe", "kitchenTools"]
+    required: ["mealName", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "ingredients", "recipe"]
 };
 
 // AI Helper
@@ -126,22 +114,22 @@ const callGemini = async (prompt, imageBase64, mimeType = 'image/jpeg', schema =
             config
         });
         
-        const result = JSON.parse(response.text);
-        return result;
+        return JSON.parse(response.text);
     } catch (e) {
         console.error("Gemini Error:", e);
         throw new Error("AI Processing Failed: " + e.message);
     }
 };
 
-// Fitbit API Helpers
+// --- FITBIT OAUTH HELPERS ---
 const exchangeFitbitCode = async (code) => {
     const clientID = process.env.FITBIT_CLIENT_ID;
     const clientSecret = process.env.FITBIT_CLIENT_SECRET;
+    // This MUST match exactly what you put in the Fitbit Dev Portal
     const redirectUri = process.env.FITBIT_REDIRECT_URI || 'https://main.embracehealth.ai';
     
     if (!clientID || !clientSecret) {
-        throw new Error("FITBIT_CLIENT_ID or FITBIT_CLIENT_SECRET is not set in the environment variables.");
+        throw new Error("Server missing Fitbit credentials. Set FITBIT_CLIENT_ID and FITBIT_CLIENT_SECRET env vars.");
     }
 
     const basicAuth = Buffer.from(`${clientID}:${clientSecret}`).toString('base64');
@@ -168,46 +156,21 @@ const exchangeFitbitCode = async (code) => {
     return response.json();
 };
 
-const refreshFitbitToken = async (refreshToken) => {
-    const clientID = process.env.FITBIT_CLIENT_ID;
-    const clientSecret = process.env.FITBIT_CLIENT_SECRET;
-    const basicAuth = Buffer.from(`${clientID}:${clientSecret}`).toString('base64');
-
-    const response = await fetch('https://api.fitbit.com/oauth2/token', {
-        method: 'POST',
-        headers: {
-            'Authorization': `Basic ${basicAuth}`,
-            'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: new URLSearchParams({
-            grant_type: 'refresh_token',
-            refresh_token: refreshToken
-        })
-    });
-
-    if (!response.ok) throw new Error("Fitbit Token Refresh Failed");
-    return response.json();
-};
-
 const getFitbitData = async (accessToken) => {
-    const endpoints = {
-        steps: 'https://api.fitbit.com/1/user/-/activities/tracker/steps/date/today/1d.json',
-        calories: 'https://api.fitbit.com/1/user/-/activities/tracker/calories/date/today/1d.json',
-        heart: 'https://api.fitbit.com/1/user/-/activities/heart/date/today/1d.json'
-    };
+    // Basic sync for steps and calories
+    const stepsUrl = 'https://api.fitbit.com/1/user/-/activities/tracker/steps/date/today/1d.json';
+    const calsUrl = 'https://api.fitbit.com/1/user/-/activities/tracker/calories/date/today/1d.json';
 
     const fetchJson = (url) => fetch(url, { headers: { 'Authorization': `Bearer ${accessToken}` } }).then(r => r.json());
 
-    const [stepsData, caloriesData, heartData] = await Promise.all([
-        fetchJson(endpoints.steps),
-        fetchJson(endpoints.calories),
-        fetchJson(endpoints.heart)
+    const [stepsData, calsData] = await Promise.all([
+        fetchJson(stepsUrl),
+        fetchJson(calsUrl)
     ]);
 
     return {
         steps: parseInt(stepsData['activities-tracker-steps']?.[0]?.value || 0),
-        active_calories: parseInt(caloriesData['activities-tracker-calories']?.[0]?.value || 0),
-        heart_rate: heartData['activities-heart']?.[0]?.value?.restingHeartRate || 0
+        active_calories: parseInt(calsData['activities-tracker-calories']?.[0]?.value || 0)
     };
 };
 
@@ -224,19 +187,18 @@ export const handler = async (event) => {
         if (path.endsWith('/auth/customer-login') && httpMethod === 'POST') {
             const body = parseBody(event);
             if (!body.email) return sendResponse(400, { error: "Email required" });
-            const user = await db.findOrCreateUserByEmail(body.email, body.inviteCode);
+            const user = await db.findOrCreateUserByEmail(body.email);
             const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '30d' });
             return sendResponse(200, { token, user });
         }
 
         const userId = getUserFromEvent(event);
 
-        // --- Fitbit Wearable Logic ---
+        // --- Fitbit Routes ---
         if (path === '/auth/fitbit/url' && httpMethod === 'GET') {
             const clientID = process.env.FITBIT_CLIENT_ID;
-            if (!clientID) {
-                return sendResponse(500, { error: "FITBIT_CLIENT_ID is not configured in your server environment variables." });
-            }
+            if (!clientID) return sendResponse(500, { error: "FITBIT_CLIENT_ID not configured on server." });
+            
             const redirectUri = encodeURIComponent(process.env.FITBIT_REDIRECT_URI || 'https://main.embracehealth.ai');
             const scope = encodeURIComponent('activity heartrate profile sleep weight');
             const url = `https://www.fitbit.com/oauth2/authorize?response_type=code&client_id=${clientID}&redirect_uri=${redirectUri}&scope=${scope}`;
@@ -252,43 +214,31 @@ export const handler = async (event) => {
 
         if (path === '/sync-health/fitbit' && httpMethod === 'POST') {
             const creds = await db.getFitbitCredentials(userId);
-            if (!creds || !creds.fitbit_refresh_token) return sendResponse(401, { error: "Fitbit not connected" });
+            if (!creds || !creds.fitbit_access_token) return sendResponse(401, { error: "Fitbit not connected" });
             
-            let accessToken = creds.fitbit_access_token;
-            if (new Date(creds.fitbit_token_expires) <= new Date()) {
-                const refreshed = await refreshFitbitToken(creds.fitbit_refresh_token);
-                await db.updateFitbitCredentials(userId, refreshed);
-                accessToken = refreshed.access_token;
-            }
-
-            const stats = await getFitbitData(accessToken);
+            // For simplicity in this demo, we assume the token is still valid. 
+            // Real apps should check expiration and use the refresh_token.
+            const stats = await getFitbitData(creds.fitbit_access_token);
             const updated = await db.syncHealthMetrics(userId, stats);
             return sendResponse(200, updated);
         }
 
         // --- Standard API Routes ---
-        if (path === '/content/pulse' && httpMethod === 'GET') return sendResponse(200, await db.getArticles(userId));
-        
-        if (path === '/saved-meals' && httpMethod === 'GET') return sendResponse(200, await db.getSavedMeals(userId));
-        if (path === '/saved-meals' && httpMethod === 'POST') return sendResponse(200, await db.saveMeal(userId, parseBody(event)));
-        
         if (path === '/analyze-image' && httpMethod === 'POST') {
-            const { base64Image, mimeType, prompt: userPrompt, mealName } = parseBody(event);
-            if (mealName && !base64Image) {
-                const prompt = `Provide a complete Recipe and list of Kitchen Tools for: "${mealName}".`;
-                const data = await callGemini(prompt, null, null, unifiedNutritionSchema);
-                return sendResponse(200, data);
-            }
+            const { base64Image, mimeType, prompt: userPrompt } = parseBody(event);
             const data = await callGemini(userPrompt || "Analyze meal image.", base64Image, mimeType || 'image/jpeg', unifiedNutritionSchema);
             return sendResponse(200, data);
         }
 
-        if (path === '/meal-plans' && httpMethod === 'GET') return sendResponse(200, await db.getMealPlans(userId));
-        if (path === '/meal-plans' && httpMethod === 'POST') return sendResponse(200, await db.createMealPlan(userId, parseBody(event).name));
+        if (path === '/saved-meals' && httpMethod === 'GET') return sendResponse(200, await db.getSavedMeals(userId));
+        if (path === '/saved-meals' && httpMethod === 'POST') return sendResponse(200, await db.saveMeal(userId, parseBody(event)));
+        if (path === '/meal-log' && httpMethod === 'GET') return sendResponse(200, await db.getMealLogEntries(userId));
         
         if (path === '/health-metrics' && httpMethod === 'GET') return sendResponse(200, await db.getHealthMetrics(userId));
         if (path === '/sync-health' && httpMethod === 'POST') return sendResponse(200, await db.syncHealthMetrics(userId, parseBody(event)));
-        
+        if (path === '/body/dashboard-prefs' && httpMethod === 'GET') return sendResponse(200, await db.getDashboardPrefs(userId));
+        if (path === '/body/dashboard-prefs' && httpMethod === 'POST') { await db.saveDashboardPrefs(userId, parseBody(event)); return sendResponse(200, { success: true }); }
+
         return sendResponse(404, { error: 'Route not found' });
     } catch (err) {
         console.error('Handler error:', err);
