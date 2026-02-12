@@ -24,9 +24,7 @@ const getUserFromEvent = (event) => {
         if (!authHeader) return '1'; 
         const token = authHeader.replace('Bearer ', '');
         const decoded = jwt.verify(token, JWT_SECRET);
-        if (typeof decoded === 'object' && decoded !== null) {
-            return decoded.userId || '1';
-        }
+        if (typeof decoded === 'object' && decoded !== null) return decoded.userId || '1';
         return '1';
     } catch (e) { return '1'; }
 };
@@ -35,7 +33,7 @@ const parseBody = (event) => {
     try { return event.body ? JSON.parse(event.body) : {}; } catch (e) { return {}; }
 };
 
-// --- COMPREHENSIVE NUTRITION SCHEMA (Ensures Recipe & Tools Tabs) ---
+// --- COMPREHENSIVE NUTRITION SCHEMA (Ensures Macros, Recipe, and Tools Tabs) ---
 const unifiedNutritionSchema = {
     type: Type.OBJECT,
     properties: {
@@ -74,11 +72,7 @@ const unifiedNutritionSchema = {
             type: Type.ARRAY,
             items: {
                 type: Type.OBJECT,
-                properties: {
-                    name: { type: Type.STRING },
-                    use: { type: Type.STRING },
-                    essential: { type: Type.BOOLEAN }
-                },
+                properties: { name: { type: Type.STRING }, use: { type: Type.STRING }, essential: { type: Type.BOOLEAN } },
                 required: ["name", "use", "essential"]
             }
         }
@@ -117,7 +111,7 @@ export const handler = async (event) => {
         if (path.endsWith('/auth/customer-login') && httpMethod === 'POST') {
             const body = parseBody(event);
             if (!body.email) return sendResponse(400, { error: "Email required" });
-            const user = await db.findOrCreateUserByEmail(body.email);
+            const user = await db.findOrCreateUserByEmail(body.email, body.inviteCode);
             const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '30d' });
             return sendResponse(200, { token, user });
         }
@@ -133,7 +127,7 @@ export const handler = async (event) => {
         if (path === '/social/friends' && httpMethod === 'GET') return sendResponse(200, await db.getFriends(userId));
         if (path === '/social/profile' && httpMethod === 'GET') return sendResponse(200, await db.getSocialProfile(userId));
 
-        // Meals & History
+        // Meals (List vs Detail optimized)
         if (path === '/saved-meals' && httpMethod === 'GET') return sendResponse(200, await db.getSavedMeals(userId));
         if (path === '/saved-meals' && httpMethod === 'POST') return sendResponse(200, await db.saveMeal(userId, parseBody(event)));
         if (path.startsWith('/saved-meals/') && httpMethod === 'GET') {
@@ -147,10 +141,6 @@ export const handler = async (event) => {
         }
         
         if (path === '/meal-log' && httpMethod === 'GET') return sendResponse(200, await db.getMealLogEntries(userId));
-        if (path === '/meal-log' && httpMethod === 'POST') {
-            const { mealData, base64Image } = parseBody(event);
-            return sendResponse(200, await db.createMealLogEntry(userId, mealData, base64Image));
-        }
         if (path.startsWith('/meal-log/') && httpMethod === 'GET') {
             const id = parseInt(path.split('/').pop());
             return sendResponse(200, await db.getMealLogEntryById(userId, id));
@@ -179,15 +169,15 @@ export const handler = async (event) => {
         }
         if (path.startsWith('/grocery/lists/') && path.endsWith('/items') && httpMethod === 'POST') {
             const id = parseInt(path.split('/')[3]);
-            return sendResponse(200, await db.addGroceryItem(id, parseBody(event).name));
+            return sendResponse(200, await db.addGroceryItem(userId, id, parseBody(event).name));
         }
         if (path.startsWith('/grocery/items/') && httpMethod === 'PATCH') {
             const id = parseInt(path.split('/').pop());
-            return sendResponse(200, await db.updateGroceryItem(id, parseBody(event).checked));
+            return sendResponse(200, await db.updateGroceryItem(userId, id, parseBody(event).checked));
         }
         if (path.startsWith('/grocery/items/') && httpMethod === 'DELETE') {
             const id = parseInt(path.split('/').pop());
-            await db.removeGroceryItem(id);
+            await db.removeGroceryItem(userId, id);
             return sendResponse(200, { success: true });
         }
 
@@ -195,7 +185,7 @@ export const handler = async (event) => {
         if (path === '/analyze-image' && httpMethod === 'POST') {
             const { base64Image, mimeType, prompt } = parseBody(event);
             const data = await callGemini(
-                prompt || "Perform comprehensive vision analysis. identify the meal, extract macros/ingredients, generate a step-by-step culinary recipe, and list required kitchen tools.", 
+                prompt || "Perform comprehensive vision analysis. Identify the meal, extract macros/ingredients, generate a step-by-step culinary recipe, and list required kitchen tools.", 
                 base64Image, 
                 mimeType, 
                 unifiedNutritionSchema
@@ -211,11 +201,9 @@ export const handler = async (event) => {
         if (path === '/body/dashboard-prefs' && httpMethod === 'GET') return sendResponse(200, await db.getDashboardPrefs(userId));
         if (path === '/body/dashboard-prefs' && httpMethod === 'POST') { await db.saveDashboardPrefs(userId, parseBody(event)); return sendResponse(200, { success: true }); }
 
-        // Shopify
+        // Shopify & Content
         if (path === '/shopify/orders' && httpMethod === 'GET') return sendResponse(200, await shopify.fetchCustomerOrders(userId));
         if (path.startsWith('/shopify/products/') && httpMethod === 'GET') return sendResponse(200, await shopify.getProductByHandle(path.split('/').pop()));
-
-        // Content
         if (path === '/content/pulse' && httpMethod === 'GET') return sendResponse(200, await db.getArticles());
 
         return sendResponse(404, { error: 'Route not found: ' + path });
