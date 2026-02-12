@@ -153,7 +153,8 @@ export const handler = async (event) => {
             const { base64Image } = parseBody(event);
             const prompt = "Extract health metrics from this wearable app screenshot. Look for steps, active/resting calories, heart rate, BP, and weight. Return JSON.";
             const data = await callGemini(prompt, base64Image, 'image/jpeg', healthOcrSchema);
-            return sendResponse(200, data);
+            const syncResult = await db.syncHealthMetrics(userId, data);
+            return sendResponse(200, syncResult);
         }
 
         // --- FITBIT FLOW ---
@@ -165,7 +166,7 @@ export const handler = async (event) => {
             const { codeChallenge } = parseBody(event);
             const clientID = process.env.FITBIT_CLIENT_ID;
             const redirectUri = encodeURIComponent(process.env.FITBIT_REDIRECT_URI || 'https://app.embracehealth.ai');
-            const url = `https://www.fitbit.com/oauth2/authorize?response_type=code&client_id=${clientID}&redirect_uri=${redirectUri}&scope=activity%20profile%20nutrition%20heartrate&code_challenge=${codeChallenge}&code_challenge_method=S256`;
+            const url = `https://www.fitbit.com/oauth2/authorize?response_type=code&client_id=${clientID}&redirect_uri=${redirectUri}&scope=activity%20profile%20nutrition%20heartrate%20weight%20sleep&code_challenge=${codeChallenge}&code_challenge_method=S256`;
             return sendResponse(200, { url });
         }
 
@@ -188,11 +189,22 @@ export const handler = async (event) => {
         if (path === '/sync-health/fitbit' && httpMethod === 'POST') {
             const creds = await db.getFitbitCredentials(userId);
             if (!creds?.fitbit_access_token) return sendResponse(401, { error: "Fitbit not connected" });
-            const statsResponse = await fetch('https://api.fitbit.com/1/user/-/activities/today.json', {
-                headers: { 'Authorization': `Bearer ${creds.fitbit_access_token}` }
+            
+            // Parallel fetch for activities and heart rate
+            const [actRes, hrRes] = await Promise.all([
+                fetch('https://api.fitbit.com/1/user/-/activities/today.json', { headers: { 'Authorization': `Bearer ${creds.fitbit_access_token}` } }),
+                fetch('https://api.fitbit.com/1/user/-/activities/heart/date/today/1d.json', { headers: { 'Authorization': `Bearer ${creds.fitbit_access_token}` } })
+            ]);
+            
+            const actData = await actRes.json();
+            const hrData = await hrRes.json();
+
+            const syncResult = await db.syncHealthMetrics(userId, { 
+                steps: actData.summary?.steps, 
+                activeCalories: actData.summary?.caloriesOut,
+                restingCalories: actData.summary?.marginalCalories,
+                restingHeartRate: hrData?.['activities-heart']?.[0]?.value?.restingHeartRate
             });
-            const data = await statsResponse.json();
-            const syncResult = await db.syncHealthMetrics(userId, { steps: data.summary?.steps, activeCalories: data.summary?.caloriesOut });
             return sendResponse(200, syncResult);
         }
 
@@ -209,7 +221,6 @@ export const handler = async (event) => {
             return sendResponse(200, { success: true });
         }
         if (path.startsWith('/body/photos/') && httpMethod === 'GET') {
-            // FIX: Added userId parameter to getBodyPhotoById call to match updated signature in databaseService.mjs
             return sendResponse(200, await db.getBodyPhotoById(userId, parseInt(path.split('/').pop())));
         }
         if (path === '/body/analyze-form' && httpMethod === 'POST') {
@@ -225,13 +236,8 @@ export const handler = async (event) => {
         // --- NUTRITION ---
         if (path === '/saved-meals' && httpMethod === 'GET') return sendResponse(200, await db.getSavedMeals(userId));
         if (path === '/saved-meals' && httpMethod === 'POST') return sendResponse(200, await db.saveMeal(userId, parseBody(event)));
-        if (path.startsWith('/saved-meals/') && httpMethod === 'GET') return sendResponse(200, await db.getSavedMealById(userId, parseInt(path.split('/').pop())));
         
         if (path === '/meal-log' && httpMethod === 'GET') return sendResponse(200, await db.getMealLogEntries(userId));
-        if (path.startsWith('/meal-log/') && httpMethod === 'GET') return sendResponse(200, await db.getMealLogEntryById(userId, parseInt(path.split('/').pop())));
-
-        if (path === '/meal-plans' && httpMethod === 'GET') return sendResponse(200, await db.getMealPlans(userId));
-        if (path === '/grocery/lists' && httpMethod === 'GET') return sendResponse(200, await db.getGroceryLists(userId));
 
         // --- VISION ---
         if (path === '/analyze-image' && httpMethod === 'POST') {
@@ -239,15 +245,6 @@ export const handler = async (event) => {
             const data = await callGemini(prompt || "Vision analysis for meal macros, recipes, and tools.", base64Image, mimeType, unifiedNutritionSchema);
             await db.createMealLogEntry(userId, data, base64Image);
             return sendResponse(200, data);
-        }
-
-        // --- TELEMED & SHOPIFY ---
-        if (path === '/shopify/orders' && httpMethod === 'GET') {
-            return sendResponse(200, await shopify.fetchCustomerOrders(userId));
-        }
-        if (path.startsWith('/shopify/products/') && httpMethod === 'GET') {
-            const handle = path.split('/').pop();
-            return sendResponse(200, await shopify.getProductByHandle(handle));
         }
 
         // --- HEALTH ---
