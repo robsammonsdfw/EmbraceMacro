@@ -18,18 +18,6 @@ const processMealDataForList = (mealData, externalHasImage = false) => {
     return dataForList;
 };
 
-const processMealDataForClient = (mealData) => {
-    const dataForClient = { ...mealData };
-    if (dataForClient.imageBase64) {
-        dataForClient.imageUrl = `data:image/jpeg;base64,${dataForClient.imageBase64}`;
-        delete dataForClient.imageBase64;
-        dataForClient.hasImage = true;
-    } else {
-        dataForClient.hasImage = false;
-    }
-    return dataForClient;
-};
-
 // --- USER & AUTH ---
 
 export const findOrCreateUserByEmail = async (email, inviteCode = null) => {
@@ -40,7 +28,6 @@ export const findOrCreateUserByEmail = async (email, inviteCode = null) => {
         const res = await client.query(`SELECT id, email, shopify_customer_id FROM users WHERE email = $1;`, [normalized]);
         const user = res.rows[0];
 
-        // Process referral if token provided
         if (inviteCode) {
             const invRes = await client.query(`SELECT id, inviter_id, status FROM invitations WHERE token = $1`, [inviteCode]);
             if (invRes.rows.length > 0 && invRes.rows[0].status !== 'joined') {
@@ -51,6 +38,23 @@ export const findOrCreateUserByEmail = async (email, inviteCode = null) => {
             }
         }
         return user;
+    } finally { client.release(); }
+};
+
+// --- FITBIT STORAGE ---
+
+export const updateFitbitCredentials = async (userId, data) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`UPDATE users SET fitbit_access_token = $1, fitbit_refresh_token = $2 WHERE id = $3`, [data.access_token, data.refresh_token, userId]);
+    } finally { client.release(); }
+};
+
+export const getFitbitCredentials = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT fitbit_access_token, fitbit_refresh_token FROM users WHERE id = $1`, [userId]);
+        return res.rows[0];
     } finally { client.release(); }
 };
 
@@ -75,7 +79,7 @@ export const getRewardsSummary = async (userId) => {
     } finally { client.release(); }
 };
 
-// --- MEALS & HISTORY (OPTIMIZED LISTS) ---
+// --- MEALS & HISTORY (STRIPPED LISTS) ---
 
 export const createMealLogEntry = async (userId, mealData, imageBase64) => {
     const client = await pool.connect();
@@ -89,7 +93,6 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
 export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
     try {
-        // CRITICAL: Explicitly exclude image_base64 string to keep payload small
         const res = await client.query(`SELECT id, meal_data, (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image, created_at FROM meal_log_entries WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
         return res.rows.map(r => ({ ...processMealDataForList(r.meal_data, r.has_image), id: r.id, createdAt: r.created_at }));
     } finally { client.release(); }
@@ -244,7 +247,7 @@ export const removeGroceryItem = async (userId, itemId) => {
     try { await client.query(`DELETE FROM grocery_list_items WHERE id = $1 AND user_id = $2`, [itemId, userId]); } finally { client.release(); }
 };
 
-// --- HEALTH & BODY ---
+// --- HEALTH & METRICS ---
 
 export const getHealthMetrics = async (userId) => {
     const client = await pool.connect();
@@ -257,7 +260,12 @@ export const getHealthMetrics = async (userId) => {
 export const syncHealthMetrics = async (userId, stats) => {
     const client = await pool.connect();
     try {
-        const res = await client.query(`INSERT INTO health_metrics (user_id, steps, active_calories, last_synced) VALUES ($1, $2, $3, CURRENT_TIMESTAMP) ON CONFLICT (user_id) DO UPDATE SET steps = EXCLUDED.steps, active_calories = EXCLUDED.active_calories, last_synced = CURRENT_TIMESTAMP RETURNING *`, [userId, stats.steps || 0, stats.activeCalories || 0]);
+        const res = await client.query(`
+            INSERT INTO health_metrics (user_id, steps, active_calories, last_synced)
+            VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+            ON CONFLICT (user_id) DO UPDATE SET steps = GREATEST(health_metrics.steps, EXCLUDED.steps), active_calories = GREATEST(health_metrics.active_calories, EXCLUDED.active_calories), last_synced = CURRENT_TIMESTAMP
+            RETURNING steps, active_calories as "activeCalories", last_synced as "lastSynced"
+        `, [userId, stats.steps || 0, stats.activeCalories || 0]);
         return res.rows[0];
     } finally { client.release(); }
 };

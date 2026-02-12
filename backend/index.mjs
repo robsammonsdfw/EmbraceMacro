@@ -33,7 +33,7 @@ const parseBody = (event) => {
     try { return event.body ? JSON.parse(event.body) : {}; } catch (e) { return {}; }
 };
 
-// --- COMPREHENSIVE NUTRITION SCHEMA (Ensures Macros, Recipe, and Tools Tabs) ---
+// --- COMPREHENSIVE NUTRITION SCHEMA (Ensures 3-Tab Intelligence) ---
 const unifiedNutritionSchema = {
     type: Type.OBJECT,
     properties: {
@@ -118,6 +118,46 @@ export const handler = async (event) => {
 
         const userId = getUserFromEvent(event);
 
+        // --- FITBIT OAUTH ENDPOINTS ---
+        if (path === '/auth/fitbit/url' && httpMethod === 'POST') {
+            const { codeChallenge } = parseBody(event);
+            const clientID = process.env.FITBIT_CLIENT_ID;
+            const redirectUri = encodeURIComponent(process.env.FITBIT_REDIRECT_URI || 'https://app.embracehealth.ai');
+            const url = `https://www.fitbit.com/oauth2/authorize?response_type=code&client_id=${clientID}&redirect_uri=${redirectUri}&scope=activity%20profile%20nutrition%20heartrate&code_challenge=${codeChallenge}&code_challenge_method=S256`;
+            return sendResponse(200, { url });
+        }
+
+        if (path === '/auth/fitbit/link' && httpMethod === 'POST') {
+            const { code, codeVerifier } = parseBody(event);
+            const clientID = process.env.FITBIT_CLIENT_ID;
+            const clientSecret = process.env.FITBIT_CLIENT_SECRET;
+            const basicAuth = Buffer.from(`${clientID}:${clientSecret}`).toString('base64');
+            const tokenResponse = await fetch('https://api.fitbit.com/oauth2/token', {
+                method: 'POST',
+                headers: { 'Authorization': `Basic ${basicAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({ grant_type: 'authorization_code', code, code_verifier: codeVerifier, redirect_uri: process.env.FITBIT_REDIRECT_URI || 'https://app.embracehealth.ai' })
+            });
+            const tokenData = await tokenResponse.json();
+            if (tokenData.errors) return sendResponse(400, tokenData);
+            await db.updateFitbitCredentials(userId, tokenData);
+            return sendResponse(200, { success: true });
+        }
+
+        if (path === '/sync-health/fitbit' && httpMethod === 'POST') {
+            const creds = await db.getFitbitCredentials(userId);
+            if (!creds?.fitbit_access_token) return sendResponse(401, { error: "Fitbit not connected" });
+            
+            const statsResponse = await fetch('https://api.fitbit.com/1/user/-/activities/today.json', {
+                headers: { 'Authorization': `Bearer ${creds.fitbit_access_token}` }
+            });
+            const data = await statsResponse.json();
+            const syncResult = await db.syncHealthMetrics(userId, {
+                steps: data.summary?.steps,
+                activeCalories: data.summary?.caloriesOut
+            });
+            return sendResponse(200, syncResult);
+        }
+
         // --- CORE ENDPOINTS ---
 
         // Rewards
@@ -127,7 +167,7 @@ export const handler = async (event) => {
         if (path === '/social/friends' && httpMethod === 'GET') return sendResponse(200, await db.getFriends(userId));
         if (path === '/social/profile' && httpMethod === 'GET') return sendResponse(200, await db.getSocialProfile(userId));
 
-        // Meals (List vs Detail optimized)
+        // Meals (6MB Payload Compliant Routing)
         if (path === '/saved-meals' && httpMethod === 'GET') return sendResponse(200, await db.getSavedMeals(userId));
         if (path === '/saved-meals' && httpMethod === 'POST') return sendResponse(200, await db.saveMeal(userId, parseBody(event)));
         if (path.startsWith('/saved-meals/') && httpMethod === 'GET') {
@@ -185,12 +225,11 @@ export const handler = async (event) => {
         if (path === '/analyze-image' && httpMethod === 'POST') {
             const { base64Image, mimeType, prompt } = parseBody(event);
             const data = await callGemini(
-                prompt || "Perform comprehensive vision analysis. Identify the meal, extract macros/ingredients, generate a step-by-step culinary recipe, and list required kitchen tools.", 
+                prompt || "Perform vision analysis. Identify the meal, extract macros/ingredients, generate a step-by-step recipe, and list required kitchen tools.", 
                 base64Image, 
                 mimeType, 
                 unifiedNutritionSchema
             );
-            // Save to history on analysis
             await db.createMealLogEntry(userId, data, base64Image);
             return sendResponse(200, data);
         }
