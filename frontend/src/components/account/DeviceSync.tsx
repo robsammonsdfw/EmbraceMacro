@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ActivityIcon, CheckIcon, RefreshIcon, CameraIcon, TrashIcon } from '../icons';
+import { ActivityIcon, RefreshIcon, CameraIcon, TrashIcon } from '../icons';
 import * as apiService from '../../services/apiService';
 import type { HealthStats } from '../../types';
 
@@ -96,7 +96,7 @@ export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete, lastSync
         try {
             const result = await apiService.syncWithFitbit();
             onSyncComplete(result);
-            alert("Fitbit sync complete! Steps and Calories updated.");
+            alert("Fitbit sync complete! Activity data updated.");
         } catch (e) {
             alert("Fitbit sync failed. Reconnect might be required.");
         } finally {

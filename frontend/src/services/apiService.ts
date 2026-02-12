@@ -1,6 +1,6 @@
 import { 
     MealPlan, GroceryItem, Order, Friendship, UserProfile, 
-    RecoveryData, ReadinessScore, FormAnalysisResult, BodyPhoto, 
+    ReadinessScore, FormAnalysisResult, BodyPhoto, 
     Assessment, AssessmentState, PartnerBlueprint, MatchProfile, 
     CoachingRelation, NutritionInfo, RestaurantActivity, PantryLogEntry,
     Recipe, SavedMeal, MealLogEntry, HealthStats, RewardsSummary, UserDashboardPrefs,
@@ -10,7 +10,6 @@ import {
 const API_BASE_URL = 'https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default';
 const AUTH_TOKEN_KEY = 'embracehealth-api-token';
 
-// Added missing JudgeResult interface
 export interface JudgeResult {
     score: number;
     feedback: string;
@@ -77,9 +76,11 @@ export const removeMealFromPlan = (itemId: number): Promise<void> => callApi(`/m
 
 // --- HEALTH ---
 export const getHealthMetrics = (): Promise<HealthStats> => {
-    const localDate = new Date().toLocaleDateString('en-CA');
+    // Pass user's local date to ensure midnight reset logic is geographically correct
+    const localDate = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
     return callApi(`/health-metrics?date=${localDate}`, 'GET');
 };
+export const syncHealthStatsToDB = (stats: Partial<HealthStats>): Promise<HealthStats> => callApi('/sync-health', 'POST', stats);
 
 // --- REST ---
 export const getSavedMeals = (): Promise<SavedMeal[]> => callApi('/saved-meals', 'GET');
@@ -106,9 +107,7 @@ export const uploadBodyPhoto = async (base64Image: string, category: string): Pr
     const compressed = await compressImage(base64Image);
     return callApi('/body/photos', 'POST', { base64Image: compressed, category });
 };
-// Fixed signature mismatch: Component only passes id
 export const getBodyPhotoById = (id: number): Promise<BodyPhoto> => callApi(`/body/photos/${id}`, 'GET');
-// Fixed signature mismatch: Component only passes exercise
 export const getFormChecks = (exercise: string | null): Promise<any[]> => callApi(`/body/form-checks${exercise ? '?exercise='+exercise : ''}`, 'GET');
 export const analyzeExerciseForm = async (base64Image: string, exercise: string): Promise<FormAnalysisResult> => {
     const compressed = await compressImage(base64Image);
@@ -128,7 +127,6 @@ export const identifyGroceryItems = async (base64Image: string, mimeType: string
     const compressed = await compressImage(base64Image, mimeType);
     return callApi('/grocery/identify', 'POST', { base64Image: compressed, mimeType });
 };
-export const syncHealthStatsToDB = (stats: Partial<HealthStats>): Promise<HealthStats> => callApi('/sync-health', 'POST', stats);
 export const getShopifyOrders = (): Promise<Order[]> => callApi('/shopify/orders', 'GET');
 export const getShopifyProduct = (handle: string): Promise<ShopifyProduct | { error: string }> => callApi(`/shopify/products/${handle}`, 'GET');
 export const generateRecipeImage = (prompt: string): Promise<{ base64Image: string }> => callApi('/generate-recipe-image', 'POST', { prompt });
@@ -152,8 +150,6 @@ export const judgeRecipeAttempt = async (base64Image: string, recipeContext: str
     const compressed = await compressImage(base64Image);
     return callApi('/judge-recipe', 'POST', { base64Image: compressed, recipeContext, recipeId });
 };
-
-// --- Added Missing API Methods ---
 export const getPantryLog = (): Promise<PantryLogEntry[]> => callApi('/nutrition/pantry-log', 'GET');
 export const savePantryLogEntry = (imageBase64: string): Promise<void> => callApi('/nutrition/pantry-log', 'POST', { imageBase64 });
 export const getPantryLogEntryById = (id: number): Promise<PantryLogEntry> => callApi(`/nutrition/pantry-log/${id}`, 'GET');

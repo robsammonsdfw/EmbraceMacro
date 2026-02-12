@@ -1,5 +1,4 @@
 import * as db from './services/databaseService.mjs';
-import * as shopify from './services/shopifyService.mjs';
 import jwt from 'jsonwebtoken';
 import { GoogleGenAI, Type } from "@google/genai";
 import { Buffer } from 'node:buffer';
@@ -24,7 +23,6 @@ const getUserFromEvent = (event) => {
         if (!authHeader) return '1'; 
         const token = authHeader.replace('Bearer ', '');
         const decoded = jwt.verify(token, JWT_SECRET);
-        // Added safety check for JWT payload to fix typing error
         return (typeof decoded === 'object' && decoded !== null ? decoded.userId : null) || '1';
     } catch (e) { return '1'; }
 };
@@ -63,7 +61,8 @@ const healthOcrSchema = {
         heartRate: { type: Type.NUMBER },
         weightLbs: { type: Type.NUMBER },
         bloodPressureSystolic: { type: Type.NUMBER },
-        bloodPressureDiastolic: { type: Type.NUMBER }
+        bloodPressureDiastolic: { type: Type.NUMBER },
+        glucoseMgDl: { type: Type.NUMBER }
     }
 };
 
@@ -103,7 +102,8 @@ export const handler = async (event) => {
         if (path === '/meal-plans' && httpMethod === 'POST') return sendResponse(200, await db.createMealPlan(userId, parseBody(event).name));
         if (path.startsWith('/meal-plans/') && path.endsWith('/items') && httpMethod === 'POST') {
             const { savedMealId, metadata } = parseBody(event);
-            return sendResponse(200, await db.addMealToPlan(userId, path.split('/')[2], savedMealId, metadata));
+            const planId = path.split('/')[2];
+            return sendResponse(200, await db.addMealToPlan(userId, planId, savedMealId, metadata));
         }
         if (path.startsWith('/meal-plans/items/') && httpMethod === 'DELETE') return sendResponse(200, await db.removeMealFromPlan(userId, path.split('/').pop()));
 
@@ -159,8 +159,11 @@ export const handler = async (event) => {
 
         // --- HEALTH GET ---
         if (path === '/health-metrics' && httpMethod === 'GET') {
-            return sendResponse(200, await db.getHealthMetrics(userId, event.queryStringParameters?.date || new Date().toISOString().split('T')[0]));
+            const date = event.queryStringParameters?.date || new Date().toISOString().split('T')[0];
+            return sendResponse(200, await db.getHealthMetrics(userId, date));
         }
+        if (path === '/sync-health' && httpMethod === 'POST') return sendResponse(200, await db.syncHealthMetrics(userId, parseBody(event)));
+        if (path === '/rewards' && httpMethod === 'GET') return sendResponse(200, await db.getRewardsSummary(userId));
 
         return sendResponse(404, { error: 'Not found: ' + path });
     } catch (err) {
