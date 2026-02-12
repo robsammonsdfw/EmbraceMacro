@@ -42,7 +42,7 @@ const sendInviteEmail = async (toEmail, token, inviterName) => {
                         <h2 style="color: #10b981;">You're Invited!</h2>
                         <p style="font-size: 16px;">${inviterName || 'A friend'} wants to connect with you on EmbraceHealth to track nutrition and fitness goals together.</p>
                         <br/>
-                        <a href="${inviteLink}" style="display: inline-block; padding: 14px 28px; background-color: #10b981; color: white; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">Accept Invitation</a>
+                        <a href="${inviteLink}" style="display: inline-block; padding: 14px 28px; background-color: #10b981; color: white; text-decoration: none; border-radius: 88px; font-weight: bold; font-size: 16px;">Accept Invitation</a>
                         <br/><br/>
                         <p style="font-size: 12px; color: #666;">Or copy this link into your browser:</p>
                         <p style="font-size: 12px; color: #666; word-break: break-all;">${inviteLink}</p>
@@ -750,8 +750,9 @@ export const createGroceryList = async (userId, name) => {
 export const addGroceryItem = async (userId, listId, name) => {
     const client = await pool.connect();
     try {
-        const query = `INSERT INTO grocery_list_items (user_id, list_id, name, checked) VALUES ($1, $2, $3, FALSE) RETURNING id, name, checked;`;
-        const res = await client.query(query, [userId, listId, name]);
+        // FIX: Renamed 'query' to 'insertQuery' to match the function call below and prevent 'Cannot find name insertQuery' error.
+        const insertQuery = `INSERT INTO grocery_list_items (user_id, list_id, name, checked) VALUES ($1, $2, $3, FALSE) RETURNING id, name, checked;`;
+        const res = await client.query(insertQuery, [userId, listId, name]);
         return res.rows[0];
     } finally {
         client.release();

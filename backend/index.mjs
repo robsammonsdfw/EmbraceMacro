@@ -173,6 +173,10 @@ const exchangeFitbitCode = async (code) => {
     const clientSecret = process.env.FITBIT_CLIENT_SECRET;
     const redirectUri = process.env.FITBIT_REDIRECT_URI || 'https://main.embracehealth.ai';
     
+    if (!clientID || !clientSecret) {
+        throw new Error("Server is missing Fitbit API Credentials. Please set FITBIT_CLIENT_ID and FITBIT_CLIENT_SECRET.");
+    }
+
     const basicAuth = Buffer.from(`${clientID}:${clientSecret}`).toString('base64');
     
     const response = await fetch('https://api.fitbit.com/oauth2/token', {
@@ -263,6 +267,9 @@ export const handler = async (event) => {
         // --- Fitbit Wearable Logic ---
         if (path === '/auth/fitbit/url' && httpMethod === 'GET') {
             const clientID = process.env.FITBIT_CLIENT_ID;
+            if (!clientID) {
+                return sendResponse(500, { error: "FITBIT_CLIENT_ID is not configured in environment variables." });
+            }
             const redirectUri = encodeURIComponent(process.env.FITBIT_REDIRECT_URI || 'https://main.embracehealth.ai');
             const scope = encodeURIComponent('activity heartrate profile sleep weight');
             const url = `https://www.fitbit.com/oauth2/authorize?response_type=code&client_id=${clientID}&redirect_uri=${redirectUri}&scope=${scope}`;
