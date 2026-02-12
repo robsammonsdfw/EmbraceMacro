@@ -16,7 +16,9 @@ const processMealForList = (row) => {
         ...mealData,
         id: row.id,
         createdAt: row.created_at,
-        hasImage: !!row.has_image
+        hasImage: !!row.has_image,
+        // Ensure imageUrl is NEVER present in list responses
+        imageUrl: undefined 
     };
 };
 
@@ -79,7 +81,12 @@ export const getRewardsSummary = async (userId) => {
 export const createMealLogEntry = async (userId, mealData, imageBase64) => {
     const client = await pool.connect();
     try {
-        const res = await client.query(`INSERT INTO meal_log_entries (user_id, meal_data, image_base64) VALUES ($1, $2, $3) RETURNING id`, [userId, mealData, imageBase64]);
+        // Prepare clean data for storage
+        const storageData = { ...mealData };
+        delete storageData.imageUrl; 
+        delete storageData.hasImage;
+
+        const res = await client.query(`INSERT INTO meal_log_entries (user_id, meal_data, image_base64) VALUES ($1, $2, $3) RETURNING id`, [userId, storageData, imageBase64]);
         await awardPoints(userId, 'meal_photo.logged', 50, { log_id: res.rows[0].id });
         return { id: res.rows[0].id, success: true };
     } finally { client.release(); }
@@ -88,7 +95,6 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
 export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
     try {
-        // Optimized: Only select boolean check for image
         const res = await client.query(`SELECT id, meal_data, (image_base64 IS NOT NULL) as has_image, created_at FROM meal_log_entries WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
         return res.rows.map(processMealForList);
     } finally { client.release(); }
@@ -97,7 +103,6 @@ export const getMealLogEntries = async (userId) => {
 export const getMealLogEntryById = async (userId, id) => {
     const client = await pool.connect();
     try {
-        // Detail: Select full Base64
         const res = await client.query(`SELECT id, meal_data, image_base64, created_at FROM meal_log_entries WHERE id = $1 AND user_id = $2`, [id, userId]);
         return res.rows[0] ? processMealForDetail(res.rows[0]) : null;
     } finally { client.release(); }
@@ -112,6 +117,9 @@ export const saveMeal = async (userId, mealData) => {
             imageBase64 = cleanData.imageUrl.split(',')[1];
             delete cleanData.imageUrl;
         }
+        delete cleanData.hasImage;
+        delete cleanData.id;
+
         const res = await client.query(`INSERT INTO saved_meals (user_id, meal_data, image_base64) VALUES ($1, $2, $3) RETURNING id`, [userId, cleanData, imageBase64]);
         await awardPoints(userId, 'meal.saved', 10);
         return { id: res.rows[0].id, ...cleanData, hasImage: !!imageBase64 };
@@ -139,7 +147,7 @@ export const deleteMeal = async (userId, id) => {
     try { await client.query(`DELETE FROM saved_meals WHERE id = $1 AND user_id = $2`, [id, userId]); } finally { client.release(); }
 };
 
-// --- MEAL PLANS ---
+// --- MEAL PLANS (IMAGE STRIPPED FROM NESTED MEALS) ---
 
 export const getMealPlans = async (userId) => {
     const client = await pool.connect();
@@ -163,7 +171,7 @@ export const getMealPlans = async (userId) => {
                 plan.items.push({ 
                     id: r.item_id, 
                     metadata: r.metadata, 
-                    meal: { id: r.meal_id, ...r.meal_data, hasImage: r.has_image } 
+                    meal: { id: r.meal_id, ...r.meal_data, hasImage: r.has_image, imageUrl: undefined } 
                 });
             }
         });

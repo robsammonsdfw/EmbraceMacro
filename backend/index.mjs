@@ -35,7 +35,7 @@ const parseBody = (event) => {
     try { return event.body ? JSON.parse(event.body) : {}; } catch (e) { return {}; }
 };
 
-// --- SCHEMAS ---
+// --- COMPREHENSIVE NUTRITION SCHEMA (Ensures Recipe & Tools Tabs) ---
 const unifiedNutritionSchema = {
     type: Type.OBJECT,
     properties: {
@@ -67,10 +67,23 @@ const unifiedNutritionSchema = {
                 ingredients: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, quantity: { type: Type.STRING } } } },
                 instructions: { type: Type.ARRAY, items: { type: Type.STRING } },
                 nutrition: { type: Type.OBJECT, properties: { totalCalories: { type: Type.NUMBER }, totalProtein: { type: Type.NUMBER }, totalCarbs: { type: Type.NUMBER }, totalFat: { type: Type.NUMBER } } }
+            },
+            required: ["recipeName", "description", "ingredients", "instructions", "nutrition"]
+        },
+        kitchenTools: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    name: { type: Type.STRING },
+                    use: { type: Type.STRING },
+                    essential: { type: Type.BOOLEAN }
+                },
+                required: ["name", "use", "essential"]
             }
         }
     },
-    required: ["mealName", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "ingredients"]
+    required: ["mealName", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "ingredients", "recipe", "kitchenTools"]
 };
 
 // --- AI HELPER ---
@@ -110,30 +123,6 @@ export const handler = async (event) => {
         }
 
         const userId = getUserFromEvent(event);
-
-        // --- FITBIT FLOW ---
-        if (path === '/auth/fitbit/url' && httpMethod === 'POST') {
-            const { codeChallenge } = parseBody(event);
-            const clientID = process.env.FITBIT_CLIENT_ID;
-            const redirectUri = encodeURIComponent(process.env.FITBIT_REDIRECT_URI || 'https://app.embracehealth.ai');
-            const url = `https://www.fitbit.com/oauth2/authorize?response_type=code&client_id=${clientID}&redirect_uri=${redirectUri}&scope=activity%20profile%20nutrition%20heartrate&code_challenge=${codeChallenge}&code_challenge_method=S256`;
-            return sendResponse(200, { url });
-        }
-
-        if (path === '/auth/fitbit/link' && httpMethod === 'POST') {
-            const { code, codeVerifier } = parseBody(event);
-            const clientID = process.env.FITBIT_CLIENT_ID;
-            const clientSecret = process.env.FITBIT_CLIENT_SECRET;
-            const basicAuth = Buffer.from(`${clientID}:${clientSecret}`).toString('base64');
-            const tokenResponse = await fetch('https://api.fitbit.com/oauth2/token', {
-                method: 'POST',
-                headers: { 'Authorization': `Basic ${basicAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({ grant_type: 'authorization_code', code, code_verifier: codeVerifier, redirect_uri: process.env.FITBIT_REDIRECT_URI || 'https://app.embracehealth.ai' })
-            });
-            const tokenData = await tokenResponse.json();
-            await db.updateFitbitCredentials(userId, tokenData);
-            return sendResponse(200, { success: true });
-        }
 
         // --- CORE ENDPOINTS ---
 
@@ -202,10 +191,15 @@ export const handler = async (event) => {
             return sendResponse(200, { success: true });
         }
 
-        // Vision Analysis
+        // Vision Analysis (Mandatory 3-Tab Logic)
         if (path === '/analyze-image' && httpMethod === 'POST') {
             const { base64Image, mimeType, prompt } = parseBody(event);
-            const data = await callGemini(prompt || "Extract macros and ingredients.", base64Image, mimeType, unifiedNutritionSchema);
+            const data = await callGemini(
+                prompt || "Perform comprehensive vision analysis. identify the meal, extract macros/ingredients, generate a step-by-step culinary recipe, and list required kitchen tools.", 
+                base64Image, 
+                mimeType, 
+                unifiedNutritionSchema
+            );
             // Save to history on analysis
             await db.createMealLogEntry(userId, data, base64Image);
             return sendResponse(200, data);
