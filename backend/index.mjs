@@ -1,4 +1,3 @@
-
 import * as db from './services/databaseService.mjs';
 import * as shopify from './services/shopifyService.mjs';
 import jwt from 'jsonwebtoken';
@@ -25,7 +24,6 @@ const getUserFromEvent = (event) => {
         if (!authHeader) return '1'; 
         const token = authHeader.replace('Bearer ', '');
         const decoded = jwt.verify(token, JWT_SECRET);
-        // FIX: Narrow decoded type to ensure userId property access is safe
         if (typeof decoded === 'object' && decoded !== null) {
             return decoded.userId || '1';
         }
@@ -79,7 +77,6 @@ const unifiedNutritionSchema = {
 const callGemini = async (prompt, imageBase64, mimeType = 'image/jpeg', schema = null) => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     try {
-        // FIX: Ensure contents parameter follows Gemini API guidelines (string for text, parts object for multimodal)
         const contents = imageBase64 
             ? { parts: [{ inlineData: { mimeType, data: imageBase64 } }, { text: prompt }] }
             : prompt;
@@ -114,7 +111,7 @@ export const handler = async (event) => {
 
         const userId = getUserFromEvent(event);
 
-        // --- FITBIT PKCE FLOW ---
+        // --- FITBIT FLOW ---
         if (path === '/auth/fitbit/url' && httpMethod === 'POST') {
             const { codeChallenge } = parseBody(event);
             const clientID = process.env.FITBIT_CLIENT_ID;
@@ -140,37 +137,6 @@ export const handler = async (event) => {
 
         // --- CORE ENDPOINTS ---
 
-        // Meals & History
-        if (path === '/saved-meals' && httpMethod === 'GET') return sendResponse(200, await db.getSavedMeals(userId));
-        if (path === '/saved-meals' && httpMethod === 'POST') return sendResponse(200, await db.saveMeal(userId, parseBody(event)));
-        if (path.startsWith('/saved-meals/') && httpMethod === 'GET') return sendResponse(200, await db.getSavedMealById(userId, path.split('/').pop()));
-        if (path.startsWith('/saved-meals/') && httpMethod === 'DELETE') { await db.deleteMeal(userId, path.split('/').pop()); return sendResponse(200, { success: true }); }
-        
-        if (path === '/meal-log' && httpMethod === 'GET') return sendResponse(200, await db.getMealLogEntries(userId));
-        if (path === '/meal-log' && httpMethod === 'POST') {
-            const { mealData, base64Image } = parseBody(event);
-            return sendResponse(200, await db.createMealLogEntry(userId, mealData, base64Image));
-        }
-        if (path.startsWith('/meal-log/') && httpMethod === 'GET') return sendResponse(200, await db.getMealLogEntryById(userId, path.split('/').pop()));
-
-        // Plans
-        if (path === '/meal-plans' && httpMethod === 'GET') return sendResponse(200, await db.getMealPlans(userId));
-        if (path === '/meal-plans' && httpMethod === 'POST') return sendResponse(200, await db.createMealPlan(userId, parseBody(event).name));
-        if (path.startsWith('/meal-plans/') && path.endsWith('/items') && httpMethod === 'POST') {
-            const planId = path.split('/')[2];
-            const { savedMealId, metadata } = parseBody(event);
-            return sendResponse(200, await db.addMealToPlan(userId, planId, savedMealId, metadata));
-        }
-        if (path.startsWith('/meal-plans/items/') && httpMethod === 'DELETE') { await db.removeMealFromPlan(userId, path.split('/').pop()); return sendResponse(200, { success: true }); }
-
-        // Grocery
-        if (path === '/grocery/lists' && httpMethod === 'GET') return sendResponse(200, await db.getGroceryLists(userId));
-        if (path === '/grocery/lists' && httpMethod === 'POST') return sendResponse(200, await db.createGroceryList(userId, parseBody(event).name));
-        if (path.startsWith('/grocery/lists/') && path.endsWith('/items') && httpMethod === 'GET') return sendResponse(200, await db.getGroceryListItems(path.split('/')[3]));
-        if (path.startsWith('/grocery/lists/') && path.endsWith('/items') && httpMethod === 'POST') return sendResponse(200, await db.addGroceryItem(path.split('/')[3], parseBody(event).name));
-        if (path.startsWith('/grocery/items/') && httpMethod === 'PATCH') return sendResponse(200, await db.updateGroceryItem(path.split('/').pop(), parseBody(event).checked));
-        if (path.startsWith('/grocery/items/') && httpMethod === 'DELETE') { await db.removeGroceryItem(path.split('/').pop()); return sendResponse(200, { success: true }); }
-
         // Rewards
         if (path === '/rewards' && httpMethod === 'GET') return sendResponse(200, await db.getRewardsSummary(userId));
 
@@ -178,11 +144,69 @@ export const handler = async (event) => {
         if (path === '/social/friends' && httpMethod === 'GET') return sendResponse(200, await db.getFriends(userId));
         if (path === '/social/profile' && httpMethod === 'GET') return sendResponse(200, await db.getSocialProfile(userId));
 
+        // Meals & History
+        if (path === '/saved-meals' && httpMethod === 'GET') return sendResponse(200, await db.getSavedMeals(userId));
+        if (path === '/saved-meals' && httpMethod === 'POST') return sendResponse(200, await db.saveMeal(userId, parseBody(event)));
+        if (path.startsWith('/saved-meals/') && httpMethod === 'GET') {
+            const id = parseInt(path.split('/').pop());
+            return sendResponse(200, await db.getSavedMealById(userId, id));
+        }
+        if (path.startsWith('/saved-meals/') && httpMethod === 'DELETE') {
+            const id = parseInt(path.split('/').pop());
+            await db.deleteMeal(userId, id);
+            return sendResponse(200, { success: true });
+        }
+        
+        if (path === '/meal-log' && httpMethod === 'GET') return sendResponse(200, await db.getMealLogEntries(userId));
+        if (path === '/meal-log' && httpMethod === 'POST') {
+            const { mealData, base64Image } = parseBody(event);
+            return sendResponse(200, await db.createMealLogEntry(userId, mealData, base64Image));
+        }
+        if (path.startsWith('/meal-log/') && httpMethod === 'GET') {
+            const id = parseInt(path.split('/').pop());
+            return sendResponse(200, await db.getMealLogEntryById(userId, id));
+        }
+
+        // Plans
+        if (path === '/meal-plans' && httpMethod === 'GET') return sendResponse(200, await db.getMealPlans(userId));
+        if (path === '/meal-plans' && httpMethod === 'POST') return sendResponse(200, await db.createMealPlan(userId, parseBody(event).name));
+        if (path.startsWith('/meal-plans/') && path.endsWith('/items') && httpMethod === 'POST') {
+            const planId = parseInt(path.split('/')[2]);
+            const { savedMealId, metadata } = parseBody(event);
+            return sendResponse(200, await db.addMealToPlan(userId, planId, savedMealId, metadata));
+        }
+        if (path.startsWith('/meal-plans/items/') && httpMethod === 'DELETE') {
+            const id = parseInt(path.split('/').pop());
+            await db.removeMealFromPlan(userId, id);
+            return sendResponse(200, { success: true });
+        }
+
+        // Grocery
+        if (path === '/grocery/lists' && httpMethod === 'GET') return sendResponse(200, await db.getGroceryLists(userId));
+        if (path === '/grocery/lists' && httpMethod === 'POST') return sendResponse(200, await db.createGroceryList(userId, parseBody(event).name));
+        if (path.startsWith('/grocery/lists/') && path.endsWith('/items') && httpMethod === 'GET') {
+            const id = parseInt(path.split('/')[3]);
+            return sendResponse(200, await db.getGroceryListItems(id));
+        }
+        if (path.startsWith('/grocery/lists/') && path.endsWith('/items') && httpMethod === 'POST') {
+            const id = parseInt(path.split('/')[3]);
+            return sendResponse(200, await db.addGroceryItem(id, parseBody(event).name));
+        }
+        if (path.startsWith('/grocery/items/') && httpMethod === 'PATCH') {
+            const id = parseInt(path.split('/').pop());
+            return sendResponse(200, await db.updateGroceryItem(id, parseBody(event).checked));
+        }
+        if (path.startsWith('/grocery/items/') && httpMethod === 'DELETE') {
+            const id = parseInt(path.split('/').pop());
+            await db.removeGroceryItem(id);
+            return sendResponse(200, { success: true });
+        }
+
         // Vision Analysis
         if (path === '/analyze-image' && httpMethod === 'POST') {
             const { base64Image, mimeType, prompt } = parseBody(event);
             const data = await callGemini(prompt || "Extract macros and ingredients.", base64Image, mimeType, unifiedNutritionSchema);
-            // Auto-save to history on analysis
+            // Save to history on analysis
             await db.createMealLogEntry(userId, data, base64Image);
             return sendResponse(200, data);
         }

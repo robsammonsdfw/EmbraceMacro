@@ -8,32 +8,30 @@ const pool = new Pool({
 // --- PAYLOAD OPTIMIZATION HELPERS (MAINTENANCE GUIDE) ---
 
 /**
- * Returns a copy of meal/photo data with the Base64 image string removed.
- * Used for list endpoints to stay under the 6MB Lambda limit.
+ * Strips heavy image data from meal objects for list responses.
  */
-const stripImageData = (data) => {
-    const optimized = { ...data };
-    optimized.hasImage = !!(optimized.image_base64 || optimized.imageBase64);
-    delete optimized.image_base64;
-    delete optimized.imageBase64;
-    delete optimized.imageUrl;
-    return optimized;
+const processMealForList = (row) => {
+    const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
+    return {
+        ...mealData,
+        id: row.id,
+        createdAt: row.created_at,
+        hasImage: !!row.has_image
+    };
 };
 
 /**
- * Converts DB image_base64 to a data URL for detail endpoints.
+ * Prepares a full meal object including the image for detail responses.
  */
-const addImageUrl = (row) => {
-    if (row.image_base64) {
-        return {
-            ...row.meal_data,
-            id: row.id,
-            imageUrl: `data:image/jpeg;base64,${row.image_base64}`,
-            createdAt: row.created_at,
-            hasImage: true
-        };
-    }
-    return { ...(row.meal_data || {}), id: row.id, createdAt: row.created_at, hasImage: false };
+const processMealForDetail = (row) => {
+    const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
+    return {
+        ...mealData,
+        id: row.id,
+        createdAt: row.created_at,
+        imageUrl: row.image_base64 ? `data:image/jpeg;base64,${row.image_base64}` : null,
+        hasImage: !!row.image_base64
+    };
 };
 
 // --- USER & AUTH ---
@@ -41,9 +39,9 @@ const addImageUrl = (row) => {
 export const findOrCreateUserByEmail = async (email) => {
     const client = await pool.connect();
     try {
-        const insertQuery = `INSERT INTO users (email) VALUES ($1) ON CONFLICT (email) DO NOTHING;`;
-        await client.query(insertQuery, [email.toLowerCase().trim()]);
-        const res = await client.query(`SELECT id, email, shopify_customer_id, user_role FROM users WHERE email = $1;`, [email.toLowerCase().trim()]);
+        const normalized = email.toLowerCase().trim();
+        await client.query(`INSERT INTO users (email) VALUES ($1) ON CONFLICT (email) DO NOTHING;`, [normalized]);
+        const res = await client.query(`SELECT id, email, shopify_customer_id FROM users WHERE email = $1;`, [normalized]);
         return res.rows[0];
     } finally { client.release(); }
 };
@@ -55,7 +53,14 @@ export const awardPoints = async (userId, eventType, points, metadata = {}) => {
     try {
         await client.query('BEGIN');
         await client.query(`INSERT INTO rewards_ledger (user_id, event_type, points_delta, metadata) VALUES ($1, $2, $3, $4)`, [userId, eventType, points, metadata]);
-        await client.query(`INSERT INTO rewards_balances (user_id, points_total, points_available) VALUES ($1, $2, $2) ON CONFLICT (user_id) DO UPDATE SET points_total = rewards_balances.points_total + EXCLUDED.points_total, points_available = rewards_balances.points_available + EXCLUDED.points_total`, [userId, points]);
+        await client.query(`
+            INSERT INTO rewards_balances (user_id, points_total, points_available) 
+            VALUES ($1, $2, $2) 
+            ON CONFLICT (user_id) DO UPDATE SET 
+                points_total = rewards_balances.points_total + EXCLUDED.points_total, 
+                points_available = rewards_balances.points_available + EXCLUDED.points_total`, 
+            [userId, points]
+        );
         await client.query('COMMIT');
     } catch (e) { await client.query('ROLLBACK'); throw e; } finally { client.release(); }
 };
@@ -69,7 +74,7 @@ export const getRewardsSummary = async (userId) => {
     } finally { client.release(); }
 };
 
-// --- MEALS & HISTORY ---
+// --- MEALS & HISTORY (LISTS ARE STRIPPED) ---
 
 export const createMealLogEntry = async (userId, mealData, imageBase64) => {
     const client = await pool.connect();
@@ -83,16 +88,18 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
 export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
     try {
+        // Optimized: Only select boolean check for image
         const res = await client.query(`SELECT id, meal_data, (image_base64 IS NOT NULL) as has_image, created_at FROM meal_log_entries WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
-        return res.rows.map(r => ({ ...r.meal_data, id: r.id, createdAt: r.created_at, hasImage: r.has_image }));
+        return res.rows.map(processMealForList);
     } finally { client.release(); }
 };
 
 export const getMealLogEntryById = async (userId, id) => {
     const client = await pool.connect();
     try {
+        // Detail: Select full Base64
         const res = await client.query(`SELECT id, meal_data, image_base64, created_at FROM meal_log_entries WHERE id = $1 AND user_id = $2`, [id, userId]);
-        return res.rows[0] ? addImageUrl(res.rows[0]) : null;
+        return res.rows[0] ? processMealForDetail(res.rows[0]) : null;
     } finally { client.release(); }
 };
 
@@ -115,7 +122,7 @@ export const getSavedMeals = async (userId) => {
     const client = await pool.connect();
     try {
         const res = await client.query(`SELECT id, meal_data, (image_base64 IS NOT NULL) as has_image FROM saved_meals WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
-        return res.rows.map(r => ({ ...r.meal_data, id: r.id, hasImage: r.has_image }));
+        return res.rows.map(processMealForList);
     } finally { client.release(); }
 };
 
@@ -123,7 +130,7 @@ export const getSavedMealById = async (userId, id) => {
     const client = await pool.connect();
     try {
         const res = await client.query(`SELECT id, meal_data, image_base64 FROM saved_meals WHERE id = $1 AND user_id = $2`, [id, userId]);
-        return res.rows[0] ? addImageUrl(res.rows[0]) : null;
+        return res.rows[0] ? processMealForDetail(res.rows[0]) : null;
     } finally { client.release(); }
 };
 
@@ -153,7 +160,11 @@ export const getMealPlans = async (userId) => {
                 plans.push(plan);
             }
             if (r.item_id) {
-                plan.items.push({ id: r.item_id, metadata: r.metadata, meal: { id: r.meal_id, ...r.meal_data, hasImage: r.has_image } });
+                plan.items.push({ 
+                    id: r.item_id, 
+                    metadata: r.metadata, 
+                    meal: { id: r.meal_id, ...r.meal_data, hasImage: r.has_image } 
+                });
             }
         });
         return plans;
@@ -233,13 +244,13 @@ export const removeGroceryItem = async (itemId) => {
     try { await client.query(`DELETE FROM grocery_list_items WHERE id = $1`, [itemId]); } finally { client.release(); }
 };
 
-// --- HEALTH & BODY ---
+// --- HEALTH & PREFS ---
 
 export const getHealthMetrics = async (userId) => {
     const client = await pool.connect();
     try {
-        const res = await client.query(`SELECT steps, active_calories as "activeCalories", heart_rate as "heartRate", weight_lbs as "weightLbs", last_synced as "lastSynced" FROM health_metrics WHERE user_id = $1`, [userId]);
-        return res.rows[0] || { steps: 0, activeCalories: 0, heartRate: 0 };
+        const res = await client.query(`SELECT steps, active_calories as "activeCalories", weight_lbs as "weightLbs", last_synced as "lastSynced" FROM health_metrics WHERE user_id = $1`, [userId]);
+        return res.rows[0] || { steps: 0, activeCalories: 0 };
     } finally { client.release(); }
 };
 
@@ -247,11 +258,11 @@ export const syncHealthMetrics = async (userId, stats) => {
     const client = await pool.connect();
     try {
         const res = await client.query(`
-            INSERT INTO health_metrics (user_id, steps, active_calories, weight_lbs, last_synced)
-            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
-            ON CONFLICT (user_id) DO UPDATE SET steps = EXCLUDED.steps, active_calories = EXCLUDED.active_calories, weight_lbs = EXCLUDED.weight_lbs, last_synced = CURRENT_TIMESTAMP
+            INSERT INTO health_metrics (user_id, steps, active_calories, last_synced)
+            VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+            ON CONFLICT (user_id) DO UPDATE SET steps = EXCLUDED.steps, active_calories = EXCLUDED.active_calories, last_synced = CURRENT_TIMESTAMP
             RETURNING *
-        `, [userId, stats.steps || 0, stats.activeCalories || 0, stats.weightLbs || 0]);
+        `, [userId, stats.steps || 0, stats.activeCalories || 0]);
         return res.rows[0];
     } finally { client.release(); }
 };
@@ -292,13 +303,19 @@ export const getSocialProfile = async (userId) => {
     } finally { client.release(); }
 };
 
-// --- FITBIT ---
-
-export const getFitbitCredentials = async (userId) => {
+export const getShopifyCustomerId = async (userId) => {
     const client = await pool.connect();
     try {
-        const res = await client.query(`SELECT fitbit_access_token, fitbit_refresh_token FROM users WHERE id = $1`, [userId]);
-        return res.rows[0];
+        const res = await client.query(`SELECT shopify_customer_id FROM users WHERE id = $1`, [userId]);
+        return res.rows[0]?.shopify_customer_id;
+    } finally { client.release(); }
+};
+
+export const getArticles = async () => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT * FROM pulse_articles ORDER BY created_at DESC`);
+        return res.rows;
     } finally { client.release(); }
 };
 
@@ -309,28 +326,10 @@ export const updateFitbitCredentials = async (userId, data) => {
     } finally { client.release(); }
 };
 
-// --- ARTICLES ---
-
-export const getArticles = async () => {
+export const getFitbitCredentials = async (userId) => {
     const client = await pool.connect();
     try {
-        const res = await client.query(`SELECT * FROM pulse_articles ORDER BY created_at DESC`);
-        return res.rows;
-    } finally { client.release(); }
-};
-
-export const publishArticle = async (data) => {
-    const client = await pool.connect();
-    try {
-        const res = await client.query(`INSERT INTO pulse_articles (title, summary, content, image_url, embedded_actions) VALUES ($1, $2, $3, $4, $5) RETURNING *`, [data.title, data.summary, data.content, data.image_url, data.embedded_actions]);
+        const res = await client.query(`SELECT fitbit_access_token FROM users WHERE id = $1`, [userId]);
         return res.rows[0];
-    } finally { client.release(); }
-};
-
-export const getShopifyCustomerId = async (userId) => {
-    const client = await pool.connect();
-    try {
-        const res = await client.query(`SELECT shopify_customer_id FROM users WHERE id = $1`, [userId]);
-        return res.rows[0]?.shopify_customer_id;
     } finally { client.release(); }
 };
