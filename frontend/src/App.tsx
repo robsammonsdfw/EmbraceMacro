@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { Login } from './components/Login';
@@ -234,13 +233,9 @@ const App: React.FC = () => {
   const bodyProps = {
       healthStats, 
       onSyncHealth: async () => { 
-          setIsAnalyzing(true);
-          try {
-             handleCaptureClick('vitals');
-          } finally {
-              setIsAnalyzing(false);
-          }
+          handleCaptureClick('vitals');
       },
+      onHealthStatsUpdate: (stats: HealthStats) => setHealthStats(prev => ({ ...prev, ...stats })),
       dashboardPrefs, 
       onUpdatePrefs: (p: UserDashboardPrefs) => {
           setDashboardPrefs(p);

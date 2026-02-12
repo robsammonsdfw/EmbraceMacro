@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { AppLayout } from './AppLayout';
 import { ActiveView, HealthStats, UserDashboardPrefs, HealthJourney, Article } from '../../types';
@@ -197,7 +196,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
             case 'account.widgets': 
                 return <WidgetConfig currentPrefs={dashboardPrefs} onSave={bodyProps.onUpdatePrefs} />;
             case 'account.sync': 
-                return <DeviceSync onSyncComplete={bodyProps.onSyncHealth} lastSynced={healthStats.lastSynced} />;
+                return <DeviceSync onSyncComplete={bodyProps.onHealthStatsUpdate} onVisionSyncTrigger={bodyProps.onSyncHealth} lastSynced={healthStats.lastSynced} />;
             case 'account.pharmacy': 
                 return <PharmacyOrders />;
 

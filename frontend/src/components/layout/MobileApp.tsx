@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { 
     ActivityIcon, CameraIcon, BrainIcon, 
@@ -449,7 +448,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                         </div>
                     )}
 
-                    {subView === 'sync' && stack === 'account' && <div className="fixed inset-0 z-[60] bg-slate-50 overflow-y-auto"><div className="p-4 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0"><button onClick={() => setSubView(null)} className="text-xs font-black uppercase">← Back</button><h2 className="font-black uppercase">Sync</h2><div className="w-10"></div></div><DeviceSync onSyncComplete={bodyProps.onSyncHealth} /></div>}
+                    {subView === 'sync' && stack === 'account' && <div className="fixed inset-0 z-[60] bg-slate-50 overflow-y-auto"><div className="p-4 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0"><button onClick={() => setSubView(null)} className="text-xs font-black uppercase">← Back</button><h2 className="font-black uppercase">Sync</h2><div className="w-10"></div></div><DeviceSync onSyncComplete={bodyProps.onHealthStatsUpdate} onVisionSyncTrigger={onVisionSync} /></div>}
                     {subView === 'widgets' && stack === 'account' && <div className="fixed inset-0 z-[60] bg-slate-50 overflow-y-auto"><div className="p-4 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0"><button onClick={() => setSubView(null)} className="text-xs font-black uppercase">← Back</button><h2 className="font-black uppercase">Widgets</h2><div className="w-10"></div></div><WidgetConfig currentPrefs={dashboardPrefs} onSave={bodyProps.onUpdatePrefs} /></div>}
                     {subView === 'pharmacy' && stack === 'account' && <div className="fixed inset-0 z-[60] bg-slate-50 overflow-y-auto"><div className="p-4 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0"><button onClick={() => setSubView(null)} className="text-xs font-black uppercase">← Back</button><h2 className="font-black uppercase">Pharmacy</h2><div className="w-10"></div></div><PharmacyOrders /></div>}
                 </div>
