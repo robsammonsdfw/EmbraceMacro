@@ -1,3 +1,4 @@
+
 import { 
     MealPlan, GroceryItem, Order, Friendship, UserProfile, 
     RecoveryData, ReadinessScore, FormAnalysisResult, BodyPhoto, 
@@ -9,6 +10,12 @@ import {
 
 const API_BASE_URL = 'https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default';
 const AUTH_TOKEN_KEY = 'embracehealth-api-token';
+
+// Added JudgeResult export to fix CookOffModal.tsx import error
+export interface JudgeResult {
+    score: number;
+    feedback: string;
+}
 
 const callApi = async (endpoint: string, method: string = 'GET', body?: any) => {
     const token = localStorage.getItem(AUTH_TOKEN_KEY);
@@ -31,11 +38,6 @@ const callApi = async (endpoint: string, method: string = 'GET', body?: any) => 
     const text = await response.text();
     return text ? JSON.parse(text) : {};
 };
-
-export interface JudgeResult {
-    score: number;
-    feedback: string;
-}
 
 const compressImage = async (base64: string, mimeType: string = 'image/jpeg'): Promise<string> => {
     return new Promise((resolve) => {
@@ -63,6 +65,11 @@ const compressImage = async (base64: string, mimeType: string = 'image/jpeg'): P
     });
 };
 
+// --- WEARABLE AUTH ---
+export const getFitbitAuthUrl = (): Promise<{ url: string }> => callApi('/auth/fitbit/url', 'GET');
+export const linkFitbitAccount = (code: string): Promise<{ success: boolean }> => callApi('/auth/fitbit/link', 'POST', { code });
+export const syncWithFitbit = (): Promise<HealthStats> => callApi('/sync-health/fitbit', 'POST');
+
 // --- CONTENT ---
 export const getArticles = (): Promise<Article[]> => callApi('/content/pulse', 'GET');
 export const completeArticleAction = (articleId: number, actionType: string): Promise<any> => callApi(`/content/pulse/${articleId}/action`, 'POST', { actionType });
@@ -83,10 +90,6 @@ export const updateGroceryItem = (itemId: number, checked: boolean): Promise<Gro
 export const removeGroceryItem = (itemId: number): Promise<void> => callApi(`/grocery/items/${itemId}`, 'DELETE');
 export const clearGroceryListItems = (listId: number, type: 'all' | 'checked'): Promise<void> => callApi(`/grocery/lists/${listId}/clear`, 'POST', { type });
 export const importIngredientsFromPlans = (listId: number, planIds: number[]): Promise<GroceryItem[]> => callApi(`/grocery/lists/${listId}/import`, 'POST', { planIds });
-export const identifyGroceryItems = async (base64Image: string, mimeType: string): Promise<{ items: string[] }> => {
-    const compressed = await compressImage(base64Image, mimeType);
-    return callApi('/analyze-image', 'POST', { base64Image: compressed, mimeType, prompt: "Identify all grocery items in this image. Return JSON with 'items' array." });
-};
 
 // --- VISION ANALYSIS ---
 export const analyzeImageWithGemini = async (base64Image: string, mimeType: string): Promise<NutritionInfo> => {
@@ -104,12 +107,20 @@ export const getRecipesFromImage = async (base64Image: string, mimeType: string)
 export const generateRecipeImage = async (description: string): Promise<{ base64Image: string }> => {
     return callApi('/generate-recipe-image', 'POST', { description });
 };
-export const generateMissingMetadata = async (mealName: string): Promise<NutritionInfo> => {
-    return callApi('/analyze-image', 'POST', { mealName });
-};
 export const analyzeHealthScreenshot = async (base64Image: string): Promise<Partial<HealthStats>> => {
     const compressed = await compressImage(base64Image);
     return callApi('/analyze-health-screenshot', 'POST', { base64Image: compressed });
+};
+
+// Added identifyGroceryItems to fix GroceryList.tsx error
+export const identifyGroceryItems = async (base64Image: string, mimeType: string): Promise<{ items: string[] }> => {
+    const compressed = await compressImage(base64Image, mimeType);
+    return callApi('/grocery/identify', 'POST', { base64Image: compressed, mimeType });
+};
+
+// Added generateMissingMetadata to fix AnalysisResultModal.tsx error
+export const generateMissingMetadata = async (mealName: string): Promise<Partial<NutritionInfo>> => {
+    return callApi('/analyze-image', 'POST', { mealName });
 };
 
 // --- MEALS & HISTORY ---
@@ -131,7 +142,7 @@ export const getFormChecks = (exercise: string): Promise<any[]> => callApi(`/bod
 export const getFormCheckById = (id: number): Promise<any> => callApi(`/body/form-checks/id/${id}`, 'GET');
 export const analyzeExerciseForm = async (base64Image: string, exercise: string): Promise<FormAnalysisResult> => {
     const compressed = await compressImage(base64Image);
-    return callApi('/analyze-image', 'POST', { base64Image: compressed, prompt: `Analyze form for ${exercise}. Return isCorrect, feedback, score.` });
+    return callApi('/analyze-image', 'POST', { base64Image: compressed, prompt: `Analyze form for ${exercise}.` });
 };
 export const saveFormCheck = (exercise: string, imageBase64: string, score: number, feedback: string): Promise<void> => callApi('/body/form-checks', 'POST', { exercise, imageBase64, score, feedback });
 
@@ -140,9 +151,11 @@ export const getHealthMetrics = (): Promise<HealthStats> => callApi('/health-met
 export const syncHealthStatsToDB = (stats: Partial<HealthStats>): Promise<HealthStats> => callApi('/sync-health', 'POST', stats);
 export const getDashboardPrefs = (): Promise<UserDashboardPrefs> => callApi('/body/dashboard-prefs', 'GET');
 export const saveDashboardPrefs = (prefs: UserDashboardPrefs): Promise<void> => callApi('/body/dashboard-prefs', 'POST', prefs);
-export const saveIntakeData = (data: any): Promise<void> => callApi('/account/intake', 'POST', data);
 export const calculateReadiness = (data: RecoveryData): Promise<ReadinessScore> => callApi('/body/readiness', 'POST', data);
 export const logRecoveryStats = (data: RecoveryData): Promise<void> => callApi('/body/recovery', 'POST', data);
+
+// Added saveIntakeData to fix JourneyView.tsx error
+export const saveIntakeData = (data: any): Promise<void> => callApi('/account/intake', 'POST', data);
 
 // --- SOCIAL ---
 export const getFriends = (): Promise<Friendship[]> => callApi('/social/friends', 'GET');
@@ -166,17 +179,13 @@ export const revokeCoachingAccess = (id: string): Promise<void> => callApi(`/coa
 export const getRewardsSummary = (): Promise<RewardsSummary> => callApi('/rewards', 'GET');
 export const getShopifyOrders = (): Promise<Order[]> => callApi('/shopify/orders', 'GET');
 export const getShopifyProduct = (handle: string): Promise<ShopifyProduct | { error: string }> => callApi(`/shopify/products/${handle}`, 'GET');
-export const searchFood = async (query: string): Promise<NutritionInfo> => callApi('/analyze-image', 'POST', { prompt: `Analyze the food: ${query}. Return JSON.` });
+export const searchFood = async (query: string): Promise<NutritionInfo> => callApi('/analyze-image', 'POST', { prompt: `Analyze: ${query}.` });
 export const getMealSuggestions = async (conditions: string[], cuisine: string, duration: string): Promise<NutritionInfo[]> => callApi('/get-meal-suggestions', 'POST', { conditions, cuisine, duration });
 export const getRestaurantActivity = (uri: string): Promise<RestaurantActivity[]> => callApi(`/social/restaurant/activity`, 'POST', { uri });
 
-// FIX: Satisfied TS6133 by including recipeId in payload
+// Updated judgeRecipeAttempt to use the JudgeResult interface
 export const judgeRecipeAttempt = async (base64Image: string, context: string, recipeId: number): Promise<JudgeResult> => {
-    return callApi('/analyze-image', 'POST', { 
-        base64Image, 
-        prompt: `Judge cooking attempt for ${context}.`, 
-        recipeId 
-    });
+    return callApi('/analyze-image', 'POST', { base64Image, prompt: `Judge attempt for ${context}.`, recipeId });
 };
 
 export const getPantryLog = (): Promise<PantryLogEntry[]> => callApi('/pantry/log', 'GET');
@@ -185,10 +194,8 @@ export const getPantryLogEntryById = (id: number): Promise<PantryLogEntry> => ca
 export const getRestaurantLog = (): Promise<any[]> => callApi('/restaurant/log', 'GET');
 export const saveRestaurantLogEntry = (imageBase64: string): Promise<void> => callApi('/restaurant/log', 'POST', { imageBase64 });
 export const getRestaurantLogEntryById = (id: number): Promise<any> => callApi(`/restaurant/log/${id}`, 'GET');
-
 export const getMedicalIntake = (): Promise<{ step: number, data: any }> => callApi('/account/medical-intake', 'GET');
 export const updateMedicalIntake = (step: number, answerKey?: string, answerValue?: any, isReset = false): Promise<any> => callApi('/account/medical-intake', 'POST', { step, answerKey, answerValue, isReset });
-
 export const getAssessments = (): Promise<Assessment[]> => callApi('/mental/assessments', 'GET');
 export const getAssessmentState = (): Promise<AssessmentState> => callApi('/mental/assessment-state', 'GET');
 export const submitAssessment = (id: string, responses: any): Promise<void> => callApi(`/mental/assessments/${id}`, 'POST', responses);

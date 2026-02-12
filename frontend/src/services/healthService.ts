@@ -1,5 +1,6 @@
 
 import type { HealthStats } from '../types';
+import * as apiService from './apiService';
 
 export type PlatformType = 'ios' | 'android' | 'web' | 'fitbit';
 
@@ -11,21 +12,26 @@ export const getPlatform = (): PlatformType => {
 };
 
 export const connectHealthProvider = async (platform: PlatformType): Promise<boolean> => {
-    // These will eventually trigger real OAuth redirect flows
     if (platform === 'fitbit') {
-        console.log("Redirecting to Fitbit OAuth...");
-    }
-    if (platform === 'ios') {
-        console.log("Checking Apple Health Bridge...");
+        const { url } = await apiService.getFitbitAuthUrl();
+        // Redirect the user to Fitbit's authorization page
+        window.location.href = url;
+        return true;
     }
     
-    return true; // Simplified for UI navigation, real logic would await the redirect/bridge
+    if (platform === 'ios') {
+        console.log("Checking Apple Health Bridge...");
+        // Placeholder for real Native Bridge call
+    }
+    
+    return true; 
 };
 
 export const syncHealthData = async (source: 'apple' | 'fitbit' = 'apple'): Promise<Partial<HealthStats>> => {
-    // NO DUMMY DATA.
-    // In a browser context, we cannot directly access Apple Health without a Native Bridge (Swift/Kotlin).
-    // We return an empty object or throw if not handled by Vision Sync.
+    if (source === 'fitbit') {
+        return await apiService.syncWithFitbit();
+    }
+    
     console.warn(`Direct ${source} sync is pending API credential configuration. Please use Vision Sync.`);
     return {};
 };
