@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { ActivityIcon, CheckIcon, RefreshIcon, CameraIcon } from '../icons';
+import { ActivityIcon, CheckIcon, RefreshIcon, CameraIcon, TrashIcon } from '../icons';
 import * as apiService from '../../services/apiService';
 import type { HealthStats } from '../../types';
 
-// PKCE Helpers
 function generateRandomString(length: number) {
     const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
     let result = '';
@@ -42,7 +41,6 @@ export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete, lastSync
     const [isProcessingCode, setIsProcessingCode] = useState(false);
     const [isSyncingData, setIsSyncingData] = useState(false);
 
-    // 1. Check existing connection on mount
     useEffect(() => {
         const verifyStatus = async () => {
             try {
@@ -53,7 +51,6 @@ export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete, lastSync
         verifyStatus();
     }, []);
 
-    // 2. Handle Fitbit Redirect Callback Handshake
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const code = params.get('code');
@@ -67,6 +64,7 @@ export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete, lastSync
                 setFitbitStatus('connected');
                 localStorage.removeItem('fitbit_code_verifier');
                 window.history.replaceState({}, document.title, window.location.pathname);
+                alert("Fitbit linked successfully!");
             }).catch(e => {
                 console.error("Link failed", e);
                 setFitbitStatus('idle');
@@ -75,11 +73,7 @@ export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete, lastSync
     }, [isProcessingCode]);
 
     const handleAppleSync = () => {
-        if (onVisionSyncTrigger) {
-            onVisionSyncTrigger();
-        } else {
-            alert("Please use the 'Vision Sync' feature to import screenshots from your Health app.");
-        }
+        if (onVisionSyncTrigger) onVisionSyncTrigger();
     };
 
     const handleFitbitConnect = async () => {
@@ -102,10 +96,22 @@ export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete, lastSync
         try {
             const result = await apiService.syncWithFitbit();
             onSyncComplete(result);
+            alert("Fitbit sync complete! Steps and Calories updated.");
         } catch (e) {
             alert("Fitbit sync failed. Reconnect might be required.");
         } finally {
             setIsSyncingData(false);
+        }
+    };
+
+    const handleFitbitDisconnect = async () => {
+        if (!window.confirm("Unlink Fitbit? Current session data will stay, but no new updates will fetch.")) return;
+        try {
+            await apiService.disconnectFitbit();
+            setFitbitStatus('idle');
+            alert("Fitbit unlinked.");
+        } catch (e) {
+            alert("Failed to unlink.");
         }
     };
 
@@ -120,7 +126,6 @@ export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete, lastSync
             </header>
 
             <div className="space-y-4">
-                {/* Vision Sync Option */}
                 <button
                     onClick={handleAppleSync}
                     className="w-full p-5 rounded-3xl border-2 bg-white border-slate-100 hover:border-indigo-400 transition-all flex items-center justify-between group shadow-sm"
@@ -137,7 +142,6 @@ export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete, lastSync
                     <span className="bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase">Launch</span>
                 </button>
 
-                {/* Fitbit persistent sync */}
                 <div className="bg-white rounded-3xl border-2 border-slate-100 shadow-sm overflow-hidden">
                     <div className="p-5 flex items-center justify-between">
                         <div className="flex items-center gap-4">
@@ -149,7 +153,11 @@ export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete, lastSync
                                 <p className="text-xs text-slate-500 font-medium">Direct API Wearable Link</p>
                             </div>
                         </div>
-                        {fitbitStatus === 'connected' && <CheckIcon className="text-emerald-500 w-6 h-6" />}
+                        {fitbitStatus === 'connected' && (
+                            <button onClick={handleFitbitDisconnect} className="p-2 text-slate-300 hover:text-rose-500 transition-colors">
+                                <TrashIcon className="w-5 h-5" />
+                            </button>
+                        )}
                     </div>
                     
                     <div className="bg-slate-50 p-4 flex gap-2">

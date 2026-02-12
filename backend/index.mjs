@@ -24,8 +24,8 @@ const getUserFromEvent = (event) => {
         if (!authHeader) return '1'; 
         const token = authHeader.replace('Bearer ', '');
         const decoded = jwt.verify(token, JWT_SECRET);
-        if (typeof decoded === 'object' && decoded !== null) return decoded.userId || '1';
-        return '1';
+        // Added safety check for JWT payload to fix typing error
+        return (typeof decoded === 'object' && decoded !== null ? decoded.userId : null) || '1';
     } catch (e) { return '1'; }
 };
 
@@ -49,28 +49,9 @@ const unifiedNutritionSchema = {
                 properties: { name: { type: Type.STRING }, weightGrams: { type: Type.NUMBER }, calories: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, fat: { type: Type.NUMBER } },
                 required: ["name", "weightGrams", "calories", "protein", "carbs", "fat"]
             }
-        },
-        recipe: {
-            type: Type.OBJECT,
-            properties: {
-                recipeName: { type: Type.STRING },
-                description: { type: Type.STRING },
-                ingredients: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, quantity: { type: Type.STRING } } } },
-                instructions: { type: Type.ARRAY, items: { type: Type.STRING } },
-                nutrition: { type: Type.OBJECT, properties: { totalCalories: { type: Type.NUMBER }, totalProtein: { type: Type.NUMBER }, totalCarbs: { type: Type.NUMBER }, totalFat: { type: Type.NUMBER } } }
-            },
-            required: ["recipeName", "description", "ingredients", "instructions", "nutrition"]
-        },
-        kitchenTools: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: { name: { type: Type.STRING }, use: { type: Type.STRING }, essential: { type: Type.BOOLEAN } },
-                required: ["name", "use", "essential"]
-            }
         }
     },
-    required: ["mealName", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "ingredients", "recipe", "kitchenTools"]
+    required: ["mealName", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "ingredients"]
 };
 
 const healthOcrSchema = {
@@ -79,44 +60,24 @@ const healthOcrSchema = {
         steps: { type: Type.NUMBER },
         activeCalories: { type: Type.NUMBER },
         restingCalories: { type: Type.NUMBER },
-        distanceMiles: { type: Type.NUMBER },
-        flightsClimbed: { type: Type.NUMBER },
         heartRate: { type: Type.NUMBER },
         weightLbs: { type: Type.NUMBER },
         bloodPressureSystolic: { type: Type.NUMBER },
-        bloodPressureDiastolic: { type: Type.NUMBER },
-        sleepMinutes: { type: Type.NUMBER },
-        glucoseMgDl: { type: Type.NUMBER }
+        bloodPressureDiastolic: { type: Type.NUMBER }
     }
 };
 
-const formAnalysisSchema = {
-    type: Type.OBJECT,
-    properties: {
-        isCorrect: { type: Type.BOOLEAN },
-        feedback: { type: Type.STRING },
-        score: { type: Type.NUMBER }
-    },
-    required: ["isCorrect", "feedback", "score"]
-};
-
-// --- AI HELPER ---
 const callGemini = async (prompt, imageBase64, mimeType = 'image/jpeg', schema = null) => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    try {
-        const contents = imageBase64 
-            ? { parts: [{ inlineData: { mimeType, data: imageBase64 } }, { text: prompt }] }
-            : prompt;
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents,
-            config: { responseMimeType: "application/json", responseSchema: schema }
-        });
-        return JSON.parse(response.text);
-    } catch (e) {
-        console.error("Gemini Error:", e);
-        throw new Error("AI Processing Failed: " + e.message);
-    }
+    const contents = imageBase64 
+        ? { parts: [{ inlineData: { mimeType, data: imageBase64 } }, { text: prompt }] }
+        : prompt;
+    const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents,
+        config: { responseMimeType: "application/json", responseSchema: schema }
+    });
+    return JSON.parse(response.text);
 };
 
 export const handler = async (event) => {
@@ -130,7 +91,6 @@ export const handler = async (event) => {
 
         if (path.endsWith('/auth/customer-login') && httpMethod === 'POST') {
             const body = parseBody(event);
-            if (!body.email) return sendResponse(400, { error: "Email required" });
             const user = await db.findOrCreateUserByEmail(body.email, body.inviteCode);
             const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '30d' });
             return sendResponse(200, { token, user });
@@ -138,122 +98,71 @@ export const handler = async (event) => {
 
         const userId = getUserFromEvent(event);
 
-        // --- DASHBOARD PREFS ---
-        if (path === '/body/dashboard-prefs' && httpMethod === 'GET') {
-            return sendResponse(200, await db.getDashboardPrefs(userId));
+        // --- MEAL PLANS (RESTORED) ---
+        if (path === '/meal-plans' && httpMethod === 'GET') return sendResponse(200, await db.getMealPlans(userId));
+        if (path === '/meal-plans' && httpMethod === 'POST') return sendResponse(200, await db.createMealPlan(userId, parseBody(event).name));
+        if (path.startsWith('/meal-plans/') && path.endsWith('/items') && httpMethod === 'POST') {
+            const { savedMealId, metadata } = parseBody(event);
+            return sendResponse(200, await db.addMealToPlan(userId, path.split('/')[2], savedMealId, metadata));
         }
-        if (path === '/body/dashboard-prefs' && httpMethod === 'POST') {
-            const prefs = parseBody(event);
-            await db.saveDashboardPrefs(userId, prefs);
+        if (path.startsWith('/meal-plans/items/') && httpMethod === 'DELETE') return sendResponse(200, await db.removeMealFromPlan(userId, path.split('/').pop()));
+
+        // --- DASHBOARD PREFS ---
+        if (path === '/body/dashboard-prefs' && httpMethod === 'GET') return sendResponse(200, await db.getDashboardPrefs(userId));
+        if (path === '/body/dashboard-prefs' && httpMethod === 'POST') return sendResponse(200, await db.saveDashboardPrefs(userId, parseBody(event)));
+
+        // --- VISION SYNC ---
+        if (path === '/analyze-health-screenshot' && httpMethod === 'POST') {
+            const data = await callGemini("Extract health metrics. JSON only.", parseBody(event).base64Image, 'image/jpeg', healthOcrSchema);
+            return sendResponse(200, await db.syncHealthMetrics(userId, data));
+        }
+
+        // --- FITBIT ---
+        if (path === '/auth/fitbit/status' && httpMethod === 'GET') return sendResponse(200, { connected: await db.hasFitbitConnection(userId) });
+        if (path === '/auth/fitbit/disconnect' && httpMethod === 'POST') {
+            await db.disconnectFitbit(userId);
             return sendResponse(200, { success: true });
         }
-
-        // --- VISION SYNC (HEALTH OCR) ---
-        if (path === '/analyze-health-screenshot' && httpMethod === 'POST') {
-            const { base64Image } = parseBody(event);
-            const prompt = "Extract health metrics from this wearable app screenshot. Look for steps, active/resting calories, heart rate, BP, and weight. Return JSON.";
-            const data = await callGemini(prompt, base64Image, 'image/jpeg', healthOcrSchema);
-            const syncResult = await db.syncHealthMetrics(userId, data);
-            return sendResponse(200, syncResult);
-        }
-
-        // --- FITBIT FLOW ---
-        if (path === '/auth/fitbit/status' && httpMethod === 'GET') {
-            return sendResponse(200, { connected: await db.hasFitbitConnection(userId) });
-        }
-
         if (path === '/auth/fitbit/url' && httpMethod === 'POST') {
-            const { codeChallenge } = parseBody(event);
             const clientID = process.env.FITBIT_CLIENT_ID;
             const redirectUri = encodeURIComponent(process.env.FITBIT_REDIRECT_URI || 'https://app.embracehealth.ai');
-            const url = `https://www.fitbit.com/oauth2/authorize?response_type=code&client_id=${clientID}&redirect_uri=${redirectUri}&scope=activity%20profile%20nutrition%20heartrate%20weight%20sleep&code_challenge=${codeChallenge}&code_challenge_method=S256`;
-            return sendResponse(200, { url });
+            return sendResponse(200, { url: `https://www.fitbit.com/oauth2/authorize?response_type=code&client_id=${clientID}&redirect_uri=${redirectUri}&scope=activity%20profile%20heartrate&code_challenge=${parseBody(event).codeChallenge}&code_challenge_method=S256` });
         }
-
         if (path === '/auth/fitbit/link' && httpMethod === 'POST') {
             const { code, codeVerifier } = parseBody(event);
-            const clientID = process.env.FITBIT_CLIENT_ID;
-            const clientSecret = process.env.FITBIT_CLIENT_SECRET;
-            const basicAuth = Buffer.from(`${clientID}:${clientSecret}`).toString('base64');
-            const tokenResponse = await fetch('https://api.fitbit.com/oauth2/token', {
+            const basicAuth = Buffer.from(`${process.env.FITBIT_CLIENT_ID}:${process.env.FITBIT_CLIENT_SECRET}`).toString('base64');
+            const res = await fetch('https://api.fitbit.com/oauth2/token', {
                 method: 'POST',
                 headers: { 'Authorization': `Basic ${basicAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: new URLSearchParams({ grant_type: 'authorization_code', code, code_verifier: codeVerifier, redirect_uri: process.env.FITBIT_REDIRECT_URI || 'https://app.embracehealth.ai' })
             });
-            const tokenData = await tokenResponse.json();
-            if (tokenData.errors) return sendResponse(400, tokenData);
-            await db.updateFitbitCredentials(userId, tokenData);
+            await db.updateFitbitCredentials(userId, await res.json());
             return sendResponse(200, { success: true });
         }
-
         if (path === '/sync-health/fitbit' && httpMethod === 'POST') {
             const creds = await db.getFitbitCredentials(userId);
-            if (!creds?.fitbit_access_token) return sendResponse(401, { error: "Fitbit not connected" });
-            
-            const [actRes, hrRes] = await Promise.all([
-                fetch('https://api.fitbit.com/1/user/-/activities/today.json', { headers: { 'Authorization': `Bearer ${creds.fitbit_access_token}` } }),
-                fetch('https://api.fitbit.com/1/user/-/activities/heart/date/today/1d.json', { headers: { 'Authorization': `Bearer ${creds.fitbit_access_token}` } })
-            ]);
-            
+            const actRes = await fetch('https://api.fitbit.com/1/user/-/activities/today.json', { headers: { 'Authorization': `Bearer ${creds.fitbit_access_token}` } });
             const actData = await actRes.json();
-            const hrData = await hrRes.json();
-
-            const syncResult = await db.syncHealthMetrics(userId, { 
-                steps: actData.summary?.steps, 
-                activeCalories: actData.summary?.caloriesOut,
-                restingCalories: actData.summary?.marginalCalories,
-                restingHeartRate: hrData?.['activities-heart']?.[0]?.value?.restingHeartRate
-            });
-            return sendResponse(200, syncResult);
-        }
-
-        // --- CORE ENDPOINTS ---
-        if (path === '/rewards' && httpMethod === 'GET') return sendResponse(200, await db.getRewardsSummary(userId));
-        if (path === '/social/friends' && httpMethod === 'GET') return sendResponse(200, await db.getFriends(userId));
-        if (path === '/social/profile' && httpMethod === 'GET') return sendResponse(200, await db.getSocialProfile(userId));
-
-        // --- BODY HUB ---
-        if (path === '/body/photos' && httpMethod === 'GET') return sendResponse(200, await db.getBodyPhotos(userId));
-        if (path === '/body/photos' && httpMethod === 'POST') {
-            const { base64Image, category } = parseBody(event);
-            await db.uploadBodyPhoto(userId, base64Image, category);
-            return sendResponse(200, { success: true });
-        }
-        if (path.startsWith('/body/photos/') && httpMethod === 'GET') {
-            return sendResponse(200, await db.getBodyPhotoById(userId, parseInt(path.split('/').pop())));
-        }
-        if (path === '/body/analyze-form' && httpMethod === 'POST') {
-            const { base64Image, exercise } = parseBody(event);
-            const prompt = `Analyze this user's exercise form for a ${exercise}. Provide score and feedback.`;
-            const data = await callGemini(prompt, base64Image, 'image/jpeg', formAnalysisSchema);
-            return sendResponse(200, data);
-        }
-        if (path === '/body/form-checks' && httpMethod === 'GET') {
-            return sendResponse(200, await db.getFormChecks(userId, event.queryStringParameters?.exercise));
+            return sendResponse(200, await db.syncHealthMetrics(userId, { steps: actData.summary?.steps, activeCalories: actData.summary?.caloriesOut }));
         }
 
         // --- NUTRITION ---
         if (path === '/saved-meals' && httpMethod === 'GET') return sendResponse(200, await db.getSavedMeals(userId));
         if (path === '/saved-meals' && httpMethod === 'POST') return sendResponse(200, await db.saveMeal(userId, parseBody(event)));
-        
         if (path === '/meal-log' && httpMethod === 'GET') return sendResponse(200, await db.getMealLogEntries(userId));
-
-        // --- VISION ---
         if (path === '/analyze-image' && httpMethod === 'POST') {
-            const { base64Image, mimeType, prompt } = parseBody(event);
-            const data = await callGemini(prompt || "Vision analysis for meal macros, recipes, and tools.", base64Image, mimeType, unifiedNutritionSchema);
+            const { base64Image, mimeType } = parseBody(event);
+            const data = await callGemini("Analyze meal JSON.", base64Image, mimeType, unifiedNutritionSchema);
             await db.createMealLogEntry(userId, data, base64Image);
             return sendResponse(200, data);
         }
 
-        // --- HEALTH (WITH DATE CONTEXT) ---
+        // --- HEALTH GET ---
         if (path === '/health-metrics' && httpMethod === 'GET') {
-            const clientDate = event.queryStringParameters?.date || new Date().toISOString().split('T')[0];
-            return sendResponse(200, await db.getHealthMetrics(userId, clientDate));
+            return sendResponse(200, await db.getHealthMetrics(userId, event.queryStringParameters?.date || new Date().toISOString().split('T')[0]));
         }
-        if (path === '/sync-health' && httpMethod === 'POST') return sendResponse(200, await db.syncHealthMetrics(userId, parseBody(event)));
 
-        return sendResponse(404, { error: 'Route not found: ' + path });
+        return sendResponse(404, { error: 'Not found: ' + path });
     } catch (err) {
         console.error('Handler error:', err);
         return sendResponse(500, { error: err.message });
