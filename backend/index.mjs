@@ -33,7 +33,7 @@ const parseBody = (event) => {
     try { return event.body ? JSON.parse(event.body) : {}; } catch (e) { return {}; }
 };
 
-// --- COMPREHENSIVE NUTRITION SCHEMA (Ensures 3-Tab Intelligence) ---
+// --- AI SCHEMA (Ensures 3-Tab Intelligence) ---
 const unifiedNutritionSchema = {
     type: Type.OBJECT,
     properties: {
@@ -46,14 +46,7 @@ const unifiedNutritionSchema = {
             type: Type.ARRAY,
             items: {
                 type: Type.OBJECT,
-                properties: {
-                    name: { type: Type.STRING },
-                    weightGrams: { type: Type.NUMBER },
-                    calories: { type: Type.NUMBER },
-                    protein: { type: Type.NUMBER },
-                    carbs: { type: Type.NUMBER },
-                    fat: { type: Type.NUMBER }
-                },
+                properties: { name: { type: Type.STRING }, weightGrams: { type: Type.NUMBER }, calories: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, fat: { type: Type.NUMBER } },
                 required: ["name", "weightGrams", "calories", "protein", "carbs", "fat"]
             }
         },
@@ -118,7 +111,11 @@ export const handler = async (event) => {
 
         const userId = getUserFromEvent(event);
 
-        // --- FITBIT OAUTH ENDPOINTS ---
+        // --- FITBIT FLOW ---
+        if (path === '/auth/fitbit/status' && httpMethod === 'GET') {
+            return sendResponse(200, { connected: await db.hasFitbitConnection(userId) });
+        }
+
         if (path === '/auth/fitbit/url' && httpMethod === 'POST') {
             const { codeChallenge } = parseBody(event);
             const clientID = process.env.FITBIT_CLIENT_ID;
@@ -146,104 +143,42 @@ export const handler = async (event) => {
         if (path === '/sync-health/fitbit' && httpMethod === 'POST') {
             const creds = await db.getFitbitCredentials(userId);
             if (!creds?.fitbit_access_token) return sendResponse(401, { error: "Fitbit not connected" });
-            
             const statsResponse = await fetch('https://api.fitbit.com/1/user/-/activities/today.json', {
                 headers: { 'Authorization': `Bearer ${creds.fitbit_access_token}` }
             });
             const data = await statsResponse.json();
-            const syncResult = await db.syncHealthMetrics(userId, {
-                steps: data.summary?.steps,
-                activeCalories: data.summary?.caloriesOut
-            });
+            const syncResult = await db.syncHealthMetrics(userId, { steps: data.summary?.steps, activeCalories: data.summary?.caloriesOut });
             return sendResponse(200, syncResult);
         }
 
         // --- CORE ENDPOINTS ---
-
-        // Rewards
         if (path === '/rewards' && httpMethod === 'GET') return sendResponse(200, await db.getRewardsSummary(userId));
-
-        // Social
         if (path === '/social/friends' && httpMethod === 'GET') return sendResponse(200, await db.getFriends(userId));
         if (path === '/social/profile' && httpMethod === 'GET') return sendResponse(200, await db.getSocialProfile(userId));
 
-        // Meals (6MB Payload Compliant Routing)
+        // MEALS (List/Detail Split)
         if (path === '/saved-meals' && httpMethod === 'GET') return sendResponse(200, await db.getSavedMeals(userId));
         if (path === '/saved-meals' && httpMethod === 'POST') return sendResponse(200, await db.saveMeal(userId, parseBody(event)));
-        if (path.startsWith('/saved-meals/') && httpMethod === 'GET') {
-            const id = parseInt(path.split('/').pop());
-            return sendResponse(200, await db.getSavedMealById(userId, id));
-        }
-        if (path.startsWith('/saved-meals/') && httpMethod === 'DELETE') {
-            const id = parseInt(path.split('/').pop());
-            await db.deleteMeal(userId, id);
-            return sendResponse(200, { success: true });
-        }
+        if (path.startsWith('/saved-meals/') && httpMethod === 'GET') return sendResponse(200, await db.getSavedMealById(userId, parseInt(path.split('/').pop())));
         
         if (path === '/meal-log' && httpMethod === 'GET') return sendResponse(200, await db.getMealLogEntries(userId));
-        if (path.startsWith('/meal-log/') && httpMethod === 'GET') {
-            const id = parseInt(path.split('/').pop());
-            return sendResponse(200, await db.getMealLogEntryById(userId, id));
-        }
+        if (path.startsWith('/meal-log/') && httpMethod === 'GET') return sendResponse(200, await db.getMealLogEntryById(userId, parseInt(path.split('/').pop())));
 
-        // Plans
+        // PLANS & GROCERY
         if (path === '/meal-plans' && httpMethod === 'GET') return sendResponse(200, await db.getMealPlans(userId));
-        if (path === '/meal-plans' && httpMethod === 'POST') return sendResponse(200, await db.createMealPlan(userId, parseBody(event).name));
-        if (path.startsWith('/meal-plans/') && path.endsWith('/items') && httpMethod === 'POST') {
-            const planId = parseInt(path.split('/')[2]);
-            const { savedMealId, metadata } = parseBody(event);
-            return sendResponse(200, await db.addMealToPlan(userId, planId, savedMealId, metadata));
-        }
-        if (path.startsWith('/meal-plans/items/') && httpMethod === 'DELETE') {
-            const id = parseInt(path.split('/').pop());
-            await db.removeMealFromPlan(userId, id);
-            return sendResponse(200, { success: true });
-        }
-
-        // Grocery
         if (path === '/grocery/lists' && httpMethod === 'GET') return sendResponse(200, await db.getGroceryLists(userId));
-        if (path === '/grocery/lists' && httpMethod === 'POST') return sendResponse(200, await db.createGroceryList(userId, parseBody(event).name));
-        if (path.startsWith('/grocery/lists/') && path.endsWith('/items') && httpMethod === 'GET') {
-            const id = parseInt(path.split('/')[3]);
-            return sendResponse(200, await db.getGroceryListItems(id));
-        }
-        if (path.startsWith('/grocery/lists/') && path.endsWith('/items') && httpMethod === 'POST') {
-            const id = parseInt(path.split('/')[3]);
-            return sendResponse(200, await db.addGroceryItem(userId, id, parseBody(event).name));
-        }
-        if (path.startsWith('/grocery/items/') && httpMethod === 'PATCH') {
-            const id = parseInt(path.split('/').pop());
-            return sendResponse(200, await db.updateGroceryItem(userId, id, parseBody(event).checked));
-        }
-        if (path.startsWith('/grocery/items/') && httpMethod === 'DELETE') {
-            const id = parseInt(path.split('/').pop());
-            await db.removeGroceryItem(userId, id);
-            return sendResponse(200, { success: true });
-        }
 
-        // Vision Analysis (Mandatory 3-Tab Logic)
+        // VISION
         if (path === '/analyze-image' && httpMethod === 'POST') {
             const { base64Image, mimeType, prompt } = parseBody(event);
-            const data = await callGemini(
-                prompt || "Perform vision analysis. Identify the meal, extract macros/ingredients, generate a step-by-step recipe, and list required kitchen tools.", 
-                base64Image, 
-                mimeType, 
-                unifiedNutritionSchema
-            );
+            const data = await callGemini(prompt || "Vision analysis for meal macros, recipes, and tools.", base64Image, mimeType, unifiedNutritionSchema);
             await db.createMealLogEntry(userId, data, base64Image);
             return sendResponse(200, data);
         }
 
-        // Health & Prefs
+        // HEALTH
         if (path === '/health-metrics' && httpMethod === 'GET') return sendResponse(200, await db.getHealthMetrics(userId));
         if (path === '/sync-health' && httpMethod === 'POST') return sendResponse(200, await db.syncHealthMetrics(userId, parseBody(event)));
-        if (path === '/body/dashboard-prefs' && httpMethod === 'GET') return sendResponse(200, await db.getDashboardPrefs(userId));
-        if (path === '/body/dashboard-prefs' && httpMethod === 'POST') { await db.saveDashboardPrefs(userId, parseBody(event)); return sendResponse(200, { success: true }); }
-
-        // Shopify & Content
-        if (path === '/shopify/orders' && httpMethod === 'GET') return sendResponse(200, await shopify.fetchCustomerOrders(userId));
-        if (path.startsWith('/shopify/products/') && httpMethod === 'GET') return sendResponse(200, await shopify.getProductByHandle(path.split('/').pop()));
-        if (path === '/content/pulse' && httpMethod === 'GET') return sendResponse(200, await db.getArticles());
 
         return sendResponse(404, { error: 'Route not found: ' + path });
     } catch (err) {

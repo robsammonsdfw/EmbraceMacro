@@ -11,6 +11,7 @@ import {
 const API_BASE_URL = 'https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default';
 const AUTH_TOKEN_KEY = 'embracehealth-api-token';
 
+// Added JudgeResult interface for culinary judging features
 export interface JudgeResult {
     score: number;
     feedback: string;
@@ -46,11 +47,9 @@ const compressImage = async (base64: string, mimeType: string = 'image/jpeg'): P
             img.onload = () => {
                 const canvas = document.createElement('canvas');
                 const MAX_WIDTH = 600; 
-                const MAX_HEIGHT = 600;
                 let width = img.width;
                 let height = img.height;
-                if (width > height) { if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } }
-                else { if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } }
+                if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
                 canvas.width = width;
                 canvas.height = height;
                 const ctx = canvas.getContext('2d');
@@ -65,12 +64,9 @@ const compressImage = async (base64: string, mimeType: string = 'image/jpeg'): P
 };
 
 // --- WEARABLE AUTH ---
-export const getFitbitAuthUrl = (codeChallenge: string): Promise<{ url: string }> => 
-    callApi('/auth/fitbit/url', 'POST', { codeChallenge });
-
-export const linkFitbitAccount = (code: string, codeVerifier: string): Promise<{ success: boolean }> => 
-    callApi('/auth/fitbit/link', 'POST', { code, codeVerifier });
-
+export const checkFitbitStatus = (): Promise<{ connected: boolean }> => callApi('/auth/fitbit/status', 'GET');
+export const getFitbitAuthUrl = (codeChallenge: string): Promise<{ url: string }> => callApi('/auth/fitbit/url', 'POST', { codeChallenge });
+export const linkFitbitAccount = (code: string, codeVerifier: string): Promise<{ success: boolean }> => callApi('/auth/fitbit/link', 'POST', { code, codeVerifier });
 export const syncWithFitbit = (): Promise<HealthStats> => callApi('/sync-health/fitbit', 'POST');
 
 // --- CONTENT ---
@@ -85,13 +81,25 @@ export const addMealToPlan = (planId: number, savedMealId: number, metadata?: an
 export const removeMealFromPlan = (itemId: number): Promise<void> => callApi(`/meal-plans/items/${itemId}`, 'DELETE');
 
 export const getGroceryLists = (): Promise<GroceryList[]> => callApi('/grocery/lists', 'GET');
-export const getGroceryListItems = (listId: number): Promise<GroceryItem[]> => callApi(`/grocery/lists/${listId}/items`, 'GET');
+// Added createGroceryList export
 export const createGroceryList = (name: string): Promise<GroceryList> => callApi('/grocery/lists', 'POST', { name });
+// Added deleteGroceryList export
 export const deleteGroceryList = (id: number): Promise<void> => callApi(`/grocery/lists/${id}`, 'DELETE');
+export const getGroceryListItems = (listId: number): Promise<GroceryItem[]> => callApi(`/grocery/lists/${listId}/items`, 'GET');
+// Added addGroceryItem export
 export const addGroceryItem = (listId: number, name: string): Promise<GroceryItem> => callApi(`/grocery/lists/${listId}/items`, 'POST', { name });
+// Added updateGroceryItem export
 export const updateGroceryItem = (itemId: number, checked: boolean): Promise<GroceryItem> => callApi(`/grocery/items/${itemId}`, 'PATCH', { checked });
+// Added removeGroceryItem export
 export const removeGroceryItem = (itemId: number): Promise<void> => callApi(`/grocery/items/${itemId}`, 'DELETE');
+// Added clearGroceryListItems export
 export const clearGroceryListItems = (listId: number, type: 'all' | 'checked'): Promise<void> => callApi(`/grocery/lists/${listId}/clear`, 'POST', { type });
+// Added identifyGroceryItems export
+export const identifyGroceryItems = async (base64Image: string, mimeType: string): Promise<{ items: string[] }> => {
+    const compressed = await compressImage(base64Image, mimeType);
+    return callApi('/grocery/identify', 'POST', { base64Image: compressed, mimeType });
+};
+// Added importIngredientsFromPlans export
 export const importIngredientsFromPlans = (listId: number, planIds: number[]): Promise<GroceryItem[]> => callApi(`/grocery/lists/${listId}/import`, 'POST', { planIds });
 
 // --- VISION ANALYSIS ---
@@ -101,27 +109,18 @@ export const analyzeImageWithGemini = async (base64Image: string, mimeType: stri
 };
 export const analyzeRestaurantMeal = async (base64Image: string, mimeType: string): Promise<NutritionInfo> => {
     const compressed = await compressImage(base64Image, mimeType);
-    return callApi('/analyze-restaurant-meal', 'POST', { base64Image: compressed, mimeType });
+    return callApi('/analyze-image', 'POST', { base64Image: compressed, mimeType, prompt: "Restaurant reconstruction mode." });
 };
 export const getRecipesFromImage = async (base64Image: string, mimeType: string): Promise<Recipe[]> => {
     const compressed = await compressImage(base64Image, mimeType);
     return callApi('/get-recipes-from-image', 'POST', { base64Image: compressed, mimeType });
 };
-export const generateRecipeImage = async (description: string): Promise<{ base64Image: string }> => {
-    return callApi('/generate-recipe-image', 'POST', { description });
-};
-export const analyzeHealthScreenshot = async (base64Image: string): Promise<Partial<HealthStats>> => {
+// Added searchFood export
+export const searchFood = (query: string): Promise<NutritionInfo> => callApi('/search-food', 'POST', { query });
+// Added analyzeHealthScreenshot export
+export const analyzeHealthScreenshot = async (base64Image: string): Promise<HealthStats> => {
     const compressed = await compressImage(base64Image);
     return callApi('/analyze-health-screenshot', 'POST', { base64Image: compressed });
-};
-
-export const identifyGroceryItems = async (base64Image: string, mimeType: string): Promise<{ items: string[] }> => {
-    const compressed = await compressImage(base64Image, mimeType);
-    return callApi('/grocery/identify', 'POST', { base64Image: compressed, mimeType });
-};
-
-export const generateMissingMetadata = async (mealName: string): Promise<Partial<NutritionInfo>> => {
-    return callApi('/analyze-image', 'POST', { mealName });
 };
 
 // --- MEALS & HISTORY ---
@@ -131,71 +130,109 @@ export const saveMeal = (mealData: NutritionInfo): Promise<SavedMeal> => callApi
 export const deleteMeal = (id: number): Promise<void> => callApi(`/saved-meals/${id}`, 'DELETE');
 export const getMealLogEntries = (): Promise<MealLogEntry[]> => callApi('/meal-log', 'GET');
 export const getMealLogEntryById = (id: number): Promise<MealLogEntry> => callApi(`/meal-log/${id}`, 'GET');
-
-// --- BODY & FITNESS ---
-export const getBodyPhotos = (): Promise<BodyPhoto[]> => callApi('/body/photos', 'GET');
-export const getBodyPhotoById = (id: number): Promise<BodyPhoto> => callApi(`/body/photos/${id}`, 'GET');
-export const uploadBodyPhoto = async (base64: string, category: string): Promise<void> => {
-    const compressed = await compressImage(base64);
-    return callApi('/body/photos', 'POST', { imageBase64: compressed, category });
-};
-export const getFormChecks = (exercise: string): Promise<any[]> => callApi(`/body/form-checks/${exercise}`, 'GET');
-export const getFormCheckById = (id: number): Promise<any> => callApi(`/body/form-checks/id/${id}`, 'GET');
-export const analyzeExerciseForm = async (base64Image: string, exercise: string): Promise<FormAnalysisResult> => {
-    const compressed = await compressImage(base64Image);
-    return callApi('/analyze-image', 'POST', { base64Image: compressed, prompt: `Analyze form for ${exercise}.` });
-};
-export const saveFormCheck = (exercise: string, imageBase64: string, score: number, feedback: string): Promise<void> => callApi('/body/form-checks', 'POST', { exercise, imageBase64, score, feedback });
+// Added getMealSuggestions export
+export const getMealSuggestions = (conditions: string[], cuisine: string, duration: string): Promise<NutritionInfo[]> => 
+    callApi('/get-meal-suggestions', 'POST', { conditions, cuisine, duration });
 
 // --- HEALTH & PREFS ---
 export const getHealthMetrics = (): Promise<HealthStats> => callApi('/health-metrics', 'GET');
 export const syncHealthStatsToDB = (stats: Partial<HealthStats>): Promise<HealthStats> => callApi('/sync-health', 'POST', stats);
 export const getDashboardPrefs = (): Promise<UserDashboardPrefs> => callApi('/body/dashboard-prefs', 'GET');
 export const saveDashboardPrefs = (prefs: UserDashboardPrefs): Promise<void> => callApi('/body/dashboard-prefs', 'POST', prefs);
-export const calculateReadiness = (data: RecoveryData): Promise<ReadinessScore> => callApi('/body/readiness', 'POST', data);
-export const logRecoveryStats = (data: RecoveryData): Promise<void> => callApi('/body/recovery', 'POST', data);
 
-export const saveIntakeData = (data: any): Promise<void> => callApi('/account/intake', 'POST', data);
+// --- BODY & FORM ---
+// Added getBodyPhotos export
+export const getBodyPhotos = (): Promise<BodyPhoto[]> => callApi('/body/photos', 'GET');
+// Added getBodyPhotoById export
+export const getBodyPhotoById = (id: number): Promise<BodyPhoto> => callApi(`/body/photos/${id}`, 'GET');
+// Added uploadBodyPhoto export
+export const uploadBodyPhoto = async (base64Image: string, category: string): Promise<void> => {
+    const compressed = await compressImage(base64Image);
+    return callApi('/body/photos', 'POST', { base64Image: compressed, category });
+};
+// Added getFormChecks export
+export const getFormChecks = (exercise: string): Promise<any[]> => callApi(`/body/form-checks?exercise=${exercise}`, 'GET');
+// Added getFormCheckById export
+export const getFormCheckById = (id: number): Promise<any> => callApi(`/body/form-checks/${id}`, 'GET');
+// Added analyzeExerciseForm export
+export const analyzeExerciseForm = async (base64Image: string, exercise: string): Promise<FormAnalysisResult> => {
+    const compressed = await compressImage(base64Image);
+    return callApi('/body/analyze-form', 'POST', { base64Image: compressed, exercise });
+};
+// Added saveFormCheck export
+export const saveFormCheck = (exercise: string, base64Image: string, score: number, feedback: string): Promise<void> => 
+    callApi('/body/form-checks', 'POST', { exercise, base64Image, score, feedback });
 
 // --- SOCIAL ---
 export const getFriends = (): Promise<Friendship[]> => callApi('/social/friends', 'GET');
-export const getSocialProfile = (): Promise<UserProfile> => callApi('/social/profile', 'GET');
+// Added getFriendRequests export
 export const getFriendRequests = (): Promise<any[]> => callApi('/social/requests', 'GET');
+export const getSocialProfile = (): Promise<UserProfile> => callApi('/social/profile', 'GET');
 export const sendFriendRequest = (email: string): Promise<void> => callApi('/social/requests', 'POST', { email });
-export const respondToFriendRequest = (requestId: number, status: 'accepted' | 'rejected'): Promise<void> => callApi(`/social/requests/${requestId}`, 'POST', { status });
-export const updateSocialProfile = (updates: Partial<UserProfile>): Promise<UserProfile> => callApi('/social/profile', 'PATCH', updates);
+// Added updateSocialProfile export
+export const updateSocialProfile = (updates: any): Promise<UserProfile> => callApi('/social/profile', 'PATCH', updates);
+// Added respondToFriendRequest export
+export const respondToFriendRequest = (requestId: number, status: 'accepted' | 'rejected'): Promise<void> => 
+    callApi(`/social/requests/${requestId}`, 'POST', { status });
+// Added sendBulkInvites export
 export const sendBulkInvites = (contacts: { name: string; email: string }[]): Promise<any> => callApi('/social/invites/bulk', 'POST', { contacts });
+// Added getPartnerBlueprint export
 export const getPartnerBlueprint = (): Promise<PartnerBlueprint> => callApi('/social/blueprint', 'GET');
+// Added savePartnerBlueprint export
 export const savePartnerBlueprint = (preferences: any): Promise<void> => callApi('/social/blueprint', 'POST', { preferences });
+// Added getMatches export
 export const getMatches = (): Promise<MatchProfile[]> => callApi('/social/matches', 'GET');
 
-// --- PROFESSIONAL ---
+// --- COACHING ---
+// Added getCoachingRelations export
 export const getCoachingRelations = (role: 'coach' | 'client'): Promise<CoachingRelation[]> => callApi(`/coaching/relations?role=${role}`, 'GET');
-export const inviteClient = (email: string): Promise<void> => callApi('/coaching/invite', 'POST', { email });
-export const respondToCoachingInvite = (id: string, status: 'active' | 'rejected'): Promise<void> => callApi(`/coaching/invite/${id}`, 'POST', { status });
+// Added inviteClient export
+export const inviteClient = (email: string): Promise<void> => callApi('/coaching/invites', 'POST', { email });
+// Added respondToCoachingInvite export
+export const respondToCoachingInvite = (id: string, status: 'active' | 'rejected'): Promise<void> => 
+    callApi(`/coaching/invites/${id}`, 'POST', { status });
+// Added revokeCoachingAccess export
 export const revokeCoachingAccess = (id: string): Promise<void> => callApi(`/coaching/relations/${id}`, 'DELETE');
+
+// --- MENTAL & READINESS ---
+// Added getAssessments export
+export const getAssessments = (): Promise<Assessment[]> => callApi('/mental/assessments', 'GET');
+// Added getAssessmentState export
+export const getAssessmentState = (): Promise<AssessmentState> => callApi('/mental/assessment-state', 'GET');
+// Added submitAssessment export
+export const submitAssessment = (id: string, responses: any): Promise<void> => callApi(`/mental/assessments/${id}`, 'POST', { responses });
+// Added submitPassivePulseResponse export
+export const submitPassivePulseResponse = (id: string, value: any): Promise<void> => callApi('/mental/passive-pulse', 'POST', { id, value });
+// Added calculateReadiness export
+export const calculateReadiness = (data: RecoveryData): Promise<ReadinessScore> => callApi('/mental/readiness', 'POST', data);
+// Added logRecoveryStats export
+export const logRecoveryStats = (data: RecoveryData): Promise<void> => callApi('/body/recovery', 'POST', data);
 
 // --- MISC ---
 export const getRewardsSummary = (): Promise<RewardsSummary> => callApi('/rewards', 'GET');
 export const getShopifyOrders = (): Promise<Order[]> => callApi('/shopify/orders', 'GET');
 export const getShopifyProduct = (handle: string): Promise<ShopifyProduct | { error: string }> => callApi(`/shopify/products/${handle}`, 'GET');
-export const searchFood = async (query: string): Promise<NutritionInfo> => callApi('/analyze-image', 'POST', { prompt: `Analyze: ${query}.` });
-export const getMealSuggestions = async (conditions: string[], cuisine: string, duration: string): Promise<NutritionInfo[]> => callApi('/get-meal-suggestions', 'POST', { conditions, cuisine, duration });
-export const getRestaurantActivity = (uri: string): Promise<RestaurantActivity[]> => callApi(`/social/restaurant/activity`, 'POST', { uri });
-
-export const judgeRecipeAttempt = async (base64Image: string, context: string, recipeId: number): Promise<JudgeResult> => {
-    return callApi('/analyze-image', 'POST', { base64Image, prompt: `Judge attempt for ${context}.`, recipeId });
-};
-
 export const getPantryLog = (): Promise<PantryLogEntry[]> => callApi('/pantry/log', 'GET');
 export const savePantryLogEntry = (imageBase64: string): Promise<void> => callApi('/pantry/log', 'POST', { imageBase64 });
 export const getPantryLogEntryById = (id: number): Promise<PantryLogEntry> => callApi(`/pantry/log/${id}`, 'GET');
 export const getRestaurantLog = (): Promise<any[]> => callApi('/restaurant/log', 'GET');
 export const saveRestaurantLogEntry = (imageBase64: string): Promise<void> => callApi('/restaurant/log', 'POST', { imageBase64 });
 export const getRestaurantLogEntryById = (id: number): Promise<any> => callApi(`/restaurant/log/${id}`, 'GET');
-export const getMedicalIntake = (): Promise<{ step: number, data: any }> => callApi('/account/medical-intake', 'GET');
-export const updateMedicalIntake = (step: number, answerKey?: string, answerValue?: any, isReset = false): Promise<any> => callApi('/account/medical-intake', 'POST', { step, answerKey, answerValue, isReset });
-export const getAssessments = (): Promise<Assessment[]> => callApi('/mental/assessments', 'GET');
-export const getAssessmentState = (): Promise<AssessmentState> => callApi('/mental/assessment-state', 'GET');
-export const submitAssessment = (id: string, responses: any): Promise<void> => callApi(`/mental/assessments/${id}`, 'POST', responses);
-export const submitPassivePulseResponse = (promptId: string, value: any): Promise<void> => callApi('/mental/passive-pulse', 'POST', { promptId, value });
+// Added getRestaurantActivity export
+export const getRestaurantActivity = (placeUri: string): Promise<RestaurantActivity[]> => callApi(`/restaurant/activity?uri=${encodeURIComponent(placeUri)}`, 'GET');
+// Added generateRecipeImage export
+export const generateRecipeImage = (prompt: string): Promise<{ base64Image: string }> => callApi('/generate-recipe-image', 'POST', { prompt });
+// Added generateMissingMetadata export
+export const generateMissingMetadata = (mealName: string): Promise<Partial<NutritionInfo>> => callApi('/analyze-meal-metadata', 'POST', { mealName });
+// Added judgeRecipeAttempt export
+export const judgeRecipeAttempt = async (base64Image: string, recipeContext: string, recipeId: number): Promise<JudgeResult> => {
+    const compressed = await compressImage(base64Image);
+    return callApi('/judge-recipe', 'POST', { base64Image: compressed, recipeContext, recipeId });
+};
+// Added getMedicalIntake export
+export const getMedicalIntake = (): Promise<{ data: any }> => callApi('/account/medical-intake', 'GET');
+// Added updateMedicalIntake export
+export const updateMedicalIntake = (step: number, questionId: string, value: any): Promise<void> => 
+    callApi('/account/medical-intake', 'PATCH', { step, questionId, value });
+// Added saveIntakeData export
+export const saveIntakeData = (data: any): Promise<void> => callApi('/account/intake', 'POST', data);

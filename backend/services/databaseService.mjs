@@ -6,9 +6,6 @@ const pool = new Pool({
     ssl: { rejectUnauthorized: false }
 });
 
-/**
- * STRIP HEAVY DATA for list views to comply with AWS 6MB limit.
- */
 const processMealDataForList = (mealData, externalHasImage = false) => {
     const dataForList = { ...mealData };
     const hasImage = externalHasImage || !!dataForList.imageBase64 || !!dataForList.imageUrl;
@@ -58,6 +55,14 @@ export const getFitbitCredentials = async (userId) => {
     } finally { client.release(); }
 };
 
+export const hasFitbitConnection = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT (fitbit_access_token IS NOT NULL) as connected FROM users WHERE id = $1`, [userId]);
+        return !!res.rows[0]?.connected;
+    } finally { client.release(); }
+};
+
 // --- REWARDS ---
 
 export const awardPoints = async (userId, eventType, points, metadata = {}) => {
@@ -79,7 +84,7 @@ export const getRewardsSummary = async (userId) => {
     } finally { client.release(); }
 };
 
-// --- MEALS & HISTORY (STRIPPED LISTS) ---
+// --- MEALS (STRIPPED LISTS) ---
 
 export const createMealLogEntry = async (userId, mealData, imageBase64) => {
     const client = await pool.connect();
@@ -93,7 +98,7 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
 export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
     try {
-        const res = await client.query(`SELECT id, meal_data, (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image, created_at FROM meal_log_entries WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
+        const res = await client.query(`SELECT id, meal_data, (image_base64 IS NOT NULL) as has_image, created_at FROM meal_log_entries WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
         return res.rows.map(r => ({ ...processMealDataForList(r.meal_data, r.has_image), id: r.id, createdAt: r.created_at }));
     } finally { client.release(); }
 };
@@ -247,7 +252,7 @@ export const removeGroceryItem = async (userId, itemId) => {
     try { await client.query(`DELETE FROM grocery_list_items WHERE id = $1 AND user_id = $2`, [itemId, userId]); } finally { client.release(); }
 };
 
-// --- HEALTH & METRICS ---
+// --- HEALTH ---
 
 export const getHealthMetrics = async (userId) => {
     const client = await pool.connect();
