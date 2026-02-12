@@ -1,8 +1,7 @@
-
 import * as db from './services/databaseService.mjs';
 import { fetchCustomerOrders, getProductByHandle } from './services/shopifyService.mjs';
 import jwt from 'jsonwebtoken';
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
 const CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
@@ -11,6 +10,7 @@ const CORS_HEADERS = {
 };
 
 const JWT_SECRET = process.env.JWT_SECRET || 'embrace-health-secret';
+const GEMINI_KEY = process.env.API_KEY || process.env.GEMINI_API_KEY;
 
 const sendResponse = (statusCode, body) => ({
     statusCode,
@@ -38,109 +38,10 @@ const parseBody = (event) => {
     catch (e) { return {}; }
 };
 
-// --- SCHEMA DEFINITIONS ---
-const unifiedNutritionSchema = {
-    type: Type.OBJECT,
-    properties: {
-        mealName: { type: Type.STRING },
-        totalCalories: { type: Type.NUMBER },
-        totalProtein: { type: Type.NUMBER },
-        totalCarbs: { type: Type.NUMBER },
-        totalFat: { type: Type.NUMBER },
-        ingredients: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    name: { type: Type.STRING },
-                    weightGrams: { type: Type.NUMBER },
-                    calories: { type: Type.NUMBER },
-                    protein: { type: Type.NUMBER },
-                    carbs: { type: Type.NUMBER },
-                    fat: { type: Type.NUMBER }
-                },
-                required: ["name", "weightGrams", "calories", "protein", "carbs", "fat"]
-            }
-        },
-        recipe: {
-            type: Type.OBJECT,
-            properties: {
-                recipeName: { type: Type.STRING },
-                description: { type: Type.STRING },
-                ingredients: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: { name: { type: Type.STRING }, quantity: { type: Type.STRING } }
-                    }
-                },
-                instructions: { type: Type.ARRAY, items: { type: Type.STRING } },
-                nutrition: {
-                    type: Type.OBJECT,
-                    properties: {
-                        totalCalories: { type: Type.NUMBER },
-                        totalProtein: { type: Type.NUMBER },
-                        totalCarbs: { type: Type.NUMBER },
-                        totalFat: { type: Type.NUMBER }
-                    },
-                    required: ["totalCalories", "totalProtein", "totalCarbs", "totalFat"]
-                }
-            },
-            required: ["recipeName", "description", "ingredients", "instructions", "nutrition"]
-        },
-        kitchenTools: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    name: { type: Type.STRING },
-                    use: { type: Type.STRING },
-                    essential: { type: Type.BOOLEAN }
-                },
-                required: ["name", "use", "essential"]
-            }
-        }
-    },
-    required: ["mealName", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "ingredients", "recipe", "kitchenTools"]
-};
-
-const healthMetricsSchema = {
-    type: Type.OBJECT,
-    properties: {
-        steps: { type: Type.NUMBER, description: "Daily step count" },
-        active_calories: { type: Type.NUMBER, description: "Active calories burned" },
-        resting_calories: { type: Type.NUMBER, description: "Resting metabolic rate calories" },
-        distance_miles: { type: Type.NUMBER, description: "Distance traveled in miles" },
-        flights_climbed: { type: Type.NUMBER, description: "Number of floors or flights climbed" },
-        heart_rate: { type: Type.NUMBER, description: "Current or average heart rate" },
-        resting_heart_rate: { type: Type.NUMBER, description: "Resting heart rate" },
-        blood_pressure_systolic: { type: Type.NUMBER, description: "Top number of blood pressure" },
-        blood_pressure_diastolic: { type: Type.NUMBER, description: "Bottom number of blood pressure" },
-        weight_lbs: { type: Type.NUMBER, description: "Body weight in pounds" },
-        body_fat_percentage: { type: Type.NUMBER, description: "Body fat percentage" },
-        bmi: { type: Type.NUMBER, description: "Body Mass Index" },
-        sleep_score: { type: Type.NUMBER, description: "Overall sleep quality score" },
-        vo2_max: { type: Type.NUMBER, description: "Cardiovascular fitness level" },
-        glucose_mg_dl: { type: Type.NUMBER, description: "Blood glucose level" }
-    }
-};
-
-// Added groceryIdentifySchema for identifyGroceryItems functionality
-const groceryIdentifySchema = {
-    type: Type.OBJECT,
-    properties: {
-        items: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-            description: "List of identified grocery items"
-        }
-    },
-    required: ["items"]
-};
-
 // AI Helper
-const callGemini = async (prompt, imageBase64, mimeType = 'image/jpeg', schema = null) => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const callGemini = async (prompt, imageBase64, mimeType = 'image/jpeg') => {
+    if (!GEMINI_KEY) throw new Error("Missing API Key");
+    const ai = new GoogleGenAI({ apiKey: GEMINI_KEY });
     const model = 'gemini-3-flash-preview';
     
     try {
@@ -148,96 +49,16 @@ const callGemini = async (prompt, imageBase64, mimeType = 'image/jpeg', schema =
             ? { parts: [{ inlineData: { mimeType, data: imageBase64 } }, { text: prompt }] }
             : { parts: [{ text: prompt }] };
 
-        const config = { 
-            responseMimeType: "application/json",
-            ...(schema ? { responseSchema: schema } : {})
-        };
-
         const response = await ai.models.generateContent({
             model,
             contents,
-            config
+            config: { responseMimeType: "application/json" }
         });
-        
-        const result = JSON.parse(response.text);
-        return result;
+        return JSON.parse(response.text);
     } catch (e) {
         console.error("Gemini Error:", e);
-        throw new Error("AI Processing Failed: " + e.message);
+        throw new Error("AI Processing Failed");
     }
-};
-
-// Fitbit API Helpers
-const exchangeFitbitCode = async (code) => {
-    const clientID = process.env.FITBIT_CLIENT_ID;
-    const clientSecret = process.env.FITBIT_CLIENT_SECRET;
-    const redirectUri = process.env.FITBIT_REDIRECT_URI || 'https://main.embracehealth.ai';
-    
-    const basicAuth = Buffer.from(`${clientID}:${clientSecret}`).toString('base64');
-    
-    const response = await fetch('https://api.fitbit.com/oauth2/token', {
-        method: 'POST',
-        headers: {
-            'Authorization': `Basic ${basicAuth}`,
-            'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: new URLSearchParams({
-            client_id: clientID,
-            grant_type: 'authorization_code',
-            redirect_uri: redirectUri,
-            code: code
-        })
-    });
-
-    if (!response.ok) {
-        const err = await response.text();
-        throw new Error(`Fitbit Token Exchange Failed: ${err}`);
-    }
-
-    return response.json();
-};
-
-const refreshFitbitToken = async (refreshToken) => {
-    const clientID = process.env.FITBIT_CLIENT_ID;
-    const clientSecret = process.env.FITBIT_CLIENT_SECRET;
-    const basicAuth = Buffer.from(`${clientID}:${clientSecret}`).toString('base64');
-
-    const response = await fetch('https://api.fitbit.com/oauth2/token', {
-        method: 'POST',
-        headers: {
-            'Authorization': `Basic ${basicAuth}`,
-            'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: new URLSearchParams({
-            grant_type: 'refresh_token',
-            refresh_token: refreshToken
-        })
-    });
-
-    if (!response.ok) throw new Error("Fitbit Token Refresh Failed");
-    return response.json();
-};
-
-const getFitbitData = async (accessToken, userId) => {
-    const endpoints = {
-        steps: 'https://api.fitbit.com/1/user/-/activities/tracker/steps/date/today/1d.json',
-        calories: 'https://api.fitbit.com/1/user/-/activities/tracker/calories/date/today/1d.json',
-        heart: 'https://api.fitbit.com/1/user/-/activities/heart/date/today/1d.json'
-    };
-
-    const fetchJson = (url) => fetch(url, { headers: { 'Authorization': `Bearer ${accessToken}` } }).then(r => r.json());
-
-    const [stepsData, caloriesData, heartData] = await Promise.all([
-        fetchJson(endpoints.steps),
-        fetchJson(endpoints.calories),
-        fetchJson(endpoints.heart)
-    ]);
-
-    return {
-        steps: parseInt(stepsData['activities-tracker-steps']?.[0]?.value || 0),
-        active_calories: parseInt(caloriesData['activities-tracker-calories']?.[0]?.value || 0),
-        heart_rate: heartData['activities-heart']?.[0]?.value?.restingHeartRate || 0
-    };
 };
 
 export const handler = async (event) => {
@@ -250,156 +71,197 @@ export const handler = async (event) => {
     try {
         if (path === '/' || path === '/health') return sendResponse(200, { status: 'ok' });
 
+        // --- AUTH ---
         if (path.endsWith('/auth/customer-login') && httpMethod === 'POST') {
             const body = parseBody(event);
             if (!body.email) return sendResponse(400, { error: "Email required" });
-            const user = await db.findOrCreateUserByEmail(body.email, body.inviteCode);
+            const user = await db.findOrCreateUserByEmail(body.email);
             const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '30d' });
             return sendResponse(200, { token, user });
         }
 
         const userId = getUserFromEvent(event);
 
-        // --- Fitbit Wearable Logic ---
-        if (path === '/auth/fitbit/url' && httpMethod === 'GET') {
-            const clientID = process.env.FITBIT_CLIENT_ID;
-            const redirectUri = encodeURIComponent(process.env.FITBIT_REDIRECT_URI || 'https://main.embracehealth.ai');
-            const scope = encodeURIComponent('activity heartrate profile sleep weight');
-            const url = `https://www.fitbit.com/oauth2/authorize?response_type=code&client_id=${clientID}&redirect_uri=${redirectUri}&scope=${scope}`;
-            return sendResponse(200, { url });
-        }
-
-        if (path === '/auth/fitbit/link' && httpMethod === 'POST') {
-            const { code } = parseBody(event);
-            const tokenData = await exchangeFitbitCode(code);
-            await db.updateFitbitCredentials(userId, tokenData);
-            return sendResponse(200, { success: true });
-        }
-
-        if (path === '/sync-health/fitbit' && httpMethod === 'POST') {
-            const creds = await db.getFitbitCredentials(userId);
-            if (!creds || !creds.fitbit_refresh_token) return sendResponse(401, { error: "Fitbit not connected" });
-            
-            let accessToken = creds.fitbit_access_token;
-            if (new Date(creds.fitbit_token_expires) <= new Date()) {
-                const refreshed = await refreshFitbitToken(creds.fitbit_refresh_token);
-                await db.updateFitbitCredentials(userId, refreshed);
-                accessToken = refreshed.access_token;
-            }
-
-            const stats = await getFitbitData(accessToken, creds.fitbit_user_id);
-            const updated = await db.syncHealthMetrics(userId, stats);
-            return sendResponse(200, updated);
-        }
-
-        // --- Standard API Routes ---
-        if (path === '/content/pulse' && httpMethod === 'GET') return sendResponse(200, await db.getArticles(userId));
-        if (path === '/content/pulse' && httpMethod === 'POST') return sendResponse(200, await db.createArticle(userId, parseBody(event)));
-        const pulseActionMatch = path.match(/\/content\/pulse\/(\d+)\/action$/);
-        if (pulseActionMatch && httpMethod === 'POST') return sendResponse(200, await db.completeArticleAction(userId, parseInt(pulseActionMatch[1]), parseBody(event).actionType));
-
-        if (path === '/saved-meals' && httpMethod === 'GET') return sendResponse(200, await db.getSavedMeals(userId));
-        if (path === '/saved-meals' && httpMethod === 'POST') return sendResponse(200, await db.saveMeal(userId, parseBody(event)));
-        const mealMatch = path.match(/\/saved-meals\/(\d+)$/);
-        if (mealMatch && httpMethod === 'DELETE') { await db.deleteMeal(userId, parseInt(mealMatch[1])); return sendResponse(200, { success: true }); }
-        if (mealMatch && httpMethod === 'GET') return sendResponse(200, await db.getSavedMealById(parseInt(mealMatch[1])));
-
-        if (path === '/meal-log' && httpMethod === 'GET') return sendResponse(200, await db.getMealLogEntries(userId));
-        const mealLogByIdMatch = path.match(/\/meal-log\/(\d+)$/);
-        if (mealLogByIdMatch && httpMethod === 'GET') return sendResponse(200, await db.getMealLogEntryById(parseInt(mealLogByIdMatch[1])));
-
-        if (path === '/analyze-image' && httpMethod === 'POST') {
-            const { base64Image, mimeType, prompt: userPrompt, mealName } = parseBody(event);
-            if (mealName && !base64Image) {
-                const prompt = `Provide a complete Recipe and list of Kitchen Tools for: "${mealName}".`;
-                const data = await callGemini(prompt, null, null, unifiedNutritionSchema);
-                return sendResponse(200, data);
-            }
-            const data = await callGemini(userPrompt || "Analyze meal image.", base64Image, mimeType || 'image/jpeg', unifiedNutritionSchema);
-            return sendResponse(200, data);
-        }
-
-        if (path === '/analyze-health-screenshot' && httpMethod === 'POST') {
-            const { base64Image, mimeType } = parseBody(event);
-            const prompt = "Extract clinical health metrics from screenshot.";
-            const data = await callGemini(prompt, base64Image, mimeType || 'image/jpeg', healthMetricsSchema);
-            const updatedStats = await db.syncHealthMetrics(userId, data);
-            return sendResponse(200, updatedStats);
-        }
-
-        // Added /grocery/identify route to support identifyGroceryItems
-        if (path === '/grocery/identify' && httpMethod === 'POST') {
-            const { base64Image, mimeType } = parseBody(event);
-            const prompt = "Identify all individual grocery items, fruits, vegetables, or packaged goods visible in this photo. Return a clean list of item names.";
-            const data = await callGemini(prompt, base64Image, mimeType || 'image/jpeg', groceryIdentifySchema);
-            return sendResponse(200, data);
-        }
-
-        // Added /generate-recipe-image route to support generateRecipeImage
+        // --- RECIPE IMAGE GENERATION ---
         if (path === '/generate-recipe-image' && httpMethod === 'POST') {
             const { description } = parseBody(event);
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            if (!description) return sendResponse(400, { error: "Description required" });
+            
+            const ai = new GoogleGenAI({ apiKey: GEMINI_KEY });
+            const model = 'gemini-2.5-flash-image';
+            const prompt = `Professional food photography, photorealistic, 4k, appetizing, high-end plating of: ${description}. Soft natural lighting, wooden table background, no text, no people.`;
+            
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash-image',
-                contents: { parts: [{ text: `Photorealistic plated dish: ${description}` }] },
+                model,
+                contents: { parts: [{ text: prompt }] },
+                config: { imageConfig: { aspectRatio: "1:1" } }
             });
-            let base64Image = '';
+            
+            let base64Image = null;
             for (const part of response.candidates[0].content.parts) {
                 if (part.inlineData) {
                     base64Image = part.inlineData.data;
                     break;
                 }
             }
+            if (!base64Image) throw new Error("Image generation failed");
             return sendResponse(200, { base64Image });
         }
 
+        // --- AI VISION ROUTES ---
+        if (path === '/analyze-image' && httpMethod === 'POST') {
+            const { base64Image, mimeType, prompt } = parseBody(event);
+            const p = prompt || "Analyze this meal. Return JSON with mealName, totalCalories, totalProtein, totalCarbs, totalFat, and ingredients array.";
+            const data = await callGemini(p, base64Image, mimeType || 'image/jpeg');
+            return sendResponse(200, data);
+        }
+
+        if (path === '/analyze-restaurant-meal' && httpMethod === 'POST') {
+             const { base64Image, mimeType } = parseBody(event);
+             const prompt = `Professional chef analysis. Identify dish name, reverse-engineer recipe (ingredients/instructions), and estimate macros. Return JSON: {mealName, totalCalories, totalProtein, totalCarbs, totalFat, recipe: {recipeName, description, ingredients: [{name, quantity}], instructions: [string], nutrition}, kitchenTools: [{name, use, essential}]}`;
+             const data = await callGemini(prompt, base64Image, mimeType || 'image/jpeg');
+             return sendResponse(200, data);
+        }
+
+        if (path === '/get-recipes-from-image' && httpMethod === 'POST') {
+            const { base64Image, mimeType } = parseBody(event);
+            const prompt = `Identify ingredients in photo. Suggest 3 healthy recipes. Return JSON Array of Recipe objects: [{recipeName, description, ingredients: [{name, quantity}], instructions: [string], nutrition}]`;
+            const data = await callGemini(prompt, base64Image, mimeType || 'image/jpeg');
+            return sendResponse(200, data);
+        }
+
+        if (path === '/analyze-health-screenshot' && httpMethod === 'POST') {
+            const { base64Image, mimeType } = parseBody(event);
+            const prompt = `Extract health metrics (steps, calories, heartRate, weightLbs, bloodPressure, etc.) from this screenshot. Return JSON only.`;
+            const data = await callGemini(prompt, base64Image, mimeType || 'image/jpeg');
+            const updatedStats = await db.syncHealthMetrics(userId, data);
+            return sendResponse(200, updatedStats);
+        }
+
+        // FIX: Added getMealSuggestions route
+        if (path === '/get-meal-suggestions' && httpMethod === 'POST') {
+            const { prompt } = parseBody(event);
+            const data = await callGemini(prompt);
+            return sendResponse(200, data);
+        }
+
+        // --- DATABASE ROUTES ---
+        // Knowledge Hub
+        if (path === '/content/pulse' && httpMethod === 'GET') return sendResponse(200, await db.getArticles(userId));
+        if (path === '/content/pulse' && httpMethod === 'POST') return sendResponse(200, await db.createArticle(userId, parseBody(event)));
+        const pulseActionMatch = path.match(/\/content\/pulse\/(\d+)\/action$/);
+        if (pulseActionMatch && httpMethod === 'POST') return sendResponse(200, await db.completeArticleAction(userId, parseInt(pulseActionMatch[1]), parseBody(event).actionType));
+
+        // Meals & History
+        if (path === '/meal-log' && httpMethod === 'GET') return sendResponse(200, await db.getMealLogEntries(userId));
+        const mealLogByIdMatch = path.match(/\/meal-log\/(\d+)$/);
+        if (mealLogByIdMatch && httpMethod === 'GET') return sendResponse(200, await db.getMealLogEntryById(parseInt(mealLogByIdMatch[1])));
+
+        if (path === '/saved-meals' && httpMethod === 'GET') return sendResponse(200, await db.getSavedMeals(userId));
+        if (path === '/saved-meals' && httpMethod === 'POST') return sendResponse(200, await db.saveMeal(userId, parseBody(event)));
+        
+        const mealMatch = path.match(/\/saved-meals\/(\d+)$/);
+        if (mealMatch && httpMethod === 'DELETE') { await db.deleteMeal(userId, parseInt(mealMatch[1])); return sendResponse(200, { success: true }); }
+        if (mealMatch && httpMethod === 'GET') return sendResponse(200, await db.getSavedMealById(parseInt(mealMatch[1])));
+
+        // Meal Plans
         if (path === '/meal-plans' && httpMethod === 'GET') return sendResponse(200, await db.getMealPlans(userId));
         if (path === '/meal-plans' && httpMethod === 'POST') return sendResponse(200, await db.createMealPlan(userId, parseBody(event).name));
+        
         const planItemMatch = path.match(/\/meal-plans\/(\d+)\/items$/);
         if (planItemMatch && httpMethod === 'POST') return sendResponse(200, await db.addMealToPlanItem(userId, parseInt(planItemMatch[1]), parseBody(event).savedMealId, parseBody(event).metadata));
+        
         const deleteItemMatch = path.match(/\/meal-plans\/items\/(\d+)$/);
         if (deleteItemMatch && httpMethod === 'DELETE') { await db.removeMealFromPlanItem(userId, parseInt(deleteItemMatch[1])); return sendResponse(200, { success: true }); }
 
+        // Grocery
         if (path === '/grocery/lists' && httpMethod === 'GET') return sendResponse(200, await db.getGroceryLists(userId));
         if (path === '/grocery/lists' && httpMethod === 'POST') return sendResponse(200, await db.createGroceryList(userId, parseBody(event).name));
-        const groceryItemsMatch = path.match(/\/grocery\/lists\/(\d+)\/items$/);
-        if (groceryItemsMatch && httpMethod === 'GET') return sendResponse(200, await db.getGroceryListItems(userId, parseInt(groceryItemsMatch[1])));
-        if (groceryItemsMatch && httpMethod === 'POST') return sendResponse(200, await db.addGroceryItem(userId, parseInt(groceryItemsMatch[1]), parseBody(event).name));
+        const groceryListIdMatch = path.match(/\/grocery\/lists\/(\d+)$/);
+        if (groceryListIdMatch && httpMethod === 'DELETE') { await db.deleteGroceryList(userId, parseInt(groceryListIdMatch[1])); return sendResponse(200, { success: true }); }
+        const listItemsMatch = path.match(/\/grocery\/lists\/(\d+)\/items$/);
+        if (listItemsMatch && httpMethod === 'GET') return sendResponse(200, await db.getGroceryListItems(userId, parseInt(listItemsMatch[1])));
+        if (listItemsMatch && httpMethod === 'POST') return sendResponse(200, await db.addGroceryItem(userId, parseInt(listItemsMatch[1]), parseBody(event).name));
         const listImportMatch = path.match(/\/grocery\/lists\/(\d+)\/import$/);
         if (listImportMatch && httpMethod === 'POST') return sendResponse(200, await db.generateGroceryList(userId, parseInt(listImportMatch[1]), parseBody(event).planIds));
         const listClearMatch = path.match(/\/grocery\/lists\/(\d+)\/clear$/);
         if (listClearMatch && httpMethod === 'POST') { await db.clearGroceryList(userId, parseInt(listClearMatch[1]), parseBody(event).type); return sendResponse(200, { success: true }); }
-        const itemMatch = path.match(/\/grocery\/items\/(\d+)$/);
-        if (itemMatch && httpMethod === 'PATCH') return sendResponse(200, await db.updateGroceryListItem(userId, parseInt(itemMatch[1]), parseBody(event).checked));
-        if (itemMatch && httpMethod === 'DELETE') { await db.removeGroceryItem(userId, parseInt(itemMatch[1])); return sendResponse(200, { success: true }); }
+        const groceryItemMatch = path.match(/\/grocery\/items\/(\d+)$/);
+        if (groceryItemMatch && httpMethod === 'PATCH') return sendResponse(200, await db.updateGroceryListItem(userId, parseInt(groceryItemMatch[1]), parseBody(event).checked));
+        if (groceryItemMatch && httpMethod === 'DELETE') { await db.removeGroceryItem(userId, parseInt(groceryItemMatch[1])); return sendResponse(200, { success: true }); }
 
+        // Rewards & Health
         if (path === '/rewards' && httpMethod === 'GET') return sendResponse(200, await db.getRewardsSummary(userId));
         if (path === '/health-metrics' && httpMethod === 'GET') return sendResponse(200, await db.getHealthMetrics(userId));
         if (path === '/sync-health' && httpMethod === 'POST') return sendResponse(200, await db.syncHealthMetrics(userId, parseBody(event)));
         if (path === '/body/dashboard-prefs' && httpMethod === 'GET') return sendResponse(200, await db.getDashboardPrefs(userId));
         if (path === '/body/dashboard-prefs' && httpMethod === 'POST') { await db.saveDashboardPrefs(userId, parseBody(event)); return sendResponse(200, { success: true }); }
-        
+        if (path === '/account/intake' && httpMethod === 'POST') { await db.saveIntakeResponses(userId, parseBody(event)); return sendResponse(200, { success: true }); }
         if (path === '/account/medical-intake' && httpMethod === 'GET') return sendResponse(200, await db.getMedicalIntake(userId));
         if (path === '/account/medical-intake' && httpMethod === 'POST') {
             const { step, answerKey, answerValue, isReset } = parseBody(event);
             return sendResponse(200, await db.updateMedicalIntake(userId, step, answerKey, answerValue, isReset));
         }
 
-        // Added /account/intake route to support saveIntakeData
-        if (path === '/account/intake' && httpMethod === 'POST') {
-            const data = parseBody(event);
-            await db.saveUserIntake(userId, data);
+        // Body Photos
+        if (path === '/body/photos' && httpMethod === 'GET') return sendResponse(200, await db.getBodyPhotos(userId));
+        if (path === '/body/photos' && httpMethod === 'POST') {
+            const { imageBase64, category } = parseBody(event);
+            await db.uploadBodyPhoto(userId, imageBase64, category);
             return sendResponse(200, { success: true });
         }
+        const bodyPhotoByIdMatch = path.match(/\/body\/photos\/(\d+)$/);
+        if (bodyPhotoByIdMatch && httpMethod === 'GET') return sendResponse(200, await db.getBodyPhotoById(parseInt(bodyPhotoByIdMatch[1])));
 
-        if (path === '/social/friends' && httpMethod === 'GET') return sendResponse(200, await db.getFriends(userId));
+        // Form Checks
+        if (path === '/body/form-checks' && httpMethod === 'POST') {
+            await db.saveFormCheck(userId, parseBody(event));
+            return sendResponse(200, { success: true });
+        }
+        const formChecksExMatch = path.match(/\/body\/form-checks\/([a-zA-Z]+)$/);
+        if (formChecksExMatch && httpMethod === 'GET') return sendResponse(200, await db.getFormChecks(userId, formChecksExMatch[1]));
+        const formCheckIdMatch = path.match(/\/body\/form-checks\/id\/(\d+)$/);
+        if (formCheckIdMatch && httpMethod === 'GET') return sendResponse(200, await db.getFormCheckById(parseInt(formCheckIdMatch[1])));
+
+        // Pantry & Restaurant Logs
+        if (path === '/pantry/log' && httpMethod === 'GET') return sendResponse(200, await db.getPantryLog(userId));
+        if (path === '/pantry/log' && httpMethod === 'POST') { await db.savePantryLogEntry(userId, parseBody(event).imageBase64); return sendResponse(200, { success: true }); }
+        const pantryLogIdMatch = path.match(/\/pantry\/log\/(\d+)$/);
+        if (pantryLogIdMatch && httpMethod === 'GET') return sendResponse(200, await db.getPantryLogEntryById(parseInt(pantryLogIdMatch[1])));
+        
+        if (path === '/restaurant/log' && httpMethod === 'GET') return sendResponse(200, await db.getRestaurantLog(userId));
+        if (path === '/restaurant/log' && httpMethod === 'POST') { await db.saveRestaurantLogEntry(userId, parseBody(event).imageBase64); return sendResponse(200, { success: true }); }
+        const restaurantLogIdMatch = path.match(/\/restaurant\/log\/(\d+)$/);
+        if (restaurantLogIdMatch && httpMethod === 'GET') return sendResponse(200, await db.getRestaurantLogEntryById(parseInt(restaurantLogIdMatch[1])));
+
+        // Social
         if (path === '/social/profile' && httpMethod === 'GET') return sendResponse(200, await db.getSocialProfile(userId));
+        if (path === '/social/profile' && httpMethod === 'POST') return sendResponse(200, await db.updateSocialProfile(userId, parseBody(event)));
+        if (path === '/social/friends' && httpMethod === 'GET') return sendResponse(200, await db.getFriends(userId));
         if (path === '/social/requests' && httpMethod === 'GET') return sendResponse(200, await db.getFriendRequests(userId));
+        if (path === '/social/requests' && httpMethod === 'POST') { await db.sendFriendRequest(userId, parseBody(event).email); return sendResponse(200, { success: true }); }
+        const socialReqIdMatch = path.match(/\/social\/requests\/(\d+)$/);
+        if (socialReqIdMatch && httpMethod === 'POST') { await db.respondToFriendRequest(userId, parseInt(socialReqIdMatch[1]), parseBody(event).status); return sendResponse(200, { success: true }); }
+        if (path === '/social/invites/bulk' && httpMethod === 'POST') return sendResponse(200, await db.processBulkInvites(userId, parseBody(event).contacts));
+        if (path === '/social/blueprint' && httpMethod === 'GET') return sendResponse(200, await db.getPartnerBlueprint());
+        if (path === '/social/blueprint' && httpMethod === 'POST') { await db.savePartnerBlueprint(userId, parseBody(event).preferences); return sendResponse(200, { success: true }); }
+        if (path === '/social/matches' && httpMethod === 'GET') return sendResponse(200, await db.getMatches());
+
+        // Coaching
+        if (path === '/coaching/relations' && httpMethod === 'GET') return sendResponse(200, await db.getCoachingRelations(userId)); // Adjusted if needed
+        if (path === '/coaching/invite' && httpMethod === 'POST') { await db.inviteClient(userId, parseBody(event).email); return sendResponse(200, { success: true }); }
+        const coachInviteMatch = path.match(/\/coaching\/invite\/(\d+)$/);
+        if (coachInviteMatch && httpMethod === 'POST') { await db.respondToCoachingInvite(userId, coachInviteMatch[1], parseBody(event).status); return sendResponse(200, { success: true }); }
+        const coachRevokeMatch = path.match(/\/coaching\/relations\/(\d+)$/);
+        if (coachRevokeMatch && httpMethod === 'DELETE') { await db.revokeCoachingAccess(userId, coachRevokeMatch[1]); return sendResponse(200, { success: true }); }
+
+        // Shopify
         if (path === '/shopify/orders' && httpMethod === 'GET') return sendResponse(200, await fetchCustomerOrders(userId));
         const shopifyProductMatch = path.match(/\/shopify\/products\/([a-zA-Z0-9-]+)$/);
         if (shopifyProductMatch && httpMethod === 'GET') return sendResponse(200, await getProductByHandle(shopifyProductMatch[1]));
 
         return sendResponse(404, { error: 'Route not found' });
+
     } catch (err) {
         console.error('Handler error:', err);
         return sendResponse(500, { error: err.message });
