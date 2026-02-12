@@ -326,3 +326,61 @@ export const getShopifyCustomerId = async (userId) => {
         return res.rows[0]?.shopify_customer_id;
     } finally { client.release(); }
 };
+
+// --- BODY & FORM ---
+
+/**
+ * Fetch all body photos for a user.
+ * FIX: Added missing function getBodyPhotos as requested by errors in index.mjs
+ */
+export const getBodyPhotos = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, category, (image_base64 IS NOT NULL) as has_image, created_at as "createdAt" FROM body_photos WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
+        return res.rows.map(r => ({ id: r.id, category: r.category, hasImage: r.has_image, createdAt: r.createdAt }));
+    } finally { client.release(); }
+};
+
+/**
+ * Upload a new body photo.
+ * FIX: Added missing function uploadBodyPhoto as requested by errors in index.mjs
+ */
+export const uploadBodyPhoto = async (userId, imageBase64, category) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`INSERT INTO body_photos (user_id, image_base64, category) VALUES ($1, $2, $3)`, [userId, imageBase64, category]);
+    } finally { client.release(); }
+};
+
+/**
+ * Fetch a specific body photo by ID.
+ * FIX: Added missing function getBodyPhotoById as requested by errors in index.mjs
+ */
+export const getBodyPhotoById = async (userId, id) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, image_base64, category, created_at as "createdAt" FROM body_photos WHERE id = $1 AND user_id = $2`, [id, userId]);
+        if (!res.rows[0]) return null;
+        const row = res.rows[0];
+        return { id: row.id, imageUrl: row.image_base64 ? `data:image/jpeg;base64,${row.image_base64}` : null, category: row.category, createdAt: row.createdAt };
+    } finally { client.release(); }
+};
+
+/**
+ * Fetch all form checks for a user, optionally filtered by exercise.
+ * FIX: Added missing function getFormChecks as requested by errors in index.mjs
+ */
+export const getFormChecks = async (userId, exercise = null) => {
+    const client = await pool.connect();
+    try {
+        let query = `SELECT id, exercise, ai_score, ai_feedback, (image_base64 IS NOT NULL) as has_image, created_at FROM form_checks WHERE user_id = $1`;
+        const params = [userId];
+        if (exercise) {
+            query += ` AND exercise = $2`;
+            params.push(exercise);
+        }
+        query += ` ORDER BY created_at DESC`;
+        const res = await client.query(query, params);
+        return res.rows.map(r => ({ id: r.id, exercise: r.exercise, ai_score: r.ai_score, ai_feedback: r.ai_feedback, hasImage: r.has_image, created_at: r.created_at }));
+    } finally { client.release(); }
+};

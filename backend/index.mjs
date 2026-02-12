@@ -33,7 +33,7 @@ const parseBody = (event) => {
     try { return event.body ? JSON.parse(event.body) : {}; } catch (e) { return {}; }
 };
 
-// --- AI SCHEMA (Ensures 3-Tab Intelligence) ---
+// --- AI SCHEMAS ---
 const unifiedNutritionSchema = {
     type: Type.OBJECT,
     properties: {
@@ -73,6 +73,33 @@ const unifiedNutritionSchema = {
     required: ["mealName", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "ingredients", "recipe", "kitchenTools"]
 };
 
+const healthOcrSchema = {
+    type: Type.OBJECT,
+    properties: {
+        steps: { type: Type.NUMBER },
+        activeCalories: { type: Type.NUMBER },
+        restingCalories: { type: Type.NUMBER },
+        distanceMiles: { type: Type.NUMBER },
+        flightsClimbed: { type: Type.NUMBER },
+        heartRate: { type: Type.NUMBER },
+        weightLbs: { type: Type.NUMBER },
+        bloodPressureSystolic: { type: Type.NUMBER },
+        bloodPressureDiastolic: { type: Type.NUMBER },
+        sleepMinutes: { type: Type.NUMBER },
+        glucoseMgDl: { type: Type.NUMBER }
+    }
+};
+
+const formAnalysisSchema = {
+    type: Type.OBJECT,
+    properties: {
+        isCorrect: { type: Type.BOOLEAN },
+        feedback: { type: Type.STRING },
+        score: { type: Type.NUMBER }
+    },
+    required: ["isCorrect", "feedback", "score"]
+};
+
 // --- AI HELPER ---
 const callGemini = async (prompt, imageBase64, mimeType = 'image/jpeg', schema = null) => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -110,6 +137,24 @@ export const handler = async (event) => {
         }
 
         const userId = getUserFromEvent(event);
+
+        // --- DASHBOARD PREFS ---
+        if (path === '/body/dashboard-prefs' && httpMethod === 'GET') {
+            return sendResponse(200, await db.getDashboardPrefs(userId));
+        }
+        if (path === '/body/dashboard-prefs' && httpMethod === 'POST') {
+            const prefs = parseBody(event);
+            await db.saveDashboardPrefs(userId, prefs);
+            return sendResponse(200, { success: true });
+        }
+
+        // --- VISION SYNC (HEALTH OCR) ---
+        if (path === '/analyze-health-screenshot' && httpMethod === 'POST') {
+            const { base64Image } = parseBody(event);
+            const prompt = "Extract health metrics from this wearable app screenshot. Look for steps, active/resting calories, heart rate, BP, and weight. Return JSON.";
+            const data = await callGemini(prompt, base64Image, 'image/jpeg', healthOcrSchema);
+            return sendResponse(200, data);
+        }
 
         // --- FITBIT FLOW ---
         if (path === '/auth/fitbit/status' && httpMethod === 'GET') {
@@ -156,7 +201,28 @@ export const handler = async (event) => {
         if (path === '/social/friends' && httpMethod === 'GET') return sendResponse(200, await db.getFriends(userId));
         if (path === '/social/profile' && httpMethod === 'GET') return sendResponse(200, await db.getSocialProfile(userId));
 
-        // MEALS (List/Detail Split)
+        // --- BODY HUB ---
+        if (path === '/body/photos' && httpMethod === 'GET') return sendResponse(200, await db.getBodyPhotos(userId));
+        if (path === '/body/photos' && httpMethod === 'POST') {
+            const { base64Image, category } = parseBody(event);
+            await db.uploadBodyPhoto(userId, base64Image, category);
+            return sendResponse(200, { success: true });
+        }
+        if (path.startsWith('/body/photos/') && httpMethod === 'GET') {
+            // FIX: Added userId parameter to getBodyPhotoById call to match updated signature in databaseService.mjs
+            return sendResponse(200, await db.getBodyPhotoById(userId, parseInt(path.split('/').pop())));
+        }
+        if (path === '/body/analyze-form' && httpMethod === 'POST') {
+            const { base64Image, exercise } = parseBody(event);
+            const prompt = `Analyze this user's exercise form for a ${exercise}. Provide score and feedback.`;
+            const data = await callGemini(prompt, base64Image, 'image/jpeg', formAnalysisSchema);
+            return sendResponse(200, data);
+        }
+        if (path === '/body/form-checks' && httpMethod === 'GET') {
+            return sendResponse(200, await db.getFormChecks(userId, event.queryStringParameters?.exercise));
+        }
+
+        // --- NUTRITION ---
         if (path === '/saved-meals' && httpMethod === 'GET') return sendResponse(200, await db.getSavedMeals(userId));
         if (path === '/saved-meals' && httpMethod === 'POST') return sendResponse(200, await db.saveMeal(userId, parseBody(event)));
         if (path.startsWith('/saved-meals/') && httpMethod === 'GET') return sendResponse(200, await db.getSavedMealById(userId, parseInt(path.split('/').pop())));
@@ -164,11 +230,10 @@ export const handler = async (event) => {
         if (path === '/meal-log' && httpMethod === 'GET') return sendResponse(200, await db.getMealLogEntries(userId));
         if (path.startsWith('/meal-log/') && httpMethod === 'GET') return sendResponse(200, await db.getMealLogEntryById(userId, parseInt(path.split('/').pop())));
 
-        // PLANS & GROCERY
         if (path === '/meal-plans' && httpMethod === 'GET') return sendResponse(200, await db.getMealPlans(userId));
         if (path === '/grocery/lists' && httpMethod === 'GET') return sendResponse(200, await db.getGroceryLists(userId));
 
-        // VISION
+        // --- VISION ---
         if (path === '/analyze-image' && httpMethod === 'POST') {
             const { base64Image, mimeType, prompt } = parseBody(event);
             const data = await callGemini(prompt || "Vision analysis for meal macros, recipes, and tools.", base64Image, mimeType, unifiedNutritionSchema);
@@ -176,7 +241,16 @@ export const handler = async (event) => {
             return sendResponse(200, data);
         }
 
-        // HEALTH
+        // --- TELEMED & SHOPIFY ---
+        if (path === '/shopify/orders' && httpMethod === 'GET') {
+            return sendResponse(200, await shopify.fetchCustomerOrders(userId));
+        }
+        if (path.startsWith('/shopify/products/') && httpMethod === 'GET') {
+            const handle = path.split('/').pop();
+            return sendResponse(200, await shopify.getProductByHandle(handle));
+        }
+
+        // --- HEALTH ---
         if (path === '/health-metrics' && httpMethod === 'GET') return sendResponse(200, await db.getHealthMetrics(userId));
         if (path === '/sync-health' && httpMethod === 'POST') return sendResponse(200, await db.syncHealthMetrics(userId, parseBody(event)));
 
