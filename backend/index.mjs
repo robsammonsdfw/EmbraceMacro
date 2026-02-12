@@ -190,7 +190,6 @@ export const handler = async (event) => {
             const creds = await db.getFitbitCredentials(userId);
             if (!creds?.fitbit_access_token) return sendResponse(401, { error: "Fitbit not connected" });
             
-            // Parallel fetch for activities and heart rate
             const [actRes, hrRes] = await Promise.all([
                 fetch('https://api.fitbit.com/1/user/-/activities/today.json', { headers: { 'Authorization': `Bearer ${creds.fitbit_access_token}` } }),
                 fetch('https://api.fitbit.com/1/user/-/activities/heart/date/today/1d.json', { headers: { 'Authorization': `Bearer ${creds.fitbit_access_token}` } })
@@ -247,8 +246,11 @@ export const handler = async (event) => {
             return sendResponse(200, data);
         }
 
-        // --- HEALTH ---
-        if (path === '/health-metrics' && httpMethod === 'GET') return sendResponse(200, await db.getHealthMetrics(userId));
+        // --- HEALTH (WITH DATE CONTEXT) ---
+        if (path === '/health-metrics' && httpMethod === 'GET') {
+            const clientDate = event.queryStringParameters?.date || new Date().toISOString().split('T')[0];
+            return sendResponse(200, await db.getHealthMetrics(userId, clientDate));
+        }
         if (path === '/sync-health' && httpMethod === 'POST') return sendResponse(200, await db.syncHealthMetrics(userId, parseBody(event)));
 
         return sendResponse(404, { error: 'Route not found: ' + path });

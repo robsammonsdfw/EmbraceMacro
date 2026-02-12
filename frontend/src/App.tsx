@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { Login } from './components/Login';
 import { Loader } from './components/Loader';
@@ -13,6 +13,7 @@ import { CaptureFlow } from './components/CaptureFlow';
 const App: React.FC = () => {
   const { isAuthenticated, isLoading, user, logout } = useAuth();
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const lastCheckedDate = useRef<string>(new Date().toISOString().split('T')[0]);
   
   // Global Data State
   const [healthStats, setHealthStats] = useState<HealthStats>({ 
@@ -47,6 +48,18 @@ const App: React.FC = () => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // Day Boundary Check: Automatically reset/refresh data if user stays in app past midnight
+  useEffect(() => {
+      const interval = setInterval(() => {
+          const today = new Date().toISOString().split('T')[0];
+          if (today !== lastCheckedDate.current) {
+              lastCheckedDate.current = today;
+              loadAllData(); // This will trigger the backend reset logic
+          }
+      }, 60000); // Check every minute
+      return () => clearInterval(interval);
+  }, [isAuthenticated]);
 
   const loadAllData = async () => {
       if (!isAuthenticated) return;

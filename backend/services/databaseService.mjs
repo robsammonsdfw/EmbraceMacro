@@ -84,51 +84,14 @@ export const getRewardsSummary = async (userId) => {
     } finally { client.release(); }
 };
 
-// --- MEALS ---
+// --- HEALTH (SMART MIDNIGHT RESET) ---
 
-export const createMealLogEntry = async (userId, mealData, imageBase64) => {
-    const client = await pool.connect();
-    try {
-        const res = await client.query(`INSERT INTO meal_log_entries (user_id, meal_data, image_base64) VALUES ($1, $2, $3) RETURNING id, meal_data, created_at`, [userId, mealData, imageBase64]);
-        await awardPoints(userId, 'meal_photo.logged', 50, { meal_log_id: res.rows[0].id });
-        return { ...res.rows[0].meal_data, id: res.rows[0].id, createdAt: res.rows[0].created_at, hasImage: !!imageBase64 };
-    } finally { client.release(); }
-};
-
-export const getMealLogEntries = async (userId) => {
-    const client = await pool.connect();
-    try {
-        const res = await client.query(`SELECT id, meal_data, (image_base64 IS NOT NULL) as has_image, created_at FROM meal_log_entries WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
-        return res.rows.map(r => ({ ...processMealDataForList(r.meal_data, r.has_image), id: r.id, createdAt: r.created_at }));
-    } finally { client.release(); }
-};
-
-export const getSavedMeals = async (userId) => {
-    const client = await pool.connect();
-    try {
-        const res = await client.query(`SELECT id, meal_data, (image_base64 IS NOT NULL) as has_image FROM saved_meals WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
-        return res.rows.map(r => ({ ...processMealDataForList(r.meal_data, r.has_image), id: r.id }));
-    } finally { client.release(); }
-};
-
-export const saveMeal = async (userId, mealData) => {
-    const client = await pool.connect();
-    try {
-        let imageBase64 = null;
-        const cleanData = { ...mealData };
-        if (cleanData.imageUrl?.startsWith('data:image')) {
-            imageBase64 = cleanData.imageUrl.split(',')[1];
-            delete cleanData.imageUrl;
-        }
-        const res = await client.query(`INSERT INTO saved_meals (user_id, meal_data, image_base64) VALUES ($1, $2, $3) RETURNING id`, [userId, cleanData, imageBase64]);
-        await awardPoints(userId, 'meal.saved', 10);
-        return { ...cleanData, id: res.rows[0].id, hasImage: !!imageBase64 };
-    } finally { client.release(); }
-};
-
-// --- HEALTH (FIXED & EXPANDED) ---
-
-export const getHealthMetrics = async (userId) => {
+/**
+ * Fetch health metrics with timezone-aware midnight reset for daily counters.
+ * @param {string} userId
+ * @param {string} clientDate - The ISO date string (YYYY-MM-DD) from the user's local timezone.
+ */
+export const getHealthMetrics = async (userId, clientDate) => {
     const client = await pool.connect();
     try {
         const res = await client.query(`
@@ -144,25 +107,56 @@ export const getHealthMetrics = async (userId) => {
                 blood_pressure_systolic as "bloodPressureSystolic",
                 blood_pressure_diastolic as "bloodPressureDiastolic",
                 glucose_mgdl as "glucoseMgDl",
+                active_zone_minutes as "activeZoneMinutes",
+                distance_miles as "distanceMiles",
+                flights_climbed as "flightsClimbed",
                 last_synced as "lastSynced" 
             FROM health_metrics WHERE user_id = $1
         `, [userId]);
-        return res.rows[0] || { steps: 0, activeCalories: 0 };
+
+        const row = res.rows[0];
+        if (!row) return { steps: 0, activeCalories: 0 };
+
+        // Check if last_synced happened on a previous day relative to user's local time
+        const syncDate = row.lastSynced ? new Date(row.lastSynced).toISOString().split('T')[0] : null;
+        const isStaleDay = syncDate !== clientDate;
+
+        if (isStaleDay) {
+            // Reset DAILY COUNTERS to 0 if it's a new day
+            // But KEEP persistent vitals (Weight, HR, BP, Glucose)
+            return {
+                ...row,
+                steps: 0,
+                activeCalories: 0,
+                restingCalories: 0,
+                activeZoneMinutes: 0,
+                distanceMiles: 0,
+                flightsClimbed: 0,
+                // Do not reset vitals
+                heartRate: row.heartRate,
+                weightLbs: row.weightLbs,
+                bloodPressureSystolic: row.bloodPressureSystolic,
+                bloodPressureDiastolic: row.bloodPressureDiastolic,
+                glucoseMgDl: row.glucoseMgDl,
+                lastSynced: row.lastSynced // Keep original for reference until new sync
+            };
+        }
+
+        return row;
     } finally { client.release(); }
 };
 
 export const syncHealthMetrics = async (userId, stats) => {
     const client = await pool.connect();
     try {
-        // Overwrite dummy data by using standard assignment in DO UPDATE instead of GREATEST.
-        // This ensures Fitbit (truth) always wins.
         const res = await client.query(`
             INSERT INTO health_metrics (
                 user_id, steps, active_calories, resting_calories, heart_rate, 
                 resting_heart_rate, weight_lbs, sleep_minutes, sleep_score,
-                blood_pressure_systolic, blood_pressure_diastolic, glucose_mgdl, last_synced
+                blood_pressure_systolic, blood_pressure_diastolic, glucose_mgdl, 
+                active_zone_minutes, distance_miles, flights_climbed, last_synced
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, CURRENT_TIMESTAMP)
             ON CONFLICT (user_id) DO UPDATE SET 
                 steps = COALESCE(EXCLUDED.steps, health_metrics.steps), 
                 active_calories = COALESCE(EXCLUDED.active_calories, health_metrics.active_calories),
@@ -175,6 +169,9 @@ export const syncHealthMetrics = async (userId, stats) => {
                 blood_pressure_systolic = COALESCE(EXCLUDED.blood_pressure_systolic, health_metrics.blood_pressure_systolic),
                 blood_pressure_diastolic = COALESCE(EXCLUDED.blood_pressure_diastolic, health_metrics.blood_pressure_diastolic),
                 glucose_mgdl = COALESCE(EXCLUDED.glucose_mgdl, health_metrics.glucose_mgdl),
+                active_zone_minutes = COALESCE(EXCLUDED.active_zone_minutes, health_metrics.active_zone_minutes),
+                distance_miles = COALESCE(EXCLUDED.distance_miles, health_metrics.distance_miles),
+                flights_climbed = COALESCE(EXCLUDED.flights_climbed, health_metrics.flights_climbed),
                 last_synced = CURRENT_TIMESTAMP
             RETURNING 
                 steps, active_calories as "activeCalories", resting_calories as "restingCalories",
@@ -182,7 +179,8 @@ export const syncHealthMetrics = async (userId, stats) => {
                 weight_lbs as "weightLbs", sleep_minutes as "sleepMinutes", 
                 sleep_score as "sleepScore", blood_pressure_systolic as "bloodPressureSystolic",
                 blood_pressure_diastolic as "bloodPressureDiastolic", glucose_mgdl as "glucoseMgDl",
-                last_synced as "lastSynced"
+                active_zone_minutes as "activeZoneMinutes", distance_miles as "distanceMiles",
+                flights_climbed as "flightsClimbed", last_synced as "lastSynced"
         `, [
             userId, 
             stats.steps, 
@@ -195,11 +193,16 @@ export const syncHealthMetrics = async (userId, stats) => {
             stats.sleepScore,
             stats.bloodPressureSystolic,
             stats.bloodPressureDiastolic,
-            stats.glucoseMgDl
+            stats.glucoseMgDl,
+            stats.activeZoneMinutes,
+            stats.distanceMiles,
+            stats.flightsClimbed
         ]);
         return res.rows[0];
     } finally { client.release(); }
 };
+
+// --- REMAINING DB METHODS ---
 
 export const getDashboardPrefs = async (userId) => {
     const client = await pool.connect();
@@ -213,8 +216,6 @@ export const saveDashboardPrefs = async (userId, prefs) => {
     const client = await pool.connect();
     try { await client.query(`UPDATE users SET dashboard_prefs = $1 WHERE id = $2`, [prefs, userId]); } finally { client.release(); }
 };
-
-// --- BODY & FORM ---
 
 export const getBodyPhotos = async (userId) => {
     const client = await pool.connect();
@@ -256,11 +257,6 @@ export const getFormChecks = async (userId, exercise = null) => {
     } finally { client.release(); }
 };
 
-// --- SOCIAL ---
-
-/**
- * FIX: Added getFriends export for backend/index.mjs
- */
 export const getFriends = async (userId) => {
     const client = await pool.connect();
     try {
@@ -274,9 +270,6 @@ export const getFriends = async (userId) => {
     } finally { client.release(); }
 };
 
-/**
- * FIX: Added getSocialProfile export for backend/index.mjs
- */
 export const getSocialProfile = async (userId) => {
     const client = await pool.connect();
     try {
@@ -285,15 +278,50 @@ export const getSocialProfile = async (userId) => {
     } finally { client.release(); }
 };
 
-// --- SHOPIFY INTEGRATION ---
-
-/**
- * FIX: Added getShopifyCustomerId export for backend/services/shopifyService.mjs
- */
 export const getShopifyCustomerId = async (userId) => {
     const client = await pool.connect();
     try {
         const res = await client.query(`SELECT shopify_customer_id FROM users WHERE id = $1`, [userId]);
         return res.rows[0]?.shopify_customer_id;
+    } finally { client.release(); }
+};
+
+export const getMealLogEntries = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, meal_data, (image_base64 IS NOT NULL) as has_image, created_at FROM meal_log_entries WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
+        return res.rows.map(r => ({ ...processMealDataForList(r.meal_data, r.has_image), id: r.id, createdAt: r.created_at }));
+    } finally { client.release(); }
+};
+
+export const getSavedMeals = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, meal_data, (image_base64 IS NOT NULL) as has_image FROM saved_meals WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
+        return res.rows.map(r => ({ ...processMealDataForList(r.meal_data, r.has_image), id: r.id }));
+    } finally { client.release(); }
+};
+
+export const saveMeal = async (userId, mealData) => {
+    const client = await pool.connect();
+    try {
+        let imageBase64 = null;
+        const cleanData = { ...mealData };
+        if (cleanData.imageUrl?.startsWith('data:image')) {
+            imageBase64 = cleanData.imageUrl.split(',')[1];
+            delete cleanData.imageUrl;
+        }
+        const res = await client.query(`INSERT INTO saved_meals (user_id, meal_data, image_base64) VALUES ($1, $2, $3) RETURNING id`, [userId, cleanData, imageBase64]);
+        await awardPoints(userId, 'meal.saved', 10);
+        return { ...cleanData, id: res.rows[0].id, hasImage: !!imageBase64 };
+    } finally { client.release(); }
+};
+
+export const createMealLogEntry = async (userId, mealData, imageBase64) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`INSERT INTO meal_log_entries (user_id, meal_data, image_base64) VALUES ($1, $2, $3) RETURNING id, meal_data, created_at`, [userId, mealData, imageBase64]);
+        await awardPoints(userId, 'meal_photo.logged', 50, { meal_log_id: res.rows[0].id });
+        return { ...res.rows[0].meal_data, id: res.rows[0].id, createdAt: res.rows[0].created_at, hasImage: !!imageBase64 };
     } finally { client.release(); }
 };
