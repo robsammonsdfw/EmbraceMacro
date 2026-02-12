@@ -11,7 +11,6 @@ import {
 const API_BASE_URL = 'https://xmpbc16u1f.execute-api.us-west-1.amazonaws.com/default';
 const AUTH_TOKEN_KEY = 'embracehealth-api-token';
 
-// Added JudgeResult export to fix CookOffModal.tsx import error
 export interface JudgeResult {
     score: number;
     feedback: string;
@@ -112,13 +111,11 @@ export const analyzeHealthScreenshot = async (base64Image: string): Promise<Part
     return callApi('/analyze-health-screenshot', 'POST', { base64Image: compressed });
 };
 
-// Added identifyGroceryItems to fix GroceryList.tsx error
 export const identifyGroceryItems = async (base64Image: string, mimeType: string): Promise<{ items: string[] }> => {
     const compressed = await compressImage(base64Image, mimeType);
     return callApi('/grocery/identify', 'POST', { base64Image: compressed, mimeType });
 };
 
-// Added generateMissingMetadata to fix AnalysisResultModal.tsx error
 export const generateMissingMetadata = async (mealName: string): Promise<Partial<NutritionInfo>> => {
     return callApi('/analyze-image', 'POST', { mealName });
 };
@@ -154,7 +151,6 @@ export const saveDashboardPrefs = (prefs: UserDashboardPrefs): Promise<void> => 
 export const calculateReadiness = (data: RecoveryData): Promise<ReadinessScore> => callApi('/body/readiness', 'POST', data);
 export const logRecoveryStats = (data: RecoveryData): Promise<void> => callApi('/body/recovery', 'POST', data);
 
-// Added saveIntakeData to fix JourneyView.tsx error
 export const saveIntakeData = (data: any): Promise<void> => callApi('/account/intake', 'POST', data);
 
 // --- SOCIAL ---
@@ -183,7 +179,6 @@ export const searchFood = async (query: string): Promise<NutritionInfo> => callA
 export const getMealSuggestions = async (conditions: string[], cuisine: string, duration: string): Promise<NutritionInfo[]> => callApi('/get-meal-suggestions', 'POST', { conditions, cuisine, duration });
 export const getRestaurantActivity = (uri: string): Promise<RestaurantActivity[]> => callApi(`/social/restaurant/activity`, 'POST', { uri });
 
-// Updated judgeRecipeAttempt to use the JudgeResult interface
 export const judgeRecipeAttempt = async (base64Image: string, context: string, recipeId: number): Promise<JudgeResult> => {
     return callApi('/analyze-image', 'POST', { base64Image, prompt: `Judge attempt for ${context}.`, recipeId });
 };

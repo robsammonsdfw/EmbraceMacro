@@ -21,7 +21,7 @@ export const connectHealthProvider = async (platform: PlatformType): Promise<boo
     
     if (platform === 'ios') {
         console.log("Checking Apple Health Bridge...");
-        // Placeholder for real Native Bridge call
+        // Native Bridge call would go here
     }
     
     return true; 
@@ -32,6 +32,6 @@ export const syncHealthData = async (source: 'apple' | 'fitbit' = 'apple'): Prom
         return await apiService.syncWithFitbit();
     }
     
-    console.warn(`Direct ${source} sync is pending API credential configuration. Please use Vision Sync.`);
+    console.warn(`Direct ${source} sync is pending native implementation. Please use Vision Sync.`);
     return {};
 };

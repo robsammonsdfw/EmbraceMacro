@@ -24,8 +24,9 @@ export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete, lastSync
             setIsProcessingCode(true);
             apiService.linkFitbitAccount(code).then(() => {
                 setFitbitStatus('connected');
-                // Clean URL
+                // Clean URL to prevent re-linking on refresh
                 window.history.replaceState({}, document.title, window.location.pathname);
+                alert("Fitbit account linked successfully!");
             }).catch(e => {
                 console.error("Link failed", e);
                 setFitbitStatus('idle');

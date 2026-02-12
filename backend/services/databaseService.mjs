@@ -53,7 +53,6 @@ const sendInviteEmail = async (toEmail, token, inviterName) => {
         console.log(`Email sent to ${toEmail}`);
     } catch (error) {
         console.error(`Failed to send email to ${toEmail}:`, error);
-        // We do not throw here to prevent one bad email from failing a bulk batch
     }
 };
 
@@ -86,17 +85,12 @@ const processMealDataForClient = (mealData) => {
     return dataForClient;
 };
 
-// NEW: Helper to strip image data for list views to prevent payload limits
+// Helper to strip image data for list views to prevent payload limits
 const processMealDataForList = (mealData, externalHasImage = false) => {
     const dataForList = { ...mealData };
-    
-    // Determine if image exists (either passed in via SQL or inside the JSON)
     const hasImage = externalHasImage || !!dataForList.imageBase64 || !!dataForList.imageUrl;
-    
-    // STRIP HEAVY DATA
     delete dataForList.imageBase64;
     delete dataForList.imageUrl;
-    
     dataForList.hasImage = hasImage;
     return dataForList;
 };
@@ -121,17 +115,14 @@ export const findOrCreateUserByEmail = async (email, inviteCode = null) => {
         
         const user = res.rows[0];
 
-        // Ensure ALL application tables exist
         await ensureTables(client);
         
-        // Ensure rewards balance entry exists for this user
         await client.query(`
             INSERT INTO rewards_balances (user_id, points_total, points_available, tier)
             VALUES ($1, 0, 0, 'Bronze')
             ON CONFLICT (user_id) DO NOTHING;
         `, [user.id]);
 
-        // Process Invite Code if provided (Referral Fulfillment)
         if (inviteCode) {
             await processReferral(client, user.id, inviteCode);
         }
@@ -148,17 +139,14 @@ export const findOrCreateUserByEmail = async (email, inviteCode = null) => {
 
 const processReferral = async (client, newUserId, code) => {
     try {
-        // Find invitation
         const invRes = await client.query(`SELECT id, inviter_id, status FROM invitations WHERE token = $1`, [code]);
-        if (invRes.rows.length === 0) return; // Invalid code
+        if (invRes.rows.length === 0) return; 
         
         const invite = invRes.rows[0];
-        if (invite.status === 'joined') return; // Already used
+        if (invite.status === 'joined') return; 
 
-        // 1. Mark joined
         await client.query(`UPDATE invitations SET status = 'joined' WHERE id = $1`, [invite.id]);
 
-        // 2. Award Inviter 450 pts
         await client.query(`
             INSERT INTO rewards_ledger (user_id, event_type, points_delta, metadata)
             VALUES ($1, 'referral.join', 450, $2)
@@ -170,8 +158,6 @@ const processReferral = async (client, newUserId, code) => {
             WHERE user_id = $1
         `, [invite.inviter_id]);
 
-        // 3. Create bidirectional friendship
-        // Status 'accepted' because it was an invite
         const friendshipQ = `
             INSERT INTO friendships (requester_id, receiver_id, status)
             VALUES ($1, $2, 'accepted'), ($2, $1, 'accepted')
@@ -226,10 +212,6 @@ const ensureTables = async (client) => {
             status VARCHAR(50) DEFAULT 'pending',
             created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         );
-    `);
-
-    // Ensure Friendships Table (Restored)
-    await client.query(`
         CREATE TABLE IF NOT EXISTS friendships (
             id SERIAL PRIMARY KEY,
             requester_id VARCHAR(255) NOT NULL,
@@ -240,20 +222,25 @@ const ensureTables = async (client) => {
         );
     `);
 
-    // User Column Migrations (Restored)
+    // User Column Migrations
     try {
         await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_mode VARCHAR(50) DEFAULT 'private'`);
         await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT`);
         await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR(255)`);
         await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name VARCHAR(255)`);
+        
+        // Fitbit Credentials
+        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS fitbit_access_token TEXT`);
+        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS fitbit_refresh_token TEXT`);
+        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS fitbit_token_expires TIMESTAMPTZ`);
+        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS fitbit_user_id VARCHAR(255)`);
     } catch (e) { console.warn("User column migration skipped", e.message); }
 
-    // Migration: Add list_id to items if it doesn't exist
     try {
         await client.query(`ALTER TABLE grocery_list_items ADD COLUMN IF NOT EXISTS list_id INT;`);
     } catch (e) { console.warn("Skipping migration for grocery_list_items", e.message); }
 
-    // Logs (Pantry, Restaurant, Body, Form)
+    // Logs
     await client.query(`
         CREATE TABLE IF NOT EXISTS pantry_logs (
             id SERIAL PRIMARY KEY,
@@ -285,7 +272,7 @@ const ensureTables = async (client) => {
         );
     `);
 
-    // Pulse / Articles (Knowledge Hub)
+    // Articles
     await client.query(`
         CREATE TABLE IF NOT EXISTS articles (
             id SERIAL PRIMARY KEY,
@@ -302,72 +289,12 @@ const ensureTables = async (client) => {
         );
     `);
 
-    // Migration for Articles Table: Add new columns if they don't exist
     try {
         await client.query(`ALTER TABLE articles ADD COLUMN IF NOT EXISTS author_id INT`);
         await client.query(`ALTER TABLE articles ADD COLUMN IF NOT EXISTS is_squad_exclusive BOOLEAN DEFAULT FALSE`);
     } catch (e) { console.warn("Article column migration skipped", e.message); }
 
-    // Seed Data Check for Articles
-    const artCount = await client.query('SELECT COUNT(*) FROM articles');
-    if (parseInt(artCount.rows[0].count) === 0) {
-        const seedArticles = [
-            {
-                title: "Good Morning Squats: What They Are & How to Fix Them",
-                summary: "Stop turning your squats into back exercises. Learn why the 'good morning squat' happens and how to fix your form for heavier, safer lifts.",
-                content: `The "good morning squat" is a common error where your hips rise faster than your chest coming out of the hole, turning the movement into a hybrid squat-good morning. \n\n Why it happens: Often attributed to a weak lower back, it's usually actually due to weak quads. When your quads can't extend the knee against the load, your body shifts the weight to the posterior chain (hamstrings and glutes) to finish the lift. \n\n How to fix it: \n1. Strengthen your quads with front squats and leg presses. \n2. Focus on the cue "chest up" or "drive your back into the bar" as you ascend. \n3. Reduce the weight until your form is perfect.`,
-                image_url: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=800&q=80",
-                author_name: "Michael Matthews",
-                author_avatar: "bg-slate-900",
-                embedded_actions: { type: 'OPEN_FORM_CHECK', exercise: 'Squat', label: 'Analyze Squat Form' }
-            },
-            {
-                title: "The Best Inner Thigh Workout for Stronger, Tighter Legs",
-                summary: "Tone and strengthen your adductors with these scientifically backed exercises. It's not just about the adductor machine.",
-                content: `Many people neglect their inner thighs (adductors), leading to muscle imbalances and potential injury. Strong adductors contribute to squat stability and overall leg power. \n\n Top Exercises: \n1. **Sumo Deadlift**: The wide stance heavily recruits the adductors. \n2. **Lateral Lunges**: Moves you through the frontal plane, stretching and strengthening the inner thigh. \n3. **Copenhagen Plank**: An advanced isometric hold that isolates the adductor muscles. \n\n Incorporate these into your leg day for complete development.`,
-                image_url: "https://images.unsplash.com/photo-1434608519344-49d77a699ded?auto=format&fit=crop&w=800&q=80",
-                author_name: "Legion Athletics",
-                author_avatar: "bg-blue-600",
-                embedded_actions: { type: 'OPEN_FORM_CHECK', exercise: 'Squat', label: 'Check Leg Day Form' }
-            },
-            {
-                title: "Cycle Syncing Workouts & Diet: What Science Really Says",
-                summary: "Should you change your diet and training based on your menstrual cycle? We dive into the research to separate hype from reality.",
-                content: `Cycle syncing involves adjusting your exercise and nutrition to match the phases of your menstrual cycle (follicular, ovulatory, luteal, menstrual). \n\n **The Theory:** Hormonal fluctuations affect energy, strength, and metabolism. For example, some claim you should lift heavy during the follicular phase and stick to yoga during the menstrual phase. \n\n **The Science:** Research is mixed. While body temperature and metabolic rate do rise slightly in the luteal phase (burning ~100-300 more calories), strength performance remains largely stable for most women. \n\n **The Takeaway:** Listen to your body. If you feel weaker or tired during your period, auto-regulate your weights down. But you don't need to overhaul your entire program based on the calendar.`,
-                image_url: "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=800&q=80",
-                author_name: "Legion Team",
-                author_avatar: "bg-pink-500",
-                embedded_actions: null
-            },
-            {
-                title: "Army Body Fat Calculator: One-Site Tape Test",
-                summary: "The Navy Seal formula vs the new One-Site Tape Test. How accurate are they, and how can you measure yourself at home?",
-                content: `Measuring body fat accurately is notoriously difficult. The gold standard (DXA scans) is expensive. The US Army recently updated their tape test method to a simpler "One-Site" test involving a waist measurement relative to body weight (and height). \n\n **How to Measure:** \n1. Stand straight, relaxed. \n2. Measure the circumference of your waist at the belly button. \n\n While convenient, tape tests can have a margin of error of 3-5%. For tracking progress, consistency is key—measure at the same time, under the same conditions, every week.`,
-                image_url: "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?auto=format&fit=crop&w=800&q=80",
-                author_name: "Data Team",
-                author_avatar: "bg-emerald-600",
-                embedded_actions: null
-            },
-            {
-                title: "Ozempic Has Ended the Weight Loss Debate",
-                summary: "GLP-1 agonists have changed the landscape of obesity treatment. What does this mean for the future of fitness and natural weight loss?",
-                content: `Ozempic (Semaglutide) and other GLP-1 agonists work by mimicking a hormone that signals fullness to the brain and slows gastric emptying. The results are undeniable: significant weight loss in a majority of patients. \n\n **The Debate:** Does this make diet and exercise obsolete? \n\n **The Reality:** Absolutely not. Rapid weight loss often results in significant muscle loss (sarcopenia) if not paired with: \n1. **High Protein Diet**: To spare lean tissue. \n2. **Resistance Training**: To signal muscle retention. \n\n Without these lifestyle pillars, patients risk becoming "skinny fat" with a lowered metabolic rate.`,
-                image_url: "https://images.unsplash.com/photo-1628771065518-0d82f1938462?auto=format&fit=crop&w=800&q=80",
-                author_name: "Dr. Spencer Nadolsky",
-                author_avatar: "bg-indigo-500",
-                embedded_actions: { type: 'OPEN_LINK', url: 'https://embracehealth.ai/collections/weight-loss', label: 'Shop GLP-1 Program' }
-            }
-        ];
-
-        for (const art of seedArticles) {
-            await client.query(
-                `INSERT INTO articles (title, summary, content, image_url, author_name, author_avatar, embedded_actions) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                [art.title, art.summary, art.content, art.image_url, art.author_name, art.author_avatar, art.embedded_actions]
-            );
-        }
-    }
-
-    // Health Metrics - Expanded Schema
+    // Health Metrics
     await client.query(`
         CREATE TABLE IF NOT EXISTS health_metrics (
             user_id VARCHAR(255) PRIMARY KEY,
@@ -389,7 +316,6 @@ const ensureTables = async (client) => {
         );
     `);
     
-    // Attempt to add missing columns if table already exists (Migration Logic)
     const addColumnSafe = async (col, type) => {
         try {
             await client.query(`ALTER TABLE health_metrics ADD COLUMN IF NOT EXISTS ${col} ${type};`);
@@ -406,6 +332,34 @@ const ensureTables = async (client) => {
     await addColumnSafe('vo2_max', 'FLOAT DEFAULT 0');
 };
 
+export const updateFitbitCredentials = async (userId, data) => {
+    const client = await pool.connect();
+    try {
+        const query = `
+            UPDATE users 
+            SET fitbit_access_token = $1, 
+                fitbit_refresh_token = $2, 
+                fitbit_token_expires = $3,
+                fitbit_user_id = $4
+            WHERE id = $5
+        `;
+        const expiresAt = new Date(Date.now() + data.expires_in * 1000);
+        await client.query(query, [data.access_token, data.refresh_token, expiresAt, data.user_id, userId]);
+    } finally {
+        client.release();
+    }
+};
+
+export const getFitbitCredentials = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT fitbit_access_token, fitbit_refresh_token, fitbit_token_expires, fitbit_user_id FROM users WHERE id = $1`, [userId]);
+        return res.rows[0];
+    } finally {
+        client.release();
+    }
+};
+
 export const getShopifyCustomerId = async (userId) => {
     const client = await pool.connect();
     try {
@@ -419,13 +373,10 @@ export const getShopifyCustomerId = async (userId) => {
     }
 };
 
-// --- Pulse / Articles Accessor ---
-// UPDATED: Now supports Squad Locking and Author Details
 export const getArticles = async (userId) => {
     const client = await pool.connect();
     try {
         await ensureTables(client);
-        
         const query = `
             SELECT 
                 a.*,
@@ -434,7 +385,7 @@ export const getArticles = async (userId) => {
                 u.id as author_user_id,
                 CASE 
                     WHEN f.id IS NOT NULL THEN true 
-                    WHEN a.author_id = $1 THEN true -- User is the author
+                    WHEN a.author_id = $1 THEN true 
                     ELSE false 
                 END as is_squad_member,
                 CASE 
@@ -452,113 +403,69 @@ export const getArticles = async (userId) => {
                 AND f.status = 'accepted'
             ORDER BY a.created_at DESC
         `;
-
         const res = await client.query(query, [userId]);
-        
-        return res.rows.map(row => {
-            const content = row.is_locked 
-                ? row.content.substring(0, 150) + "..." 
-                : row.content;
-
-            return {
-                id: row.id,
-                title: row.title,
-                summary: row.summary,
-                content: content,
-                image_url: row.image_url,
-                author_name: row.author_first_name ? `${row.author_first_name} ${row.author_last_name || ''}`.trim() : row.author_name,
-                author_avatar: row.author_avatar,
-                author_id: row.author_user_id, 
-                embedded_actions: row.embedded_actions,
-                is_locked: row.is_locked,
-                is_squad_exclusive: row.is_squad_exclusive,
-                created_at: row.created_at
-            };
-        });
-    } catch (e) {
-        console.error("Error fetching articles:", e);
-        return [];
+        return res.rows.map(row => ({
+            id: row.id,
+            title: row.title,
+            summary: row.summary,
+            content: row.is_locked ? row.content.substring(0, 150) + "..." : row.content,
+            image_url: row.image_url,
+            author_name: row.author_first_name ? `${row.author_first_name} ${row.author_last_name || ''}`.trim() : row.author_name,
+            author_avatar: row.author_avatar,
+            author_id: row.author_user_id, 
+            embedded_actions: row.embedded_actions,
+            is_locked: row.is_locked,
+            is_squad_exclusive: row.is_squad_exclusive,
+            created_at: row.created_at
+        }));
     } finally {
         client.release();
     }
 };
 
-// NEW: Create Article for Creators
 export const createArticle = async (userId, articleData) => {
     const client = await pool.connect();
     try {
         await ensureTables(client);
         const { title, summary, content, image_url, embedded_actions, is_squad_exclusive } = articleData;
-        
-        // Fetch user details for author name
         const userRes = await client.query('SELECT first_name, last_name FROM users WHERE id = $1', [userId]);
         const authorName = userRes.rows[0] ? `${userRes.rows[0].first_name} ${userRes.rows[0].last_name || ''}`.trim() : 'Creator';
-
         const query = `
             INSERT INTO articles (title, summary, content, image_url, author_name, author_avatar, embedded_actions, author_id, is_squad_exclusive)
             VALUES ($1, $2, $3, $4, $5, 'bg-indigo-600', $6, $7, $8)
             RETURNING id, title, created_at
         `;
-        
-        const res = await client.query(query, [
-            title, 
-            summary, 
-            content, 
-            image_url, 
-            authorName, 
-            embedded_actions || {}, 
-            userId, 
-            is_squad_exclusive || false
-        ]);
-        
+        const res = await client.query(query, [title, summary, content, image_url, authorName, embedded_actions || {}, userId, is_squad_exclusive || false]);
         return res.rows[0];
-    } catch (e) {
-        console.error("Error creating article:", e);
-        throw new Error("Failed to publish article");
     } finally {
         client.release();
     }
 };
 
-// NEW: Complete Action Endpoint Logic
 export const completeArticleAction = async (userId, articleId, actionType) => {
     const client = await pool.connect();
     try {
-        // 1. Get Article Author
         const articleRes = await client.query(`SELECT author_id FROM articles WHERE id = $1`, [articleId]);
         if (articleRes.rows.length === 0) throw new Error("Article not found");
-        
         const authorId = articleRes.rows[0].author_id;
-
-        // 2. Award Points to User (Engagement)
         await awardPoints(userId, 'user.action_completed', 50, { article_id: articleId, action: actionType });
-
-        // 3. Award Points to Creator (Attribution) - if author exists and isn't self
         if (authorId && authorId != userId) {
             await awardPoints(authorId, 'creator.action_completed', 100, { article_id: articleId, performed_by: userId });
         }
-
         return { success: true, pointsAwarded: 50 };
-    } catch (e) {
-        console.error("Error completing action:", e);
-        throw e;
     } finally {
         client.release();
     }
 };
-
-// --- Rewards Logic ---
 
 export const awardPoints = async (userId, eventType, points, metadata = {}) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-
         await client.query(`
             INSERT INTO rewards_ledger (user_id, event_type, points_delta, metadata)
             VALUES ($1, $2, $3, $4)
         `, [userId, eventType, points, metadata]);
-
         const updateRes = await client.query(`
             UPDATE rewards_balances
             SET points_total = points_total + $2,
@@ -567,17 +474,12 @@ export const awardPoints = async (userId, eventType, points, metadata = {}) => {
             WHERE user_id = $1
             RETURNING points_total
         `, [userId, points]);
-        
         const newTotal = updateRes.rows[0].points_total;
         let newTier = 'Bronze';
         if (newTotal >= 5000) newTier = 'Platinum';
         else if (newTotal >= 1000) newTier = 'Gold';
         else if (newTotal >= 200) newTier = 'Silver';
-
-        await client.query(`
-            UPDATE rewards_balances SET tier = $2 WHERE user_id = $1
-        `, [userId, newTier]);
-
+        await client.query(`UPDATE rewards_balances SET tier = $2 WHERE user_id = $1`, [userId, newTier]);
         await client.query('COMMIT');
     } catch (err) {
         await client.query('ROLLBACK');
@@ -590,35 +492,14 @@ export const awardPoints = async (userId, eventType, points, metadata = {}) => {
 export const getRewardsSummary = async (userId) => {
     const client = await pool.connect();
     try {
-        const balanceRes = await client.query(`
-            SELECT points_total, points_available, tier 
-            FROM rewards_balances WHERE user_id = $1
-        `, [userId]);
-        
-        const historyRes = await client.query(`
-            SELECT entry_id, event_type, points_delta, created_at, metadata
-            FROM rewards_ledger
-            WHERE user_id = $1
-            ORDER BY created_at DESC
-            LIMIT 50
-        `, [userId]);
-
+        const balanceRes = await client.query(`SELECT points_total, points_available, tier FROM rewards_balances WHERE user_id = $1`, [userId]);
+        const historyRes = await client.query(`SELECT entry_id, event_type, points_delta, created_at, metadata FROM rewards_ledger WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`, [userId]);
         const balance = balanceRes.rows[0] || { points_total: 0, points_available: 0, tier: 'Bronze' };
-
-        return {
-            ...balance,
-            history: historyRes.rows
-        };
-    } catch (err) {
-        console.error('Error getting rewards summary:', err);
-        throw new Error('Could not retrieve rewards.');
+        return { ...balance, history: historyRes.rows };
     } finally {
         client.release();
     }
 };
-
-
-// --- Meal Log (History) Persistence ---
 
 export const createMealLogEntry = async (userId, mealData, imageBase64) => {
     const client = await pool.connect();
@@ -630,11 +511,8 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
         `;
         const res = await client.query(query, [userId, mealData, imageBase64]);
         const row = res.rows[0];
-        
         await awardPoints(userId, 'meal_photo.logged', 50, { meal_log_id: row.id });
-
         const mealDataFromDb = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
-        // Return full object on creation so UI updates immediately
         return { 
             id: row.id,
             ...mealDataFromDb,
@@ -642,19 +520,14 @@ export const createMealLogEntry = async (userId, mealData, imageBase64) => {
             hasImage: true,
             createdAt: row.created_at
         };
-    } catch (err) {
-        console.error('Database error in createMealLogEntry:', err);
-        throw new Error('Could not save meal to history.');
     } finally {
         client.release();
     }
 };
 
-
 export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
     try {
-        // OPTIMIZATION: Do NOT select image_base64. Use a CASE statement to determine existence.
         const query = `
             SELECT id, meal_data, (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image, created_at 
             FROM meal_log_entries
@@ -664,15 +537,8 @@ export const getMealLogEntries = async (userId) => {
         const res = await client.query(query, [userId]);
         return res.rows.map(row => {
             const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
-            return {
-                id: row.id,
-                ...processMealDataForList(mealData, row.has_image),
-                createdAt: row.created_at,
-            };
+            return { id: row.id, ...processMealDataForList(mealData, row.has_image), createdAt: row.created_at };
         });
-    } catch (err) {
-        console.error('Database error in getMealLogEntries:', err);
-        throw new Error('Could not retrieve meal history.');
     } finally {
         client.release();
     }
@@ -685,36 +551,21 @@ export const getMealLogEntryById = async (id) => {
         if (res.rows.length === 0) return null;
         const row = res.rows[0];
         const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
-        return {
-            id: row.id,
-            ...processMealDataForClient(mealData), // Keeps image
-            imageUrl: row.image_base64 ? `data:image/jpeg;base64,${row.image_base64}` : undefined,
-            createdAt: row.created_at,
-        };
+        return { id: row.id, ...processMealDataForClient(mealData), createdAt: row.created_at };
     } finally {
         client.release();
     }
 };
 
-// --- Saved Meals Persistence ---
-
 export const getSavedMeals = async (userId) => {
     const client = await pool.connect();
     try {
-        const query = `
-            SELECT id, meal_data FROM saved_meals 
-            WHERE user_id = $1 
-            ORDER BY created_at DESC;
-        `;
+        const query = `SELECT id, meal_data FROM saved_meals WHERE user_id = $1 ORDER BY created_at DESC;`;
         const res = await client.query(query, [userId]);
         return res.rows.map(row => {
             const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
-            // Strip the image from the list view
             return { id: row.id, ...processMealDataForList(mealData) };
         });
-    } catch (err) {
-        console.error('Database error in getSavedMeals:', err);
-        throw new Error('Could not retrieve saved meals.');
     } finally {
         client.release();
     }
@@ -727,7 +578,6 @@ export const getSavedMealById = async (id) => {
         if (res.rows.length === 0) return null;
         const row = res.rows[0];
         const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
-        // Full data for details view
         return { id: row.id, ...processMealDataForClient(mealData) };
     } finally {
         client.release();
@@ -745,15 +595,9 @@ export const saveMeal = async (userId, mealData) => {
         `;
         const res = await client.query(query, [userId, mealDataForDb]);
         const row = res.rows[0];
-        
         await awardPoints(userId, 'meal.saved', 10, { saved_meal_id: row.id });
-        
         const mealDataFromDb = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
-
         return { id: row.id, ...processMealDataForClient(mealDataFromDb) };
-    } catch (err) {
-        console.error('Database error in saveMeal:', err);
-        throw new Error('Could not save meal.');
     } finally {
         client.release();
     }
@@ -763,25 +607,16 @@ export const deleteMeal = async (userId, mealId) => {
     const client = await pool.connect();
     try {
         await client.query(`DELETE FROM saved_meals WHERE id = $1 AND user_id = $2;`, [mealId, userId]);
-    } catch (err) {
-        console.error('Database error in deleteMeal:', err);
-        throw new Error('Could not delete meal.');
     } finally {
         client.release();
     }
 };
 
-// --- Meal Plans Persistence ---
-
 export const getMealPlans = async (userId) => {
     const client = await pool.connect();
     try {
         const query = `
-            SELECT 
-                p.id as plan_id, p.name as plan_name,
-                i.id as item_id,
-                sm.id as meal_id, sm.meal_data,
-                i.metadata
+            SELECT p.id as plan_id, p.name as plan_name, i.id as item_id, sm.id as meal_id, sm.meal_data, i.metadata
             FROM meal_plans p
             LEFT JOIN meal_plan_items i ON p.id = i.meal_plan_id
             LEFT JOIN saved_meals sm ON i.saved_meal_id = sm.id
@@ -789,32 +624,17 @@ export const getMealPlans = async (userId) => {
             ORDER BY p.name, i.created_at;
         `;
         const res = await client.query(query, [userId]);
-        
         const plans = new Map();
         res.rows.forEach(row => {
             if (!plans.has(row.plan_id)) {
-                plans.set(row.plan_id, {
-                    id: row.plan_id,
-                    name: row.plan_name,
-                    items: [],
-                });
+                plans.set(row.plan_id, { id: row.plan_id, name: row.plan_name, items: [] });
             }
             if (row.item_id) {
                 const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
-                plans.get(row.plan_id).items.push({
-                    id: row.item_id,
-                    meal: {
-                        id: row.meal_id,
-                        ...processMealDataForList(mealData) // Strip image from plans too
-                    },
-                    metadata: row.metadata || {}
-                });
+                plans.get(row.plan_id).items.push({ id: row.item_id, meal: { id: row.meal_id, ...processMealDataForList(mealData) }, metadata: row.metadata || {} });
             }
         });
         return Array.from(plans.values());
-    } catch (err) {
-        console.error('Database error in getMealPlans:', err);
-        throw new Error('Could not retrieve meal plans.');
     } finally {
         client.release();
     }
@@ -827,224 +647,8 @@ export const createMealPlan = async (userId, name) => {
         const res = await client.query(query, [userId, name]);
         return { ...res.rows[0], items: [] };
     } catch(err) {
-        if (err.code === '23505') {
-            throw new Error(`A meal plan with the name "${name}" already exists.`);
-        }
-        console.error('Database error in createMealPlan:', err);
-        throw new Error('Could not create meal plan.');
-    } finally {
-        client.release();
-    }
-};
-
-export const deleteMealPlan = async (userId, planId) => {
-    const client = await pool.connect();
-    try {
-        await client.query(`DELETE FROM meal_plans WHERE id = $1 AND user_id = $2;`, [planId, userId]);
-    } catch(err) {
-        console.error('Database error in deleteMealPlan:', err);
-        throw new Error('Could not delete meal plan.');
-    } finally {
-        client.release();
-    }
-};
-
-
-export const addMealToPlanItem = async (userId, planId, savedMealId, metadata = {}) => {
-    const client = await pool.connect();
-    try {
-        const checkQuery = `
-           SELECT (SELECT user_id FROM meal_plans WHERE id = $1) = $3 AS owns_plan,
-                  (SELECT user_id FROM saved_meals WHERE id = $2) = $3 AS owns_meal;
-        `;
-        const checkRes = await client.query(checkQuery, [planId, savedMealId, userId]);
-        if (!checkRes.rows[0] || !checkRes.rows[0].owns_plan || !checkRes.rows[0].owns_meal) {
-            throw new Error("Authorization error.");
-        }
-
-        const insertQuery = `
-            INSERT INTO meal_plan_items (user_id, meal_plan_id, saved_meal_id, metadata)
-            VALUES ($1, $2, $3, $4)
-            RETURNING id;
-        `;
-        const insertRes = await client.query(insertQuery, [userId, planId, savedMealId, metadata]);
-        const newItemId = insertRes.rows[0].id;
-
-        const selectQuery = `
-            SELECT 
-                i.id,
-                m.id as meal_id,
-                m.meal_data,
-                i.metadata
-            FROM meal_plan_items i
-            JOIN saved_meals m ON i.saved_meal_id = m.id
-            WHERE i.id = $1;
-        `;
-        const selectRes = await client.query(selectQuery, [newItemId]);
-        const row = selectRes.rows[0];
-        const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
-        return {
-            id: row.id,
-            meal: { id: row.meal_id, ...processMealDataForList(mealData) }, // Strip image
-            metadata: row.metadata
-        };
-
-    } catch (err) {
-        console.error('Database error in addMealToPlanItem:', err);
-        throw new Error('Could not add meal to plan.');
-    } finally {
-        client.release();
-    }
-};
-
-
-export const addMealAndLinkToPlan = async (userId, mealData, planId) => {
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-        const newMeal = await saveMeal(userId, mealData);
-        const newPlanItem = await addMealToPlanItem(userId, planId, newMeal.id);
-        await client.query('COMMIT');
-        return newPlanItem;
-    } catch (err) {
-        await client.query('ROLLBACK');
-        console.error('Database transaction error in addMealAndLinkToPlan:', err);
-        throw new Error('Could not add meal.');
-    } finally {
-        client.release();
-    }
-};
-
-export const removeMealFromPlanItem = async (userId, planItemId) => {
-    const client = await pool.connect();
-    try {
-        await client.query(`DELETE FROM meal_plan_items WHERE id = $1 AND user_id = $2;`, [planItemId, userId]);
-    } catch (err) {
-        console.error('Database error in removeMealFromPlanItem:', err);
-        throw new Error('Could not remove meal from plan.');
-    } finally {
-        client.release();
-    }
-};
-
-
-// --- Grocery List Persistence ---
-
-export const getGroceryLists = async (userId) => {
-    const client = await pool.connect();
-    try {
-        await ensureTables(client);
-        
-        // If no lists exist, create a default one
-        const check = await client.query('SELECT id FROM grocery_lists WHERE user_id = $1 LIMIT 1', [userId]);
-        if (check.rows.length === 0) {
-            await client.query(`INSERT INTO grocery_lists (user_id, name, is_active) VALUES ($1, 'Main List', TRUE)`, [userId]);
-        }
-
-        const query = `
-            SELECT id, name, is_active, created_at 
-            FROM grocery_lists 
-            WHERE user_id = $1 
-            ORDER BY created_at DESC;
-        `;
-        const res = await client.query(query, [userId]);
-        return res.rows;
-    } catch (err) {
-        console.error('Database error in getGroceryLists:', err);
-        throw new Error('Could not retrieve grocery lists.');
-    } finally {
-        client.release();
-    }
-};
-
-export const getGroceryListItems = async (userId, listId) => {
-    const client = await pool.connect();
-    try {
-        const query = `
-            SELECT id, name, checked FROM grocery_list_items 
-            WHERE user_id = $1 AND list_id = $2
-            ORDER BY name ASC;
-        `;
-        const res = await client.query(query, [userId, listId]);
-        return res.rows;
-    } catch (err) {
-        console.error('Database error in getGroceryListItems:', err);
-        throw new Error('Could not retrieve grocery items.');
-    } finally {
-        client.release();
-    }
-};
-
-// Legacy fallback
-export const getGroceryList = async (userId) => {
-    // Falls back to the first active list if no ID provided
-    const lists = await getGroceryLists(userId);
-    if (lists.length > 0) return getGroceryListItems(userId, lists[0].id);
-    return [];
-};
-
-export const createGroceryList = async (userId, name) => {
-    const client = await pool.connect();
-    try {
-        // Set others to inactive first
-        await client.query(`UPDATE grocery_lists SET is_active = FALSE WHERE user_id = $1`, [userId]);
-        
-        const query = `
-            INSERT INTO grocery_lists (user_id, name, is_active)
-            VALUES ($1, $2, TRUE)
-            RETURNING id, name, is_active;
-        `;
-        const res = await client.query(query, [userId, name]);
-        return res.rows[0];
-    } catch (err) {
-        console.error('Database error in createGroceryList:', err);
-        throw new Error('Could not create grocery list.');
-    } finally {
-        client.release();
-    }
-};
-
-export const deleteGroceryList = async (userId, listId) => {
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-        await client.query(`DELETE FROM grocery_list_items WHERE list_id = $1 AND user_id = $2`, [listId, userId]);
-        await client.query(`DELETE FROM grocery_lists WHERE id = $1 AND user_id = $2`, [listId, userId]);
-        await client.query('COMMIT');
-    } catch (err) {
-        await client.query('ROLLBACK');
-        console.error('Database error in deleteGroceryList:', err);
-        throw new Error('Could not delete grocery list.');
-    } finally {
-        client.release();
-    }
-};
-
-export const addGroceryItem = async (userId, listId, name) => {
-    const client = await pool.connect();
-    try {
-        const query = `
-            INSERT INTO grocery_list_items (user_id, list_id, name, checked)
-            VALUES ($1, $2, $3, FALSE)
-            RETURNING id, name, checked;
-        `;
-        const res = await client.query(query, [userId, listId, name]);
-        return res.rows[0];
-    } catch (err) {
-        console.error('Database error in addGroceryItem:', err);
-        throw new Error('Could not add grocery item.');
-    } finally {
-        client.release();
-    }
-};
-
-export const removeGroceryItem = async (userId, itemId) => {
-    const client = await pool.connect();
-    try {
-        await client.query(`DELETE FROM grocery_list_items WHERE id = $1 AND user_id = $2;`, [itemId, userId]);
-    } catch (err) {
-        console.error('Database error in removeGroceryItem:', err);
-        throw new Error('Could not delete grocery item.');
+        if (err.code === '23505') throw new Error(`A meal plan with the name "${name}" already exists.`);
+        throw err;
     } finally {
         client.release();
     }
@@ -1052,9 +656,7 @@ export const removeGroceryItem = async (userId, itemId) => {
 
 export const generateGroceryList = async (userId, listId, planIds = []) => {
     const client = await pool.connect();
-    if (planIds.length === 0) {
-        return getGroceryListItems(userId, listId);
-    }
+    if (planIds.length === 0) return [];
     
     try {
         await client.query('BEGIN');
@@ -1065,38 +667,101 @@ export const generateGroceryList = async (userId, listId, planIds = []) => {
             WHERE mpi.user_id = $1 AND mpi.meal_plan_id = ANY($2::int[]);
         `;
         const mealRes = await client.query(mealQuery, [userId, planIds]);
-        
-        // Extract ingredients
-        const allIngredients = mealRes.rows.flatMap(row => {
-            const data = row.meal_data;
-            if (data && Array.isArray(data.ingredients)) return data.ingredients;
-            if (data && data.recipe && Array.isArray(data.recipe.ingredients)) return data.recipe.ingredients;
-            return [];
-        });
-        
+        const allIngredients = mealRes.rows.flatMap(row => row.meal_data?.ingredients || []);
         const uniqueIngredientNames = [...new Set(allIngredients.map(ing => ing.name))].sort();
         
-        if (uniqueIngredientNames.length > 0) {
-             for (const name of uniqueIngredientNames) {
-                 // Check dupe in list
-                 const check = await client.query(
-                     `SELECT id FROM grocery_list_items WHERE user_id = $1 AND list_id = $2 AND name = $3`,
-                     [userId, listId, name]
-                 );
-                 if (check.rows.length === 0) {
-                     await client.query(
-                         `INSERT INTO grocery_list_items (user_id, list_id, name) VALUES ($1, $2, $3)`, 
-                         [userId, listId, name]
-                     );
-                 }
-             }
+        const results = [];
+        for (const name of uniqueIngredientNames) {
+            const insertQuery = `INSERT INTO grocery_list_items (user_id, list_id, name, checked) VALUES ($1, $2, $3, FALSE) RETURNING id, name, checked;`;
+            const res = await client.query(insertQuery, [userId, listId, name]);
+            results.push(res.rows[0]);
         }
+        
         await client.query('COMMIT');
-        return getGroceryListItems(userId, listId);
+        return results;
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error('Database transaction error in generateGroceryList:', err);
-        throw new Error('Could not generate grocery list.');
+        throw err;
+    } finally {
+        client.release();
+    }
+};
+
+export const addMealToPlanItem = async (userId, planId, savedMealId, metadata = {}) => {
+    const client = await pool.connect();
+    try {
+        const insertQuery = `INSERT INTO meal_plan_items (user_id, meal_plan_id, saved_meal_id, metadata) VALUES ($1, $2, $3, $4) RETURNING id;`;
+        const insertRes = await client.query(insertQuery, [userId, planId, savedMealId, metadata]);
+        const newItemId = insertRes.rows[0].id;
+        const selectQuery = `SELECT i.id, m.id as meal_id, m.meal_data, i.metadata FROM meal_plan_items i JOIN saved_meals m ON i.saved_meal_id = m.id WHERE i.id = $1;`;
+        const selectRes = await client.query(selectQuery, [newItemId]);
+        const row = selectRes.rows[0];
+        const mealData = row.meal_data && typeof row.meal_data === 'object' ? row.meal_data : {};
+        return { id: row.id, meal: { id: row.meal_id, ...processMealDataForList(mealData) }, metadata: row.metadata };
+    } finally {
+        client.release();
+    }
+};
+
+export const removeMealFromPlanItem = async (userId, planItemId) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`DELETE FROM meal_plan_items WHERE id = $1 AND user_id = $2;`, [planItemId, userId]);
+    } finally {
+        client.release();
+    }
+};
+
+export const getGroceryLists = async (userId) => {
+    const client = await pool.connect();
+    try {
+        await ensureTables(client);
+        const query = `SELECT id, name, is_active, created_at FROM grocery_lists WHERE user_id = $1 ORDER BY created_at DESC;`;
+        const res = await client.query(query, [userId]);
+        return res.rows;
+    } finally {
+        client.release();
+    }
+};
+
+export const getGroceryListItems = async (userId, listId) => {
+    const client = await pool.connect();
+    try {
+        const query = `SELECT id, name, checked FROM grocery_list_items WHERE user_id = $1 AND list_id = $2 ORDER BY name ASC;`;
+        const res = await client.query(query, [userId, listId]);
+        return res.rows;
+    } finally {
+        client.release();
+    }
+};
+
+export const createGroceryList = async (userId, name) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`UPDATE grocery_lists SET is_active = FALSE WHERE user_id = $1`, [userId]);
+        const query = `INSERT INTO grocery_lists (user_id, name, is_active) VALUES ($1, $2, TRUE) RETURNING id, name, is_active;`;
+        const res = await client.query(query, [userId, name]);
+        return res.rows[0];
+    } finally {
+        client.release();
+    }
+};
+
+export const addGroceryItem = async (userId, listId, name) => {
+    const client = await pool.connect();
+    try {
+        const query = `INSERT INTO grocery_list_items (user_id, list_id, name, checked) VALUES ($1, $2, $3, FALSE) RETURNING id, name, checked;`;
+        const res = await client.query(query, [userId, listId, name]);
+        return res.rows[0];
+    } finally {
+        client.release();
+    }
+};
+
+export const removeGroceryItem = async (userId, itemId) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`DELETE FROM grocery_list_items WHERE id = $1 AND user_id = $2;`, [itemId, userId]);
     } finally {
         client.release();
     }
@@ -1105,17 +770,9 @@ export const generateGroceryList = async (userId, listId, planIds = []) => {
 export const updateGroceryListItem = async (userId, itemId, checked) => {
     const client = await pool.connect();
     try {
-        const query = `
-            UPDATE grocery_list_items 
-            SET checked = $1 
-            WHERE id = $2 AND user_id = $3
-            RETURNING id, name, checked;
-        `;
+        const query = `UPDATE grocery_list_items SET checked = $1 WHERE id = $2 AND user_id = $3 RETURNING id, name, checked;`;
         const res = await client.query(query, [checked, itemId, userId]);
         return res.rows[0];
-    } catch (err) {
-        console.error('Database error in updateGroceryListItem:', err);
-        throw new Error('Could not update grocery list item.');
     } finally {
         client.release();
     }
@@ -1124,475 +781,26 @@ export const updateGroceryListItem = async (userId, itemId, checked) => {
 export const clearGroceryList = async (userId, listId, type) => {
     const client = await pool.connect();
     try {
-        let query;
-        if (type === 'checked') {
-            query = `DELETE FROM grocery_list_items WHERE user_id = $1 AND list_id = $2 AND checked = TRUE;`;
-        } else if (type === 'all') {
-            query = `DELETE FROM grocery_list_items WHERE user_id = $1 AND list_id = $2;`;
-        } else {
-            throw new Error("Invalid clear type.");
-        }
+        const query = type === 'checked' 
+            ? `DELETE FROM grocery_list_items WHERE user_id = $1 AND list_id = $2 AND checked = TRUE;`
+            : `DELETE FROM grocery_list_items WHERE user_id = $1 AND list_id = $2;`;
         await client.query(query, [userId, listId]);
-    } catch (err) {
-        console.error('Database error in clearGroceryList:', err);
-        throw new Error('Could not clear grocery list.');
     } finally {
         client.release();
     }
 };
 
-// --- Pantry & Restaurant Log Implementation ---
-
-export const getPantryLog = async (userId) => {
-    const client = await pool.connect();
-    try {
-        await ensureTables(client);
-        // Optimize: Don't send heavy image_base64 in list view
-        const query = `
-            SELECT id, created_at, (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image 
-            FROM pantry_logs 
-            WHERE user_id = $1 
-            ORDER BY created_at DESC
-        `;
-        const res = await client.query(query, [userId]);
-        return res.rows.map(r => ({
-            id: r.id,
-            created_at: r.created_at,
-            hasImage: r.has_image
-        }));
-    } catch (err) {
-        console.error("Error getting pantry log", err);
-        return [];
-    } finally { 
-        client.release(); 
-    }
-};
-
-export const getPantryLogEntryById = async (id) => {
-    const client = await pool.connect();
-    try {
-        const res = await client.query(`SELECT id, image_base64, created_at FROM pantry_logs WHERE id = $1`, [id]);
-        if (res.rows.length === 0) return null;
-        return {
-            id: res.rows[0].id,
-            imageUrl: `data:image/jpeg;base64,${res.rows[0].image_base64}`,
-            created_at: res.rows[0].created_at
-        };
-    } finally { client.release(); }
-};
-
-export const savePantryLogEntry = async (userId, imageBase64) => {
-    const client = await pool.connect();
-    try {
-        await client.query(`INSERT INTO pantry_logs (user_id, image_base64) VALUES ($1, $2)`, [userId, imageBase64]);
-        await awardPoints(userId, 'pantry.scan', 10);
-    } finally { client.release(); }
-};
-
-export const getRestaurantLog = async (userId) => {
-    const client = await pool.connect();
-    try {
-        await ensureTables(client);
-        const query = `
-            SELECT id, created_at, (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image 
-            FROM restaurant_logs 
-            WHERE user_id = $1 
-            ORDER BY created_at DESC
-        `;
-        const res = await client.query(query, [userId]);
-        return res.rows.map(r => ({
-            id: r.id,
-            created_at: r.created_at,
-            hasImage: r.has_image
-        }));
-    } catch (err) {
-        console.error("Error getting restaurant log", err);
-        return [];
-    } finally { 
-        client.release(); 
-    }
-};
-
-export const getRestaurantLogEntryById = async (id) => {
-    const client = await pool.connect();
-    try {
-        const res = await client.query(`SELECT id, image_base64, created_at FROM restaurant_logs WHERE id = $1`, [id]);
-        if (res.rows.length === 0) return null;
-        return {
-            id: res.rows[0].id,
-            imageUrl: `data:image/jpeg;base64,${res.rows[0].image_base64}`,
-            created_at: res.rows[0].created_at
-        };
-    } finally { client.release(); }
-};
-
-export const saveRestaurantLogEntry = async (userId, imageBase64) => {
-    const client = await pool.connect();
-    try {
-        await client.query(`INSERT INTO restaurant_logs (user_id, image_base64) VALUES ($1, $2)`, [userId, imageBase64]);
-        await awardPoints(userId, 'dining.scan', 15);
-    } finally { client.release(); }
-};
-
-// --- Body Photos Implementation ---
-
-export const getBodyPhotos = async (userId) => {
-    const client = await pool.connect();
-    try {
-        await ensureTables(client);
-        // CRITICAL: Strip image_base64 to comply with 6MB AWS Lambda payload limit
-        const query = `
-            SELECT id, category, created_at, (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image 
-            FROM body_photos 
-            WHERE user_id = $1 
-            ORDER BY created_at DESC
-        `;
-        const res = await client.query(query, [userId]);
-        return res.rows.map(r => ({
-            id: r.id,
-            category: r.category,
-            createdAt: r.created_at,
-            hasImage: r.has_image // Boolean flag only, no string
-        }));
-    } catch (err) {
-        console.error("Error getting body photos", err);
-        return [];
-    } finally { 
-        client.release(); 
-    }
-};
-
-export const uploadBodyPhoto = async (userId, imageBase64, category) => {
-    const client = await pool.connect();
-    try {
-        await client.query(`INSERT INTO body_photos (user_id, image_base64, category) VALUES ($1, $2, $3)`, [userId, imageBase64, category]);
-        await awardPoints(userId, 'body.photo', 25);
-    } finally { client.release(); }
-};
-
-export const getBodyPhotoById = async (id) => {
-    const client = await pool.connect();
-    try {
-        // Only return full base64 data in the detailed ID query
-        const res = await client.query(`SELECT id, image_base64, category, created_at FROM body_photos WHERE id = $1`, [id]);
-        if (res.rows.length === 0) return null;
-        return {
-            id: res.rows[0].id,
-            imageUrl: `data:image/jpeg;base64,${res.rows[0].image_base64}`,
-            category: res.rows[0].category,
-            createdAt: res.rows[0].created_at
-        };
-    } finally { client.release(); }
-};
-
-// --- Form Checks Implementation ---
-
-export const getFormChecks = async (userId, exercise) => {
-    const client = await pool.connect();
-    try {
-        await ensureTables(client);
-        // CRITICAL: Strip image_base64 to comply with 6MB AWS Lambda payload limit
-        const query = `
-            SELECT id, exercise, ai_score, ai_feedback, created_at, (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image
-            FROM form_checks
-            WHERE user_id = $1 AND exercise = $2
-            ORDER BY created_at DESC
-        `;
-        const res = await client.query(query, [userId, exercise]);
-        return res.rows.map(r => ({
-            id: r.id,
-            exercise: r.exercise,
-            ai_score: r.ai_score,
-            ai_feedback: r.ai_feedback,
-            created_at: r.created_at,
-            hasImage: r.has_image // Boolean flag only
-        }));
-    } catch (err) {
-        console.error("Error getting form checks", err);
-        return [];
-    } finally { 
-        client.release(); 
-    }
-};
-
-export const saveFormCheck = async (userId, data) => {
-    const client = await pool.connect();
-    try {
-        await client.query(
-            `INSERT INTO form_checks (user_id, exercise, image_base64, ai_score, ai_feedback) VALUES ($1, $2, $3, $4, $5)`,
-            [userId, data.exercise, data.imageBase64, data.score, data.feedback]
-        );
-        await awardPoints(userId, 'form.check', 30);
-    } finally { client.release(); }
-};
-
-export const getFormCheckById = async (id) => {
-    const client = await pool.connect();
-    try {
-        const res = await client.query(`SELECT id, image_base64, exercise, ai_score, ai_feedback, created_at FROM form_checks WHERE id = $1`, [id]);
-        if (res.rows.length === 0) return null;
-        return {
-            id: res.rows[0].id,
-            imageUrl: `data:image/jpeg;base64,${res.rows[0].image_base64}`,
-            exercise: res.rows[0].exercise,
-            ai_score: res.rows[0].ai_score,
-            ai_feedback: res.rows[0].ai_feedback,
-            created_at: res.rows[0].created_at
-        };
-    } finally { client.release(); }
-};
-
-/**
- * Friends - Bidirectional logic with correct column names (requester_id, receiver_id)
- */
-export const getFriends = async (userId) => {
-    const client = await pool.connect();
-    try {
-        const res = await client.query(`
-            SELECT u.id as "friendId", u.email, u.first_name as "firstName"
-            FROM friendships f
-            JOIN users u ON (CASE WHEN f.requester_id = $1 THEN f.receiver_id ELSE f.requester_id END) = u.id
-            WHERE (f.requester_id = $1 OR f.receiver_id = $1) AND f.status = 'accepted'
-        `, [userId]);
-        return res.rows;
-    } finally { client.release(); }
-};
-
-export const getFriendRequests = async (userId) => {
-    const client = await pool.connect();
-    try {
-        const res = await client.query(`
-            SELECT f.id, u.email
-            FROM friendships f
-            JOIN users u ON f.requester_id = u.id
-            WHERE f.receiver_id = $1 AND f.status = 'pending'
-        `, [userId]);
-        return res.rows;
-    } finally { client.release(); }
-};
-
-export const sendFriendRequest = async (userId, email) => {
-    const client = await pool.connect();
-    try {
-        const target = await client.query(`SELECT id FROM users WHERE email = $1`, [email.toLowerCase().trim()]);
-        
-        // Updated logic: if user doesn't exist, we should trigger an invite flow instead of throwing error.
-        // For simple compatibility with existing singular invite flow:
-        if (target.rows.length === 0) {
-             // Reuse bulk invite logic for consistency
-             await processBulkInvites(userId, [{ name: '', email }]);
-             return;
-        }
-        
-        await client.query(`INSERT INTO friendships (requester_id, receiver_id, status) VALUES ($1, $2, 'pending') ON CONFLICT DO NOTHING`, [userId, target.rows[0].id]);
-    } finally { client.release(); }
-};
-
-export const respondToFriendRequest = async (userId, requestId, status) => {
-    const client = await pool.connect();
-    try { await client.query(`UPDATE friendships SET status = $1 WHERE id = $2 AND receiver_id = $3`, [status, requestId, userId]); } finally { client.release(); }
-};
-
-export const getSocialProfile = async (userId) => {
-    const client = await pool.connect();
-    try {
-        const res = await client.query(`SELECT id as "userId", email, first_name as "firstName", privacy_mode as "privacyMode", bio FROM users WHERE id = $1`, [userId]);
-        return res.rows[0];
-    } finally { client.release(); }
-};
-
-export const updateSocialProfile = async (userId, updates) => {
-    const client = await pool.connect();
-    try {
-        const fields = [];
-        const values = [];
-        if (updates.privacyMode) { fields.push(`privacy_mode = $${values.length + 1}`); values.push(updates.privacyMode); }
-        if (updates.bio !== undefined) { fields.push(`bio = $${values.length + 1}`); values.push(updates.bio); }
-        if (fields.length === 0) return getSocialProfile(userId);
-        values.push(userId);
-        await client.query(`UPDATE users SET ${fields.join(', ')} WHERE id = $${values.length}`, values);
-        return getSocialProfile(userId);
-    } finally { client.release(); }
-};
-
-// --- Bulk Invite Logic ---
-
-export const processBulkInvites = async (userId, contacts) => {
-    const client = await pool.connect();
-    try {
-        await ensureTables(client); // Ensure invitation table exists
-        
-        // Get inviter details for email template
-        const inviterRes = await client.query(`SELECT first_name, email FROM users WHERE id = $1`, [userId]);
-        const inviter = inviterRes.rows[0];
-        const inviterName = inviter?.first_name || inviter?.email || 'A friend';
-        
-        let invitesSent = 0;
-        let requestsSent = 0;
-        let friendsAdded = 0;
-        let pointsAwarded = 0;
-
-        for (const contact of contacts) {
-            const email = contact.email.toLowerCase().trim();
-            if (email === '') continue;
-
-            // 1. Check if user exists
-            const userRes = await client.query(`SELECT id, privacy_mode FROM users WHERE email = $1`, [email]);
-            const existingUser = userRes.rows[0];
-
-            if (existingUser) {
-                if (existingUser.id === userId) continue; // Skip self
-
-                // Check existing friendship
-                const friendRes = await client.query(`
-                    SELECT status FROM friendships 
-                    WHERE (requester_id = $1 AND receiver_id = $2) OR (requester_id = $2 AND receiver_id = $1)
-                `, [userId, existingUser.id]);
-
-                if (friendRes.rows.length === 0) {
-                    if (existingUser.privacy_mode === 'public') {
-                        // Public: Add as friend (accepted)
-                        await client.query(`INSERT INTO friendships (requester_id, receiver_id, status) VALUES ($1, $2, 'accepted')`, [userId, existingUser.id]);
-                        friendsAdded++;
-                    } else {
-                        // Private: Send Request
-                        await client.query(`INSERT INTO friendships (requester_id, receiver_id, status) VALUES ($1, $2, 'pending')`, [userId, existingUser.id]);
-                        requestsSent++;
-                    }
-                }
-            } else {
-                // 2. New User - Send Invite
-                // Check if invite already exists
-                const inviteRes = await client.query(`SELECT id, token FROM invitations WHERE inviter_id = $1 AND email = $2`, [userId, email]);
-                
-                let token;
-                if (inviteRes.rows.length === 0) {
-                    token = crypto.randomBytes(16).toString('hex');
-                    await client.query(`
-                        INSERT INTO invitations (inviter_id, email, name, token)
-                        VALUES ($1, $2, $3, $4)
-                    `, [userId, email, contact.name, token]);
-                    
-                    invitesSent++;
-                    pointsAwarded += 50;
-                } else {
-                    token = inviteRes.rows[0].token;
-                }
-                
-                // Send Real Email via SMTP
-                await sendInviteEmail(email, token, inviterName);
-            }
-        }
-
-        if (pointsAwarded > 0) {
-            await awardPoints(userId, 'referral.invite', pointsAwarded);
-        }
-
-        return { invitesSent, requestsSent, friendsAdded, pointsAwarded };
-
-    } catch (e) {
-        console.error("Bulk Invite Error:", e);
-        throw new Error("Failed to process bulk invites.");
-    } finally {
-        client.release();
-    }
-};
-
-// --- Sleep Records ---
-
-export const saveSleepRecord = async (userId, sleepData) => {
-    const client = await pool.connect();
-    try {
-        const query = `
-            INSERT INTO sleep_records (user_id, duration_minutes, quality_score, start_time, end_time)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING id, duration_minutes, quality_score, start_time, end_time, created_at;
-        `;
-        const res = await client.query(query, [
-            userId, 
-            sleepData.durationMinutes, 
-            sleepData.qualityScore || null, 
-            sleepData.startTime, 
-            sleepData.endTime
-        ]);
-        
-        await awardPoints(userId, 'sleep.tracked', 20);
-        const row = res.rows[0];
-        return {
-            id: row.id,
-            durationMinutes: row.duration_minutes,
-            qualityScore: row.quality_score,
-            startTime: row.start_time,
-            endTime: row.end_time,
-            createdAt: row.created_at
-        };
-    } catch (err) {
-        console.error('Database error in saveSleepRecord:', err);
-        throw new Error('Could not save sleep record.');
-    } finally {
-        client.release();
-    }
-};
-
-export const getSleepRecords = async (userId) => {
-    const client = await pool.connect();
-    try {
-        const query = `
-            SELECT id, duration_minutes, quality_score, start_time, end_time, created_at 
-            FROM sleep_records 
-            WHERE user_id = $1 
-            ORDER BY created_at DESC;
-        `;
-        const res = await client.query(query, [userId]);
-        return res.rows.map(row => ({
-            id: row.id,
-            durationMinutes: row.duration_minutes,
-            qualityScore: row.quality_score,
-            startTime: row.start_time,
-            endTime: row.end_time,
-            createdAt: row.created_at
-        }));
-    } catch (err) {
-        console.error('Database error in getSleepRecords:', err);
-        throw new Error('Could not retrieve sleep records.');
-    } finally {
-        client.release();
-    }
-};
-
-/**
- * Health & Dashboard Prefs
- */
 export const getHealthMetrics = async (userId) => {
     const client = await pool.connect();
     try { 
-        // Ensure tables exist before querying
         await ensureTables(client);
-        
         const res = await client.query(`
-            SELECT 
-                steps, 
-                active_calories as "activeCalories", 
-                resting_calories as "restingCalories", 
-                distance_miles as "distanceMiles", 
-                flights_climbed as "flightsClimbed", 
-                heart_rate as "heartRate", 
-                resting_heart_rate as "restingHeartRate",
-                blood_pressure_systolic as "bloodPressureSystolic",
-                blood_pressure_diastolic as "bloodPressureDiastolic",
-                weight_lbs as "weightLbs",
-                body_fat_percentage as "bodyFatPercentage",
-                bmi as "bmi",
-                sleep_score as "sleepScore",
-                vo2_max as "vo2Max",
-                last_synced as "lastSynced"
+            SELECT steps, active_calories as "activeCalories", resting_calories as "restingCalories", distance_miles as "distanceMiles", flights_climbed as "flightsClimbed", heart_rate as "heartRate", resting_heart_rate as "restingHeartRate", blood_pressure_systolic as "bloodPressureSystolic", blood_pressure_diastolic as "bloodPressureDiastolic", weight_lbs as "weightLbs", body_fat_percentage as "bodyFatPercentage", bmi as "bmi", sleep_score as "sleepScore", vo2_max as "vo2Max", last_synced as "lastSynced"
             FROM health_metrics WHERE user_id = $1
         `, [userId]);
         return res.rows[0] || { 
-            steps: 0, activeCalories: 0, restingCalories: 0, distanceMiles: 0, 
-            flightsClimbed: 0, heartRate: 0, restingHeartRate: 0,
-            bloodPressureSystolic: 0, bloodPressureDiastolic: 0, weightLbs: 0, 
-            bodyFatPercentage: 0, bmi: 0, sleepScore: 0, vo2Max: 0
+            steps: 0, activeCalories: 0, restingCalories: 0, distanceMiles: 0, flightsClimbed: 0, heartRate: 0, restingHeartRate: 0,
+            bloodPressureSystolic: 0, bloodPressureDiastolic: 0, weightLbs: 0, bodyFatPercentage: 0, bmi: 0, sleepScore: 0, vo2Max: 0
         }; 
     } finally { client.release(); }
 };
@@ -1601,91 +809,44 @@ export const syncHealthMetrics = async (userId, stats) => {
     const client = await pool.connect();
     try {
         await ensureTables(client);
-
-        // Normalize keys (handle spaces, snake_case, etc.)
         const normalize = (key) => key.toLowerCase().replace(/[\s_]+/g, '');
         const map = {};
         Object.keys(stats).forEach(k => map[normalize(k)] = stats[k]);
-
-        // Helper to find value from map
-        const getVal = (keys) => {
-            for (const k of keys) {
-                if (map[normalize(k)] !== undefined) return map[normalize(k)];
-            }
-            return 0;
+        const getVal = (keys, fallback = 0) => {
+            for (const k of keys) { if (map[normalize(k)] !== undefined) return map[normalize(k)]; }
+            return fallback;
         };
 
-        // Parse BP String (e.g. "120/80")
-        let bpSys = getVal(['bloodPressureSystolic', 'systolic']);
-        let bpDia = getVal(['bloodPressureDiastolic', 'diastolic']);
-        const bpString = getVal(['bloodPressure', 'bp']);
+        const bpString = getVal(['bloodPressure', 'bp'], null);
+        let bpSys = getVal(['bloodPressureSystolic', 'systolic'], 0);
+        let bpDia = getVal(['bloodPressureDiastolic', 'diastolic'], 0);
         if (typeof bpString === 'string' && bpString.includes('/')) {
             const parts = bpString.split('/');
             bpSys = parseInt(parts[0]) || 0;
             bpDia = parseInt(parts[1]) || 0;
         }
 
-        const q = `INSERT INTO health_metrics (
-            user_id, steps, active_calories, resting_calories, distance_miles, flights_climbed, 
-            heart_rate, resting_heart_rate, blood_pressure_systolic, blood_pressure_diastolic,
-            weight_lbs, body_fat_percentage, bmi, sleep_score, vo2_max, last_synced
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, CURRENT_TIMESTAMP)
-        ON CONFLICT (user_id) DO UPDATE SET 
-            steps = GREATEST(health_metrics.steps, EXCLUDED.steps), 
-            active_calories = GREATEST(health_metrics.active_calories, EXCLUDED.active_calories),
-            resting_calories = GREATEST(health_metrics.resting_calories, EXCLUDED.resting_calories),
-            distance_miles = GREATEST(health_metrics.distance_miles, EXCLUDED.distance_miles),
-            flights_climbed = GREATEST(health_metrics.flights_climbed, EXCLUDED.flights_climbed),
-            heart_rate = CASE WHEN EXCLUDED.heart_rate > 0 THEN EXCLUDED.heart_rate ELSE health_metrics.heart_rate END,
-            resting_heart_rate = CASE WHEN EXCLUDED.resting_heart_rate > 0 THEN EXCLUDED.resting_heart_rate ELSE health_metrics.resting_heart_rate END,
-            blood_pressure_systolic = CASE WHEN EXCLUDED.blood_pressure_systolic > 0 THEN EXCLUDED.blood_pressure_systolic ELSE health_metrics.blood_pressure_systolic END,
-            blood_pressure_diastolic = CASE WHEN EXCLUDED.blood_pressure_diastolic > 0 THEN EXCLUDED.blood_pressure_diastolic ELSE health_metrics.blood_pressure_diastolic END,
-            weight_lbs = CASE WHEN EXCLUDED.weight_lbs > 0 THEN EXCLUDED.weight_lbs ELSE health_metrics.weight_lbs END,
-            body_fat_percentage = CASE WHEN EXCLUDED.body_fat_percentage > 0 THEN EXCLUDED.body_fat_percentage ELSE health_metrics.body_fat_percentage END,
-            bmi = CASE WHEN EXCLUDED.bmi > 0 THEN EXCLUDED.bmi ELSE health_metrics.bmi END,
-            sleep_score = CASE WHEN EXCLUDED.sleep_score > 0 THEN EXCLUDED.sleep_score ELSE health_metrics.sleep_score END,
-            vo2_max = CASE WHEN EXCLUDED.vo2_max > 0 THEN EXCLUDED.vo2_max ELSE health_metrics.vo2_max END,
-            last_synced = CURRENT_TIMESTAMP 
-        RETURNING *`;
-
-        const res = await client.query(q, [
-            userId, 
-            getVal(['steps', 'stepcount']), 
-            getVal(['activeCalories', 'activeEnergy']), 
-            getVal(['restingCalories', 'restingEnergy']), 
-            getVal(['distanceMiles', 'distance']), 
-            getVal(['flightsClimbed', 'flights']), 
-            getVal(['heartRate', 'hr', 'pulse']), 
-            getVal(['restingHeartRate', 'rhr']),
-            bpSys, 
-            bpDia,
-            getVal(['weight', 'weightLbs', 'bodyMass']),
-            getVal(['bodyFat', 'bodyFatPercentage']),
-            getVal(['bmi', 'bodyMassIndex']),
-            getVal(['sleepScore', 'sleepQuality']),
-            getVal(['vo2Max', 'cardioFitness'])
-        ]);
-        
-        // Map back to camelCase for frontend
+        const q = `INSERT INTO health_metrics (user_id, steps, active_calories, resting_calories, distance_miles, flights_climbed, heart_rate, resting_heart_rate, blood_pressure_systolic, blood_pressure_diastolic, weight_lbs, body_fat_percentage, bmi, sleep_score, vo2_max, last_synced)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, CURRENT_TIMESTAMP)
+                   ON CONFLICT (user_id) DO UPDATE SET 
+                        steps = GREATEST(health_metrics.steps, EXCLUDED.steps), 
+                        active_calories = GREATEST(health_metrics.active_calories, EXCLUDED.active_calories),
+                        resting_calories = GREATEST(health_metrics.resting_calories, EXCLUDED.resting_calories),
+                        distance_miles = GREATEST(health_metrics.distance_miles, EXCLUDED.distance_miles),
+                        flights_climbed = GREATEST(health_metrics.flights_climbed, EXCLUDED.flights_climbed),
+                        heart_rate = CASE WHEN EXCLUDED.heart_rate > 0 THEN EXCLUDED.heart_rate ELSE health_metrics.heart_rate END,
+                        resting_heart_rate = CASE WHEN EXCLUDED.resting_heart_rate > 0 THEN EXCLUDED.resting_heart_rate ELSE health_metrics.resting_heart_rate END,
+                        blood_pressure_systolic = CASE WHEN EXCLUDED.blood_pressure_systolic > 0 THEN EXCLUDED.blood_pressure_systolic ELSE health_metrics.blood_pressure_systolic END,
+                        blood_pressure_diastolic = CASE WHEN EXCLUDED.blood_pressure_diastolic > 0 THEN EXCLUDED.blood_pressure_diastolic ELSE health_metrics.blood_pressure_diastolic END,
+                        weight_lbs = CASE WHEN EXCLUDED.weight_lbs > 0 THEN EXCLUDED.weight_lbs ELSE health_metrics.weight_lbs END,
+                        body_fat_percentage = CASE WHEN EXCLUDED.body_fat_percentage > 0 THEN EXCLUDED.body_fat_percentage ELSE health_metrics.body_fat_percentage END,
+                        bmi = CASE WHEN EXCLUDED.bmi > 0 THEN EXCLUDED.bmi ELSE health_metrics.bmi END,
+                        sleep_score = CASE WHEN EXCLUDED.sleep_score > 0 THEN EXCLUDED.sleep_score ELSE health_metrics.sleep_score END,
+                        vo2_max = CASE WHEN EXCLUDED.vo2_max > 0 THEN EXCLUDED.vo2_max ELSE health_metrics.vo2_max END,
+                        last_synced = CURRENT_TIMESTAMP RETURNING *`;
+        const res = await client.query(q, [userId, getVal(['steps']), getVal(['activeCalories']), getVal(['restingCalories']), getVal(['distanceMiles']), getVal(['flightsClimbed']), getVal(['heartRate']), getVal(['restingHeartRate']), bpSys, bpDia, getVal(['weightLbs']), getVal(['bodyFatPercentage']), getVal(['bmi']), getVal(['sleepScore']), getVal(['vo2Max'])]);
         const r = res.rows[0];
-        return {
-            steps: r.steps,
-            activeCalories: r.active_calories,
-            restingCalories: r.resting_calories,
-            distanceMiles: r.distance_miles,
-            flightsClimbed: r.flights_climbed,
-            heartRate: r.heart_rate,
-            restingHeartRate: r.resting_heart_rate,
-            bloodPressureSystolic: r.blood_pressure_systolic,
-            bloodPressureDiastolic: r.blood_pressure_diastolic,
-            weightLbs: r.weight_lbs,
-            bodyFatPercentage: r.body_fat_percentage,
-            bmi: r.bmi,
-            sleepScore: r.sleep_score,
-            vo2Max: r.vo2_max,
-            lastSynced: r.last_synced
-        };
+        return { steps: r.steps, activeCalories: r.active_calories, restingCalories: r.resting_calories, distanceMiles: r.distance_miles, flightsClimbed: r.flights_climbed, heartRate: r.heart_rate, restingHeartRate: r.resting_heart_rate, bloodPressureSystolic: r.blood_pressure_systolic, bloodPressureDiastolic: r.blood_pressure_diastolic, weightLbs: r.weight_lbs, bodyFatPercentage: r.body_fat_percentage, bmi: r.bmi, sleepScore: r.sleep_score, vo2Max: r.vo2_max, lastSynced: r.last_synced };
     } finally { client.release(); }
 };
 
@@ -1702,105 +863,203 @@ export const saveDashboardPrefs = async (userId, prefs) => {
     try { await client.query(`UPDATE users SET dashboard_prefs = $1 WHERE id = $2`, [prefs, userId]); } finally { client.release(); }
 };
 
-// NEW: Intake Data Persistence
-export const saveIntakeResponses = async (userId, intakeData) => {
-    const client = await pool.connect();
-    try {
-        // Ensure column exists
-        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS intake_data JSONB DEFAULT '{}';`);
-        
-        // Merge with existing data
-        const currentRes = await client.query(`SELECT intake_data FROM users WHERE id = $1`, [userId]);
-        const currentData = currentRes.rows[0]?.intake_data || {};
-        const newData = { ...currentData, ...intakeData };
-        
-        await client.query(`UPDATE users SET intake_data = $1 WHERE id = $2`, [newData, userId]);
-    } catch (err) {
-        console.error('Database error in saveIntakeResponses:', err);
-        throw new Error('Could not save intake data.');
-    } finally {
-        client.release();
-    }
-};
-
-export const getIntakeData = async (userId) => {
-    const client = await pool.connect();
-    try {
-        const res = await client.query(`SELECT intake_data FROM users WHERE id = $1`, [userId]);
-        return res.rows[0]?.intake_data || {};
-    } finally {
-        client.release();
-    }
-};
-
-// --- EXTENSIVE MEDICAL INTAKE (NEW) ---
-
 export const getMedicalIntake = async (userId) => {
     const client = await pool.connect();
     try {
-        // Ensure columns exist (Migration logic inline)
         await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS medical_intake_data JSONB DEFAULT '{}';`);
         await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS medical_intake_step INT DEFAULT 0;`);
-
         const res = await client.query(`SELECT medical_intake_data, medical_intake_step FROM users WHERE id = $1`, [userId]);
         const row = res.rows[0] || {};
-        return {
-            step: row.medical_intake_step || 0,
-            data: row.medical_intake_data || {}
-        };
-    } finally {
-        client.release();
-    }
+        return { step: row.medical_intake_step || 0, data: row.medical_intake_data || {} };
+    } finally { client.release(); }
 };
 
 export const updateMedicalIntake = async (userId, step, answerKey, answerValue, isReset = false) => {
     const client = await pool.connect();
     try {
-        // If reset, clear everything
         if (isReset) {
             await client.query(`UPDATE users SET medical_intake_data = '{}', medical_intake_step = 0 WHERE id = $1`, [userId]);
             return { success: true };
         }
-
-        // Standard update: Merge new key/value into JSONB and update step
-        // PostgreSQL jsonb_set or || operator for merging
-        // We fetch current, merge in JS, save back to be DB-agnostic safe
         const currentRes = await client.query(`SELECT medical_intake_data FROM users WHERE id = $1`, [userId]);
         const currentData = currentRes.rows[0]?.medical_intake_data || {};
-        
-        // Merge new answer
-        if (answerKey) {
-            currentData[answerKey] = answerValue;
-        }
+        if (answerKey) currentData[answerKey] = answerValue;
+        await client.query(`UPDATE users SET medical_intake_data = $1, medical_intake_step = $2 WHERE id = $3`, [currentData, step, userId]);
+        return { success: true };
+    } finally { client.release(); }
+};
 
+export const saveUserIntake = async (userId, data) => {
+    const client = await pool.connect();
+    try {
         await client.query(`
             UPDATE users 
-            SET medical_intake_data = $1, medical_intake_step = $2 
-            WHERE id = $3
-        `, [currentData, step, userId]);
-
-        return { success: true };
+            SET medical_intake_data = medical_intake_data || $1::jsonb
+            WHERE id = $2
+        `, [JSON.stringify(data), userId]);
     } finally {
         client.release();
     }
 };
 
-
-export const logRecoveryStats = async (userId, data) => {
+export const getFriends = async (userId) => {
     const client = await pool.connect();
     try {
-        await client.query(`
-            INSERT INTO sleep_records (user_id, duration_minutes, quality_score)
-            VALUES ($1, $2, $3)
-        `, [userId, data.sleepMinutes, data.sleepQuality]);
-        await awardPoints(userId, 'recovery.logged', 20);
+        const res = await client.query(`SELECT u.id as "friendId", u.email, u.first_name as "firstName" FROM friendships f JOIN users u ON (CASE WHEN f.requester_id = $1 THEN f.receiver_id ELSE f.requester_id END) = u.id WHERE (f.requester_id = $1 OR f.receiver_id = $1) AND f.status = 'accepted'`, [userId]);
+        return res.rows;
     } finally { client.release(); }
 };
 
-export const getAssessments = async () => [
-    { id: 'daily-pulse', title: 'Daily Pulse', description: 'Quick check of your mental and physical state.', questions: [{id: 'mood', text: 'How is your mood?', type: 'scale', min: 1, max: 10}] }
-];
-export const submitAssessment = async (userId, id, resp) => { await awardPoints(userId, 'assessment.complete', 50, { assessmentId: id }); };
-export const getPartnerBlueprint = async () => ({ preferences: {} });
-export const savePartnerBlueprint = async () => {};
-export const getMatches = async () => [];
+export const getSocialProfile = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id as "userId", email, first_name as "firstName", privacy_mode as "privacyMode", bio FROM users WHERE id = $1`, [userId]);
+        return res.rows[0];
+    } finally { client.release(); }
+};
+
+export const getFriendRequests = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT f.id, u.email FROM friendships f JOIN users u ON f.requester_id = u.id WHERE f.receiver_id = $1 AND f.status = 'pending'`, [userId]);
+        return res.rows;
+    } finally { client.release(); }
+};
+
+export const getBodyPhotos = async (userId) => {
+    const client = await pool.connect();
+    try {
+        await ensureTables(client);
+        const query = `SELECT id, category, created_at, (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image FROM body_photos WHERE user_id = $1 ORDER BY created_at DESC`;
+        const res = await client.query(query, [userId]);
+        return res.rows.map(r => ({ id: r.id, category: r.category, createdAt: r.created_at, hasImage: r.has_image }));
+    } finally { client.release(); }
+};
+
+export const getBodyPhotoById = async (id) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, image_base64, category, created_at FROM body_photos WHERE id = $1`, [id]);
+        if (res.rows.length === 0) return null;
+        return { id: res.rows[0].id, imageUrl: `data:image/jpeg;base64,${res.rows[0].image_base64}`, category: res.rows[0].category, createdAt: res.rows[0].created_at };
+    } finally { client.release(); }
+};
+
+export const uploadBodyPhoto = async (userId, imageBase64, category) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`INSERT INTO body_photos (user_id, image_base64, category) VALUES ($1, $2, $3)`, [userId, imageBase64, category]);
+        await awardPoints(userId, 'body.photo', 25);
+    } finally { client.release(); }
+};
+
+export const getPantryLog = async (userId) => {
+    const client = await pool.connect();
+    try {
+        await ensureTables(client);
+        const query = `SELECT id, created_at, (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image FROM pantry_logs WHERE user_id = $1 ORDER BY created_at DESC`;
+        const res = await client.query(query, [userId]);
+        return res.rows.map(r => ({ id: r.id, created_at: r.created_at, hasImage: r.has_image }));
+    } finally { client.release(); }
+};
+
+export const savePantryLogEntry = async (userId, imageBase64) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`INSERT INTO pantry_logs (user_id, image_base64) VALUES ($1, $2)`, [userId, imageBase64]);
+        await awardPoints(userId, 'pantry.scan', 10);
+    } finally { client.release(); }
+};
+
+export const getPantryLogEntryById = async (id) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, image_base64, created_at FROM pantry_logs WHERE id = $1`, [id]);
+        if (res.rows.length === 0) return null;
+        return { id: res.rows[0].id, imageUrl: `data:image/jpeg;base64,${res.rows[0].image_base64}`, created_at: res.rows[0].created_at };
+    } finally { client.release(); }
+};
+
+export const getRestaurantLog = async (userId) => {
+    const client = await pool.connect();
+    try {
+        await ensureTables(client);
+        const query = `SELECT id, created_at, (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image FROM restaurant_logs WHERE user_id = $1 ORDER BY created_at DESC`;
+        const res = await client.query(query, [userId]);
+        return res.rows.map(r => ({ id: r.id, created_at: r.created_at, hasImage: r.has_image }));
+    } finally { client.release(); }
+};
+
+export const saveRestaurantLogEntry = async (userId, imageBase64) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`INSERT INTO restaurant_logs (user_id, image_base64) VALUES ($1, $2)`, [userId, imageBase64]);
+        await awardPoints(userId, 'dining.scan', 15);
+    } finally { client.release(); }
+};
+
+export const getRestaurantLogEntryById = async (id) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, image_base64, created_at FROM restaurant_logs WHERE id = $1`, [id]);
+        if (res.rows.length === 0) return null;
+        return { id: res.rows[0].id, imageUrl: `data:image/jpeg;base64,${res.rows[0].image_base64}`, created_at: res.rows[0].created_at };
+    } finally { client.release(); }
+};
+
+export const getFormChecks = async (userId, exercise) => {
+    const client = await pool.connect();
+    try {
+        await ensureTables(client);
+        const query = `SELECT id, exercise, ai_score, ai_feedback, created_at, (image_base64 IS NOT NULL AND length(image_base64) > 0) as has_image FROM form_checks WHERE user_id = $1 AND exercise = $2 ORDER BY created_at DESC`;
+        const res = await client.query(query, [userId, exercise]);
+        return res.rows.map(r => ({ id: r.id, exercise: r.exercise, ai_score: r.ai_score, ai_feedback: r.ai_feedback, created_at: r.created_at, hasImage: r.has_image }));
+    } finally { client.release(); }
+};
+
+export const getFormCheckById = async (id) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, image_base64, exercise, ai_score, ai_feedback, created_at FROM form_checks WHERE id = $1`, [id]);
+        if (res.rows.length === 0) return null;
+        return { id: res.rows[0].id, imageUrl: `data:image/jpeg;base64,${res.rows[0].image_base64}`, exercise: res.rows[0].exercise, ai_score: res.rows[0].ai_score, ai_feedback: res.rows[0].ai_feedback, created_at: res.rows[0].created_at };
+    } finally { client.release(); }
+};
+
+export const saveFormCheck = async (userId, data) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`INSERT INTO form_checks (user_id, exercise, image_base64, ai_score, ai_feedback) VALUES ($1, $2, $3, $4, $5)`, [userId, data.exercise, data.imageBase64, data.score, data.feedback]);
+        await awardPoints(userId, 'form.check', 30);
+    } finally { client.release(); }
+};
+
+export const getCoachingRelations = async (userId, role) => {
+    const client = await pool.connect();
+    try {
+        const query = role === 'coach' 
+            ? `SELECT c.*, u.email as "clientEmail", u.first_name as "clientName" FROM coaching_relations c JOIN users u ON c.client_id = u.id WHERE c.coach_id = $1`
+            : `SELECT c.*, u.email as "coachEmail", u.first_name as "coachName" FROM coaching_relations c JOIN users u ON c.coach_id = u.id WHERE c.client_id = $1`;
+        const res = await client.query(query, [userId]);
+        return res.rows;
+    } finally { client.release(); }
+};
+
+export const inviteClient = async (userId, email) => {
+    const client = await pool.connect();
+    try {
+        const target = await client.query(`SELECT id FROM users WHERE email = $1`, [email.toLowerCase().trim()]);
+        if (target.rows.length === 0) throw new Error("User not found");
+        await client.query(`INSERT INTO coaching_relations (coach_id, client_id, status) VALUES ($1, $2, 'pending') ON CONFLICT DO NOTHING`, [userId, target.rows[0].id]);
+    } finally { client.release(); }
+};
+
+export const respondToCoachingInvite = async (userId, id, status) => {
+    const client = await pool.connect();
+    try { await client.query(`UPDATE coaching_relations SET status = $1 WHERE id = $2 AND client_id = $3`, [status, id, userId]); } finally { client.release(); }
+};
+
+export const revokeCoachingAccess = async (userId, id) => {
+    const client = await pool.connect();
+    try { await client.query(`DELETE FROM coaching_relations WHERE id = $1 AND (coach_id = $2 OR client_id = $2)`, [id, userId]); } finally { client.release(); }
+};

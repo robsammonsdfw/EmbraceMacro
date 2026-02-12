@@ -94,7 +94,6 @@ const App: React.FC = () => {
           try {
               const base64 = img.startsWith('data:') ? img.split(',')[1] : img;
               const analyzedStats = await apiService.analyzeHealthScreenshot(base64);
-              // Use real extracted data instead of dummy hardcoding
               if (analyzedStats) {
                   const updated = await apiService.syncHealthStatsToDB(analyzedStats);
                   setHealthStats(prev => ({ ...prev, ...updated }));
@@ -237,8 +236,6 @@ const App: React.FC = () => {
       onSyncHealth: async () => { 
           setIsAnalyzing(true);
           try {
-             // In a web environment, we trigger a prompt for "Vision Sync" 
-             // as direct HealthKit access is restricted to native code.
              handleCaptureClick('vitals');
           } finally {
               setIsAnalyzing(false);
