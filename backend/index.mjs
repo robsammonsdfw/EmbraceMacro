@@ -122,30 +122,33 @@ const callGemini = async (prompt, imageBase64, mimeType = 'image/jpeg', schema =
 };
 
 // --- FITBIT OAUTH HELPERS ---
-const exchangeFitbitCode = async (code) => {
+const exchangeFitbitCode = async (code, codeVerifier) => {
     const clientID = process.env.FITBIT_CLIENT_ID;
     const clientSecret = process.env.FITBIT_CLIENT_SECRET;
-    // This MUST match exactly what you put in the Fitbit Dev Portal
-    const redirectUri = process.env.FITBIT_REDIRECT_URI || 'https://main.embracehealth.ai';
+    // Defaulting to the URI shown in the user's screenshot
+    const redirectUri = process.env.FITBIT_REDIRECT_URI || 'https://app.embracehealth.ai';
     
     if (!clientID || !clientSecret) {
-        throw new Error("Server missing Fitbit credentials. Set FITBIT_CLIENT_ID and FITBIT_CLIENT_SECRET env vars.");
+        throw new Error("Server missing Fitbit credentials. Set FITBIT_CLIENT_ID and FITBIT_CLIENT_SECRET.");
     }
 
     const basicAuth = Buffer.from(`${clientID}:${clientSecret}`).toString('base64');
     
+    const params = new URLSearchParams({
+        client_id: clientID,
+        grant_type: 'authorization_code',
+        redirect_uri: redirectUri,
+        code: code,
+        code_verifier: codeVerifier // Required for PKCE
+    });
+
     const response = await fetch('https://api.fitbit.com/oauth2/token', {
         method: 'POST',
         headers: {
             'Authorization': `Basic ${basicAuth}`,
             'Content-Type': 'application/x-www-form-urlencoded'
         },
-        body: new URLSearchParams({
-            client_id: clientID,
-            grant_type: 'authorization_code',
-            redirect_uri: redirectUri,
-            code: code
-        })
+        body: params.toString()
     });
 
     if (!response.ok) {
@@ -157,7 +160,6 @@ const exchangeFitbitCode = async (code) => {
 };
 
 const getFitbitData = async (accessToken) => {
-    // Basic sync for steps and calories
     const stepsUrl = 'https://api.fitbit.com/1/user/-/activities/tracker/steps/date/today/1d.json';
     const calsUrl = 'https://api.fitbit.com/1/user/-/activities/tracker/calories/date/today/1d.json';
 
@@ -195,19 +197,24 @@ export const handler = async (event) => {
         const userId = getUserFromEvent(event);
 
         // --- Fitbit Routes ---
-        if (path === '/auth/fitbit/url' && httpMethod === 'GET') {
+        if (path === '/auth/fitbit/url' && httpMethod === 'POST') {
+            const { codeChallenge } = parseBody(event);
             const clientID = process.env.FITBIT_CLIENT_ID;
-            if (!clientID) return sendResponse(500, { error: "FITBIT_CLIENT_ID not configured on server." });
+            if (!clientID) return sendResponse(500, { error: "FITBIT_CLIENT_ID not configured." });
             
-            const redirectUri = encodeURIComponent(process.env.FITBIT_REDIRECT_URI || 'https://main.embracehealth.ai');
-            const scope = encodeURIComponent('activity heartrate profile sleep weight');
-            const url = `https://www.fitbit.com/oauth2/authorize?response_type=code&client_id=${clientID}&redirect_uri=${redirectUri}&scope=${scope}`;
+            const redirectUri = encodeURIComponent(process.env.FITBIT_REDIRECT_URI || 'https://app.embracehealth.ai');
+            // Added nutrition to the scopes as it's relevant for this app
+            const scope = encodeURIComponent('activity heartrate profile sleep weight nutrition');
+            
+            // Build URL with PKCE parameters
+            const url = `https://www.fitbit.com/oauth2/authorize?response_type=code&client_id=${clientID}&redirect_uri=${redirectUri}&scope=${scope}&code_challenge=${codeChallenge}&code_challenge_method=S256`;
+            
             return sendResponse(200, { url });
         }
 
         if (path === '/auth/fitbit/link' && httpMethod === 'POST') {
-            const { code } = parseBody(event);
-            const tokenData = await exchangeFitbitCode(code);
+            const { code, codeVerifier } = parseBody(event);
+            const tokenData = await exchangeFitbitCode(code, codeVerifier);
             await db.updateFitbitCredentials(userId, tokenData);
             return sendResponse(200, { success: true });
         }
@@ -215,9 +222,6 @@ export const handler = async (event) => {
         if (path === '/sync-health/fitbit' && httpMethod === 'POST') {
             const creds = await db.getFitbitCredentials(userId);
             if (!creds || !creds.fitbit_access_token) return sendResponse(401, { error: "Fitbit not connected" });
-            
-            // For simplicity in this demo, we assume the token is still valid. 
-            // Real apps should check expiration and use the refresh_token.
             const stats = await getFitbitData(creds.fitbit_access_token);
             const updated = await db.syncHealthMetrics(userId, stats);
             return sendResponse(200, updated);

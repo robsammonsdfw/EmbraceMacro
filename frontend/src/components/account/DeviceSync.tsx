@@ -1,8 +1,38 @@
 import React, { useState, useEffect } from 'react';
 import { ActivityIcon, CheckIcon, HeartIcon, RefreshIcon } from '../icons';
 import * as apiService from '../../services/apiService';
-import { connectHealthProvider, syncHealthData } from '../../services/healthService';
 import type { HealthStats } from '../../types';
+
+// --- PKCE Helpers ---
+function generateRandomString(length: number) {
+    const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+    let result = '';
+    const values = new Uint8Array(length);
+    crypto.getRandomValues(values);
+    for (let i = 0; i < length; i++) {
+        result += charset[values[i] % charset.length];
+    }
+    return result;
+}
+
+async function sha256(plain: string) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(plain);
+    return crypto.subtle.digest('SHA-256', data);
+}
+
+function base64urlencode(a: ArrayBuffer) {
+    let str = "";
+    const bytes = new Uint8Array(a);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+        str += String.fromCharCode(bytes[i]);
+    }
+    return btoa(str)
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
+}
 
 interface DeviceSyncProps {
     onSyncComplete: (data?: HealthStats) => void;
@@ -20,34 +50,37 @@ export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete, lastSync
         const params = new URLSearchParams(window.location.search);
         const code = params.get('code');
         if (code && !isProcessingCode) {
+            const verifier = localStorage.getItem('fitbit_code_verifier');
+            if (!verifier) {
+                console.warn("No verifier found in local storage. Auth session may have expired.");
+                return;
+            }
+
             setIsProcessingCode(true);
             setFitbitStatus('syncing');
-            apiService.linkFitbitAccount(code).then(() => {
+            apiService.linkFitbitAccount(code, verifier).then(() => {
                 setFitbitStatus('connected');
-                // Clean URL to prevent re-linking on refresh
+                localStorage.removeItem('fitbit_code_verifier');
+                // Clean URL to prevent re-processing on refresh
                 window.history.replaceState({}, document.title, window.location.pathname);
                 alert("Fitbit account linked successfully!");
             }).catch(e => {
                 console.error("Link failed", e);
                 setFitbitStatus('idle');
-                alert("Fitbit link failed. Check your server environment variables.");
+                alert("Fitbit link failed. Check your backend environment variables (ID/SECRET/REDIRECT).");
             }).finally(() => setIsProcessingCode(false));
         }
-    }, []);
+    }, [isProcessingCode]);
 
     const handleAppleSync = async () => {
         setAppleStatus('syncing');
         setLastUpdatedFields([]);
         try {
-            await connectHealthProvider('ios');
-            const data = await syncHealthData('apple');
-            const result = await apiService.syncHealthStatsToDB(data);
-            setAppleStatus('connected');
-            setLastUpdatedFields(['Blood Pressure', 'Weight', 'Body Fat', 'Mindfulness']);
-            onSyncComplete(result);
+            // Direct sync pending native platform bridge
+            alert("Native Apple Health sync is coming soon! For now, use the 'Vision Sync' feature to import screenshots from your Health app.");
+            setAppleStatus('idle');
         } catch (e) {
             console.error(e);
-            alert("Apple Health sync failed.");
             setAppleStatus('idle');
         }
     };
@@ -55,10 +88,21 @@ export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete, lastSync
     const handleFitbitConnect = async () => {
         setFitbitStatus('syncing');
         try {
-            // This will trigger the redirect to Fitbit's site
-            await connectHealthProvider('fitbit');
+            // 1. Generate Verifier and Challenge for PKCE
+            const verifier = generateRandomString(128);
+            const hashed = await sha256(verifier);
+            const challenge = base64urlencode(hashed);
+            
+            // 2. Save verifier locally for the return trip
+            localStorage.setItem('fitbit_code_verifier', verifier);
+
+            // 3. Get Auth URL from backend (includes challenge)
+            const { url } = await apiService.getFitbitAuthUrl(challenge);
+            
+            // 4. Redirect the user to Fitbit
+            window.location.href = url;
         } catch (e) {
-            console.error(e);
+            console.error("Failed to initiate Fitbit connect", e);
             alert("Fitbit connection failed. Ensure FITBIT_CLIENT_ID is set in backend.");
             setFitbitStatus('idle');
         }
@@ -121,7 +165,7 @@ export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete, lastSync
                         </div>
                     </div>
                     <div className="pr-2">
-                        {appleStatus === 'syncing' ? <div className="w-5 h-5 border-2 border-slate-300 border-t-rose-500 rounded-full animate-spin"></div> : <span className="bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase group-hover:bg-slate-200">Connect</span>}
+                        {appleStatus === 'syncing' ? <div className="w-5 h-5 border-2 border-slate-300 border-t-rose-500 rounded-full animate-spin"></div> : <span className="bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase group-hover:bg-slate-200">Sync</span>}
                     </div>
                 </button>
 

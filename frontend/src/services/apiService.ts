@@ -65,8 +65,12 @@ const compressImage = async (base64: string, mimeType: string = 'image/jpeg'): P
 };
 
 // --- WEARABLE AUTH ---
-export const getFitbitAuthUrl = (): Promise<{ url: string }> => callApi('/auth/fitbit/url', 'GET');
-export const linkFitbitAccount = (code: string): Promise<{ success: boolean }> => callApi('/auth/fitbit/link', 'POST', { code });
+export const getFitbitAuthUrl = (codeChallenge: string): Promise<{ url: string }> => 
+    callApi('/auth/fitbit/url', 'POST', { codeChallenge });
+
+export const linkFitbitAccount = (code: string, codeVerifier: string): Promise<{ success: boolean }> => 
+    callApi('/auth/fitbit/link', 'POST', { code, codeVerifier });
+
 export const syncWithFitbit = (): Promise<HealthStats> => callApi('/sync-health/fitbit', 'POST');
 
 // --- CONTENT ---
