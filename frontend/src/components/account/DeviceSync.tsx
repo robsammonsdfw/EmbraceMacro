@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ActivityIcon, CheckIcon, HeartIcon, RefreshIcon } from '../icons';
 import * as apiService from '../../services/apiService';
 import { connectHealthProvider, syncHealthData } from '../../services/healthService';
@@ -146,10 +145,8 @@ export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete, lastSync
                             disabled={fitbitStatus === 'syncing'}
                             className="flex-1 bg-white border border-slate-200 py-3 rounded-xl text-[10px] font-black uppercase text-slate-700 hover:bg-slate-100 transition shadow-sm"
                         >
-                            {/* FIX: Cast fitbitStatus to string to bypass unintended overlap warning */}
                             {(fitbitStatus as string) === 'connected' ? 'Connected' : 'Link Account'}
                         </button>
-                        {/* FIX: Cast fitbitStatus to string to bypass unintended overlap warning */}
                         {(fitbitStatus as string) === 'connected' && (
                             <button 
                                 onClick={handleFitbitSync}
