@@ -1,7 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-// Added missing CameraIcon to imports
-import { ActivityIcon, CheckIcon, HeartIcon, RefreshIcon, CameraIcon } from '../icons';
+import { ActivityIcon, CheckIcon, RefreshIcon, CameraIcon } from '../icons';
 import * as apiService from '../../services/apiService';
 import type { HealthStats } from '../../types';
 
@@ -40,10 +38,8 @@ interface DeviceSyncProps {
 }
 
 export const DeviceSync: React.FC<DeviceSyncProps> = ({ onSyncComplete, lastSynced, onVisionSyncTrigger }) => {
-    const [appleStatus, setAppleStatus] = useState<'idle' | 'syncing'>('idle');
     const [fitbitStatus, setFitbitStatus] = useState<'idle' | 'syncing' | 'connected'>('idle');
     const [isProcessingCode, setIsProcessingCode] = useState(false);
-    // Added separate state to track data syncing to avoid TS narrowing issues with fitbitStatus literal type
     const [isSyncingData, setIsSyncingData] = useState(false);
 
     // 1. Check existing connection on mount
