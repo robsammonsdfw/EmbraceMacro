@@ -8,7 +8,6 @@ const pool = new Pool({
 
 /**
  * STRATEGY: Strip Base64 from list responses to prevent AWS Lambda 413 Payload error.
- * Added "hasImage" flag so frontend knows to show "View" button.
  */
 const processMealDataForList = (mealData, externalHasImage = false) => {
     const dataForList = { ...mealData };
@@ -26,6 +25,15 @@ export const findOrCreateUserByEmail = async (email) => {
         const normalized = email.toLowerCase().trim();
         await client.query(`INSERT INTO users (email) VALUES ($1) ON CONFLICT (email) DO NOTHING;`, [normalized]);
         const res = await client.query(`SELECT id, email, shopify_customer_id FROM users WHERE email = $1;`, [normalized]);
+        
+        // Ensure ALL tables exist - Self-Healing Migration
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS pantry_log (id SERIAL PRIMARY KEY, user_id VARCHAR(255), image_base64 TEXT, created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP);
+            CREATE TABLE IF NOT EXISTS restaurant_log (id SERIAL PRIMARY KEY, user_id VARCHAR(255), image_base64 TEXT, created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP);
+            CREATE TABLE IF NOT EXISTS body_photos (id SERIAL PRIMARY KEY, user_id VARCHAR(255), category VARCHAR(100), image_base64 TEXT, created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP);
+            CREATE TABLE IF NOT EXISTS exercise_form_checks (id SERIAL PRIMARY KEY, user_id VARCHAR(255), exercise VARCHAR(100), image_base64 TEXT, ai_score INT, ai_feedback TEXT, created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP);
+        `);
+
         return res.rows[0];
     } finally { client.release(); }
 };
@@ -61,7 +69,60 @@ export const completeArticleAction = async (userId, articleId, actionType) => {
     return { success: true };
 };
 
-// --- NUTRITION LOGS (PANTRY / RESTAURANT) ---
+// --- BODY PHOTOS ---
+export const getBodyPhotos = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, category, created_at as "createdAt", TRUE as "hasImage" FROM body_photos WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
+        return res.rows;
+    } finally { client.release(); }
+};
+
+export const uploadBodyPhoto = async (userId, base64Image, category) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`INSERT INTO body_photos (user_id, image_base64, category) VALUES ($1, $2, $3)`, [userId, base64Image, category]);
+    } finally { client.release(); }
+};
+
+export const getBodyPhotoById = async (userId, id) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, category, created_at as "createdAt", 'data:image/jpeg;base64,' || image_base64 as "imageUrl" FROM body_photos WHERE id = $1 AND user_id = $2`, [id, userId]);
+        return res.rows[0];
+    } finally { client.release(); }
+};
+
+// --- FORM CHECKS ---
+export const saveFormCheck = async (userId, exercise, imageBase64, score, feedback) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`INSERT INTO exercise_form_checks (user_id, exercise, image_base64, ai_score, ai_feedback) VALUES ($1, $2, $3, $4, $5) RETURNING id`, [userId, exercise, imageBase64, score, feedback]);
+        return res.rows[0];
+    } finally { client.release(); }
+};
+
+export const getFormChecks = async (userId, exercise) => {
+    const client = await pool.connect();
+    try {
+        let query = `SELECT id, exercise, ai_score, created_at FROM exercise_form_checks WHERE user_id = $1`;
+        const params = [userId];
+        if (exercise) { query += ` AND exercise = $2`; params.push(exercise); }
+        query += ` ORDER BY created_at DESC`;
+        const res = await client.query(query, params);
+        return res.rows;
+    } finally { client.release(); }
+};
+
+export const getFormCheckById = async (userId, id) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, exercise, ai_score, ai_feedback, created_at, 'data:image/jpeg;base64,' || image_base64 as "imageUrl" FROM exercise_form_checks WHERE id = $1 AND user_id = $2`, [id, userId]);
+        return res.rows[0];
+    } finally { client.release(); }
+};
+
+// --- NUTRITION LOGS ---
 export const getPantryLog = async (userId) => {
     const client = await pool.connect();
     try {
@@ -227,6 +288,20 @@ export const getSocialProfile = async (userId) => {
     try {
         const res = await client.query(`SELECT id as "userId", email, first_name as "firstName", privacy_mode as "privacyMode", bio FROM users WHERE id = $1`, [userId]);
         return res.rows[0];
+    } finally { client.release(); }
+};
+
+export const updateSocialProfile = async (userId, updates) => {
+    const client = await pool.connect();
+    try {
+        const fields = [];
+        const values = [];
+        if (updates.privacyMode) { fields.push(`privacy_mode = $${values.length + 1}`); values.push(updates.privacyMode); }
+        if (updates.bio !== undefined) { fields.push(`bio = $${values.length + 1}`); values.push(updates.bio); }
+        if (fields.length === 0) return getSocialProfile(userId);
+        values.push(userId);
+        await client.query(`UPDATE users SET ${fields.join(', ')} WHERE id = $${values.length}`, values);
+        return getSocialProfile(userId);
     } finally { client.release(); }
 };
 

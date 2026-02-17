@@ -114,6 +114,38 @@ export const handler = async (event) => {
             return sendResponse(200, await db.completeArticleAction(userId, path.split('/')[3], parseBody(event).actionType));
         }
 
+        // --- BODY & FITNESS ---
+        if (path === '/body/photos' && httpMethod === 'GET') return sendResponse(200, await db.getBodyPhotos(userId));
+        if (path === '/body/photos' && httpMethod === 'POST') {
+            const { base64Image, category } = parseBody(event);
+            await db.uploadBodyPhoto(userId, base64Image, category);
+            return sendResponse(200, { success: true });
+        }
+        if (path.startsWith('/body/photos/') && httpMethod === 'GET') {
+            return sendResponse(200, await db.getBodyPhotoById(userId, path.split('/').pop()));
+        }
+        if (path === '/body/form-checks' && httpMethod === 'GET') {
+            const exercise = event.queryStringParameters?.exercise || null;
+            return sendResponse(200, await db.getFormChecks(userId, exercise));
+        }
+        if (path === '/body/form-check' && httpMethod === 'POST') {
+            const { exercise, imageBase64, score, feedback } = parseBody(event);
+            return sendResponse(200, await db.saveFormCheck(userId, exercise, imageBase64, score, feedback));
+        }
+        if (path.startsWith('/body/form-check/') && httpMethod === 'GET') {
+            return sendResponse(200, await db.getFormCheckById(userId, path.split('/').pop()));
+        }
+        if (path === '/body/analyze-form' && httpMethod === 'POST') {
+            const { base64Image, exercise } = parseBody(event);
+            const prompt = `Analyze this ${exercise} form. Score 0-100. Give actionable feedback. JSON only.`;
+            const result = await callGemini(prompt, base64Image, 'image/jpeg', {
+                type: Type.OBJECT,
+                properties: { isCorrect: { type: Type.BOOLEAN }, score: { type: Type.NUMBER }, feedback: { type: Type.STRING } },
+                required: ["isCorrect", "score", "feedback"]
+            });
+            return sendResponse(200, result);
+        }
+
         // --- NUTRITION LOGS ---
         if (path === '/nutrition/pantry-log' && httpMethod === 'GET') return sendResponse(200, await db.getPantryLog(userId));
         if (path === '/nutrition/pantry-log' && httpMethod === 'POST') return sendResponse(200, await db.savePantryLogEntry(userId, parseBody(event).imageBase64));
@@ -138,6 +170,7 @@ export const handler = async (event) => {
         if (path === '/social/friends' && httpMethod === 'GET') return sendResponse(200, await db.getFriends(userId));
         if (path === '/social/requests' && httpMethod === 'GET') return sendResponse(200, await db.getFriendRequests(userId));
         if (path === '/social/profile' && httpMethod === 'GET') return sendResponse(200, await db.getSocialProfile(userId));
+        if (path === '/social/profile' && httpMethod === 'PATCH') return sendResponse(200, await db.updateSocialProfile(userId, parseBody(event)));
         if (path === '/social/request' && httpMethod === 'POST') return sendResponse(200, await db.sendFriendRequest(userId, parseBody(event).email));
 
         // --- MEALS & HISTORY ---
