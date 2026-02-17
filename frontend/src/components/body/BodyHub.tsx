@@ -124,7 +124,7 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, initialTab = '3d_
 
     const handleStartBodyScan = () => {
         const token = localStorage.getItem('embracehealth-api-token');
-        const baseUrl = 'https://app.embracehealth.ai/';
+        const baseUrl = 'https://scan.embracehealth.ai';
         if (token) {
             window.location.href = `${baseUrl}?token=${encodeURIComponent(token)}`;
         } else {

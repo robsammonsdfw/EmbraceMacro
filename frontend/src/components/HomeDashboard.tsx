@@ -144,10 +144,11 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
     const handleBodyScanClick = () => {
         // Redirect to body scan page logic or modal
         const token = localStorage.getItem('embracehealth-api-token');
+        const scannerUrl = 'https://scan.embracehealth.ai';
         if (token) {
-            window.location.href = `https://app.embracehealth.ai?token=${encodeURIComponent(token)}`;
+            window.location.href = `${scannerUrl}?token=${encodeURIComponent(token)}`;
         } else {
-            window.location.href = 'https://app.embracehealth.ai';
+            window.location.href = scannerUrl;
         }
     };
 

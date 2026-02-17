@@ -48,7 +48,7 @@ export const Hub: React.FC<HubProps> = ({ onEnterMeals, onLogout }) => {
 
     const handleGoToScanner = () => {
         const token = localStorage.getItem('embracehealth-api-token');
-        const baseUrl = 'https://app.embracehealth.ai/';
+        const baseUrl = 'https://scan.embracehealth.ai';
         if (token) {
             // Pass token for seamless auth
             window.location.href = `${baseUrl}?token=${encodeURIComponent(token)}`;
