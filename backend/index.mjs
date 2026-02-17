@@ -1,3 +1,4 @@
+
 import * as db from './services/databaseService.mjs';
 import jwt from 'jsonwebtoken';
 import { GoogleGenAI, Type } from "@google/genai";
@@ -97,7 +98,27 @@ export const handler = async (event) => {
 
         const userId = getUserFromEvent(event);
 
-        // --- MEAL PLANS (RESTORED) ---
+        // --- GROCERY (FIXED) ---
+        if (path === '/grocery/lists' && httpMethod === 'GET') return sendResponse(200, await db.getGroceryLists(userId));
+        if (path === '/grocery/lists' && httpMethod === 'POST') return sendResponse(200, await db.createGroceryList(userId, parseBody(event).name));
+        if (path.match(/^\/grocery\/lists\/\d+\/items$/) && httpMethod === 'GET') return sendResponse(200, await db.getGroceryListItems(path.split('/')[3]));
+        if (path.match(/^\/grocery\/lists\/\d+\/items$/) && httpMethod === 'POST') return sendResponse(200, await db.addGroceryItem(userId, path.split('/')[3], parseBody(event).name));
+        if (path.match(/^\/grocery\/items\/\d+$/) && httpMethod === 'PATCH') return sendResponse(200, await db.updateGroceryItem(userId, path.split('/').pop(), parseBody(event).checked));
+        if (path.match(/^\/grocery\/items\/\d+$/) && httpMethod === 'DELETE') {
+            await db.removeGroceryItem(userId, path.split('/').pop());
+            return sendResponse(200, { success: true });
+        }
+        if (path.match(/^\/grocery\/lists\/\d+\/clear$/) && httpMethod === 'POST') {
+            await db.clearGroceryListItems(userId, path.split('/')[3], parseBody(event).type);
+            return sendResponse(200, { success: true });
+        }
+        if (path.match(/^\/grocery\/lists\/\d+\/import$/) && httpMethod === 'POST') return sendResponse(200, await db.importIngredientsFromPlans(userId, path.split('/')[3], parseBody(event).planIds));
+
+        // --- SOCIAL (FIXED) ---
+        if (path === '/social/friends' && httpMethod === 'GET') return sendResponse(200, await db.getFriends(userId));
+        if (path === '/social/profile' && httpMethod === 'GET') return sendResponse(200, await db.getSocialProfile(userId));
+
+        // --- MEAL PLANS ---
         if (path === '/meal-plans' && httpMethod === 'GET') return sendResponse(200, await db.getMealPlans(userId));
         if (path === '/meal-plans' && httpMethod === 'POST') return sendResponse(200, await db.createMealPlan(userId, parseBody(event).name));
         if (path.startsWith('/meal-plans/') && path.endsWith('/items') && httpMethod === 'POST') {

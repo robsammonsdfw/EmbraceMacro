@@ -1,3 +1,4 @@
+
 import pg from 'pg';
 
 const { Pool } = pg;
@@ -12,15 +13,6 @@ const processMealDataForList = (mealData, externalHasImage = false) => {
     delete dataForList.imageUrl;
     dataForList.hasImage = hasImage;
     return dataForList;
-};
-
-const processMealDataForClient = (mealData) => {
-    const dataForClient = { ...mealData };
-    if (dataForClient.imageBase64) {
-        dataForClient.imageUrl = `data:image/jpeg;base64,${dataForClient.imageBase64}`;
-        delete dataForClient.imageBase64;
-    }
-    return dataForClient;
 };
 
 // --- USER & AUTH ---
@@ -73,11 +65,10 @@ export const hasFitbitConnection = async (userId) => {
     } finally { client.release(); }
 };
 
-// --- HEALTH (SMART DAILY RESET) ---
+// --- HEALTH (FIXED COLUMNS) ---
 export const getHealthMetrics = async (userId, clientDate) => {
     const client = await pool.connect();
     try {
-        // Querying with safe COALESCE fallback for possible missing columns in specific envs
         const res = await client.query(`
             SELECT 
                 steps, 
@@ -86,11 +77,12 @@ export const getHealthMetrics = async (userId, clientDate) => {
                 heart_rate as "heartRate",
                 resting_heart_rate as "restingHeartRate",
                 weight_lbs as "weightLbs",
-                sleep_minutes as "sleepMinutes",
                 sleep_score as "sleepScore",
                 blood_pressure_systolic as "bloodPressureSystolic",
                 blood_pressure_diastolic as "bloodPressureDiastolic",
                 glucose_mgdl as "glucoseMgDl",
+                body_fat_percentage as "bodyFatPercentage",
+                bmi,
                 last_synced as "lastSynced" 
             FROM health_metrics WHERE user_id = $1
         `, [userId]);
@@ -98,7 +90,6 @@ export const getHealthMetrics = async (userId, clientDate) => {
         const row = res.rows[0];
         if (!row) return { steps: 0, activeCalories: 0 };
 
-        // Reset daily counters if last_synced isn't today in user's locale
         const syncDate = row.lastSynced ? new Date(row.lastSynced).toISOString().split('T')[0] : null;
         if (syncDate !== clientDate) {
             return {
@@ -106,18 +97,13 @@ export const getHealthMetrics = async (userId, clientDate) => {
                 steps: 0,
                 activeCalories: 0,
                 restingCalories: 0,
-                heartRate: 0,
-                // Keep persistent vitals
-                weightLbs: row.weightLbs,
-                bloodPressureSystolic: row.bloodPressureSystolic,
-                bloodPressureDiastolic: row.bloodPressureDiastolic,
-                glucoseMgDl: row.glucoseMgDl
+                heartRate: 0
             };
         }
         return row;
     } catch (e) {
         console.error("DB Health Fetch Error", e);
-        // Fallback for missing columns like glucose_mgdl
+        // Minimal fallback
         const res = await client.query(`SELECT steps, active_calories as "activeCalories", last_synced as "lastSynced" FROM health_metrics WHERE user_id = $1`, [userId]);
         return res.rows[0] || { steps: 0, activeCalories: 0 };
     } finally { client.release(); }
@@ -126,14 +112,14 @@ export const getHealthMetrics = async (userId, clientDate) => {
 export const syncHealthMetrics = async (userId, stats) => {
     const client = await pool.connect();
     try {
-        // Removed GREATEST: New sync values are now authoritative truths for the moment
         const res = await client.query(`
             INSERT INTO health_metrics (
                 user_id, steps, active_calories, resting_calories, heart_rate, 
-                resting_heart_rate, weight_lbs, sleep_minutes, sleep_score,
-                blood_pressure_systolic, blood_pressure_diastolic, glucose_mgdl, last_synced
+                resting_heart_rate, weight_lbs, sleep_score,
+                blood_pressure_systolic, blood_pressure_diastolic, glucose_mgdl, 
+                body_fat_percentage, bmi, last_synced
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP)
             ON CONFLICT (user_id) DO UPDATE SET 
                 steps = COALESCE(EXCLUDED.steps, health_metrics.steps), 
                 active_calories = COALESCE(EXCLUDED.active_calories, health_metrics.active_calories),
@@ -141,34 +127,108 @@ export const syncHealthMetrics = async (userId, stats) => {
                 heart_rate = COALESCE(EXCLUDED.heart_rate, health_metrics.heart_rate),
                 resting_heart_rate = COALESCE(EXCLUDED.resting_heart_rate, health_metrics.resting_heart_rate),
                 weight_lbs = COALESCE(EXCLUDED.weight_lbs, health_metrics.weight_lbs),
-                sleep_minutes = COALESCE(EXCLUDED.sleep_minutes, health_metrics.sleep_minutes),
                 sleep_score = COALESCE(EXCLUDED.sleep_score, health_metrics.sleep_score),
                 blood_pressure_systolic = COALESCE(EXCLUDED.blood_pressure_systolic, health_metrics.blood_pressure_systolic),
                 blood_pressure_diastolic = COALESCE(EXCLUDED.blood_pressure_diastolic, health_metrics.blood_pressure_diastolic),
                 glucose_mgdl = COALESCE(EXCLUDED.glucose_mgdl, health_metrics.glucose_mgdl),
+                body_fat_percentage = COALESCE(EXCLUDED.body_fat_percentage, health_metrics.body_fat_percentage),
+                bmi = COALESCE(EXCLUDED.bmi, health_metrics.bmi),
                 last_synced = CURRENT_TIMESTAMP
             RETURNING steps, active_calories as "activeCalories", last_synced as "lastSynced"
         `, [
             userId, stats.steps, stats.activeCalories, stats.restingCalories, 
             stats.heartRate, stats.restingHeartRate, stats.weightLbs, 
-            stats.sleepMinutes, stats.sleepScore, stats.bloodPressureSystolic, 
-            stats.bloodPressureDiastolic, stats.glucoseMgDl
+            stats.sleepScore, stats.bloodPressureSystolic, 
+            stats.bloodPressureDiastolic, stats.glucoseMgDl,
+            stats.bodyFatPercentage, stats.bmi
         ]);
-        return res.rows[0];
-    } catch (e) {
-        console.error("DB Health Sync Error", e);
-        // Fallback for possible missing columns
-        const res = await client.query(`
-            INSERT INTO health_metrics (user_id, steps, active_calories, last_synced)
-            VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
-            ON CONFLICT (user_id) DO UPDATE SET steps = EXCLUDED.steps, active_calories = EXCLUDED.active_calories, last_synced = CURRENT_TIMESTAMP
-            RETURNING steps, active_calories as "activeCalories", last_synced as "lastSynced"
-        `, [userId, stats.steps, stats.activeCalories]);
         return res.rows[0];
     } finally { client.release(); }
 };
 
-// --- MEAL PLANS (RESTORED) ---
+// --- GROCERY (IMPLEMENTED) ---
+export const getGroceryLists = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, name, is_active, created_at FROM grocery_lists WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
+        return res.rows;
+    } finally { client.release(); }
+};
+
+export const createGroceryList = async (userId, name) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`INSERT INTO grocery_lists (user_id, name) VALUES ($1, $2) RETURNING id, name, is_active, created_at`, [userId, name]);
+        return res.rows[0];
+    } finally { client.release(); }
+};
+
+export const getGroceryListItems = async (listId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, name, checked FROM grocery_list_items WHERE list_id = $1 ORDER BY name ASC`, [listId]);
+        return res.rows;
+    } finally { client.release(); }
+};
+
+export const addGroceryItem = async (userId, listId, name) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`INSERT INTO grocery_list_items (user_id, list_id, name) VALUES ($1, $2, $3) RETURNING id, name, checked`, [userId, listId, name]);
+        return res.rows[0];
+    } finally { client.release(); }
+};
+
+export const updateGroceryItem = async (userId, itemId, checked) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`UPDATE grocery_list_items SET checked = $1 WHERE id = $2 AND user_id = $3 RETURNING id, name, checked`, [checked, itemId, userId]);
+        return res.rows[0];
+    } finally { client.release(); }
+};
+
+export const removeGroceryItem = async (userId, itemId) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`DELETE FROM grocery_list_items WHERE id = $1 AND user_id = $2`, [itemId, userId]);
+    } finally { client.release(); }
+};
+
+export const clearGroceryListItems = async (userId, listId, type) => {
+    const client = await pool.connect();
+    try {
+        if (type === 'checked') {
+            await client.query(`DELETE FROM grocery_list_items WHERE list_id = $1 AND user_id = $2 AND checked = TRUE`, [listId, userId]);
+        } else {
+            await client.query(`DELETE FROM grocery_list_items WHERE list_id = $1 AND user_id = $2`, [listId, userId]);
+        }
+    } finally { client.release(); }
+};
+
+export const importIngredientsFromPlans = async (userId, listId, planIds) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const mealRes = await client.query(`
+            SELECT sm.meal_data
+            FROM saved_meals sm
+            JOIN meal_plan_items mpi ON sm.id = mpi.saved_meal_id
+            WHERE mpi.user_id = $1 AND mpi.meal_plan_id = ANY($2::int[])
+        `, [userId, planIds]);
+        
+        const ingredients = [...new Set(mealRes.rows.flatMap(r => r.meal_data.ingredients.map(i => i.name)))];
+        for (const ing of ingredients) {
+            await client.query(`INSERT INTO grocery_list_items (user_id, list_id, name) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, [userId, listId, ing]);
+        }
+        await client.query('COMMIT');
+        return getGroceryListItems(listId);
+    } catch (e) {
+        await client.query('ROLLBACK');
+        throw e;
+    } finally { client.release(); }
+};
+
+// --- REMAINING METHODS ---
 export const getMealPlans = async (userId) => {
     const client = await pool.connect();
     try {
@@ -210,7 +270,6 @@ export const removeMealFromPlan = async (userId, itemId) => {
     try { await client.query(`DELETE FROM meal_plan_items WHERE id = $1 AND user_id = $2`, [itemId, userId]); } finally { client.release(); }
 };
 
-// --- REMAINING METHODS ---
 export const getDashboardPrefs = async (userId) => {
     const client = await pool.connect();
     try {
@@ -229,15 +288,6 @@ export const getSavedMeals = async (userId) => {
     try {
         const res = await client.query(`SELECT id, meal_data, (image_base64 IS NOT NULL) as has_image FROM saved_meals WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
         return res.rows.map(r => ({ ...processMealDataForList(r.meal_data, r.has_image), id: r.id }));
-    } finally { client.release(); }
-};
-
-export const getSavedMealById = async (userId, id) => {
-    const client = await pool.connect();
-    try {
-        const res = await client.query(`SELECT id, meal_data, image_base64 FROM saved_meals WHERE id = $1 AND user_id = $2`, [id, userId]);
-        if (!res.rows[0]) return null;
-        return { ...res.rows[0].meal_data, id: res.rows[0].id, imageUrl: res.rows[0].image_base64 ? `data:image/jpeg;base64,${res.rows[0].image_base64}` : null };
     } finally { client.release(); }
 };
 
