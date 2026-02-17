@@ -22,23 +22,23 @@ To prevent `413 Request Entity Too Large` errors, **NEVER** return Base64 image 
 ### 📸 MacrosChef (`POST /analyze-image`)
 - [ ] **Meal Name & Macros:** Returns `mealName`, `totalCalories`, `totalProtein`, `totalCarbs`, `totalFat`.
 - [ ] **Ingredients:** Returns `ingredients` array (used by Macros Tab).
-- [ ] **Recipe Integration:** Returns `recipe` object with `instructions` array and `ingredients` array (used by Recipe Tab).
-- [ ] **Kitchen Tools:** Returns `kitchenTools` array of objects `{name, use, essential}` (used by Tools Tab).
+- [ ] **Recipe Integration:** Returns `recipe` object with `instructions` and `nutrition`.
+- [ ] **Kitchen Tools:** Returns `kitchenTools` array of objects `{name, use, essential}`.
 
-### 🛒 Grocery Hub (Fixed Infrastructure)
-- [ ] **Table Structure:** Relies on `grocery_lists` (parent) and `grocery_list_items` (children).
-- [ ] **Functions:** Must use `getGroceryLists` (plural) and `createGroceryList` to handle multiple lists correctly.
-- [ ] **Stub Prevention:** Ensure `index.mjs` is NOT hardcoded to return `[{id:1}]`. It must query the DB.
+### ⌚ Fitbit Integration
+- [ ] `POST /auth/fitbit/url`: Returns signed authorization URL.
+- [ ] `POST /auth/fitbit/link`: Handles PKCE token exchange.
+- [ ] `GET /auth/fitbit/status`: Returns current link state.
+- [ ] `POST /sync-health/fitbit`: Pulls and saves device activity.
 
-### 👤 User Intake & Journey
-- [ ] **Storage:** "Active Journey" is stored in `dashboard_prefs.selectedJourney`.
-- [ ] **Questionnaire:** Additional health answers are stored in `users.intake_data` JSONB column.
+### 🩺 Clinical Suite
+- [ ] `POST /analyze-health-screenshot`: Parses metrics from Apple Health images via Gemini.
+- [ ] `GET/PATCH /account/medical-intake`: Persists user medical history JSON.
+- [ ] `POST /body/analyze-form`: Computer vision form analysis with score/feedback.
 
-### 🌐 Social Hub & Referrals
-- [ ] **Bulk Invite:** `POST /social/bulk-invite` processes contact lists.
-- [ ] **Privacy Logic:** Checks `privacy_mode` before auto-friending.
-- [ ] **Referral Rewards:** Awards 50 pts on invite, 450 pts on join.
-- [ ] **Token Logic:** `invitations` table stores unique tokens redeemed via `POST /auth/customer-login`.
+### 🛒 Grocery Hub
+- [ ] **Table Structure:** Relies on `grocery_lists` and `grocery_list_items`.
+- [ ] `POST /grocery/identify`: AI Vision identifies ingredients from pantry photos.
 
 ---
 
@@ -46,20 +46,27 @@ To prevent `413 Request Entity Too Large` errors, **NEVER** return Base64 image 
 *Ensure all the following route patterns exist and match their HTTP methods.*
 
 ### 🟢 Core & Auth
-- [ ] `GET  /` or `/health`
 - [ ] `POST /auth/customer-login`
-- [ ] `GET /account/intake` (New)
-- [ ] `POST /account/intake` (New)
+- [ ] `POST /auth/fitbit/url`
+- [ ] `POST /auth/fitbit/link`
+- [ ] `GET  /auth/fitbit/status`
+- [ ] `POST /auth/fitbit/disconnect`
 
-### 🛒 Grocery List
+### 🛒 Grocery & Nutrition
 - [ ] `GET  /grocery/lists`
-- [ ] `POST /grocery/lists`
-- [ ] `GET  /grocery/lists/:id/items`
-- [ ] `POST /grocery/lists/:id/items`
-- [ ] `PATCH /grocery/items/:id` (Toggle check)
-- [ ] `DELETE /grocery/items/:id`
-- [ ] `POST /grocery/lists/:id/import` (Import from plan)
-- [ ] `POST /grocery/lists/:id/clear` (Clear checked/all)
 - [ ] `POST /grocery/identify` (AI Vision)
+- [ ] `POST /analyze-image` (Macros Extraction)
+- [ ] `POST /get-recipes-from-image` (Pantry Chef)
+- [ ] `POST /search-food` (Manual Text Search)
 
-... [Rest of existing checklist remains valid] ...
+### 💪 Physical & Health
+- [ ] `POST /sync-health/fitbit`
+- [ ] `POST /analyze-health-screenshot` (Vision Sync)
+- [ ] `POST /body/analyze-form` (Form AI)
+- [ ] `GET  /body/photos` (Progress Gallery)
+- [ ] `GET  /account/medical-intake`
+
+### 👤 Social & Shopify
+- [ ] `GET  /social/friends`
+- [ ] `GET  /shopify/orders`
+- [ ] `GET  /shopify/products/:handle`
