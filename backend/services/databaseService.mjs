@@ -467,3 +467,8 @@ export const saveDashboardPrefs = async (userId, prefs) => {
     const client = await pool.connect();
     try { await client.query(`UPDATE users SET dashboard_prefs = $1 WHERE id = $2`, [prefs, userId]); } finally { client.release(); }
 };
+
+// FIX: Added getAssessments export used by index.mjs
+export const getAssessments = async () => [
+    { id: 'daily-pulse', title: 'Daily Pulse', description: 'Quick check of your mental and physical state.', questions: [{id: 'mood', text: 'How is your mood?', type: 'scale', min: 1, max: 10}] }
+];
