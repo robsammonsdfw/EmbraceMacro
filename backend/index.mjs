@@ -72,7 +72,6 @@ const callGemini = async (prompt, imageBase64, mimeType = 'image/jpeg', schema =
 
 export const handler = async (event) => {
     let path = event.path || event.rawPath || "";
-    // Robust path cleanup
     if (path.startsWith('/default')) path = path.replace('/default', '');
     if (path.endsWith('/') && path.length > 1) path = path.slice(0, -1);
     
@@ -116,12 +115,32 @@ export const handler = async (event) => {
             const exercise = event.queryStringParameters?.exercise || null;
             return sendResponse(200, await db.getFormChecks(userId, exercise));
         }
+        if (path.startsWith('/body/form-check/') && httpMethod === 'GET') {
+            const id = path.split('/').pop();
+            return sendResponse(200, await db.getFormCheckById(userId, id));
+        }
+
+        // --- GROCERY (FIXED 404s) ---
+        if (path === '/grocery/lists' && httpMethod === 'GET') return sendResponse(200, await db.getGroceryLists(userId));
+        if (path === '/grocery/lists' && httpMethod === 'POST') return sendResponse(200, await db.createGroceryList(userId, parseBody(event).name));
+        if (path.match(/^\/grocery\/lists\/\d+\/items$/) && httpMethod === 'GET') return sendResponse(200, await db.getGroceryListItems(path.split('/')[3]));
+        if (path.match(/^\/grocery\/lists\/\d+\/items$/) && httpMethod === 'POST') return sendResponse(200, await db.addGroceryItem(userId, path.split('/')[3], parseBody(event).name));
+        if (path.match(/^\/grocery\/items\/\d+$/) && httpMethod === 'PATCH') return sendResponse(200, await db.updateGroceryItem(userId, path.split('/').pop(), parseBody(event).checked));
+        if (path.match(/^\/grocery\/items\/\d+$/) && httpMethod === 'DELETE') {
+            await db.removeGroceryItem(userId, path.split('/').pop());
+            return sendResponse(200, { success: true });
+        }
+        if (path.match(/^\/grocery\/lists\/\d+\/clear$/) && httpMethod === 'POST') {
+            await db.clearGroceryListItems(userId, path.split('/')[3], parseBody(event).type);
+            return sendResponse(200, { success: true });
+        }
+        if (path.match(/^\/grocery\/lists\/\d+\/import$/) && httpMethod === 'POST') return sendResponse(200, await db.importIngredientsFromPlans(userId, path.split('/')[3], parseBody(event).planIds));
 
         // --- SOCIAL (FIXED 404s) ---
         if (path === '/social/friends' && httpMethod === 'GET') return sendResponse(200, await db.getFriends(userId));
         if (path === '/social/profile' && httpMethod === 'GET') return sendResponse(200, await db.getSocialProfile(userId));
 
-        // --- HEALTH ---
+        // --- HEALTH & SYNC ---
         if (path === '/health-metrics' && httpMethod === 'GET') {
             const date = event.queryStringParameters?.date || new Date().toISOString().split('T')[0];
             return sendResponse(200, await db.getHealthMetrics(userId, date));
@@ -132,11 +151,12 @@ export const handler = async (event) => {
             return sendResponse(200, await db.syncHealthMetrics(userId, data));
         }
 
-        // --- OTHER ROUTES ---
+        // --- OTHER ---
         if (path === '/rewards' && httpMethod === 'GET') return sendResponse(200, await db.getRewardsSummary(userId));
         if (path === '/body/dashboard-prefs' && httpMethod === 'GET') return sendResponse(200, await db.getDashboardPrefs(userId));
         if (path === '/body/dashboard-prefs' && httpMethod === 'POST') return sendResponse(200, await db.saveDashboardPrefs(userId, parseBody(event)));
         if (path === '/meal-log' && httpMethod === 'GET') return sendResponse(200, await db.getMealLogEntries(userId));
+        if (path.startsWith('/saved-meals') && httpMethod === 'GET') return sendResponse(200, await db.getSavedMeals(userId));
 
         return sendResponse(404, { error: 'Not found: ' + path });
     } catch (err) {

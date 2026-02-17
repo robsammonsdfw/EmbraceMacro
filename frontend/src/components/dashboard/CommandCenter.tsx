@@ -143,8 +143,11 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
             {/* Vitals Strip */}
             <div className="pt-4">
                 <TodayStrip 
-                    stats={healthStats} isHealthConnected={isHealthConnected} onConnect={onConnectHealth} 
-                    isSyncing={isHealthSyncing} dashboardPrefs={dashboardPrefs} 
+                    stats={healthStats} 
+                    isConnected={isHealthConnected} 
+                    onConnect={onConnectHealth} 
+                    isSyncing={isHealthSyncing} 
+                    dashboardPrefs={dashboardPrefs} 
                 />
             </div>
 

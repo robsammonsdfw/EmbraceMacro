@@ -17,7 +17,6 @@ export const findOrCreateUserByEmail = async (email) => {
     } finally { client.release(); }
 };
 
-// FIX: Added getShopifyCustomerId to fix error in shopifyService.mjs on line 23
 export const getShopifyCustomerId = async (userId) => {
     const client = await pool.connect();
     try {
@@ -26,7 +25,7 @@ export const getShopifyCustomerId = async (userId) => {
     } finally { client.release(); }
 };
 
-// --- HEALTH (FIXED COLUMNS) ---
+// --- HEALTH ---
 export const getHealthMetrics = async (userId, clientDate) => {
     const client = await pool.connect();
     try {
@@ -76,7 +75,7 @@ export const syncHealthMetrics = async (userId, stats) => {
     } finally { client.release(); }
 };
 
-// --- BODY PHOTOS (NEW) ---
+// --- BODY PHOTOS ---
 export const getBodyPhotos = async (userId) => {
     const client = await pool.connect();
     try {
@@ -110,7 +109,7 @@ export const getBodyPhotoById = async (userId, id) => {
     } finally { client.release(); }
 };
 
-// --- FORM CHECKS (NEW) ---
+// --- FORM CHECKS ---
 export const saveFormCheck = async (userId, exercise, imageBase64, score, feedback) => {
     const client = await pool.connect();
     try {
@@ -149,8 +148,89 @@ export const getFormCheckById = async (userId, id) => {
     } finally { client.release(); }
 };
 
-// --- NUTRITION & MEALS ---
-// FIX: Added getMealLogEntries to fix error in index.mjs on line 139
+// --- GROCERY ---
+export const getGroceryLists = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, name, is_active, created_at FROM grocery_lists WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
+        return res.rows;
+    } finally { client.release(); }
+};
+
+export const createGroceryList = async (userId, name) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`INSERT INTO grocery_lists (user_id, name) VALUES ($1, $2) RETURNING id, name, is_active, created_at`, [userId, name]);
+        return res.rows[0];
+    } finally { client.release(); }
+};
+
+export const getGroceryListItems = async (listId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, name, checked FROM grocery_list_items WHERE list_id = $1 ORDER BY name ASC`, [listId]);
+        return res.rows;
+    } finally { client.release(); }
+};
+
+export const addGroceryItem = async (userId, listId, name) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`INSERT INTO grocery_list_items (user_id, list_id, name) VALUES ($1, $2, $3) RETURNING id, name, checked`, [userId, listId, name]);
+        return res.rows[0];
+    } finally { client.release(); }
+};
+
+export const updateGroceryItem = async (userId, itemId, checked) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`UPDATE grocery_list_items SET checked = $1 WHERE id = $2 AND user_id = $3 RETURNING id, name, checked`, [checked, itemId, userId]);
+        return res.rows[0];
+    } finally { client.release(); }
+};
+
+export const removeGroceryItem = async (userId, itemId) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`DELETE FROM grocery_list_items WHERE id = $1 AND user_id = $2`, [itemId, userId]);
+    } finally { client.release(); }
+};
+
+export const clearGroceryListItems = async (userId, listId, type) => {
+    const client = await pool.connect();
+    try {
+        if (type === 'checked') {
+            await client.query(`DELETE FROM grocery_list_items WHERE list_id = $1 AND user_id = $2 AND checked = TRUE`, [listId, userId]);
+        } else {
+            await client.query(`DELETE FROM grocery_list_items WHERE list_id = $1 AND user_id = $2`, [listId, userId]);
+        }
+    } finally { client.release(); }
+};
+
+export const importIngredientsFromPlans = async (userId, listId, planIds) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const mealRes = await client.query(`
+            SELECT sm.meal_data
+            FROM saved_meals sm
+            JOIN meal_plan_items mpi ON sm.id = mpi.saved_meal_id
+            WHERE mpi.user_id = $1 AND mpi.meal_plan_id = ANY($2::int[])
+        `, [userId, planIds]);
+        
+        const ingredients = [...new Set(mealRes.rows.flatMap(r => r.meal_data.ingredients.map(i => i.name)))];
+        for (const ing of ingredients) {
+            await client.query(`INSERT INTO grocery_list_items (user_id, list_id, name) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, [userId, listId, ing]);
+        }
+        await client.query('COMMIT');
+        return getGroceryListItems(listId);
+    } catch (e) {
+        await client.query('ROLLBACK');
+        throw e;
+    } finally { client.release(); }
+};
+
+// --- MISC ---
 export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
     try {
@@ -176,7 +256,14 @@ export const getMealLogEntries = async (userId) => {
     }
 };
 
-// --- MISC ---
+export const getSavedMeals = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, meal_data, (image_base64 IS NOT NULL) as has_image FROM saved_meals WHERE user_id = $1 ORDER BY created_at DESC`, [userId]);
+        return res.rows.map(r => ({ ...r.meal_data, id: r.id, hasImage: r.has_image }));
+    } finally { client.release(); }
+};
+
 export const getDashboardPrefs = async (userId) => {
     const client = await pool.connect();
     try {
@@ -194,14 +281,20 @@ export const getRewardsSummary = async (userId) => {
     const client = await pool.connect();
     try {
         const bal = await client.query(`SELECT points_total, points_available, tier FROM rewards_balances WHERE user_id = $1`, [userId]);
-        return bal.rows[0] || { points_total: 0, points_available: 0, tier: 'Bronze' };
+        const hist = await client.query(`SELECT entry_id, event_type, points_delta, created_at FROM rewards_ledger WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20`, [userId]);
+        return { ...(bal.rows[0] || { points_total: 0, points_available: 0, tier: 'Bronze' }), history: hist.rows };
     } finally { client.release(); }
 };
 
 export const getFriends = async (userId) => {
     const client = await pool.connect();
     try {
-        const res = await client.query(`SELECT u.id as "friendId", u.email FROM users u JOIN friendships f ON (f.requester_id = u.id OR f.receiver_id = u.id) WHERE (f.requester_id = $1 OR f.receiver_id = $1) AND f.status = 'accepted' AND u.id != $1`, [userId]);
+        const res = await client.query(`
+            SELECT u.id as "friendId", u.email, u.first_name as "firstName"
+            FROM friendships f
+            JOIN users u ON (CASE WHEN f.requester_id = $1 THEN f.receiver_id ELSE f.requester_id END) = u.id
+            WHERE (f.requester_id = $1 OR f.receiver_id = $1) AND f.status = 'accepted'
+        `, [userId]);
         return res.rows;
     } finally { client.release(); }
 };
@@ -209,7 +302,7 @@ export const getFriends = async (userId) => {
 export const getSocialProfile = async (userId) => {
     const client = await pool.connect();
     try {
-        const res = await client.query(`SELECT id as "userId", email FROM users WHERE id = $1`, [userId]);
+        const res = await client.query(`SELECT id as "userId", email, first_name as "firstName", privacy_mode as "privacyMode", bio FROM users WHERE id = $1`, [userId]);
         return res.rows[0];
     } finally { client.release(); }
 };
