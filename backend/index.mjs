@@ -1,5 +1,6 @@
 
 import * as db from './services/databaseService.mjs';
+import * as shopify from './services/shopifyService.mjs';
 import jwt from 'jsonwebtoken';
 import { GoogleGenAI, Type } from "@google/genai";
 import { Buffer } from 'node:buffer';
@@ -106,6 +107,14 @@ export const handler = async (event) => {
         }
 
         const userId = getUserFromEvent(event);
+
+        // --- SHOPIFY ---
+        if (path === '/shopify/orders' && httpMethod === 'GET') {
+            return sendResponse(200, await shopify.fetchCustomerOrders(userId));
+        }
+        if (path.startsWith('/shopify/products/') && httpMethod === 'GET') {
+            return sendResponse(200, await shopify.getProductByHandle(path.split('/').pop()));
+        }
 
         // --- CONTENT / PULSE ---
         if (path === '/content/pulse' && httpMethod === 'GET') return sendResponse(200, await db.getArticles());
