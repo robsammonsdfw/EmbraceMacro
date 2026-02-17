@@ -133,7 +133,7 @@ export const RewardsDashboard: React.FC<RewardsDashboardProps> = ({ onNavigate }
     }
 
     const { points_total, tier, history } = rewardsData;
-    const cashValue = (points_total * 0.009).toFixed(2);
+    const cashValue = ((points_total ?? 0) * 0.009).toFixed(2);
 
     const tierColor = {
         'Bronze': 'text-amber-700 bg-amber-100 border-amber-300',
@@ -157,7 +157,7 @@ export const RewardsDashboard: React.FC<RewardsDashboardProps> = ({ onNavigate }
                              <span className="bg-white/20 px-2 py-0.5 rounded text-xs">Redeemable</span>
                         </div>
                         <div className="flex items-baseline justify-center md:justify-start space-x-3">
-                            <p className="text-5xl font-extrabold tracking-tight">{points_total.toLocaleString()}<span className="text-2xl font-medium ml-1">pts</span></p>
+                            <p className="text-5xl font-extrabold tracking-tight">{(points_total ?? 0).toLocaleString()}<span className="text-2xl font-medium ml-1">pts</span></p>
                             <span className="text-3xl opacity-60">·</span>
                             <p className="text-4xl font-bold text-emerald-300">${cashValue}</p>
                         </div>

@@ -88,7 +88,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                 <div className="flex-1 text-center md:text-left">
                     <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Health Wallet</p>
                     <div className="flex items-baseline justify-center md:justify-start gap-2">
-                        <span className="text-5xl font-black text-white">{rewardsBalance.toLocaleString()}</span>
+                        <span className="text-5xl font-black text-white">{(rewardsBalance ?? 0).toLocaleString()}</span>
                         <span className="text-emerald-400 font-black uppercase text-xs tracking-widest">Points</span>
                     </div>
                 </div>
@@ -158,19 +158,19 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                             <div>
                                 <div className="flex justify-between mb-2">
                                     <span className="font-black uppercase text-[10px] tracking-widest text-slate-600">Energy (Kcal)</span>
-                                    <span className="font-black text-slate-900">{Math.round(dailyCalories)} / {calorieGoal}</span>
+                                    <span className="font-black text-slate-900">{Math.round(dailyCalories ?? 0)} / {calorieGoal}</span>
                                 </div>
                                 <div className="h-3 bg-slate-100 rounded-full overflow-hidden shadow-inner">
-                                    <div className="h-full bg-emerald-500 rounded-full transition-all duration-1000 shadow-lg" style={{ width: `${Math.min(100, (dailyCalories / calorieGoal) * 100)}%` }}></div>
+                                    <div className="h-full bg-emerald-500 rounded-full transition-all duration-1000 shadow-lg" style={{ width: `${Math.min(100, ((dailyCalories ?? 0) / calorieGoal) * 100)}%` }}></div>
                                 </div>
                             </div>
                             <div>
                                 <div className="flex justify-between mb-2">
                                     <span className="font-black uppercase text-[10px] tracking-widest text-slate-600">Protein (Grams)</span>
-                                    <span className="font-black text-slate-900">{Math.round(dailyProtein)} / {proteinGoal}g</span>
+                                    <span className="font-black text-slate-900">{Math.round(dailyProtein ?? 0)} / {proteinGoal}g</span>
                                 </div>
                                 <div className="h-3 bg-slate-100 rounded-full overflow-hidden shadow-inner">
-                                    <div className="h-full bg-indigo-500 rounded-full transition-all duration-1000 shadow-lg" style={{ width: `${Math.min(100, (dailyProtein / proteinGoal) * 100)}%` }}></div>
+                                    <div className="h-full bg-indigo-500 rounded-full transition-all duration-1000 shadow-lg" style={{ width: `${Math.min(100, ((dailyProtein ?? 0) / proteinGoal) * 100)}%` }}></div>
                                 </div>
                             </div>
                         </div>

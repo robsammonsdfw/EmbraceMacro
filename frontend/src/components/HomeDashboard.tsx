@@ -24,8 +24,8 @@ const DigitalTwin: React.FC<{
 }> = ({ calories, protein, calorieGoal, proteinGoal, activityScore, onBodyClick }) => {
     
     // Calculate progress (capped at 100%)
-    const calPct = Math.min(100, (calories / calorieGoal) * 100);
-    const protPct = Math.min(100, (protein / proteinGoal) * 100);
+    const calPct = Math.min(100, ((calories ?? 0) / calorieGoal) * 100);
+    const protPct = Math.min(100, ((protein ?? 0) / proteinGoal) * 100);
     const actPct = Math.min(100, activityScore);
 
     // SVG parameters
@@ -138,8 +138,8 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
     const activityScore = 65; 
 
     // Helper to get wallet string
-    const walletBalance = rewards ? `${rewards.points_total.toLocaleString()} pts` : 'Loading...';
-    const cashValue = rewards ? `$${(rewards.points_total * 0.009).toFixed(2)}` : '...';
+    const walletBalance = rewards ? `${(rewards.points_total ?? 0).toLocaleString()} pts` : 'Loading...';
+    const cashValue = rewards ? `$${((rewards.points_total ?? 0) * 0.009).toFixed(2)}` : '...';
 
     const handleBodyScanClick = () => {
         // Redirect to body scan page logic or modal
@@ -201,8 +201,8 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
 
                 {/* Legend */}
                 <div className="flex justify-center gap-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                    <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Cal: {Math.round(dailyStats.calories)}</div>
-                    <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500"></span> Pro: {Math.round(dailyStats.protein)}g</div>
+                    <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Cal: {Math.round(dailyStats.calories ?? 0)}</div>
+                    <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500"></span> Pro: {Math.round(dailyStats.protein ?? 0)}g</div>
                     <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500"></span> Activity</div>
                 </div>
             </section>

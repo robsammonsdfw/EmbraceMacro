@@ -94,7 +94,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeView, onNavigate, onLogout
                                     <span className="text-[10px] uppercase font-bold text-slate-400">Health Wallet</span>
                                     <div className="flex items-baseline space-x-1">
                                         <span className={`text-sm font-bold ${activeView === 'rewards' ? 'text-indigo-700' : 'text-slate-700'}`}>
-                                            {points.toLocaleString()} pts
+                                            {(points ?? 0).toLocaleString()} pts
                                         </span>
                                     </div>
                                 </div>

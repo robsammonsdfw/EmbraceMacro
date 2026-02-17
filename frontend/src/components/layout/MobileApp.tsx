@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { 
     ActivityIcon, CameraIcon, BrainIcon, 
@@ -49,11 +50,11 @@ type StackLevel = 'home' | 'account' | 'physical' | 'nutrition' | 'mental' | 'sl
 const VitalsStrip: React.FC<{ stats: HealthStats; prefs: UserDashboardPrefs; onVisionSync?: () => void }> = ({ stats, prefs, onVisionSync }) => {
     
     const allWidgets: Record<string, { label: string, value: string | number, unit: string, color: string }> = {
-        steps: { label: 'Steps', value: stats.steps.toLocaleString(), unit: '', color: 'text-blue-500' },
-        activeCalories: { label: 'Active', value: Math.round(stats.activeCalories), unit: 'kcal', color: 'text-emerald-500' },
-        restingCalories: { label: 'Resting', value: Math.round(stats.restingCalories), unit: 'kcal', color: 'text-indigo-500' },
-        distanceMiles: { label: 'Dist', value: stats.distanceMiles.toFixed(1), unit: 'mi', color: 'text-amber-500' },
-        flightsClimbed: { label: 'Flights', value: stats.flightsClimbed, unit: 'flr', color: 'text-rose-500' },
+        steps: { label: 'Steps', value: (stats.steps ?? 0).toLocaleString(), unit: '', color: 'text-blue-500' },
+        activeCalories: { label: 'Active', value: Math.round(stats.activeCalories ?? 0), unit: 'kcal', color: 'text-emerald-500' },
+        restingCalories: { label: 'Resting', value: Math.round(stats.restingCalories ?? 0), unit: 'kcal', color: 'text-indigo-500' },
+        distanceMiles: { label: 'Dist', value: (stats.distanceMiles ?? 0).toFixed(1), unit: 'mi', color: 'text-amber-500' },
+        flightsClimbed: { label: 'Flights', value: stats.flightsClimbed ?? 0, unit: 'flr', color: 'text-rose-500' },
         heartRate: { label: 'HR', value: stats.heartRate || '--', unit: 'bpm', color: 'text-red-500' },
         restingHeartRate: { label: 'RHR', value: stats.restingHeartRate || '--', unit: 'bpm', color: 'text-rose-600' },
         sleepScore: { label: 'Sleep', value: stats.sleepScore || '--', unit: 'pts', color: 'text-indigo-600' },
@@ -182,14 +183,6 @@ export const MobileApp: React.FC<MobileAppProps> = ({
         institutional: false
     });
 
-    const toggleTelemedCategory = (cat: keyof typeof telemedCategories) => {
-        setTelemedCategories(prev => ({ ...prev, [cat]: !prev[cat] }));
-    };
-
-    const toggleRolesCategory = (cat: keyof typeof rolesCategories) => {
-        setRolesCategories(prev => ({ ...prev, [cat]: !prev[cat] }));
-    };
-
     const navigateTo = (level: StackLevel, view?: string) => {
         setStack(level);
         if (view) setSubView(view);
@@ -202,6 +195,14 @@ export const MobileApp: React.FC<MobileAppProps> = ({
         } else {
             setStack('home');
         }
+    };
+
+    const toggleTelemedCategory = (cat: keyof typeof telemedCategories) => {
+        setTelemedCategories(prev => ({ ...prev, [cat]: !prev[cat] }));
+    };
+
+    const toggleRolesCategory = (cat: keyof typeof rolesCategories) => {
+        setRolesCategories(prev => ({ ...prev, [cat]: !prev[cat] }));
     };
 
     const handleArticleAction = (type: string, payload: any) => {

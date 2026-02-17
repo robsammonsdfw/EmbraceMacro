@@ -43,8 +43,8 @@ const StatCard: React.FC<{
 export const TodayStrip: React.FC<TodayStripProps> = ({ stats, onConnect, dashboardPrefs, isSyncing }) => {
     
     const availableWidgets = [
-        { id: 'steps', label: 'Steps', value: stats.steps.toLocaleString(), subValue: 'Daily Count', icon: <ActivityIcon />, colors: 'bg-blue-50 text-blue-600' },
-        { id: 'activeCalories', label: 'Active Burn', value: Math.round(stats.activeCalories), subValue: 'kcal', icon: <FireIcon />, colors: 'bg-emerald-50 text-emerald-600' },
+        { id: 'steps', label: 'Steps', value: (stats.steps ?? 0).toLocaleString(), subValue: 'Daily Count', icon: <ActivityIcon />, colors: 'bg-blue-50 text-blue-600' },
+        { id: 'activeCalories', label: 'Active Burn', value: Math.round(stats.activeCalories ?? 0), subValue: 'kcal', icon: <FireIcon />, colors: 'bg-emerald-50 text-emerald-600' },
         { id: 'heartRate', label: 'Current HR', value: stats.heartRate || '--', subValue: 'bpm', icon: <HeartIcon />, colors: 'bg-red-50 text-red-600' },
         { id: 'bloodPressure', label: 'Blood Pressure', value: stats.bloodPressureSystolic && stats.bloodPressureDiastolic ? `${stats.bloodPressureSystolic}/${stats.bloodPressureDiastolic}` : '--', subValue: 'mmHg', icon: <HeartIcon />, colors: 'bg-rose-100 text-rose-600 border-rose-200' },
         { id: 'weight', label: 'Body Weight', value: stats.weightLbs ? stats.weightLbs.toFixed(1) : '--', subValue: 'lbs', icon: <ActivityIcon />, colors: 'bg-slate-100 text-slate-700' },
