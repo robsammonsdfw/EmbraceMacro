@@ -1,4 +1,3 @@
-
 import * as db from './services/databaseService.mjs';
 import * as shopify from './services/shopifyService.mjs';
 import jwt from 'jsonwebtoken';
@@ -99,31 +98,31 @@ export const handler = async (event) => {
         const userId = getUserFromEvent(event);
         const body = parseBody(event);
         const queryParams = event.queryStringParameters || {};
+        const segments = path.split('/');
 
-        // --- NUTRITION LOGS (THE MISSING PIECES) ---
+        // --- NUTRITION LOGS ---
         if (path === '/nutrition/pantry-log' && method === 'GET') return sendResponse(200, await db.getPantryLog(userId));
         if (path === '/nutrition/pantry-log' && method === 'POST') return sendResponse(200, await db.savePantryLogEntry(userId, body.imageBase64));
-        if (path.match(/^\/nutrition\/pantry-log\/\d+$/) && method === 'GET') return sendResponse(200, await db.getPantryLogEntryById(userId, path.split('/').pop()));
+        if (path.match(/^\/nutrition\/pantry-log\/\d+$/) && method === 'GET') return sendResponse(200, await db.getPantryLogEntryById(userId, segments.pop()));
         
         if (path === '/nutrition/restaurant-log' && method === 'GET') return sendResponse(200, await db.getRestaurantLog(userId));
         if (path === '/nutrition/restaurant-log' && method === 'POST') return sendResponse(200, await db.saveRestaurantLogEntry(userId, body.imageBase64));
-        if (path.match(/^\/nutrition\/restaurant-log\/\d+$/) && method === 'GET') return sendResponse(200, await db.getRestaurantLogEntryById(userId, path.split('/').pop()));
+        if (path.match(/^\/nutrition\/restaurant-log\/\d+$/) && method === 'GET') return sendResponse(200, await db.getRestaurantLogEntryById(userId, segments.pop()));
 
         // --- MEAL PLANS & MEALS ---
         if (path === '/meal-plans' && method === 'GET') return sendResponse(200, await db.getMealPlans(userId));
         if (path === '/meal-plans' && method === 'POST') return sendResponse(200, await db.createMealPlan(userId, body.name));
-        // FIX: Updated function name to addMealToPlan and added metadata argument
-        if (path.match(/^\/meal-plans\/\d+\/items$/) && method === 'POST') return sendResponse(200, await db.addMealToPlan(userId, path.split('/')[2], body.savedMealId, body.metadata || {}));
-        // FIX: Updated function name to removeMealFromPlan
-        if (path.match(/^\/meal-plans\/items\/\d+$/) && method === 'DELETE') return sendResponse(200, await db.removeMealFromPlan(userId, path.split('/').pop()));
+        // /meal-plans/:id/items -> split("/") yields ["", "meal-plans", "id", "items"] -> index 2
+        if (path.match(/^\/meal-plans\/\d+\/items$/) && method === 'POST') return sendResponse(200, await db.addMealToPlan(userId, segments[2], body.savedMealId, body.metadata || {}));
+        if (path.match(/^\/meal-plans\/items\/\d+$/) && method === 'DELETE') return sendResponse(200, await db.removeMealFromPlan(userId, segments.pop()));
         
         if (path === '/saved-meals' && method === 'GET') return sendResponse(200, await db.getSavedMeals(userId));
         if (path === '/saved-meals' && method === 'POST') return sendResponse(200, await db.saveMeal(userId, body));
-        if (path.match(/^\/saved-meals\/\d+$/) && method === 'GET') return sendResponse(200, await db.getSavedMealById(userId, path.split('/').pop()));
-        if (path.match(/^\/saved-meals\/\d+$/) && method === 'DELETE') return sendResponse(200, await db.deleteMeal(userId, path.split('/').pop()));
+        if (path.match(/^\/saved-meals\/\d+$/) && method === 'GET') return sendResponse(200, await db.getSavedMealById(userId, segments.pop()));
+        if (path.match(/^\/saved-meals\/\d+$/) && method === 'DELETE') return sendResponse(200, await db.deleteMeal(userId, segments.pop()));
 
         if (path === '/meal-log' && method === 'GET') return sendResponse(200, await db.getMealLogEntries(userId));
-        if (path.match(/^\/meal-log\/\d+$/) && method === 'GET') return sendResponse(200, await db.getMealLogEntryById(userId, path.split('/').pop()));
+        if (path.match(/^\/meal-log\/\d+$/) && method === 'GET') return sendResponse(200, await db.getMealLogEntryById(userId, segments.pop()));
 
         // --- HEALTH & VITALS ---
         if (path === '/health-metrics' && method === 'GET') return sendResponse(200, await db.getHealthMetrics(userId));
@@ -149,7 +148,7 @@ export const handler = async (event) => {
         // --- BODY & FORM ---
         if (path === '/body/photos' && method === 'GET') return sendResponse(200, await db.getBodyPhotos(userId));
         if (path === '/body/photos' && method === 'POST') { await db.uploadBodyPhoto(userId, body.base64Image, body.category); return sendResponse(200, { success: true }); }
-        if (path.match(/^\/body\/photos\/\d+$/) && method === 'GET') return sendResponse(200, await db.getBodyPhotoById(userId, path.split('/').pop()));
+        if (path.match(/^\/body\/photos\/\d+$/) && method === 'GET') return sendResponse(200, await db.getBodyPhotoById(userId, segments.pop()));
         if (path === '/body/form-checks' && method === 'GET') return sendResponse(200, await db.getFormChecks(userId, queryParams.exercise));
         if (path === '/body/analyze-form' && method === 'POST') {
             const prompt = `Analyze this ${body.exercise} form. JSON only.`;
@@ -157,21 +156,23 @@ export const handler = async (event) => {
             return sendResponse(200, res);
         }
 
-        // --- GROCERY ---
+        // --- GROCERY (FIXED SEGMENT INDEXING) ---
         if (path === '/grocery/lists' && method === 'GET') return sendResponse(200, await db.getGroceryLists(userId));
         if (path === '/grocery/lists' && method === 'POST') return sendResponse(200, await db.createGroceryList(userId, body.name));
-        if (path.match(/^\/grocery\/lists\/\d+$/) && method === 'DELETE') { await db.deleteGroceryList(userId, path.split('/').pop()); return sendResponse(200, { success: true }); }
-        if (path.match(/^\/grocery\/lists\/\d+\/items$/) && method === 'GET') return sendResponse(200, await db.getGroceryListItems(path.split('/')[2]));
-        if (path.match(/^\/grocery\/lists\/\d+\/items$/) && method === 'POST') return sendResponse(200, await db.addGroceryItem(userId, path.split('/')[2], body.name));
-        if (path.match(/^\/grocery\/items\/\d+$/) && method === 'PATCH') return sendResponse(200, await db.updateGroceryItem(userId, path.split('/').pop(), body.checked));
-        if (path.match(/^\/grocery\/items\/\d+$/) && method === 'DELETE') { await db.removeGroceryItem(userId, path.split('/').pop()); return sendResponse(200, { success: true }); }
-        if (path.match(/^\/grocery\/lists\/\d+\/import$/) && method === 'POST') return sendResponse(200, await db.importIngredientsFromPlans(userId, path.split('/')[2], body.planIds));
-        if (path.match(/^\/grocery\/lists\/\d+\/clear$/) && method === 'POST') { await db.clearGroceryListItems(userId, path.split('/')[2], body.type); return sendResponse(200, { success: true }); }
+        if (path.match(/^\/grocery\/lists\/\d+$/) && method === 'DELETE') { await db.deleteGroceryList(userId, segments.pop()); return sendResponse(200, { success: true }); }
+        
+        // Nested grocery list routes: /grocery/lists/:id/items -> segments = ["", "grocery", "lists", ":id", "items"] -> index 3
+        if (path.match(/^\/grocery\/lists\/\d+\/items$/) && method === 'GET') return sendResponse(200, await db.getGroceryListItems(segments[3]));
+        if (path.match(/^\/grocery\/lists\/\d+\/items$/) && method === 'POST') return sendResponse(200, await db.addGroceryItem(userId, segments[3], body.name));
+        if (path.match(/^\/grocery\/items\/\d+$/) && method === 'PATCH') return sendResponse(200, await db.updateGroceryItem(userId, segments.pop(), body.checked));
+        if (path.match(/^\/grocery\/items\/\d+$/) && method === 'DELETE') { await db.removeGroceryItem(userId, segments.pop()); return sendResponse(200, { success: true }); }
+        if (path.match(/^\/grocery\/lists\/\d+\/import$/) && method === 'POST') return sendResponse(200, await db.importIngredientsFromPlans(userId, segments[3], body.planIds));
+        if (path.match(/^\/grocery\/lists\/\d+\/clear$/) && method === 'POST') { await db.clearGroceryListItems(userId, segments[3], body.type); return sendResponse(200, { success: true }); }
 
         // --- PULSE & SHOPIFY ---
         if (path === '/content/pulse' && method === 'GET') return sendResponse(200, await db.getArticles());
         if (path === '/shopify/orders' && method === 'GET') return sendResponse(200, await shopify.fetchCustomerOrders(userId));
-        if (path.match(/^\/shopify\/products\/[a-z0-9-]+$/) && method === 'GET') return sendResponse(200, await shopify.getProductByHandle(path.split('/').pop()));
+        if (path.match(/^\/shopify\/products\/[a-z0-9-]+$/) && method === 'GET') return sendResponse(200, await shopify.getProductByHandle(segments.pop()));
 
         // --- AI TOOLS ---
         if (path === '/analyze-image' && method === 'POST') {
