@@ -45,7 +45,14 @@ const unifiedNutritionSchema = {
             type: Type.ARRAY,
             items: {
                 type: Type.OBJECT,
-                properties: { name: { type: Type.STRING }, weightGrams: { type: Type.NUMBER }, calories: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, fat: { type: Type.NUMBER } },
+                properties: { 
+                    name: { type: Type.STRING }, 
+                    weightGrams: { type: Type.NUMBER }, 
+                    calories: { type: Type.NUMBER }, 
+                    protein: { type: Type.NUMBER }, 
+                    carbs: { type: Type.NUMBER }, 
+                    fat: { type: Type.NUMBER } 
+                },
                 required: ["name", "weightGrams", "calories", "protein", "carbs", "fat"]
             }
         },
@@ -100,24 +107,23 @@ export const handler = async (event) => {
 
         const userId = getUserFromEvent(event);
 
-        // --- PULSE / CONTENT ---
+        // --- CONTENT / PULSE ---
         if (path === '/content/pulse' && httpMethod === 'GET') return sendResponse(200, await db.getArticles());
         if (path === '/content/pulse' && httpMethod === 'POST') return sendResponse(200, await db.publishArticle(parseBody(event)));
         if (path.match(/^\/content\/pulse\/\d+\/action$/) && httpMethod === 'POST') {
-            const articleId = path.split('/')[3];
-            return sendResponse(200, await db.completeArticleAction(userId, articleId, parseBody(event).actionType));
+            return sendResponse(200, await db.completeArticleAction(userId, path.split('/')[3], parseBody(event).actionType));
         }
 
-        // --- NUTRITION LOGS (PANTRY / RESTAURANT) ---
+        // --- NUTRITION LOGS ---
         if (path === '/nutrition/pantry-log' && httpMethod === 'GET') return sendResponse(200, await db.getPantryLog(userId));
         if (path === '/nutrition/pantry-log' && httpMethod === 'POST') return sendResponse(200, await db.savePantryLogEntry(userId, parseBody(event).imageBase64));
-        if (path.match(/^\/nutrition\/pantry-log\/\d+$/) && httpMethod === 'GET') return sendResponse(200, await db.getPantryLogEntryById(userId, path.split('/').pop()));
+        if (path.startsWith('/nutrition/pantry-log/') && httpMethod === 'GET') return sendResponse(200, await db.getPantryLogEntryById(userId, path.split('/').pop()));
 
         if (path === '/nutrition/restaurant-log' && httpMethod === 'GET') return sendResponse(200, await db.getRestaurantLog(userId));
         if (path === '/nutrition/restaurant-log' && httpMethod === 'POST') return sendResponse(200, await db.saveRestaurantLogEntry(userId, parseBody(event).imageBase64));
-        if (path.match(/^\/nutrition\/restaurant-log\/\d+$/) && httpMethod === 'GET') return sendResponse(200, await db.getRestaurantLogEntryById(userId, path.split('/').pop()));
+        if (path.startsWith('/nutrition/restaurant-log/') && httpMethod === 'GET') return sendResponse(200, await db.getRestaurantLogEntryById(userId, path.split('/').pop()));
 
-        // --- GROCERY ---
+        // --- GROCERY HUB ---
         if (path === '/grocery/lists' && httpMethod === 'GET') return sendResponse(200, await db.getGroceryLists(userId));
         if (path === '/grocery/lists' && httpMethod === 'POST') return sendResponse(200, await db.createGroceryList(userId, parseBody(event).name));
         if (path.match(/^\/grocery\/lists\/\d+$/) && httpMethod === 'DELETE') return sendResponse(200, await db.deleteGroceryList(userId, path.split('/').pop()));
@@ -130,37 +136,34 @@ export const handler = async (event) => {
 
         // --- SOCIAL ---
         if (path === '/social/friends' && httpMethod === 'GET') return sendResponse(200, await db.getFriends(userId));
-        if (path === '/social/profile' && httpMethod === 'GET') return sendResponse(200, await db.getSocialProfile(userId));
-        if (path === '/social/profile' && httpMethod === 'PATCH') return sendResponse(200, await db.updateSocialProfile(userId, parseBody(event)));
-        if (path === '/social/request' && httpMethod === 'POST') return sendResponse(200, await db.sendFriendRequest(userId, parseBody(event).email));
         if (path === '/social/requests' && httpMethod === 'GET') return sendResponse(200, await db.getFriendRequests(userId));
-        if (path === '/social/request/respond' && httpMethod === 'POST') return sendResponse(200, await db.respondToFriendRequest(userId, parseBody(event).id, parseBody(event).status));
+        if (path === '/social/profile' && httpMethod === 'GET') return sendResponse(200, await db.getSocialProfile(userId));
+        if (path === '/social/request' && httpMethod === 'POST') return sendResponse(200, await db.sendFriendRequest(userId, parseBody(event).email));
 
-        // --- MEALS & PLANS ---
-        if (path === '/meal-plans' && httpMethod === 'GET') return sendResponse(200, await db.getMealPlans(userId));
-        if (path === '/meal-plans' && httpMethod === 'POST') return sendResponse(200, await db.createMealPlan(userId, parseBody(event).name));
-        if (path.match(/^\/meal-plans\/\d+\/items$/) && httpMethod === 'POST') return sendResponse(200, await db.addMealToPlan(userId, path.split('/')[2], parseBody(event).savedMealId, parseBody(event).metadata));
-        if (path.match(/^\/meal-plans\/items\/\d+$/) && httpMethod === 'DELETE') return sendResponse(200, await db.removeMealFromPlan(userId, path.split('/').pop()));
-        
+        // --- MEALS & HISTORY ---
+        if (path === '/meal-log' && httpMethod === 'GET') return sendResponse(200, await db.getMealLogEntries(userId));
+        if (path.match(/^\/meal-log\/\d+$/) && httpMethod === 'GET') return sendResponse(200, await db.getMealLogEntryById(userId, path.split('/').pop()));
         if (path === '/saved-meals' && httpMethod === 'GET') return sendResponse(200, await db.getSavedMeals(userId));
         if (path === '/saved-meals' && httpMethod === 'POST') return sendResponse(200, await db.saveMeal(userId, parseBody(event)));
         if (path.match(/^\/saved-meals\/\d+$/) && httpMethod === 'GET') return sendResponse(200, await db.getSavedMealById(userId, path.split('/').pop()));
         if (path.match(/^\/saved-meals\/\d+$/) && httpMethod === 'DELETE') return sendResponse(200, await db.deleteMeal(userId, path.split('/').pop()));
         
-        if (path === '/meal-log' && httpMethod === 'GET') return sendResponse(200, await db.getMealLogEntries(userId));
-        if (path.match(/^\/meal-log\/\d+$/) && httpMethod === 'GET') return sendResponse(200, await db.getMealLogEntryById(userId, path.split('/').pop()));
+        // --- MEAL PLANS ---
+        if (path === '/meal-plans' && httpMethod === 'GET') return sendResponse(200, await db.getMealPlans(userId));
+        if (path === '/meal-plans' && httpMethod === 'POST') return sendResponse(200, await db.createMealPlan(userId, parseBody(event).name));
+        if (path.match(/^\/meal-plans\/\d+\/items$/) && httpMethod === 'POST') return sendResponse(200, await db.addMealToPlan(userId, path.split('/')[2], parseBody(event).savedMealId, parseBody(event).metadata));
+        if (path.match(/^\/meal-plans\/items\/\d+$/) && httpMethod === 'DELETE') return sendResponse(200, await db.removeMealFromPlan(userId, path.split('/').pop()));
 
-        // --- AI ANALYSIS ---
+        // --- AI TOOLS ---
         if (path === '/analyze-image' && httpMethod === 'POST') {
             const { base64Image, mimeType, prompt } = parseBody(event);
-            const data = await callGemini(prompt || "Analyze meal JSON.", base64Image, mimeType, unifiedNutritionSchema);
+            const data = await callGemini(prompt || "Extract macros JSON.", base64Image, mimeType, unifiedNutritionSchema);
             await db.createMealLogEntry(userId, data, base64Image);
             return sendResponse(200, data);
         }
-
         if (path === '/get-meal-suggestions' && httpMethod === 'POST') {
             const { conditions, cuisine, duration } = parseBody(event);
-            const prompt = `Suggest 3 meals for ${conditions.join(', ')} in ${cuisine} style for a ${duration}. JSON only.`;
+            const prompt = `Suggest meals for ${conditions.join(',')} in ${cuisine} for a ${duration}. JSON only.`;
             return sendResponse(200, await callGemini(prompt, null, null, { type: Type.ARRAY, items: unifiedNutritionSchema }));
         }
 
@@ -171,9 +174,9 @@ export const handler = async (event) => {
         if (path === '/body/dashboard-prefs' && httpMethod === 'GET') return sendResponse(200, await db.getDashboardPrefs(userId));
         if (path === '/body/dashboard-prefs' && httpMethod === 'POST') return sendResponse(200, await db.saveDashboardPrefs(userId, parseBody(event)));
 
-        return sendResponse(404, { error: 'Not found: ' + path });
+        return sendResponse(404, { error: 'Route not found: ' + path });
     } catch (err) {
-        console.error('Handler error:', err);
+        console.error('Handler crash:', err);
         return sendResponse(500, { error: err.message });
     }
 };

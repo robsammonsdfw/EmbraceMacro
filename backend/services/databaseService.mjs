@@ -8,6 +8,7 @@ const pool = new Pool({
 
 /**
  * STRATEGY: Strip Base64 from list responses to prevent AWS Lambda 413 Payload error.
+ * Added "hasImage" flag so frontend knows to show "View" button.
  */
 const processMealDataForList = (mealData, externalHasImage = false) => {
     const dataForList = { ...mealData };
@@ -37,7 +38,7 @@ export const getShopifyCustomerId = async (userId) => {
     } finally { client.release(); }
 };
 
-// --- PULSE ---
+// --- PULSE / CONTENT ---
 export const getArticles = async () => {
     const client = await pool.connect();
     try {
@@ -60,7 +61,7 @@ export const completeArticleAction = async (userId, articleId, actionType) => {
     return { success: true };
 };
 
-// --- PANTRY & RESTAURANT LOGS ---
+// --- NUTRITION LOGS (PANTRY / RESTAURANT) ---
 export const getPantryLog = async (userId) => {
     const client = await pool.connect();
     try {
@@ -109,7 +110,7 @@ export const getRestaurantLogEntryById = async (userId, id) => {
     } finally { client.release(); }
 };
 
-// --- GROCERY ---
+// --- GROCERY HUB ---
 export const getGroceryLists = async (userId) => {
     const client = await pool.connect();
     try {
@@ -221,30 +222,11 @@ export const sendFriendRequest = async (userId, email) => {
     } finally { client.release(); }
 };
 
-export const respondToFriendRequest = async (userId, id, status) => {
-    const client = await pool.connect();
-    try { await client.query(`UPDATE friendships SET status = $1 WHERE id = $2 AND receiver_id = $3`, [status, id, userId]); } finally { client.release(); }
-};
-
 export const getSocialProfile = async (userId) => {
     const client = await pool.connect();
     try {
         const res = await client.query(`SELECT id as "userId", email, first_name as "firstName", privacy_mode as "privacyMode", bio FROM users WHERE id = $1`, [userId]);
         return res.rows[0];
-    } finally { client.release(); }
-};
-
-export const updateSocialProfile = async (userId, updates) => {
-    const client = await pool.connect();
-    try {
-        const fields = [];
-        const values = [];
-        if (updates.privacyMode) { fields.push(`privacy_mode = $${values.length + 1}`); values.push(updates.privacyMode); }
-        if (updates.bio !== undefined) { fields.push(`bio = $${values.length + 1}`); values.push(updates.bio); }
-        if (fields.length === 0) return getSocialProfile(userId);
-        values.push(userId);
-        await client.query(`UPDATE users SET ${fields.join(', ')} WHERE id = $${values.length}`, values);
-        return getSocialProfile(userId);
     } finally { client.release(); }
 };
 
@@ -343,9 +325,6 @@ export const getSavedMealById = async (userId, id) => {
     } finally { client.release(); }
 };
 
-/**
- * FIX: Added deleteMeal function to database service to support the DELETE /saved-meals/:id endpoint
- */
 export const deleteMeal = async (userId, id) => {
     const client = await pool.connect();
     try { await client.query(`DELETE FROM saved_meals WHERE id = $1 AND user_id = $2`, [id, userId]); } finally { client.release(); }
