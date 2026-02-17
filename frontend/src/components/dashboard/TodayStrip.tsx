@@ -44,7 +44,7 @@ export const TodayStrip: React.FC<TodayStripProps> = ({ stats, onConnect, dashbo
     
     const availableWidgets = [
         { id: 'steps', label: 'Steps', value: (stats.steps ?? 0).toLocaleString(), subValue: 'Daily Count', icon: <ActivityIcon />, colors: 'bg-blue-50 text-blue-600' },
-        { id: 'activeCalories', label: 'Active Burn', value: Math.round(stats.activeCalories ?? 0), subValue: 'kcal', icon: <FireIcon />, colors: 'bg-emerald-50 text-emerald-600' },
+        { id: 'activeCalories', label: 'Active Burn', value: Math.round(stats.activeCalories ?? 0).toLocaleString(), subValue: 'kcal', icon: <FireIcon />, colors: 'bg-emerald-50 text-emerald-600' },
         { id: 'heartRate', label: 'Current HR', value: stats.heartRate || '--', subValue: 'bpm', icon: <HeartIcon />, colors: 'bg-red-50 text-red-600' },
         { id: 'bloodPressure', label: 'Blood Pressure', value: stats.bloodPressureSystolic && stats.bloodPressureDiastolic ? `${stats.bloodPressureSystolic}/${stats.bloodPressureDiastolic}` : '--', subValue: 'mmHg', icon: <HeartIcon />, colors: 'bg-rose-100 text-rose-600 border-rose-200' },
         { id: 'weight', label: 'Body Weight', value: stats.weightLbs ? stats.weightLbs.toFixed(1) : '--', subValue: 'lbs', icon: <ActivityIcon />, colors: 'bg-slate-100 text-slate-700' },
@@ -53,7 +53,7 @@ export const TodayStrip: React.FC<TodayStripProps> = ({ stats, onConnect, dashbo
     ];
 
     const selectedWidgets = availableWidgets.filter(w => (dashboardPrefs.selectedWidgets || []).includes(w.id)).slice(0, 3);
-    if (selectedWidgets.length === 0) selectedWidgets.push(availableWidgets[0], availableWidgets[3], availableWidgets[4]);
+    if (selectedWidgets.length === 0) selectedWidgets.push(availableWidgets[0], availableWidgets[1], availableWidgets[4]);
 
     return (
         <div className="space-y-4 mb-6">

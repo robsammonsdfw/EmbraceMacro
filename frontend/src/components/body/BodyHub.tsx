@@ -32,44 +32,34 @@ const BODY_POSE_GRID = [
 ];
 
 const BodybuilderOutline: React.FC<{ pose: string; className?: string }> = ({ pose, className }) => {
-    // Specific SVG paths for each pose silhouette
     let path = ""; 
     let viewBox = "0 0 24 24";
     let scale = "scale(1)";
     
-    // These paths are stylized simplifications of the classic bodybuilding poses
     switch (pose) {
         case 'Front Double Bicep':
-            // Arms flexed up, symmetrical
             path = "M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 8C21 7.4 20.6 7 20 7H17C16.4 7 16 7.4 16 8V10H15V8C15 6.3 13.7 5 12 5C10.3 5 9 6.3 9 8V10H8V8C8 7.4 7.6 7 7 7H4C3.4 7 3 7.4 3 8V10C3 11.1 3.9 12 5 12H6V16C6 16.6 6.4 17 7 17H8.5V23H10.5V17H13.5V23H15.5V17H17C17.6 17 18 16.6 18 16V12H19C20.1 12 21 11.1 21 10V8Z";
             break;
         case 'Front Lat Spread':
-            // Hands on hips, lats flared
             path = "M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM18 8C18 6.3 16.7 5 15 5H13V17H15.5V23H17.5V15H18.5C19.3 15 20 14.3 20 13.5V11C20 9.3 19.1 8 18 8ZM6 8C4.9 8 4 9.3 4 11V13.5C4 14.3 4.7 15 5.5 15H6.5V23H8.5V17H11V5H9C7.3 5 6 6.3 6 8Z";
             break;
         case 'Side Chest Left':
-            // Profile view, hands clasped
             path = "M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM11 7C10.4 7 10 7.4 10 8V14L12 16L14 14V8C14 7.4 13.6 7 13 7H11ZM12 17L10 15V23H14V15L12 17ZM15 9V13H17V9H15ZM7 9V13H9V9H7Z";
             break;
         case 'Side Chest Right':
-            // Mirror of Left
             scale = "scale(-1, 1) translate(-24, 0)";
             path = "M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM11 7C10.4 7 10 7.4 10 8V14L12 16L14 14V8C14 7.4 13.6 7 13 7H11ZM12 17L10 15V23H14V15L12 17ZM15 9V13H17V9H15ZM7 9V13H9V9H7Z";
             break;
         case 'Abs & Thighs':
-            // Hands behind head, one leg forward
             path = "M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM7 5V8H9V12H7V15H9V23H11V15H13V23H15V12H13V8H17V5H7Z";
             break;
         case 'Back Double Bicep':
-            // Similar to front but broader back
             path = "M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM22 8C22 7.4 21.6 7 21 7H18C17.4 7 17 7.4 17 8V10H16V8C16 6.3 14.7 5 13 5C11.3 5 10 6.3 10 8V10H9V8C9 7.4 8.6 7 8 7H5C4.4 7 4 7.4 4 8V10C4 11.1 4.9 12 6 12H7V16C7 17.1 7.9 18 9 18H10.5V23H12.5V18H13.5V23H15.5V18H17C18.1 18 19 17.1 19 16V12H20C21.1 12 22 11.1 22 10V8Z";
             break;
         case 'Back Lat Spread':
-            // Similar to front lat but broader
             path = "M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM19 8C19 6.3 17.7 5 16 5H14V17H15.5V23H17.5V15H19.5C20.3 15 21 14.3 21 13.5V11C21 9.3 20.1 8 19 8ZM5 8C3.9 8 3 9.3 3 11V13.5C3 14.3 3.7 15 4.5 15H6.5V23H8.5V17H10V5H8C6.3 5 5 6.3 5 8Z";
             break;
         case 'Side Tricep Left':
-            // Arm straight down
             path = "M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM11 7H13V16H15V23H13V17H11V23H9V16H11V7Z M8 8H10V14H8V8Z";
             break;
         case 'Side Tricep Right':
@@ -77,7 +67,6 @@ const BodybuilderOutline: React.FC<{ pose: string; className?: string }> = ({ po
             path = "M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM11 7H13V16H15V23H13V17H11V23H9V16H11V7Z M8 8H10V14H8V8Z";
             break;
         case 'Most Muscular':
-            // Hands clasped in front, traps flexed
             path = "M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM18 7C17.4 7 17 7.4 17 8V12L15 14L12 12L9 14L7 12V8C7 7.4 6.6 7 6 7H4V12C4 13.1 4.9 14 6 14H8L12 17L16 14H18C19.1 14 20 13.1 20 12V7H18ZM10.5 18V23H12.5V18H10.5ZM13.5 18H15.5V23H13.5V18ZM8.5 18V23H6.5V18H8.5Z";
             break;
         default:
@@ -95,16 +84,13 @@ const BodybuilderOutline: React.FC<{ pose: string; className?: string }> = ({ po
 
 export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, initialTab = '3d_scan', initialExercise }) => {
     const [activeTab, setActiveTab] = useState<BodyTab>(initialTab);
-    
-    // Gallery States
     const [photos, setPhotos] = useState<BodyPhoto[]>([]);
-    const [selectedCategory, setSelectedCategory] = useState<string | null>(null); // Track which grid slot is clicked
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [uploadImage, setUploadImage] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [viewPhotoId, setViewPhotoId] = useState<number | null>(null);
     const galleryInputRef = useRef<HTMLInputElement>(null);
 
-    // Sync prop to state if it changes
     useEffect(() => {
         if (initialTab) setActiveTab(initialTab);
     }, [initialTab]);
@@ -156,7 +142,8 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, initialTab = '3d_
         if (!uploadImage || !selectedCategory) return;
         setIsUploading(true);
         try {
-            await apiService.uploadBodyPhoto(uploadImage, selectedCategory);
+            const base64 = uploadImage.split(',')[1];
+            await apiService.uploadBodyPhoto(base64, selectedCategory);
             setUploadImage(null);
             setSelectedCategory(null);
             loadPhotos();
@@ -195,7 +182,6 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, initialTab = '3d_
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden min-h-[240px]">
-                    {/* Visual: Before Body */}
                     <div className="absolute -right-4 top-4 bottom-0 w-32 opacity-10 md:opacity-20 pointer-events-none">
                         <img src="/before_body.png" alt="Body Model" className="w-full h-full object-contain object-bottom" />
                     </div>
@@ -220,7 +206,6 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, initialTab = '3d_
                 </div>
 
                 <div className="bg-gradient-to-br from-fuchsia-50 to-pink-50 p-6 rounded-[2rem] border border-fuchsia-100 shadow-sm flex flex-col justify-center items-end text-right relative overflow-hidden min-h-[240px]">
-                    {/* Visual: After Body - Moved to left to align with center */}
                     <div className="absolute -left-4 top-4 bottom-0 w-32 opacity-30 pointer-events-none">
                          <img src="/after_body.png" alt="Future Prediction" className="w-full h-full object-contain object-bottom" />
                     </div>
@@ -239,11 +224,9 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, initialTab = '3d_
     );
 
     const renderImages = () => {
-        // Find latest photo for each pose
         const latestPhotos: Record<string, BodyPhoto> = {};
         photos.forEach(p => {
             if (BODY_POSE_GRID.some(pose => pose.id === p.category)) {
-                // If newer or first found
                 if (!latestPhotos[p.category] || new Date(p.createdAt) > new Date(latestPhotos[p.category].createdAt)) {
                     latestPhotos[p.category] = p;
                 }
@@ -257,7 +240,6 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, initialTab = '3d_
                         <h3 className="text-xl font-black text-slate-900">Physique Check-In</h3>
                         <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Update your visual progress log</p>
                     </div>
-                    {/* Hidden input for slot clicks */}
                     <input type="file" accept="image/*" capture="environment" ref={galleryInputRef} onChange={handleFileSelect} className="hidden" />
                 </div>
 
@@ -270,7 +252,6 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, initialTab = '3d_
                                 onClick={() => handleSlotClick(pose.id, existing?.id)}
                                 className="relative aspect-[3/4] rounded-2xl bg-slate-100 overflow-hidden border-2 border-slate-200 hover:border-indigo-400 hover:shadow-lg transition-all group flex flex-col items-center justify-end p-2"
                             >
-                                {/* Background Outline or Image */}
                                 {existing && existing.hasImage ? (
                                     <div className="absolute inset-0 bg-slate-200">
                                         <div className="w-full h-full flex items-center justify-center text-slate-400 font-bold bg-white">
@@ -284,7 +265,6 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, initialTab = '3d_
                                     </div>
                                 )}
 
-                                {/* Overlay Label */}
                                 <div className="relative z-10 w-full text-center">
                                     {existing ? (
                                         <span className="bg-emerald-500 text-white text-[9px] font-black uppercase px-2 py-1 rounded-full shadow-sm">
@@ -324,7 +304,6 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, initialTab = '3d_
                 <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
                     <ActivityIcon className="w-5 h-5 text-indigo-500" /> Actual vs Ideal
                 </h3>
-                {/* Placeholder Chart */}
                 <div className="space-y-4">
                     <div>
                         <div className="flex justify-between text-xs font-bold mb-1">
@@ -353,13 +332,11 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, initialTab = '3d_
         <div className="max-w-5xl mx-auto space-y-6 pb-20">
             {viewPhotoId && <ImageViewModal itemId={viewPhotoId} type="body" onClose={() => setViewPhotoId(null)} />}
 
-            {/* Upload Modal with Visual Template */}
             {uploadImage && selectedCategory && (
                 <div className="fixed inset-0 bg-black/90 z-[70] flex items-center justify-center p-4">
                     <div className="bg-white rounded-[2rem] w-full max-w-sm overflow-hidden animate-slide-up relative">
                         <div className="relative">
                             <img src={uploadImage} alt="Preview" className="w-full h-96 object-cover" />
-                            {/* Overlay Template for Alignment */}
                             <div className="absolute inset-0 pointer-events-none opacity-40 border-4 border-emerald-500/50 flex items-center justify-center p-8">
                                 <BodybuilderOutline pose={selectedCategory} className="w-full h-full text-white drop-shadow-lg" />
                             </div>
@@ -391,7 +368,6 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, initialTab = '3d_
                     <h2 className="text-4xl font-black text-slate-900 tracking-tighter">Body + Fitness</h2>
                     <p className="text-slate-500 font-medium">Physical intelligence & recovery metrics.</p>
                 </div>
-                {/* Tab Navigation */}
                 <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200 w-full md:w-auto overflow-x-auto no-scrollbar">
                     <button onClick={() => setActiveTab('3d_scan')} className={`flex-1 md:flex-none px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === '3d_scan' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}>3D Scan</button>
                     <button onClick={() => setActiveTab('images')} className={`flex-1 md:flex-none px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'images' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}>Body Pics</button>
@@ -400,7 +376,6 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, initialTab = '3d_
                 </div>
             </header>
 
-            {/* Tab Content */}
             <div className="min-h-[400px]">
                 {activeTab === '3d_scan' && render3DScan()}
                 {activeTab === 'images' && renderImages()}
@@ -415,18 +390,17 @@ export const BodyHub: React.FC<BodyHubProps> = ({ healthStats, initialTab = '3d_
                 )}
             </div>
 
-            {/* Bottom Widgets (Always Visible) */}
             {activeTab !== 'form_check' && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8 pt-8 border-t border-slate-100">
                     <div className="bg-white p-4 rounded-2xl border border-slate-100 text-center">
                         <ActivityIcon className="w-5 h-5 text-slate-300 mx-auto mb-1" />
                         <p className="text-[10px] font-bold text-slate-400 uppercase">Steps</p>
-                        <p className="font-black text-slate-800">{healthStats.steps.toLocaleString()}</p>
+                        <p className="font-black text-slate-800">{(healthStats.steps ?? 0).toLocaleString()}</p>
                     </div>
                     <div className="bg-white p-4 rounded-2xl border border-slate-100 text-center">
                         <FireIcon className="w-5 h-5 text-slate-300 mx-auto mb-1" />
                         <p className="text-[10px] font-bold text-slate-400 uppercase">Active Cal</p>
-                        <p className="font-black text-slate-800">{Math.round(healthStats.activeCalories)}</p>
+                        <p className="font-black text-slate-800">{Math.round(healthStats.activeCalories ?? 0).toLocaleString()}</p>
                     </div>
                     <div className="bg-white p-4 rounded-2xl border border-slate-100 text-center">
                         <DumbbellIcon className="w-5 h-5 text-slate-300 mx-auto mb-1" />

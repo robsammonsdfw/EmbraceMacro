@@ -33,24 +33,14 @@ const parseBody = (event) => {
 };
 
 // --- AI SCHEMAS ---
-const unifiedNutritionSchema = {
+const formAnalysisSchema = {
     type: Type.OBJECT,
     properties: {
-        mealName: { type: Type.STRING },
-        totalCalories: { type: Type.NUMBER },
-        totalProtein: { type: Type.NUMBER },
-        totalCarbs: { type: Type.NUMBER },
-        totalFat: { type: Type.NUMBER },
-        ingredients: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: { name: { type: Type.STRING }, weightGrams: { type: Type.NUMBER }, calories: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, fat: { type: Type.NUMBER } },
-                required: ["name", "weightGrams", "calories", "protein", "carbs", "fat"]
-            }
-        }
+        isCorrect: { type: Type.BOOLEAN },
+        score: { type: Type.NUMBER },
+        feedback: { type: Type.STRING }
     },
-    required: ["mealName", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "ingredients"]
+    required: ["isCorrect", "score", "feedback"]
 };
 
 const healthOcrSchema = {
@@ -82,109 +72,71 @@ const callGemini = async (prompt, imageBase64, mimeType = 'image/jpeg', schema =
 
 export const handler = async (event) => {
     let path = event.path || event.rawPath || "";
+    // Robust path cleanup
     if (path.startsWith('/default')) path = path.replace('/default', '');
+    if (path.endsWith('/') && path.length > 1) path = path.slice(0, -1);
+    
     let httpMethod = (event.httpMethod || event.requestContext?.http?.method || "").toUpperCase();
     if (httpMethod === 'OPTIONS') return { statusCode: 200, headers: CORS_HEADERS, body: '' };
 
     try {
-        if (path === '/' || path === '/health') return sendResponse(200, { status: 'ok' });
+        if (path === '' || path === '/' || path === '/health') return sendResponse(200, { status: 'ok' });
 
-        if (path.endsWith('/auth/customer-login') && httpMethod === 'POST') {
+        if (path === '/auth/customer-login' && httpMethod === 'POST') {
             const body = parseBody(event);
-            const user = await db.findOrCreateUserByEmail(body.email, body.inviteCode);
+            const user = await db.findOrCreateUserByEmail(body.email);
             const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '30d' });
             return sendResponse(200, { token, user });
         }
 
         const userId = getUserFromEvent(event);
 
-        // --- GROCERY (FIXED) ---
-        if (path === '/grocery/lists' && httpMethod === 'GET') return sendResponse(200, await db.getGroceryLists(userId));
-        if (path === '/grocery/lists' && httpMethod === 'POST') return sendResponse(200, await db.createGroceryList(userId, parseBody(event).name));
-        if (path.match(/^\/grocery\/lists\/\d+\/items$/) && httpMethod === 'GET') return sendResponse(200, await db.getGroceryListItems(path.split('/')[3]));
-        if (path.match(/^\/grocery\/lists\/\d+\/items$/) && httpMethod === 'POST') return sendResponse(200, await db.addGroceryItem(userId, path.split('/')[3], parseBody(event).name));
-        if (path.match(/^\/grocery\/items\/\d+$/) && httpMethod === 'PATCH') return sendResponse(200, await db.updateGroceryItem(userId, path.split('/').pop(), parseBody(event).checked));
-        if (path.match(/^\/grocery\/items\/\d+$/) && httpMethod === 'DELETE') {
-            await db.removeGroceryItem(userId, path.split('/').pop());
+        // --- BODY & FITNESS (FIXED 404s) ---
+        if (path === '/body/photos' && httpMethod === 'GET') return sendResponse(200, await db.getBodyPhotos(userId));
+        if (path === '/body/photos' && httpMethod === 'POST') {
+            const { base64Image, category } = parseBody(event);
+            await db.uploadBodyPhoto(userId, base64Image, category);
             return sendResponse(200, { success: true });
         }
-        if (path.match(/^\/grocery\/lists\/\d+\/clear$/) && httpMethod === 'POST') {
-            await db.clearGroceryListItems(userId, path.split('/')[3], parseBody(event).type);
-            return sendResponse(200, { success: true });
+        if (path.startsWith('/body/photos/') && httpMethod === 'GET') {
+            const photoId = path.split('/').pop();
+            return sendResponse(200, await db.getBodyPhotoById(userId, photoId));
         }
-        if (path.match(/^\/grocery\/lists\/\d+\/import$/) && httpMethod === 'POST') return sendResponse(200, await db.importIngredientsFromPlans(userId, path.split('/')[3], parseBody(event).planIds));
+        if (path === '/body/analyze-form' && httpMethod === 'POST') {
+            const { base64Image, exercise } = parseBody(event);
+            const prompt = `Analyze this ${exercise} form. Score 0-100. Give actionable feedback. JSON only.`;
+            const result = await callGemini(prompt, base64Image, 'image/jpeg', formAnalysisSchema);
+            return sendResponse(200, result);
+        }
+        if (path === '/body/form-check' && httpMethod === 'POST') {
+            const { exercise, imageBase64, score, feedback } = parseBody(event);
+            return sendResponse(200, await db.saveFormCheck(userId, exercise, imageBase64, score, feedback));
+        }
+        if (path === '/body/form-checks' && httpMethod === 'GET') {
+            const exercise = event.queryStringParameters?.exercise || null;
+            return sendResponse(200, await db.getFormChecks(userId, exercise));
+        }
 
-        // --- SOCIAL (FIXED) ---
+        // --- SOCIAL (FIXED 404s) ---
         if (path === '/social/friends' && httpMethod === 'GET') return sendResponse(200, await db.getFriends(userId));
         if (path === '/social/profile' && httpMethod === 'GET') return sendResponse(200, await db.getSocialProfile(userId));
 
-        // --- MEAL PLANS ---
-        if (path === '/meal-plans' && httpMethod === 'GET') return sendResponse(200, await db.getMealPlans(userId));
-        if (path === '/meal-plans' && httpMethod === 'POST') return sendResponse(200, await db.createMealPlan(userId, parseBody(event).name));
-        if (path.startsWith('/meal-plans/') && path.endsWith('/items') && httpMethod === 'POST') {
-            const { savedMealId, metadata } = parseBody(event);
-            const planId = path.split('/')[2];
-            return sendResponse(200, await db.addMealToPlan(userId, planId, savedMealId, metadata));
-        }
-        if (path.startsWith('/meal-plans/items/') && httpMethod === 'DELETE') return sendResponse(200, await db.removeMealFromPlan(userId, path.split('/').pop()));
-
-        // --- DASHBOARD PREFS ---
-        if (path === '/body/dashboard-prefs' && httpMethod === 'GET') return sendResponse(200, await db.getDashboardPrefs(userId));
-        if (path === '/body/dashboard-prefs' && httpMethod === 'POST') return sendResponse(200, await db.saveDashboardPrefs(userId, parseBody(event)));
-
-        // --- VISION SYNC ---
-        if (path === '/analyze-health-screenshot' && httpMethod === 'POST') {
-            const data = await callGemini("Extract health metrics. JSON only.", parseBody(event).base64Image, 'image/jpeg', healthOcrSchema);
-            return sendResponse(200, await db.syncHealthMetrics(userId, data));
-        }
-
-        // --- FITBIT ---
-        if (path === '/auth/fitbit/status' && httpMethod === 'GET') return sendResponse(200, { connected: await db.hasFitbitConnection(userId) });
-        if (path === '/auth/fitbit/disconnect' && httpMethod === 'POST') {
-            await db.disconnectFitbit(userId);
-            return sendResponse(200, { success: true });
-        }
-        if (path === '/auth/fitbit/url' && httpMethod === 'POST') {
-            const clientID = process.env.FITBIT_CLIENT_ID;
-            const redirectUri = encodeURIComponent(process.env.FITBIT_REDIRECT_URI || 'https://app.embracehealth.ai');
-            return sendResponse(200, { url: `https://www.fitbit.com/oauth2/authorize?response_type=code&client_id=${clientID}&redirect_uri=${redirectUri}&scope=activity%20profile%20heartrate&code_challenge=${parseBody(event).codeChallenge}&code_challenge_method=S256` });
-        }
-        if (path === '/auth/fitbit/link' && httpMethod === 'POST') {
-            const { code, codeVerifier } = parseBody(event);
-            const basicAuth = Buffer.from(`${process.env.FITBIT_CLIENT_ID}:${process.env.FITBIT_CLIENT_SECRET}`).toString('base64');
-            const res = await fetch('https://api.fitbit.com/oauth2/token', {
-                method: 'POST',
-                headers: { 'Authorization': `Basic ${basicAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({ grant_type: 'authorization_code', code, code_verifier: codeVerifier, redirect_uri: process.env.FITBIT_REDIRECT_URI || 'https://app.embracehealth.ai' })
-            });
-            await db.updateFitbitCredentials(userId, await res.json());
-            return sendResponse(200, { success: true });
-        }
-        if (path === '/sync-health/fitbit' && httpMethod === 'POST') {
-            const creds = await db.getFitbitCredentials(userId);
-            const actRes = await fetch('https://api.fitbit.com/1/user/-/activities/today.json', { headers: { 'Authorization': `Bearer ${creds.fitbit_access_token}` } });
-            const actData = await actRes.json();
-            return sendResponse(200, await db.syncHealthMetrics(userId, { steps: actData.summary?.steps, activeCalories: actData.summary?.caloriesOut }));
-        }
-
-        // --- NUTRITION ---
-        if (path === '/saved-meals' && httpMethod === 'GET') return sendResponse(200, await db.getSavedMeals(userId));
-        if (path === '/saved-meals' && httpMethod === 'POST') return sendResponse(200, await db.saveMeal(userId, parseBody(event)));
-        if (path === '/meal-log' && httpMethod === 'GET') return sendResponse(200, await db.getMealLogEntries(userId));
-        if (path === '/analyze-image' && httpMethod === 'POST') {
-            const { base64Image, mimeType } = parseBody(event);
-            const data = await callGemini("Analyze meal JSON.", base64Image, mimeType, unifiedNutritionSchema);
-            await db.createMealLogEntry(userId, data, base64Image);
-            return sendResponse(200, data);
-        }
-
-        // --- HEALTH GET ---
+        // --- HEALTH ---
         if (path === '/health-metrics' && httpMethod === 'GET') {
             const date = event.queryStringParameters?.date || new Date().toISOString().split('T')[0];
             return sendResponse(200, await db.getHealthMetrics(userId, date));
         }
         if (path === '/sync-health' && httpMethod === 'POST') return sendResponse(200, await db.syncHealthMetrics(userId, parseBody(event)));
+        if (path === '/analyze-health-screenshot' && httpMethod === 'POST') {
+            const data = await callGemini("Extract health metrics. JSON only.", parseBody(event).base64Image, 'image/jpeg', healthOcrSchema);
+            return sendResponse(200, await db.syncHealthMetrics(userId, data));
+        }
+
+        // --- OTHER ROUTES ---
         if (path === '/rewards' && httpMethod === 'GET') return sendResponse(200, await db.getRewardsSummary(userId));
+        if (path === '/body/dashboard-prefs' && httpMethod === 'GET') return sendResponse(200, await db.getDashboardPrefs(userId));
+        if (path === '/body/dashboard-prefs' && httpMethod === 'POST') return sendResponse(200, await db.saveDashboardPrefs(userId, parseBody(event)));
+        if (path === '/meal-log' && httpMethod === 'GET') return sendResponse(200, await db.getMealLogEntries(userId));
 
         return sendResponse(404, { error: 'Not found: ' + path });
     } catch (err) {
