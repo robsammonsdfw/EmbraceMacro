@@ -283,6 +283,12 @@ export const sendFriendRequest = async (userId, email) => {
     } finally { client.release(); }
 };
 
+// FIX: Added missing respondToFriendRequest function used by index.mjs
+export const respondToFriendRequest = async (userId, requestId, status) => {
+    const client = await pool.connect();
+    try { await client.query(`UPDATE friendships SET status = $1 WHERE id = $2 AND receiver_id = $3`, [status, requestId, userId]); } finally { client.release(); }
+};
+
 export const getSocialProfile = async (userId) => {
     const client = await pool.connect();
     try {

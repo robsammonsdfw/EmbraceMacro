@@ -1,3 +1,4 @@
+
 import * as db from './services/databaseService.mjs';
 import * as shopify from './services/shopifyService.mjs';
 import jwt from 'jsonwebtoken';
@@ -111,8 +112,10 @@ export const handler = async (event) => {
         // --- MEAL PLANS & MEALS ---
         if (path === '/meal-plans' && method === 'GET') return sendResponse(200, await db.getMealPlans(userId));
         if (path === '/meal-plans' && method === 'POST') return sendResponse(200, await db.createMealPlan(userId, body.name));
-        if (path.match(/^\/meal-plans\/\d+\/items$/) && method === 'POST') return sendResponse(200, await db.addMealToPlanItem(userId, path.split('/')[2], body.savedMealId));
-        if (path.match(/^\/meal-plans\/items\/\d+$/) && method === 'DELETE') return sendResponse(200, await db.removeMealFromPlanItem(userId, path.split('/').pop()));
+        // FIX: Updated function name to addMealToPlan and added metadata argument
+        if (path.match(/^\/meal-plans\/\d+\/items$/) && method === 'POST') return sendResponse(200, await db.addMealToPlan(userId, path.split('/')[2], body.savedMealId, body.metadata || {}));
+        // FIX: Updated function name to removeMealFromPlan
+        if (path.match(/^\/meal-plans\/items\/\d+$/) && method === 'DELETE') return sendResponse(200, await db.removeMealFromPlan(userId, path.split('/').pop()));
         
         if (path === '/saved-meals' && method === 'GET') return sendResponse(200, await db.getSavedMeals(userId));
         if (path === '/saved-meals' && method === 'POST') return sendResponse(200, await db.saveMeal(userId, body));
