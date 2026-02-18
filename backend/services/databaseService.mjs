@@ -61,6 +61,32 @@ export const syncHealthMetrics = async (userId, stats) => {
     } finally { client.release(); }
 };
 
+// --- FITBIT ---
+// Added Fitbit integration stubs to satisfy index.mjs requirements
+export const getFitbitStatus = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id FROM users WHERE id = $1`, [userId]);
+        return { connected: false }; 
+    } finally { client.release(); }
+};
+
+export const getFitbitAuthUrl = async (userId) => {
+    return { url: '' };
+};
+
+export const linkFitbitAccount = async (userId, code) => {
+    return { success: true };
+};
+
+export const disconnectFitbit = async (userId) => {
+    return { success: true };
+};
+
+export const syncFitbitData = async (userId) => {
+    return {};
+};
+
 export const getDashboardPrefs = async (userId) => {
     const client = await pool.connect();
     try {

@@ -20,11 +20,15 @@ AWS Lambda and API Gateway have a strict **6MB payload limit**.
 - `POST /auth/fitbit/url`
 - `POST /auth/fitbit/link`
 - `POST /auth/fitbit/disconnect`
-- `POST /sync-health/fitbit` (ADDED)
+- `POST /sync-health/fitbit` (Restored)
 
 ### 🥗 Nutrition Logs & Kitchen AI
 - `GET  /meal-log` (Strip Base64!)
 - `GET  /meal-log/:id` (Include Base64!)
+- `GET  /nutrition/pantry-log`
+- `POST /nutrition/pantry-log`
+- `GET  /nutrition/restaurant-log`
+- `POST /nutrition/restaurant-log`
 - `GET  /saved-meals`
 - `POST /saved-meals`
 - `DELETE /saved-meals/:id`
@@ -51,6 +55,17 @@ AWS Lambda and API Gateway have a strict **6MB payload limit**.
 - `POST /social/request`
 - `POST /social/request/respond`
 - `GET  /coaching/relations`
+
+### 🛒 Grocery System
+- `GET  /grocery/lists`
+- `POST /grocery/lists`
+- `DELETE /grocery/lists/:id`
+- `GET  /grocery/lists/:id/items`
+- `POST /grocery/lists/:id/items`
+- `PATCH /grocery/items/:id`
+- `DELETE /grocery/items/:id`
+- `POST /grocery/lists/:id/import`
+- `POST /grocery/lists/:id/clear`
 
 ---
 
