@@ -1,8 +1,8 @@
 {
-  "name": "EmbraceHealth AI",
-  "description": "An intelligent web app that analyzes pictures of food to calculate calories and macronutrients. Users can snap a photo of their meal, and the app will identify the ingredients, estimate their nutritional values, and allow them to add items to a daily food plan.",
   "requestFramePermissions": [
     "camera",
     "geolocation"
-  ]
+  ],
+  "name": "",
+  "description": ""
 }

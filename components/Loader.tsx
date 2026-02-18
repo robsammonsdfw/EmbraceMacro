@@ -1,10 +1,9 @@
 
 import React from 'react';
 
-export const Loader: React.FC<{ message: string }> = ({ message }) => (
-  <div className="flex flex-col items-center justify-center p-8 bg-white rounded-xl shadow-md border border-slate-200">
-    <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-    <p className="mt-4 text-slate-600 font-semibold">{message}</p>
-    <p className="mt-1 text-sm text-slate-500">This might take a moment.</p>
+export const Loader: React.FC = () => (
+  <div className="relative w-12 h-12 flex items-center justify-center">
+    <div className="absolute inset-0 border-4 border-slate-800 rounded-full"></div>
+    <div className="absolute inset-0 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
   </div>
 );

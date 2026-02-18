@@ -1,3 +1,4 @@
+
 export interface Ingredient {
   name: string;
   weightGrams: number;
@@ -5,35 +6,11 @@ export interface Ingredient {
   protein: number;
   carbs: number;
   fat: number;
-  // Optional detailed nutrients
+  // Added fields to match usage in components and services
   sugar?: number;
   fiber?: number;
   sodium?: number;
-  // Optional metadata
   imageUrl?: string;
-}
-
-export interface NutritionInfo {
-  mealName: string;
-  totalCalories: number;
-  totalProtein: number;
-  totalCarbs: number;
-  totalFat: number;
-  // Optional detailed totals
-  totalSugar?: number;
-  totalFiber?: number;
-  totalSodium?: number;
-  ingredients: Ingredient[];
-  justification?: string;
-  // Optional metadata for the whole meal/product
-  imageUrl?: string; 
-  nutriScore?: string;
-  ecoScore?: string;
-  allergens?: string[];
-}
-
-export interface SavedMeal extends NutritionInfo {
-  id: string;
 }
 
 export interface Recipe {
@@ -50,4 +27,28 @@ export interface Recipe {
     totalCarbs: number;
     totalFat: number;
   };
+  imageUrl?: string;
+}
+
+export interface SavedMeal extends NutritionInfo {
+  id: number;
+}
+
+export interface NutritionInfo {
+  mealName: string;
+  totalCalories: number;
+  totalProtein: number;
+  totalCarbs: number;
+  totalFat: number;
+  // Added fields to match usage in components and services
+  totalSugar?: number;
+  totalFiber?: number;
+  totalSodium?: number;
+  ingredients: Ingredient[];
+  insight: string;
+  nutriScore?: string;
+  ecoScore?: string;
+  allergens?: string[];
+  imageUrl?: string;
+  justification?: string;
 }

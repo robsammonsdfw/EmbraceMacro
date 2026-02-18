@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { CameraIcon, UploadIcon, BarcodeIcon, ChefHatIcon } from './icons';
 
@@ -25,7 +26,8 @@ export const Hero: React.FC<HeroProps> = ({ onCameraClick, onUploadClick, onBarc
                     onClick={onCameraClick}
                     className="w-full inline-flex items-center justify-center space-x-3 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-bold py-3 px-6 rounded-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-300 ease-in-out"
                 >
-                    <CameraIcon />
+                    {/* Added className to CameraIcon */}
+                    <CameraIcon className="w-6 h-6" />
                     <span>Take Photo</span>
                 </button>
                  <button
