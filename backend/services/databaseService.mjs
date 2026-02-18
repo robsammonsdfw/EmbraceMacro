@@ -1,3 +1,4 @@
+
 import pg from 'pg';
 const { Pool } = pg;
 const pool = new Pool({ ssl: { rejectUnauthorized: false } });
@@ -72,6 +73,21 @@ export const getPantryLog = async (userId) => {
     const client = await pool.connect();
     try { return (await client.query(`SELECT id, created_at FROM pantry_log WHERE user_id = $1 ORDER BY created_at DESC`, [userId])).rows; } finally { client.release(); }
 };
+
+/* Added missing function to retrieve a specific pantry entry by ID for the client */
+export const getPantryLogEntryById = async (userId, entryId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, created_at, image_base64 FROM pantry_log WHERE id = $1 AND user_id = $2`, [entryId, userId]);
+        const row = res.rows[0];
+        if (row && row.image_base64) {
+            row.imageUrl = `data:image/jpeg;base64,${row.image_base64}`;
+            delete row.image_base64;
+        }
+        return row;
+    } finally { client.release(); }
+};
+
 export const savePantryLogEntry = async (userId, imageBase64) => {
     const client = await pool.connect();
     try { await client.query(`INSERT INTO pantry_log (user_id, image_base64) VALUES ($1, $2)`, [userId, imageBase64]); } finally { client.release(); }
@@ -80,6 +96,21 @@ export const getRestaurantLog = async (userId) => {
     const client = await pool.connect();
     try { return (await client.query(`SELECT id, created_at FROM restaurant_log WHERE user_id = $1 ORDER BY created_at DESC`, [userId])).rows; } finally { client.release(); }
 };
+
+/* Added missing function to retrieve a specific restaurant entry by ID for the client */
+export const getRestaurantLogEntryById = async (userId, entryId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, created_at, image_base64 FROM restaurant_log WHERE id = $1 AND user_id = $2`, [entryId, userId]);
+        const row = res.rows[0];
+        if (row && row.image_base64) {
+            row.imageUrl = `data:image/jpeg;base64,${row.image_base64}`;
+            delete row.image_base64;
+        }
+        return row;
+    } finally { client.release(); }
+};
+
 export const saveRestaurantLogEntry = async (userId, imageBase64) => {
     const client = await pool.connect();
     try { await client.query(`INSERT INTO restaurant_log (user_id, image_base64) VALUES ($1, $2)`, [userId, imageBase64]); } finally { client.release(); }
@@ -135,6 +166,15 @@ export const getFriendRequests = async (userId) => {
     try { return (await client.query(`SELECT * FROM friendships WHERE receiver_id = $1 AND status = 'pending'`, [userId])).rows; } finally { client.release(); }
 };
 
+/* Added missing function to handle responding to friend requests */
+export const respondToFriendRequest = async (userId, requestId, status) => {
+    const client = await pool.connect();
+    try {
+        await client.query(`UPDATE friendships SET status = $1 WHERE id = $2 AND receiver_id = $3`, [status, requestId, userId]);
+        return { success: true };
+    } finally { client.release(); }
+};
+
 // --- REWARDS ---
 export const getRewardsSummary = async (userId) => {
     const client = await pool.connect();
@@ -145,6 +185,15 @@ export const getRewardsSummary = async (userId) => {
 export const getGroceryLists = async (userId) => {
     const client = await pool.connect();
     try { return (await client.query(`SELECT * FROM grocery_lists WHERE user_id = $1`, [userId])).rows; } finally { client.release(); }
+};
+
+/* Added missing function to create a new grocery list */
+export const createGroceryList = async (userId, name) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`INSERT INTO grocery_lists (user_id, name) VALUES ($1, $2) RETURNING *`, [userId, name]);
+        return res.rows[0];
+    } finally { client.release(); }
 };
 
 // --- SHOPIFY ---

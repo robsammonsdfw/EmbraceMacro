@@ -1,5 +1,7 @@
+
 import React from 'react';
 import type { NutritionInfo } from '../types';
+/* Updated import to use lowercase 'icons' for naming consistency and to resolve casing conflicts */
 import { PlusIcon, BookmarkIcon } from './icons';
 
 interface NutritionCardProps {

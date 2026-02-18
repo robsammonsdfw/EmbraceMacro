@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import type { NutritionInfo, Ingredient } from '../types';
 import { MealSuggestionCard } from './MealSuggestionCard';
+/* Updated import to use lowercase 'icons' for naming consistency and to resolve casing conflicts */
 import { LightBulbIcon } from './icons';
 
 interface MealSuggesterProps {

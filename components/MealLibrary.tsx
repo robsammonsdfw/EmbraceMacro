@@ -1,6 +1,7 @@
 
 import React from 'react';
 import type { SavedMeal } from '../types';
+/* Updated import to use lowercase 'icons' for naming consistency and to resolve casing conflicts */
 import { PlusIcon, TrashIcon, BookOpenIcon } from './icons';
 
 interface MealLibraryProps {

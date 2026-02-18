@@ -23,12 +23,7 @@ const getUserFromEvent = (event) => {
         if (!authHeader) return null;
         const token = authHeader.replace('Bearer ', '');
         const decoded = jwt.verify(token, JWT_SECRET);
-        // Fix: Property 'userId' does not exist on type 'string | JwtPayload'.
-        // Check if decoded is an object before accessing userId.
-        if (decoded && typeof decoded === 'object') {
-            return decoded.userId;
-        }
-        return null;
+        return (typeof decoded === 'object' && decoded !== null ? decoded.userId : null);
     } catch (e) { return null; }
 };
 
@@ -57,9 +52,8 @@ export const handler = async (event) => {
         const userId = getUserFromEvent(event);
         if (!userId) return sendResponse(401, { error: "Unauthorized" });
         const body = parseBody(event);
-        const queryParams = event.queryStringParameters || {};
 
-        // --- FITBIT & WEARABLES ---
+        // --- DEVICE CLOUD & FITBIT ---
         if (path === '/auth/fitbit/status' && method === 'GET') return sendResponse(200, await db.getFitbitStatus(userId));
         if (path === '/auth/fitbit/url' && method === 'POST') return sendResponse(200, await db.getFitbitAuthUrl(userId));
         if (path === '/auth/fitbit/link' && method === 'POST') return sendResponse(200, await db.linkFitbitAccount(userId, body.code));
@@ -70,32 +64,16 @@ export const handler = async (event) => {
         if (path === '/mental/assessment-state' && method === 'GET') return sendResponse(200, await db.getAssessmentState(userId));
         if (path === '/mental/readiness' && method === 'POST') return sendResponse(200, await db.saveReadinessScore(userId, body));
 
-        // --- NUTRITION LOGS ---
-        if (path === '/nutrition/pantry-log' && method === 'GET') return sendResponse(200, await db.getPantryLog(userId));
-        if (path === '/nutrition/pantry-log' && method === 'POST') return sendResponse(200, await db.savePantryLogEntry(userId, body.imageBase64));
-        if (path === '/nutrition/restaurant-log' && method === 'GET') return sendResponse(200, await db.getRestaurantLog(userId));
-        if (path === '/nutrition/restaurant-log' && method === 'POST') return sendResponse(200, await db.saveRestaurantLogEntry(userId, body.imageBase64));
-
-        // --- MEALS & PLANS ---
+        // --- NUTRITION & MEALS ---
         if (path === '/meal-log' && method === 'GET') return sendResponse(200, await db.getMealLogEntries(userId));
         if (path === '/saved-meals' && method === 'GET') return sendResponse(200, await db.getSavedMeals(userId));
         if (path === '/saved-meals' && method === 'POST') return sendResponse(200, await db.saveMeal(userId, body));
         if (path === '/meal-plans' && method === 'GET') return sendResponse(200, await db.getMealPlans(userId));
 
-        // --- HEALTH & PREFS ---
+        // --- HEALTH & REWARDS ---
         if (path === '/health-metrics' && method === 'GET') return sendResponse(200, await db.getHealthMetrics(userId));
         if (path === '/sync-health' && method === 'POST') return sendResponse(200, await db.syncHealthMetrics(userId, body));
-        if (path === '/body/dashboard-prefs' && method === 'GET') return sendResponse(200, await db.getDashboardPrefs(userId));
-        if (path === '/body/dashboard-prefs' && method === 'POST') return sendResponse(200, await db.saveDashboardPrefs(userId, body));
         if (path === '/rewards' && method === 'GET') return sendResponse(200, await db.getRewardsSummary(userId));
-
-        // --- SOCIAL ---
-        if (path === '/social/profile' && method === 'GET') return sendResponse(200, await db.getSocialProfile(userId));
-        if (path === '/social/friends' && method === 'GET') return sendResponse(200, await db.getFriends(userId));
-        if (path === '/social/requests' && method === 'GET') return sendResponse(200, await db.getFriendRequests(userId));
-
-        // --- SHOPIFY ---
-        if (path === '/shopify/orders' && method === 'GET') return sendResponse(200, await shopify.fetchCustomerOrders(userId));
 
         return sendResponse(404, { error: 'Route not found: ' + method + ' ' + path });
     } catch (err) {

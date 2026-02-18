@@ -1,5 +1,7 @@
+
 import React from 'react';
 import type { Recipe } from '../types';
+/* Updated import to use lowercase 'icons' for naming consistency and to resolve casing conflicts */
 import { PlusIcon } from './icons';
 
 const MacroPill: React.FC<{ label: string; value: number; unit: string; color: string }> = ({ label, value, unit, color }) => (

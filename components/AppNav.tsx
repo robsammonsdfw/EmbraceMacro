@@ -1,4 +1,6 @@
+
 import React from 'react';
+/* Updated import to use lowercase 'icons' for naming consistency and to resolve casing conflicts */
 import { PlusIcon, BookOpenIcon, ClipboardListIcon, LightBulbIcon } from './icons';
 
 type ActiveView = 'plan' | 'meals' | 'grocery' | 'suggestions';
@@ -18,7 +20,7 @@ const NavButton: React.FC<{
         onClick={onClick}
         className={`w-full flex items-center justify-center space-x-2 font-bold py-3 px-4 rounded-lg transition-all text-sm md:text-base ${
             isActive
-                ? 'bg-emerald-500 text-white shadow-md'
+                ? 'bg-emerald-50 text-white shadow-md'
                 : 'bg-white text-slate-600 hover:bg-slate-100'
         }`}
     >

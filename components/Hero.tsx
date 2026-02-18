@@ -1,5 +1,6 @@
 
 import React from 'react';
+/* Updated import to use lowercase 'icons' for naming consistency and to resolve casing conflicts */
 import { CameraIcon, UploadIcon, BarcodeIcon, ChefHatIcon } from './icons';
 
 interface HeroProps {

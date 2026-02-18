@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useCallback } from 'react';
-/* Corrected import to use lowercase 'icons' to resolve casing conflict with Icons.tsx */
+/* Updated import to use lowercase 'icons' to resolve casing conflict with existing program files */
 import { CameraIcon, PhotoIcon, XMarkIcon, SparklesIcon, ChartBarIcon } from './components/icons';
 import { NutritionDisplay } from './components/NutritionDisplay';
 import { Loader } from './components/Loader';

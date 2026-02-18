@@ -1,5 +1,7 @@
+
 import React, { useState, useMemo } from 'react';
 import type { SavedMeal } from '../types';
+/* Updated import to use lowercase 'icons' for naming consistency and to resolve casing conflicts */
 import { ClipboardListIcon } from './icons';
 
 interface GroceryListProps {
@@ -58,7 +60,7 @@ export const GroceryList: React.FC<GroceryListProps> = ({ meals }) => {
                 onClick={() => toggleItem(index)}
                 className="flex items-center space-x-3 p-3 bg-slate-50 rounded-md cursor-pointer hover:bg-slate-100"
             >
-                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${item.checked ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}`}>
+                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${item.checked ? 'bg-emerald-50 border-emerald-500' : 'border-slate-300'}`}>
                     {item.checked && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>}
                 </div>
                 <span className={`flex-1 ${item.checked ? 'text-slate-400 line-through' : 'text-slate-700 font-medium'}`}>

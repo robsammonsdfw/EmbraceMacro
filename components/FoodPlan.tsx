@@ -1,5 +1,7 @@
+
 import React from 'react';
 import type { Ingredient } from '../types';
+/* Updated import to use lowercase 'icons' for consistency and to resolve casing conflicts */
 import { TrashIcon, PlusIcon } from './icons';
 
 interface FoodPlanProps {

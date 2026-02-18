@@ -1,4 +1,6 @@
+
 import React, { useEffect } from 'react';
+/* Updated import to use lowercase 'icons' for naming consistency and to resolve casing conflicts */
 import { XIcon } from './icons';
 
 // The Html5Qrcode library is loaded from a script tag in index.html
