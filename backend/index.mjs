@@ -33,6 +33,7 @@ const parseBody = (event) => {
 
 export const handler = async (event) => {
     let path = event.path || event.rawPath || "";
+    // MANDATORY FIX for AWS Stage 'default' 404s
     if (path.startsWith('/default')) path = path.replace('/default', '');
     if (path.endsWith('/') && path.length > 1) path = path.slice(0, -1);
     
@@ -53,31 +54,29 @@ export const handler = async (event) => {
         if (!userId) return sendResponse(401, { error: "Unauthorized" });
         const body = parseBody(event);
 
-        // --- DEVICE CLOUD & FITBIT ---
+        // --- FITBIT ---
         if (path === '/auth/fitbit/status' && method === 'GET') return sendResponse(200, await db.getFitbitStatus(userId));
         if (path === '/auth/fitbit/url' && method === 'POST') return sendResponse(200, await db.getFitbitAuthUrl(userId));
         if (path === '/auth/fitbit/link' && method === 'POST') return sendResponse(200, await db.linkFitbitAccount(userId, body.code));
         if (path === '/sync-health/fitbit' && method === 'POST') return sendResponse(200, await db.syncFitbitData(userId));
 
-        // --- MENTAL & ASSESSMENTS ---
+        // --- MENTAL HEALTH ---
         if (path === '/mental/assessments' && method === 'GET') return sendResponse(200, await db.getAssessments(userId));
         if (path === '/mental/assessment-state' && method === 'GET') return sendResponse(200, await db.getAssessmentState(userId));
         if (path === '/mental/readiness' && method === 'POST') return sendResponse(200, await db.saveReadinessScore(userId, body));
 
-        // --- NUTRITION & MEALS ---
+        // --- NUTRITION ---
         if (path === '/meal-log' && method === 'GET') return sendResponse(200, await db.getMealLogEntries(userId));
         if (path === '/saved-meals' && method === 'GET') return sendResponse(200, await db.getSavedMeals(userId));
         if (path === '/saved-meals' && method === 'POST') return sendResponse(200, await db.saveMeal(userId, body));
-        if (path === '/meal-plans' && method === 'GET') return sendResponse(200, await db.getMealPlans(userId));
+        if (path === '/nutrition/pantry-log' && method === 'GET') return sendResponse(200, await db.getPantryLog(userId));
 
         // --- HEALTH & REWARDS ---
         if (path === '/health-metrics' && method === 'GET') return sendResponse(200, await db.getHealthMetrics(userId));
-        if (path === '/sync-health' && method === 'POST') return sendResponse(200, await db.syncHealthMetrics(userId, body));
         if (path === '/rewards' && method === 'GET') return sendResponse(200, await db.getRewardsSummary(userId));
 
-        return sendResponse(404, { error: 'Route not found: ' + method + ' ' + path });
+        return sendResponse(404, { error: 'Route not found: ' + path });
     } catch (err) {
-        console.error('Critical Error:', err);
         return sendResponse(500, { error: err.message });
     }
 };

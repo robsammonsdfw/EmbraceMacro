@@ -2,18 +2,35 @@ import pg from 'pg';
 const { Pool } = pg;
 const pool = new Pool({ ssl: { rejectUnauthorized: false } });
 
-// --- AUTH ---
+// --- HELPERS ---
+const processMealData = (data) => {
+    if (data.imageBase64) {
+        data.imageUrl = `data:image/jpeg;base64,${data.imageBase64}`;
+        delete data.imageBase64;
+    }
+    return data;
+};
+
+// --- CORE EXPORTS ---
 export const findOrCreateUserByEmail = async (email) => {
     const client = await pool.connect();
     try {
         const normalized = email.toLowerCase().trim();
         await client.query(`INSERT INTO users (email) VALUES ($1) ON CONFLICT (email) DO NOTHING`, [normalized]);
-        const res = await client.query(`SELECT id, email, first_name, shopify_customer_id FROM users WHERE email = $1`, [normalized]);
+        const res = await client.query(`SELECT id, email FROM users WHERE email = $1`, [normalized]);
         return res.rows[0];
     } finally { client.release(); }
 };
 
-// --- FITBIT (Restored) ---
+// FIX: Added getShopifyCustomerId to resolve "Property 'getShopifyCustomerId' does not exist on type 'typeof import(...)"" in shopifyService.mjs
+export const getShopifyCustomerId = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT shopify_customer_id FROM users WHERE id = $1`, [userId]);
+        return res.rows[0]?.shopify_customer_id;
+    } finally { client.release(); }
+};
+
 export const getFitbitStatus = async (userId) => {
     const client = await pool.connect();
     try {
@@ -40,7 +57,6 @@ export const syncFitbitData = async (userId) => {
     return { success: true, message: "Sync complete" };
 };
 
-// --- MENTAL HEALTH (Restored) ---
 export const getAssessments = async (userId) => {
     const client = await pool.connect();
     try { return (await client.query(`SELECT * FROM mental_assessments`)).rows; } finally { client.release(); }
@@ -56,7 +72,6 @@ export const saveReadinessScore = async (userId, data) => {
     try { await client.query(`INSERT INTO mental_readiness (user_id, score) VALUES ($1, $2)`, [userId, data.score]); return { success: true }; } finally { client.release(); }
 };
 
-// --- MEALS & LOGS ---
 export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
     try { return (await client.query(`SELECT id, meal_data, (image_base64 IS NOT NULL) as "hasImage" FROM meal_log_entries WHERE user_id = $1 ORDER BY created_at DESC`, [userId])).rows; } finally { client.release(); }
@@ -64,7 +79,7 @@ export const getMealLogEntries = async (userId) => {
 
 export const getSavedMeals = async (userId) => {
     const client = await pool.connect();
-    try { return (await client.query(`SELECT id, meal_data FROM saved_meals WHERE user_id = $1`, [userId])).rows; } finally { client.release(); }
+    try { return (await client.query(`SELECT id, meal_data FROM saved_meals WHERE user_id = $1`, [userId])).rows.map(r => ({ ...processMealData(r.meal_data), id: r.id })); } finally { client.release(); }
 };
 
 export const saveMeal = async (userId, meal) => {
@@ -72,20 +87,9 @@ export const saveMeal = async (userId, meal) => {
     try { const res = await client.query(`INSERT INTO saved_meals (user_id, meal_data) VALUES ($1, $2) RETURNING id`, [userId, meal]); return { id: res.rows[0].id }; } finally { client.release(); }
 };
 
-export const getMealPlans = async (userId) => {
-    const client = await pool.connect();
-    try { return (await client.query(`SELECT id, name FROM meal_plans WHERE user_id = $1`, [userId])).rows; } finally { client.release(); }
-};
-
-// --- HEALTH & REWARDS ---
 export const getHealthMetrics = async (userId) => {
     const client = await pool.connect();
     try { return (await client.query(`SELECT * FROM health_metrics WHERE user_id = $1`, [userId])).rows[0] || { steps: 0 }; } finally { client.release(); }
-};
-
-export const syncHealthMetrics = async (userId, stats) => {
-    const client = await pool.connect();
-    try { return (await client.query(`INSERT INTO health_metrics (user_id, steps) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET steps = $2 RETURNING *`, [userId, stats.steps])).rows[0]; } finally { client.release(); }
 };
 
 export const getRewardsSummary = async (userId) => {
@@ -93,7 +97,7 @@ export const getRewardsSummary = async (userId) => {
     try { return (await client.query(`SELECT points_total FROM rewards_balances WHERE user_id = $1`, [userId])).rows[0] || { points_total: 0 }; } finally { client.release(); }
 };
 
-export const getShopifyCustomerId = async (userId) => {
+export const getPantryLog = async (userId) => {
     const client = await pool.connect();
-    try { return (await client.query(`SELECT shopify_customer_id FROM users WHERE id = $1`, [userId])).rows[0]?.shopify_customer_id; } finally { client.release(); }
+    try { return (await client.query(`SELECT id, created_at, (image_base64 IS NOT NULL) as "hasImage" FROM pantry_log_entries WHERE user_id = $1 ORDER BY created_at DESC`, [userId])).rows; } finally { client.release(); }
 };
