@@ -316,7 +316,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                     )}
                     {stack === 'nutrition' && (
                         subView ? (
-                            subView === 'videos' ? <MealPrepVideos /> : <FuelSection {...fuelProps} defaultTab={subView === 'plan' ? 'plan' : undefined} initialMedicalParams={medicalActionParams} />
+                            subView === 'videos' ? <MealPrepVideos /> : <FuelSection {...fuelProps} defaultTab={subView === 'plan' ? 'plan' : undefined} initialMedicalActionParams={medicalActionParams} />
                         ) : (
                             <FuelSection {...fuelProps} />
                         )

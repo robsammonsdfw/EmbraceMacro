@@ -67,6 +67,7 @@ export interface NutritionInfo {
   totalVitaminD?: number;
   totalCalcium?: number;
   ingredients: Ingredient[];
+  insight: string; // Fixed: Added required insight property
   justification?: string;
   imageUrl?: string; 
   hasImage?: boolean; 
