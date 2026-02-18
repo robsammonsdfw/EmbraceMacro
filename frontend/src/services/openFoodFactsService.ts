@@ -1,3 +1,4 @@
+
 import type { NutritionInfo, Ingredient } from '../types';
 
 const API_URL = 'https://world.openfoodfacts.org/api/v2/product/';
@@ -66,6 +67,8 @@ export const getProductByBarcode = async (barcode: string): Promise<NutritionInf
         nutriScore: product.nutriscore_grade || undefined,
         ecoScore: product.ecoscore_grade || undefined,
         allergens: allergens.length > 0 ? allergens : undefined,
+        // Added required insight field
+        insight: `Retrieved via barcode scan from Open Food Facts.`
     };
 
     return nutritionInfo;
