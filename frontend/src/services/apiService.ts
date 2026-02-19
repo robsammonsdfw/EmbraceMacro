@@ -127,8 +127,6 @@ export const identifyGroceryItems = async (base64Image: string, mimeType: string
     const compressed = await compressImage(base64Image, mimeType);
     return callApi('/grocery/identify', 'POST', { base64Image: compressed, mimeType });
 };
-export const getShopifyOrders = (): Promise<Order[]> => callApi('/shopify/orders', 'GET');
-export const getShopifyProduct = (handle: string): Promise<ShopifyProduct | { error: string }> => callApi(`/shopify/products/${handle}`, 'GET');
 export const generateRecipeImage = (prompt: string): Promise<{ base64Image: string }> => callApi('/generate-recipe-image', 'POST', { prompt });
 export const generateMissingMetadata = (mealName: string): Promise<Partial<NutritionInfo>> => callApi('/analyze-meal-metadata', 'POST', { mealName });
 export const getMedicalIntake = (): Promise<{ data: any }> => callApi('/account/medical-intake', 'GET');
@@ -177,3 +175,42 @@ export const revokeCoachingAccess = (id: string): Promise<void> => callApi(`/coa
 export const calculateReadiness = (data: any): Promise<ReadinessScore> => callApi('/mental/readiness', 'POST', data);
 export const getRestaurantActivity = (uri: string): Promise<RestaurantActivity[]> => callApi(`/social/restaurant-activity?uri=${encodeURIComponent(uri)}`, 'GET');
 export const logRecoveryStats = (data: any): Promise<void> => callApi('/mental/log-recovery', 'POST', data);
+// --- SHOPIFY GROUP MAPPING & INTERCEPTION ---
+
+// 1. Force medications into their overarching treatment groups
+export const resolveShopifyGroup = (medicationName: string): string => {
+    if (!medicationName) return 'weight-loss'; // Fallback
+    const name = medicationName.toLowerCase();
+    
+    if (name.includes('tirzepatide') || name.includes('semaglutide')) return 'weight-loss';
+    if (name.includes('sildenafil') || name.includes('tadalafil')) return 'erectile-dysfunction';
+    if (name.includes('enclomiphene')) return 'low-testosterone';
+    if (name.includes('sertraline')) return 'premature-ejaculation';
+    
+    return name.replace(/\s+/g, '-');
+};
+
+// 2. Generate the correct external collection URL
+export const getShopifyCollectionUrl = (medicationName: string): string => {
+    const group = resolveShopifyGroup(medicationName);
+    return `https://shop.embracehealth.ai/collections/${group}`;
+};
+
+// 3. INTERCEPT: Swap product name for group name before hitting AWS
+export const getShopifyProduct = (medicationName: string): Promise<ShopifyProduct> => {
+    const groupHandle = resolveShopifyGroup(medicationName);
+    return callApi(`/shopify/products/${groupHandle}`, 'GET');
+};
+
+// 4. INTERCEPT: Map URLs on order history to the correct group page
+export const getShopifyOrders = async (): Promise<Order[]> => {
+    const orders: Order[] = await callApi('/shopify/orders', 'GET');
+    
+    return orders.map(order => ({
+        ...order,
+        items: order.items.map(item => ({
+            ...item,
+            url: getShopifyCollectionUrl(item.title)
+        }))
+    }));
+};
