@@ -321,7 +321,8 @@ export const getShopifyCustomerId = async (userId) => {
 };
 
 export const analyzeImageMacros = async (userId, body) => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    // FIX: Using the correct environment variable to prevent Lambda crash
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const prompt = "Analyze this image and return a JSON object with totalCalories, totalProtein, totalCarbs, and totalFat.";
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
@@ -331,7 +332,7 @@ export const analyzeImageMacros = async (userId, body) => {
 };
 
 export const analyzeRestaurantMeal = async (userId, body) => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const prompt = "Analyze this restaurant meal and estimate macros. Return JSON.";
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
@@ -341,7 +342,7 @@ export const analyzeRestaurantMeal = async (userId, body) => {
 };
 
 export const getRecipesFromImage = async (body) => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const prompt = "Analyze these ingredients and suggest 3 recipes in JSON format array.";
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
