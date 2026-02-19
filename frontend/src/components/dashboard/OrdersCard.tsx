@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { ClipboardListIcon, CheckIcon, ClockIcon } from '../icons';
+import { ClipboardListIcon, CheckIcon, ClockIcon, ExternalLinkIcon } from '../icons'; // Added ExternalLinkIcon if available, or use standard anchor
 import type { Order } from '../../types';
 import * as apiService from '../../services/apiService';
 
@@ -101,6 +100,18 @@ export const OrdersCard: React.FC = () => {
                                                     <p className="text-[10px] text-slate-400 font-bold uppercase">Qty: {item.quantity}</p>
                                                 </div>
                                             </div>
+                                            
+                                            {/* NEW: Buy Again / Track Button pointing to specific Group URL */}
+                                            {item.url && (
+                                                <a 
+                                                    href={item.url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-[10px] font-black uppercase tracking-wider text-indigo-600 border border-indigo-200 px-2 py-1 rounded hover:bg-indigo-50 transition-colors flex items-center gap-1"
+                                                >
+                                                    Buy Again
+                                                </a>
+                                            )}
                                         </div>
                                     ))}
                                 </div>

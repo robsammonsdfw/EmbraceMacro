@@ -230,7 +230,8 @@ export interface CoachingRelation {
 export interface OrderItem {
   title: string;
   quantity: number;
-  image?: string;
+  price: string;
+  url?: string; 
 }
 
 export interface Order {
