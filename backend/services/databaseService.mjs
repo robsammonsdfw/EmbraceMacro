@@ -4,12 +4,15 @@ const { Pool } = pg;
 const pool = new Pool({ ssl: { rejectUnauthorized: false } });
 
 // --- HELPERS ---
+// ✅ CORRECT: Strips the heavy data completely
 const processMealData = (data) => {
-    if (data.imageBase64) {
-        data.imageUrl = `data:image/jpeg;base64,${data.imageBase64}`;
-        delete data.imageBase64;
+    const cleanData = { ...data };
+    if (cleanData.imageBase64) {
+        cleanData.hasImage = true; // Light-weight flag
+        delete cleanData.imageBase64; // Delete the heavy data
+        delete cleanData.imageUrl; // Ensure no heavy URL string exists
     }
-    return data;
+    return cleanData;
 };
 
 // --- AUTH ---
