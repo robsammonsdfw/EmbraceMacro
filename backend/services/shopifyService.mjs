@@ -1,4 +1,3 @@
-
 import * as db from './databaseService.mjs';
 
 // Updated to match the specific environment variables from your configuration
@@ -9,6 +8,45 @@ const SHOPIFY_ADMIN_TOKEN = process.env.SHOPIFY_ADMIN_API_KEY;
 
 // STRICT: Use the Storefront Access Token for client-facing operations (Products)
 const SHOPIFY_STOREFRONT_TOKEN = process.env.SHOPIFY_STOREFRONT_TOKEN;
+
+// --- URL MAPPING HELPER ---
+// Explicitly maps each medication to its specific collection page
+const resolveCollectionUrl = (text) => {
+    if (!text) return `https://${SHOPIFY_DOMAIN}`;
+    
+    const t = text.toLowerCase();
+    const domain = `https://${SHOPIFY_DOMAIN}`;
+
+    // Weight Loss Group
+    if (t.includes('tirzepatide')) {
+        return `${domain}/collections/weight-loss`;
+    }
+    if (t.includes('semaglutide')) {
+        return `${domain}/collections/weight-loss`;
+    }
+
+    // Sexual Health Group (ED)
+    if (t.includes('sildenafil')) {
+        return `${domain}/collections/erectile-dysfunction`;
+    }
+    if (t.includes('tadalafil')) {
+        return `${domain}/collections/erectile-dysfunction`;
+    }
+
+    // Testosterone Group
+    if (t.includes('enclomiphene')) {
+        return `${domain}/collections/low-testosterone`;
+    }
+
+    // Premature Ejaculation Group
+    if (t.includes('sertraline')) {
+        return `${domain}/collections/premature-ejaculation`;
+    }
+    
+    // Default Fallback (Generic Product Page)
+    // If it's a handle (no spaces), go to /products/, otherwise default to domain
+    return t.includes(' ') ? `${domain}` : `${domain}/products/${text}`;
+};
 
 // 1. Backend Order Fetching (Admin Context)
 export const fetchCustomerOrders = async (userId) => {
@@ -62,7 +100,9 @@ export const fetchCustomerOrders = async (userId) => {
             items: order.line_items.map(item => ({
                 title: item.title,
                 quantity: item.quantity,
-                price: item.price
+                price: item.price,
+                // INJECTED: Resolves the "Buy Again" URL based on medication name
+                url: resolveCollectionUrl(item.title || item.name) 
             }))
         }));
 
@@ -142,7 +182,8 @@ export const getProductByHandle = async (handle) => {
             price: product.priceRange?.minVariantPrice?.amount || "0.00",
             currency: product.priceRange?.minVariantPrice?.currencyCode || "USD",
             imageUrl: product.featuredImage?.url,
-            url: product.onlineStoreUrl
+            // OVERRIDE: Ignore the default product URL and use our Collection map
+            url: resolveCollectionUrl(handle) 
         };
 
     } catch (error) {
