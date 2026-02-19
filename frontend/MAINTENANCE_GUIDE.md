@@ -1,4 +1,3 @@
-
 # Frontend Maintenance & Integrity Guide
 
 **Application:** EmbraceHealth AI  
@@ -8,7 +7,16 @@ This document serves as the "Production Bible" for frontend updates. Any change 
 
 ---
 
-## 1. UX & State Integrity Checklist
+## 1. STRICT CODING STANDARDS (Anti-Breakage Rules)
+*Violating these rules will crash the AWS Amplify build pipeline.*
+
+- **NO External Icons:** Do not import from `lucide-react`, `heroicons`, or any other external library. **ALL** icons must be imported from `../icons` (or `../../components/icons.tsx`).
+- **NO Default Exports for Components:** Components consumed by `DesktopApp.tsx` or `MobileApp.tsx` MUST use named exports (e.g., `export const PharmacyOrders = () => {...}`). Do not use `export default`.
+- **API Interception:** Frontend components must NEVER build raw Shopify URLs. They must rely on `apiService` methods which automatically intercept and map medications to their proper treatment group collections.
+
+---
+
+## 2. UX & State Integrity Checklist
 *Before merging any PR, verify these critical user flows.*
 
 ### 🟢 Core Capture Flow
@@ -31,8 +39,7 @@ This document serves as the "Production Bible" for frontend updates. Any change 
 
 ### 💪 Body Hub
 - [ ] **Tab Switching:** Switching between `3D Scan`, `Body Pics`, `Log`, and `Form AI` must preserve state.
-- [ ] **Form Analysis:** 
-    - [ ] Uploading a video/image in `FormAnalysis.tsx` must trigger the analysis loader.
+- [ ] **Form Analysis:** - [ ] Uploading a video/image in `FormAnalysis.tsx` must trigger the analysis loader.
     - [ ] Result overlay must show Score & Feedback.
 - [ ] **Upload Alignment:** The `BodybuilderOutline` overlay must appear when uploading a progress pic to guide alignment.
 
@@ -48,7 +55,7 @@ This document serves as the "Production Bible" for frontend updates. Any change 
 
 ---
 
-## 2. Component Hierarchy & Props
+## 3. Component Hierarchy & Props
 *Critical prop-drilling paths that must be maintained.*
 
 - **`App.tsx` -> `DesktopApp/MobileApp`**: Passes global state (`healthStats`, `dashboardPrefs`, `userRole`).
@@ -60,7 +67,7 @@ This document serves as the "Production Bible" for frontend updates. Any change 
 
 ---
 
-## 3. Service Layer Standards (`services/apiService.ts`)
+## 4. Service Layer Standards (`services/apiService.ts`)
 *Rules for communicating with the backend.*
 
 - [ ] **Image Compression:** All image uploads MUST go through `compressImage` before being sent to the backend. Max width 600px, quality 0.5.
@@ -69,7 +76,7 @@ This document serves as the "Production Bible" for frontend updates. Any change 
 
 ---
 
-## 4. CSS & Visual Regression
+## 5. CSS & Visual Regression
 - [ ] **Mobile SafeArea:** Bottom navigation must respect `pb-safe` (safe area inset) for iPhone users.
 - [ ] **Z-Index Layering:**
     - `CaptureFlow` (Camera) = z-[100]
