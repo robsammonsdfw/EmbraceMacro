@@ -108,8 +108,20 @@ export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
     try { 
         const rows = (await client.query(`SELECT id, meal_data, created_at, (image_base64 IS NOT NULL) as "hasImage" FROM meal_log_entries WHERE user_id = $1 ORDER BY created_at DESC`, [userId])).rows; 
-        return rows.map(r => ({ ...r, meal_data: processDataForList(r.meal_data) }));
-    } catch(e) { return []; } finally { client.release(); }
+        
+        // FIX: Flatten the meal data directly into the root object so frontend can access log.imageUrl
+        return rows.map(r => ({ 
+            id: r.id,
+            createdAt: r.created_at,
+            hasImage: r.hasImage,
+            ...processDataForList(r.meal_data)
+        }));
+    } catch(e) { 
+        console.error("Meal Log DB Error:", e);
+        return []; 
+    } finally { 
+        client.release(); 
+    }
 };
 
 export const getMealLogEntryById = async (userId, id) => {
@@ -176,11 +188,19 @@ export const deleteMeal = async (userId, id) => {
 export const getMealPlans = async (userId) => {
     const client = await pool.connect();
     try { 
-        // FIX: Added LEFT JOIN to saved_meals to filter out orphaned IDs
+        // FIX: The frontend expects the full 'meal' object nested inside each plan item.
+        // We must pull sm.meal_data into the JSON object so the UI has the imageUrl and ingredients.
         const query = `
             SELECT mp.id, mp.name,
                 COALESCE(
-                    json_agg(json_build_object('id', mpi.id, 'savedMealId', mpi.saved_meal_id, 'metadata', mpi.metadata))
+                    json_agg(
+                        json_build_object(
+                            'id', mpi.id, 
+                            'savedMealId', mpi.saved_meal_id, 
+                            'metadata', mpi.metadata,
+                            'meal', sm.meal_data
+                        )
+                    )
                     FILTER (WHERE mpi.id IS NOT NULL AND sm.id IS NOT NULL),
                     '[]'::json
                 ) as items
@@ -190,8 +210,21 @@ export const getMealPlans = async (userId) => {
             WHERE mp.user_id = $1 GROUP BY mp.id
         `;
         const rows = (await client.query(query, [userId])).rows;
-        return rows.map(r => ({ ...r, items: typeof r.items === 'string' ? JSON.parse(r.items) : (r.items || []) }));
+        
+        return rows.map(r => {
+            const parsedItems = typeof r.items === 'string' ? JSON.parse(r.items) : (r.items || []);
+            // Pass the nested meal through our failsafe helper to prevent any other crashes
+            const safeItems = parsedItems.map(item => ({
+                ...item,
+                meal: {
+                    ...processDataForList(item.meal),
+                    id: item.savedMealId 
+                }
+            }));
+            return { ...r, items: safeItems };
+        });
     } catch(e) { 
+        console.error("Meal Plan DB Error:", e);
         return []; 
     } finally { 
         client.release(); 
