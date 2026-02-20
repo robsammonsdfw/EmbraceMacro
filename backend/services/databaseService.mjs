@@ -6,22 +6,33 @@ const pool = new Pool({ ssl: { rejectUnauthorized: false } });
 // ==========================================
 // UTILITY HELPERS
 // ==========================================
+// ⚠️ AWS 6MB LIMIT PROTECTION & IMAGE SANITIZER
 const processDataForList = (data) => {
     if (!data) return { ingredients: [] };
-    const cleanData = typeof data === 'string' ? JSON.parse(data) : { ...data };
     
+    let cleanData = {};
+    try {
+        cleanData = typeof data === 'string' ? JSON.parse(data) : { ...data };
+    } catch (e) {
+        cleanData = {}; // Failsafe for corrupted strings in DB
+    }
+
+    // Protect against nulls masquerading as objects
+    if (typeof cleanData !== 'object' || cleanData === null) {
+        cleanData = {};
+    }
+
     // PROTECT FRONTEND: Guarantee ingredients is an array
     if (!cleanData.ingredients) cleanData.ingredients = []; 
     
-    // FIX CORRUPTED IMAGES: Clean up double-prefixes or missing prefixes
+    // FIX CORRUPTED IMAGES: Clean up double-prefixes
     if (cleanData.imageUrl) {
-        const rawBase64 = cleanData.imageUrl.replace(/^(data:image\/\w+;base64,)+/, '');
+        const rawBase64 = String(cleanData.imageUrl).replace(/^(data:image\/\w+;base64,)+/, '');
         if (!rawBase64.startsWith('http')) {
             cleanData.imageUrl = `data:image/jpeg;base64,${rawBase64}`;
         }
     }
     
-    // Strip redundant massive keys to protect the AWS payload
     delete cleanData.image_base64;
     delete cleanData.imageBase64;
     
@@ -165,19 +176,26 @@ export const deleteMeal = async (userId, id) => {
 export const getMealPlans = async (userId) => {
     const client = await pool.connect();
     try { 
+        // FIX: Added LEFT JOIN to saved_meals to filter out orphaned IDs
         const query = `
             SELECT mp.id, mp.name,
                 COALESCE(
-                    json_agg(json_build_object('id', mpi.id, 'savedMealId', mpi.saved_meal_id, 'metadata', mpi.metadata)) FILTER (WHERE mpi.id IS NOT NULL),
+                    json_agg(json_build_object('id', mpi.id, 'savedMealId', mpi.saved_meal_id, 'metadata', mpi.metadata))
+                    FILTER (WHERE mpi.id IS NOT NULL AND sm.id IS NOT NULL),
                     '[]'::json
                 ) as items
             FROM meal_plans mp
             LEFT JOIN meal_plan_items mpi ON mp.id = mpi.meal_plan_id
+            LEFT JOIN saved_meals sm ON mpi.saved_meal_id = sm.id
             WHERE mp.user_id = $1 GROUP BY mp.id
         `;
         const rows = (await client.query(query, [userId])).rows;
         return rows.map(r => ({ ...r, items: typeof r.items === 'string' ? JSON.parse(r.items) : (r.items || []) }));
-    } catch(e) { return []; } finally { client.release(); }
+    } catch(e) { 
+        return []; 
+    } finally { 
+        client.release(); 
+    }
 };
 
 export const createMealPlan = async (userId, name) => {
