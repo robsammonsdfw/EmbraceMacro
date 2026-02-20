@@ -6,21 +6,24 @@ const pool = new Pool({ ssl: { rejectUnauthorized: false } });
 // ==========================================
 // UTILITY HELPERS
 // ==========================================
-// ⚠️ AWS 6MB LIMIT PROTECTION & FRONTEND SAFETY
 const processDataForList = (data) => {
     if (!data) return { ingredients: [] };
-    // Handle stringified JSON from older database saves
     const cleanData = typeof data === 'string' ? JSON.parse(data) : { ...data };
     
-    if (cleanData.image_base64 || cleanData.imageBase64) {
-        cleanData.hasImage = true;
-        delete cleanData.image_base64;
-        delete cleanData.imageBase64;
-        delete cleanData.imageUrl; 
+    // PROTECT FRONTEND: Guarantee ingredients is an array
+    if (!cleanData.ingredients) cleanData.ingredients = []; 
+    
+    // FIX CORRUPTED IMAGES: Clean up double-prefixes or missing prefixes
+    if (cleanData.imageUrl) {
+        const rawBase64 = cleanData.imageUrl.replace(/^(data:image\/\w+;base64,)+/, '');
+        if (!rawBase64.startsWith('http')) {
+            cleanData.imageUrl = `data:image/jpeg;base64,${rawBase64}`;
+        }
     }
     
-    // PROTECT FRONTEND: Guarantee ingredients is an array so .map/.find won't crash
-    if (!cleanData.ingredients) cleanData.ingredients = []; 
+    // Strip redundant massive keys to protect the AWS payload
+    delete cleanData.image_base64;
+    delete cleanData.imageBase64;
     
     return cleanData;
 };
@@ -92,7 +95,10 @@ export const logRecoveryStats = async (userId, body) => { return { success: true
 // ==========================================
 export const getMealLogEntries = async (userId) => {
     const client = await pool.connect();
-    try { return (await client.query(`SELECT id, meal_data, created_at, (image_base64 IS NOT NULL) as "hasImage" FROM meal_log_entries WHERE user_id = $1 ORDER BY created_at DESC`, [userId])).rows; } catch(e) { return []; } finally { client.release(); }
+    try { 
+        const rows = (await client.query(`SELECT id, meal_data, created_at, (image_base64 IS NOT NULL) as "hasImage" FROM meal_log_entries WHERE user_id = $1 ORDER BY created_at DESC`, [userId])).rows; 
+        return rows.map(r => ({ ...r, meal_data: processDataForList(r.meal_data) }));
+    } catch(e) { return []; } finally { client.release(); }
 };
 
 export const getMealLogEntryById = async (userId, id) => {
@@ -100,19 +106,14 @@ export const getMealLogEntryById = async (userId, id) => {
     try {
         const res = await client.query(`SELECT id, meal_data, image_base64 FROM meal_log_entries WHERE id = $1 AND user_id = $2`, [id, userId]);
         if (!res.rows[0]) return null;
-        
         let imgUrl = null;
         if (res.rows[0].image_base64) {
-            // Strip the prefix if it accidentally got saved with one, then re-apply it cleanly
-            const rawBase64 = res.rows[0].image_base64.replace(/^data:image\/\w+;base64,/, '');
+            const rawBase64 = res.rows[0].image_base64.replace(/^(data:image\/\w+;base64,)+/, '');
             imgUrl = `data:image/jpeg;base64,${rawBase64}`;
         }
-        
         const mealData = typeof res.rows[0].meal_data === 'string' ? JSON.parse(res.rows[0].meal_data) : res.rows[0].meal_data;
         return { ...mealData, imageUrl: imgUrl };
-    } finally { 
-        client.release(); 
-    }
+    } catch(e) { return null; } finally { client.release(); }
 };
 
 export const createMealLogEntry = async (userId, data, imageBase64) => {
@@ -158,37 +159,25 @@ export const saveMeal = async (userId, meal) => {
 
 export const deleteMeal = async (userId, id) => {
     const client = await pool.connect();
-    try { await client.query(`DELETE FROM saved_meals WHERE id = $1 AND user_id = $2`, [id, userId]); } catch(e) { console.error(e); } finally { client.release(); }
+    try { await client.query(`DELETE FROM saved_meals WHERE id = $1 AND user_id = $2`, [id, userId]); } catch(e) {} finally { client.release(); }
 };
 
 export const getMealPlans = async (userId) => {
     const client = await pool.connect();
     try { 
-        // CRITICAL: We MUST join the items into a JSON array, 
-        // otherwise the frontend crashes looking for plan.items
         const query = `
-            SELECT
-                mp.id,
-                mp.name,
+            SELECT mp.id, mp.name,
                 COALESCE(
-                    json_agg(
-                        json_build_object(
-                            'id', mpi.id,
-                            'savedMealId', mpi.saved_meal_id,
-                            'metadata', mpi.metadata
-                        )
-                    ) FILTER (WHERE mpi.id IS NOT NULL),
-                    '[]'
+                    json_agg(json_build_object('id', mpi.id, 'savedMealId', mpi.saved_meal_id, 'metadata', mpi.metadata)) FILTER (WHERE mpi.id IS NOT NULL),
+                    '[]'::json
                 ) as items
             FROM meal_plans mp
             LEFT JOIN meal_plan_items mpi ON mp.id = mpi.meal_plan_id
-            WHERE mp.user_id = $1
-            GROUP BY mp.id
+            WHERE mp.user_id = $1 GROUP BY mp.id
         `;
-        return (await client.query(query, [userId])).rows; 
-    } finally { 
-        client.release(); 
-    }
+        const rows = (await client.query(query, [userId])).rows;
+        return rows.map(r => ({ ...r, items: typeof r.items === 'string' ? JSON.parse(r.items) : (r.items || []) }));
+    } catch(e) { return []; } finally { client.release(); }
 };
 
 export const createMealPlan = async (userId, name) => {
@@ -203,7 +192,7 @@ export const addMealToPlan = async (userId, planId, savedMealId, metadata = {}) 
 
 export const removeMealFromPlan = async (userId, itemId) => {
     const client = await pool.connect();
-    try { await client.query(`DELETE FROM meal_plan_items WHERE id = $1 AND user_id = $2`, [itemId, userId]); } catch(e) { console.error(e); } finally { client.release(); }
+    try { await client.query(`DELETE FROM meal_plan_items WHERE id = $1 AND user_id = $2`, [itemId, userId]); } catch(e) {} finally { client.release(); }
 };
 
 // ==========================================
@@ -221,7 +210,7 @@ export const createGroceryList = async (userId, name) => {
 
 export const deleteGroceryList = async (userId, id) => {
     const client = await pool.connect();
-    try { await client.query(`DELETE FROM grocery_lists WHERE id = $1 AND user_id = $2`, [id, userId]); } catch(e) { console.error(e); } finally { client.release(); }
+    try { await client.query(`DELETE FROM grocery_lists WHERE id = $1 AND user_id = $2`, [id, userId]); } catch(e) {} finally { client.release(); }
 };
 
 export const getGroceryListItems = async (listId) => {
@@ -241,7 +230,7 @@ export const updateGroceryItem = async (userId, itemId, checked) => {
 
 export const removeGroceryItem = async (userId, itemId) => {
     const client = await pool.connect();
-    try { await client.query(`DELETE FROM grocery_list_items WHERE id = $1`, [itemId]); } catch(e) { console.error(e); } finally { client.release(); }
+    try { await client.query(`DELETE FROM grocery_list_items WHERE id = $1`, [itemId]); } catch(e) {} finally { client.release(); }
 };
 
 export const importIngredientsFromPlans = async (userId, listId, planIds) => { return []; };
@@ -257,7 +246,7 @@ export const importToGroceryList = async (userId, listId, items) => {
 
 export const clearGroceryListItems = async (userId, listId, type) => {
     const client = await pool.connect();
-    try { await client.query(`DELETE FROM grocery_list_items WHERE grocery_list_id = $1`, [listId]); } catch(e) { console.error(e); } finally { client.release(); }
+    try { await client.query(`DELETE FROM grocery_list_items WHERE grocery_list_id = $1`, [listId]); } catch(e) {} finally { client.release(); }
 };
 
 // ==========================================
@@ -265,7 +254,7 @@ export const clearGroceryListItems = async (userId, listId, type) => {
 // ==========================================
 export const getSocialProfile = async (userId) => {
     const client = await pool.connect();
-    try { return (await client.query(`SELECT email, first_name as "firstName", bio FROM users WHERE id = $1`, [userId])).rows[0]; } catch(e) { return { email: "", firstName: "" }; } finally { client.release(); }
+    try { return (await client.query(`SELECT email, first_name as "firstName", bio FROM users WHERE id = $1`, [userId])).rows[0] || { email: '', firstName: '', bio: '' }; } catch(e) { return { email: "", firstName: "", bio: "" }; } finally { client.release(); }
 };
 
 export const updateSocialProfile = async (userId, updates) => {
@@ -275,12 +264,28 @@ export const updateSocialProfile = async (userId, updates) => {
 
 export const getFriends = async (userId) => {
     const client = await pool.connect();
-    try { return (await client.query(`SELECT * FROM friendships WHERE (requester_id = $1 OR receiver_id = $1) AND status = 'accepted'`, [userId])).rows; } catch(e) { return []; } finally { client.release(); }
+    try { 
+        const query = `
+            SELECT f.id, f.status, u.id as "userId", u.email, u.first_name as "firstName"
+            FROM friendships f
+            JOIN users u ON (u.id = f.requester_id OR u.id = f.receiver_id) AND u.id != $1
+            WHERE (f.requester_id = $1 OR f.receiver_id = $1) AND f.status = 'accepted'
+        `;
+        return (await client.query(query, [userId])).rows; 
+    } catch(e) { return []; } finally { client.release(); }
 };
 
 export const getFriendRequests = async (userId) => {
     const client = await pool.connect();
-    try { return (await client.query(`SELECT * FROM friendships WHERE receiver_id = $1 AND status = 'pending'`, [userId])).rows; } catch(e) { return []; } finally { client.release(); }
+    try { 
+        const query = `
+            SELECT f.id, f.status, u.id as "userId", u.email, u.first_name as "firstName"
+            FROM friendships f
+            JOIN users u ON u.id = f.requester_id
+            WHERE f.receiver_id = $1 AND f.status = 'pending'
+        `;
+        return (await client.query(query, [userId])).rows; 
+    } catch(e) { return []; } finally { client.release(); }
 };
 
 export const sendFriendRequest = async (userId, email) => {
@@ -304,7 +309,15 @@ export const getRestaurantActivity = async (userId, uri) => { return []; };
 
 export const getCoachingRelations = async (userId, type) => {
     const client = await pool.connect();
-    try { return (await client.query(`SELECT * FROM coaching_relations WHERE (coach_id = $1 OR client_id = $1)`, [userId])).rows; } catch(e) { return []; } finally { client.release(); }
+    try { 
+        const query = `
+            SELECT c.id, c.status, u.id as "userId", u.email, u.first_name as "firstName"
+            FROM coaching_relations c
+            JOIN users u ON (u.id = c.coach_id OR u.id = c.client_id) AND u.id != $1
+            WHERE (c.coach_id = $1 OR c.client_id = $1)
+        `;
+        return (await client.query(query, [userId])).rows; 
+    } catch(e) { return []; } finally { client.release(); }
 };
 
 export const inviteClient = async (userId, email) => {
@@ -324,7 +337,7 @@ export const respondToCoachingInvite = async (userId, id, status) => {
 
 export const revokeCoachingAccess = async (userId, id) => {
     const client = await pool.connect();
-    try { await client.query(`DELETE FROM coaching_relations WHERE id = $1 AND (coach_id = $2 OR client_id = $2)`, [id, userId]); } catch(e) { console.error(e); } finally { client.release(); }
+    try { await client.query(`DELETE FROM coaching_relations WHERE id = $1 AND (coach_id = $2 OR client_id = $2)`, [id, userId]); } catch(e) {} finally { client.release(); }
 };
 
 // ==========================================
@@ -342,7 +355,10 @@ export const syncHealthMetrics = async (userId, stats) => {
 
 export const getRewardsSummary = async (userId) => {
     const client = await pool.connect();
-    try { return (await client.query(`SELECT points_total FROM rewards_balances WHERE user_id = $1`, [userId])).rows[0] || { points_total: 0 }; } catch(e) { return { points_total: 0 }; } finally { client.release(); }
+    try { 
+        const row = (await client.query(`SELECT points_total FROM rewards_balances WHERE user_id = $1`, [userId])).rows[0];
+        return { points_total: row?.points_total || 0, history: [], available_rewards: [] };
+    } catch(e) { return { points_total: 0, history: [], available_rewards: [] }; } finally { client.release(); }
 };
 
 export const getBodyPhotos = async (userId) => { return []; };

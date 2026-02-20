@@ -1,5 +1,11 @@
 import * as db from './databaseService.mjs';
 
+// HELPER: Extracts '7140...' from 'gid://shopify/Customer/7140...'
+const extractNumericId = (gid) => {
+    if (!gid) return null;
+    const parts = gid.toString().split('/');
+    return parts[parts.length - 1]; 
+};
 // Updated to match the specific environment variables from your configuration
 const SHOPIFY_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN || process.env.SHOPIFY_STORE_URL;
 
@@ -57,17 +63,19 @@ export const fetchCustomerOrders = async (userId) => {
         throw new Error(errorMsg);
     }
 
-    // Get the Shopify Customer ID associated with this user
-    const shopifyCustomerId = await db.getShopifyCustomerId(userId);
+ // Get the Shopify Customer ID associated with this user
+ const rawShopifyId = await db.getShopifyCustomerId(userId);
 
-    if (!shopifyCustomerId) {
-        return []; 
-    }
+ if (!rawShopifyId) {
+     return []; 
+ }
 
-    try {
-        // Admin API version 2024-01
-        const url = `https://${SHOPIFY_DOMAIN}/admin/api/2024-01/customers/${shopifyCustomerId}/orders.json?status=any`;
-        
+ // FIX: Convert the GraphQL ID to a Numeric ID
+ const numericId = extractNumericId(rawShopifyId);
+
+ try {
+     // Admin API version 2024-01
+     const url = `https://${SHOPIFY_DOMAIN}/admin/api/2024-01/customers/${numericId}/orders.json?status=any`;  
         console.log(`Fetching orders from: ${url}`);
 
         const response = await fetch(url, {
