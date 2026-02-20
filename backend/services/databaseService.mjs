@@ -317,9 +317,11 @@ export const saveDashboardPrefs = async (userId, prefs) => {
 // ==========================================
 export const getShopifyCustomerId = async (userId) => {
     const client = await pool.connect();
-    try { return (await client.query(`SELECT shopify_customer_id FROM users WHERE id = $1`, [userId])).rows[0]?.shopify_customer_id; } finally { client.release(); }
+    try { 
+        // Ensure these backticks exist!
+        return (await client.query(`SELECT shopify_customer_id FROM users WHERE id = $1`, [userId])).rows[0]?.shopify_customer_id; 
+    } finally { client.release(); }
 };
-
 export const analyzeImageMacros = async (userId, body) => {
     // FIX: Using the correct environment variable to prevent Lambda crash
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });

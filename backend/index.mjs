@@ -1,7 +1,7 @@
 import * as db from './services/databaseService.mjs';
 import * as shopify from './services/shopifyService.mjs';
 import jwt from 'jsonwebtoken';
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
 const CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
@@ -32,7 +32,6 @@ const parseBody = (event) => {
 };
 
 export const handler = async (event) => {
-    // MANDATORY FIX for AWS Stage 'default' 404s
     let path = event.path || event.rawPath || "";
     if (path.startsWith('/default')) path = path.replace('/default', '');
     if (path.endsWith('/') && path.length > 1) path = path.slice(0, -1);
@@ -43,7 +42,6 @@ export const handler = async (event) => {
     try {
         if (path === '' || path === '/' || path === '/health') return sendResponse(200, { status: 'ok' });
 
-        // --- PUBLIC AUTH ---
         if (path === '/auth/customer-login' && method === 'POST') {
             const body = parseBody(event);
             const user = await db.findOrCreateUserByEmail(body.email);
@@ -57,25 +55,19 @@ export const handler = async (event) => {
         const body = parseBody(event);
         const queryParams = event.queryStringParameters || {};
 
-        // ==========================================
-        // 1. AUTH & WEARABLES
-        // ==========================================
+        // --- WEARABLES ---
         if (path === '/auth/fitbit/status' && method === 'GET') return sendResponse(200, await db.getFitbitStatus(userId));
         if (path === '/auth/fitbit/url' && method === 'POST') return sendResponse(200, await db.getFitbitAuthUrl(userId));
         if (path === '/auth/fitbit/link' && method === 'POST') return sendResponse(200, await db.linkFitbitAccount(userId, body.code));
         if (path === '/auth/fitbit/disconnect' && method === 'POST') { await db.disconnectFitbit(userId); return sendResponse(200, { success: true }); }
         if (path === '/sync-health/fitbit' && method === 'POST') return sendResponse(200, await db.syncFitbitData(userId));
 
-        // ==========================================
-        // 2. MENTAL HEALTH & READINESS
-        // ==========================================
+        // --- MENTAL HEALTH ---
         if (path === '/mental/assessments' && method === 'GET') return sendResponse(200, await db.getAssessments(userId));
         if (path === '/mental/assessment-state' && method === 'GET') return sendResponse(200, await db.getAssessmentState(userId));
         if (path === '/mental/readiness' && method === 'POST') return sendResponse(200, await db.saveReadinessScore(userId, body));
 
-        // ==========================================
-        // 3. NUTRITION & KITCHEN AI
-        // ==========================================
+        // --- NUTRITION ---
         if (path === '/meal-log') {
             if (method === 'GET') return sendResponse(200, await db.getMealLogEntries(userId));
             if (method === 'POST') return sendResponse(200, await db.createMealLogEntry(userId, body.meal_data, body.imageBase64));
@@ -99,6 +91,7 @@ export const handler = async (event) => {
         const savedMealMatch = path.match(/^\/saved-meals\/(\d+)$/);
         if (savedMealMatch && method === 'DELETE') { await db.deleteMeal(userId, savedMealMatch[1]); return sendResponse(204, null); }
 
+        // --- MEAL PLANS ---
         if (path === '/meal-plans') {
             if (method === 'GET') return sendResponse(200, await db.getMealPlans(userId));
             if (method === 'POST') return sendResponse(200, await db.createMealPlan(userId, body.name));
@@ -108,9 +101,7 @@ export const handler = async (event) => {
         const removePlanItemMatch = path.match(/^\/meal-plans\/items\/(\d+)$/);
         if (removePlanItemMatch && method === 'DELETE') { await db.removeMealFromPlan(userId, removePlanItemMatch[1]); return sendResponse(204, null); }
 
-        // ==========================================
-        // 4. GROCERY SYSTEM
-        // ==========================================
+        // --- GROCERY ---
         if (path === '/grocery/lists') {
             if (method === 'GET') return sendResponse(200, await db.getGroceryLists(userId));
             if (method === 'POST') return sendResponse(200, await db.createGroceryList(userId, body.name));
@@ -123,7 +114,6 @@ export const handler = async (event) => {
             if (method === 'GET') return sendResponse(200, await db.getGroceryListItems(listItemsMatch[1]));
             if (method === 'POST') return sendResponse(200, await db.addGroceryItem(userId, listItemsMatch[1], body.name));
         }
-        
         const listImportMatch = path.match(/^\/grocery\/lists\/(\d+)\/import$/);
         if (listImportMatch && method === 'POST') return sendResponse(200, await db.importToGroceryList(userId, listImportMatch[1], body.items));
         
@@ -136,9 +126,7 @@ export const handler = async (event) => {
             if (method === 'DELETE') { await db.removeGroceryItem(userId, itemMatch[1]); return sendResponse(204, null); }
         }
 
-        // ==========================================
-        // 5. SOCIAL & COACHING
-        // ==========================================
+        // --- SOCIAL ---
         if (path === '/social/profile') {
             if (method === 'GET') return sendResponse(200, await db.getSocialProfile(userId));
             if (method === 'PATCH') return sendResponse(200, await db.updateSocialProfile(userId, body));
@@ -156,13 +144,32 @@ export const handler = async (event) => {
         const coachingDeleteMatch = path.match(/^\/coaching\/relation\/(\d+)$/);
         if (coachingDeleteMatch && method === 'DELETE') { await db.revokeCoachingAccess(userId, coachingDeleteMatch[1]); return sendResponse(204, null); }
 
-        // ==========================================
-        // 6. HEALTH, BODY, & PREFERENCES
-        // ==========================================
+        // --- HEALTH & BODY ---
         if (path === '/health-metrics' && method === 'GET') return sendResponse(200, await db.getHealthMetrics(userId));
         if (path === '/sync-health' && method === 'POST') return sendResponse(200, await db.syncHealthMetrics(userId, body));
         if (path === '/rewards' && method === 'GET') return sendResponse(200, await db.getRewardsSummary(userId));
 
         if (path === '/body/form-check' && method === 'POST') return sendResponse(200, await db.saveFormCheck(userId, body));
         const formCheckMatch = path.match(/^\/body\/form-check\/(\d+)$/);
-        if (formCheckMatch && method === 'GET') return sendResponse(200, await db.get
+        if (formCheckMatch && method === 'GET') return sendResponse(200, await db.getFormCheckById(userId, formCheckMatch[1]));
+
+        if (path === '/body/dashboard-prefs') {
+            if (method === 'GET') return sendResponse(200, await db.getDashboardPrefs(userId));
+            if (method === 'POST') return sendResponse(200, await db.saveDashboardPrefs(userId, body));
+        }
+
+        // --- SHOPIFY & AI ---
+        if (path === '/shopify/orders' && method === 'GET') return sendResponse(200, await shopify.fetchCustomerOrders(userId));
+        const shopifyProductMatch = path.match(/^\/shopify\/products\/(.+)$/);
+        if (shopifyProductMatch && method === 'GET') return sendResponse(200, await shopify.getProductByHandle(shopifyProductMatch[1]));
+        
+        if (path === '/analyze-image' && method === 'POST') return sendResponse(200, await db.analyzeImageMacros(userId, body));
+        if (path === '/analyze-restaurant-meal' && method === 'POST') return sendResponse(200, await db.analyzeRestaurantMeal(userId, body));
+        if (path === '/get-recipes-from-image' && method === 'POST') return sendResponse(200, await db.getRecipesFromImage(body));
+
+        return sendResponse(404, { error: 'Route not found: ' + method + ' ' + path });
+    } catch (err) {
+        console.error('Runtime Error:', err);
+        return sendResponse(500, { error: err.message });
+    }
+};
