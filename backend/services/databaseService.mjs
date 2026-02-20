@@ -6,16 +6,22 @@ const pool = new Pool({ ssl: { rejectUnauthorized: false } });
 // ==========================================
 // UTILITY HELPERS
 // ==========================================
-// ⚠️ AWS 6MB LIMIT PROTECTION: Strips Base64 from list endpoints
+// ⚠️ AWS 6MB LIMIT PROTECTION & FRONTEND SAFETY
 const processDataForList = (data) => {
-    if (!data) return data;
-    const cleanData = { ...data };
+    if (!data) return { ingredients: [] };
+    // Handle stringified JSON from older database saves
+    const cleanData = typeof data === 'string' ? JSON.parse(data) : { ...data };
+    
     if (cleanData.image_base64 || cleanData.imageBase64) {
         cleanData.hasImage = true;
         delete cleanData.image_base64;
         delete cleanData.imageBase64;
         delete cleanData.imageUrl; 
     }
+    
+    // PROTECT FRONTEND: Guarantee ingredients is an array so .map/.find won't crash
+    if (!cleanData.ingredients) cleanData.ingredients = []; 
+    
     return cleanData;
 };
 
@@ -94,8 +100,19 @@ export const getMealLogEntryById = async (userId, id) => {
     try {
         const res = await client.query(`SELECT id, meal_data, image_base64 FROM meal_log_entries WHERE id = $1 AND user_id = $2`, [id, userId]);
         if (!res.rows[0]) return null;
-        return { ...res.rows[0].meal_data, imageUrl: res.rows[0].image_base64 ? `data:image/jpeg;base64,${res.rows[0].image_base64}` : null };
-    } catch(e) { return null; } finally { client.release(); }
+        
+        let imgUrl = null;
+        if (res.rows[0].image_base64) {
+            // Strip the prefix if it accidentally got saved with one, then re-apply it cleanly
+            const rawBase64 = res.rows[0].image_base64.replace(/^data:image\/\w+;base64,/, '');
+            imgUrl = `data:image/jpeg;base64,${rawBase64}`;
+        }
+        
+        const mealData = typeof res.rows[0].meal_data === 'string' ? JSON.parse(res.rows[0].meal_data) : res.rows[0].meal_data;
+        return { ...mealData, imageUrl: imgUrl };
+    } finally { 
+        client.release(); 
+    }
 };
 
 export const createMealLogEntry = async (userId, data, imageBase64) => {
@@ -146,7 +163,32 @@ export const deleteMeal = async (userId, id) => {
 
 export const getMealPlans = async (userId) => {
     const client = await pool.connect();
-    try { return (await client.query(`SELECT id, name FROM meal_plans WHERE user_id = $1`, [userId])).rows; } catch(e) { return []; } finally { client.release(); }
+    try { 
+        // CRITICAL: We MUST join the items into a JSON array, 
+        // otherwise the frontend crashes looking for plan.items
+        const query = `
+            SELECT
+                mp.id,
+                mp.name,
+                COALESCE(
+                    json_agg(
+                        json_build_object(
+                            'id', mpi.id,
+                            'savedMealId', mpi.saved_meal_id,
+                            'metadata', mpi.metadata
+                        )
+                    ) FILTER (WHERE mpi.id IS NOT NULL),
+                    '[]'
+                ) as items
+            FROM meal_plans mp
+            LEFT JOIN meal_plan_items mpi ON mp.id = mpi.meal_plan_id
+            WHERE mp.user_id = $1
+            GROUP BY mp.id
+        `;
+        return (await client.query(query, [userId])).rows; 
+    } finally { 
+        client.release(); 
+    }
 };
 
 export const createMealPlan = async (userId, name) => {
