@@ -30,9 +30,24 @@ interface FuelSectionProps {
 }
 
 export const FuelSection: React.FC<FuelSectionProps> = ({
-    plans, activePlanId, savedMeals, mealLog, onPlanChange, onCreatePlan, onRemoveFromPlan, 
-    onQuickAdd, onGenerateMedical, medicalPlannerState, onAddMealToLibrary, onDeleteMeal, onSelectMeal,
-    onManualLibraryAdd, onManualLogAdd, onScanClick, defaultTab, initialMedicalParams
+    plans = [], 
+    activePlanId = null, 
+    savedMeals = [], 
+    mealLog = [], 
+    onPlanChange, 
+    onCreatePlan, 
+    onRemoveFromPlan, 
+    onQuickAdd, 
+    onGenerateMedical, 
+    medicalPlannerState, 
+    onAddMealToLibrary, 
+    onDeleteMeal, 
+    onSelectMeal,
+    onManualLibraryAdd, 
+    onManualLogAdd, 
+    onScanClick, 
+    defaultTab, 
+    initialMedicalParams
 }) => {
     const [activeTab, setActiveTab] = useState<'plan' | 'library' | 'grocery' | 'history' | 'videos'>('plan');
 
