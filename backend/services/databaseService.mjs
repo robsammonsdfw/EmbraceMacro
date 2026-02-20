@@ -194,6 +194,7 @@ export const removeGroceryItem = async (userId, itemId) => {
 export const importToGroceryList = async (userId, listId, items) => {
     const client = await pool.connect();
     try {
+        // Use Promise.all to run parallel inserts safely
         const queries = items.map(item => client.query(`INSERT INTO grocery_list_items (grocery_list_id, name) VALUES ($1, $2)`, [listId, item]));
         await Promise.all(queries);
         return { success: true };
@@ -247,7 +248,7 @@ export const sendBulkInvites = async (userId, contacts) => {
 };
 
 export const getRestaurantActivity = async (userId, uri) => {
-    return []; // Placeholder for social restaurant feed
+    return []; 
 };
 
 export const getCoachingRelations = async (userId, type) => {
@@ -317,13 +318,11 @@ export const saveDashboardPrefs = async (userId, prefs) => {
 // ==========================================
 export const getShopifyCustomerId = async (userId) => {
     const client = await pool.connect();
-    try { 
-        // Ensure these backticks exist!
-        return (await client.query(`SELECT shopify_customer_id FROM users WHERE id = $1`, [userId])).rows[0]?.shopify_customer_id; 
-    } finally { client.release(); }
+    try { return (await client.query(`SELECT shopify_customer_id FROM users WHERE id = $1`, [userId])).rows[0]?.shopify_customer_id; } finally { client.release(); }
 };
+
 export const analyzeImageMacros = async (userId, body) => {
-    // FIX: Using the correct environment variable to prevent Lambda crash
+    // FIX: Use GEMINI_API_KEY to prevent startup crash if API_KEY is missing
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const prompt = "Analyze this image and return a JSON object with totalCalories, totalProtein, totalCarbs, and totalFat.";
     const response = await ai.models.generateContent({
