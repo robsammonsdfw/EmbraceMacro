@@ -479,7 +479,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                             </div>
                         </div>
                     )}
-                    {subView === 'pharmacy' && stack === 'account' && (
+{subView === 'pharmacy' && stack === 'account' && (
                         <div className="fixed inset-0 z-[60] bg-slate-50 flex flex-col">
                             <div className="p-4 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0 shrink-0">
                                 <button onClick={() => setSubView(null)} className="text-xs font-black uppercase">← Back</button>
@@ -491,6 +491,10 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                             </div>
                         </div>
                     )}
+                </div>
+            </div>
+        );
+    };
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col font-sans selection:bg-indigo-100">
