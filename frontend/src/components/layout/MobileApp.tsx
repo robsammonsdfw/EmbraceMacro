@@ -316,7 +316,7 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                     )}
                     {stack === 'nutrition' && (
                         subView ? (
-                            subView === 'videos' ? <MealPrepVideos /> : <FuelSection {...fuelProps} defaultTab={subView === 'plan' ? 'plan' : undefined} initialMedicalActionParams={medicalActionParams} />
+                            subView === 'videos' ? <MealPrepVideos /> : <FuelSection {...fuelProps} defaultTab={subView === 'plan' ? 'plan' : undefined} initialMedicalParams={medicalActionParams} />
                         ) : (
                             <FuelSection {...fuelProps} />
                         )
@@ -401,8 +401,8 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                             )}
                             
                             {subView === 'results' && <HealthReportsView />}
-                            {subView === 'lab_kits' && <TeleMedicineHub view="telemed.everyone.lab_kits" />}
-                            {subView === 'dna_kits' && <TeleMedicineHub view="telemed.everyone.dna_kits" />}
+                            {subView === 'lab_kits' && <TeleMedicineHub view="labs.store" />}
+                            {subView === 'dna_kits' && <TeleMedicineHub view="labs.store" />}
                         </div>
                     )}
                     
@@ -448,14 +448,49 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                             <button onClick={onLogout} className="w-full bg-rose-50 p-6 rounded-3xl border border-rose-100 text-left font-black uppercase text-sm text-rose-600 flex justify-between mt-10">Sign Out <span>⏻</span></button>
                         </div>
                     )}
-
-                    {subView === 'sync' && stack === 'account' && <div className="fixed inset-0 z-[60] bg-slate-50 overflow-y-auto"><div className="p-4 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0"><button onClick={() => setSubView(null)} className="text-xs font-black uppercase">← Back</button><h2 className="font-black uppercase">Sync</h2><div className="w-10"></div></div><DeviceSync onSyncComplete={bodyProps.onHealthStatsUpdate} onVisionSyncTrigger={onVisionSync} /></div>}
-                    {subView === 'widgets' && stack === 'account' && <div className="fixed inset-0 z-[60] bg-slate-50 overflow-y-auto"><div className="p-4 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0"><button onClick={() => setSubView(null)} className="text-xs font-black uppercase">← Back</button><h2 className="font-black uppercase">Widgets</h2><div className="w-10"></div></div><WidgetConfig currentPrefs={dashboardPrefs} onSave={bodyProps.onUpdatePrefs} /></div>}
-                    {subView === 'pharmacy' && stack === 'account' && <div className="fixed inset-0 z-[60] bg-slate-50 overflow-y-auto"><div className="p-4 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0"><button onClick={() => setSubView(null)} className="text-xs font-black uppercase">← Back</button><h2 className="font-black uppercase">Pharmacy</h2><div className="w-10"></div></div><PharmacyOrders /></div>}
-                </div>
-            </div>
-        );
-    };
+{subView === 'sync' && stack === 'account' && (
+                        <div className="fixed inset-0 z-[60] bg-slate-50 flex flex-col">
+                            <div className="p-4 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0 shrink-0">
+                                <button onClick={() => setSubView(null)} className="text-xs font-black uppercase">← Back</button>
+                                <h2 className="font-black uppercase">Sync</h2><div className="w-10"></div>
+                            </div>
+                            <div className="flex-1 overflow-y-auto">
+                                {/* FIX: Added lastSynced and mapped the correct sync trigger from bodyProps */}
+                                <DeviceSync 
+                                    onSyncComplete={(stats) => { bodyProps.onHealthStatsUpdate(stats); setSubView(null); }} 
+                                    onVisionSyncTrigger={bodyProps.onSyncHealth || onVisionSync} 
+                                    lastSynced={healthStats.lastSynced} 
+                                />
+                            </div>
+                        </div>
+                    )}
+                    {subView === 'widgets' && stack === 'account' && (
+                        <div className="fixed inset-0 z-[60] bg-slate-50 flex flex-col">
+                            <div className="p-4 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0 shrink-0">
+                                <button onClick={() => setSubView(null)} className="text-xs font-black uppercase">← Back</button>
+                                <h2 className="font-black uppercase">Widgets</h2><div className="w-10"></div>
+                            </div>
+                            <div className="flex-1 overflow-y-auto">
+                                {/* FIX: Added modal close on save so the UI updates immediately */}
+                                <WidgetConfig 
+                                    currentPrefs={dashboardPrefs} 
+                                    onSave={(prefs) => { bodyProps.onUpdatePrefs(prefs); setSubView(null); }} 
+                                />
+                            </div>
+                        </div>
+                    )}
+                    {subView === 'pharmacy' && stack === 'account' && (
+                        <div className="fixed inset-0 z-[60] bg-slate-50 flex flex-col">
+                            <div className="p-4 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0 shrink-0">
+                                <button onClick={() => setSubView(null)} className="text-xs font-black uppercase">← Back</button>
+                                <h2 className="font-black uppercase">Pharmacy</h2><div className="w-10"></div>
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-2">
+                                {/* FIX: Isolated the component in a scrolling flex-container to prevent rendering cutoffs */}
+                                <PharmacyOrders />
+                            </div>
+                        </div>
+                    )}
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col font-sans selection:bg-indigo-100">
