@@ -590,21 +590,39 @@ export const getShopifyCustomerId = async (userId) => {
     try { return (await client.query(`SELECT shopify_customer_id FROM users WHERE id = $1`, [userId])).rows[0]?.shopify_customer_id; } catch(e) { return null; } finally { client.release(); }
 };
 
-const callGemini = async (prompt, mimeType, base64Data) => {
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: [{ parts: [{ inlineData: { mimeType, data: base64Data } }, { text: prompt }] }]
-    });
-    return JSON.parse(response.text.replace(/```json/g, '').replace(/```/g, '').trim());
+// --- AI TEXT HELPER (NEW: Required for text-only recipe generation) ---
+const callGeminiText = async (prompt) => {
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt
+        });
+        return JSON.parse(response.text.replace(/```json/g, '').replace(/```/g, '').trim());
+    } catch (e) {
+        console.error("Gemini Text Error:", e);
+        return null;
+    }
 };
 
-export const analyzeImageWithGemini = async (userId, body) => callGemini("Analyze nutrition. Return JSON.", body.mimeType, body.base64Image);
-export const analyzeHealthScreenshot = async (userId, body) => callGemini("Analyze health stats. Return JSON.", 'image/jpeg', body.base64Image);
-export const identifyGroceryItems = async (userId, body) => callGemini("Identify grocery items. Return JSON {items:[]}.", body.mimeType, body.base64Image);
+// --- RESTORED EXPORTS ---
+export const analyzeImageWithGemini = async (userId, body) => callGemini("Analyze nutrition. Return JSON: { name, calories, protein, carbs, fat, ingredients: [] }", body.mimeType, body.base64Image);
+export const analyzeHealthScreenshot = async (userId, body) => callGemini("Analyze health stats. Return JSON matching health_metrics columns.", 'image/jpeg', body.base64Image);
+export const identifyGroceryItems = async (userId, body) => callGemini("Identify grocery items in this image. Return JSON {items:['item1', 'item2']}.", body.mimeType, body.base64Image);
 export const generateRecipeImage = async (body) => { return { base64Image: "" }; };
-export const generateMissingMetadata = async (body) => { return {}; };
-export const searchFood = async (body) => { return {}; };
-export const getMealSuggestions = async (body) => { return []; };
-export const judgeRecipeAttempt = async (userId, body) => callGemini("Judge recipe attempt. Return JSON.", 'image/jpeg', body.base64Image);
-export const getRecipesFromImage = async (body) => callGemini("Suggest 3 recipes. Return JSON array.", body.mimeType, body.base64Image);
+
+export const generateMissingMetadata = async (body) => { 
+    return await callGeminiText(`Analyze the meal "${body.mealName}". Return a JSON object with estimated macros: { "calories": number, "protein": number, "carbs": number, "fat": number, "ingredients": [] }`); 
+};
+
+export const searchFood = async (body) => { 
+    return await callGeminiText(`Search for average nutrition info for "${body.query}". Return JSON object: { "name": "${body.query}", "calories": number, "protein": number, "carbs": number, "fat": number, "ingredients": [] }`); 
+};
+
+export const getMealSuggestions = async (body) => { 
+    const prompt = `Suggest 3 meals for cuisine: ${body.cuisine || 'any'}, duration: ${body.duration || 'any'}, conditions: ${body.conditions?.join(',') || 'none'}. Return ONLY a JSON array of objects: [{ "name": string, "calories": number, "protein": number, "carbs": number, "fat": number, "ingredients": [], "instructions": [] }]`;
+    return (await callGeminiText(prompt)) || []; 
+};
+
+export const judgeRecipeAttempt = async (userId, body) => callGemini("Judge this recipe attempt out of 100. Return JSON { score: number, feedback: string }.", 'image/jpeg', body.base64Image);
+export const getRecipesFromImage = async (body) => callGemini("Suggest 3 recipes based on these ingredients. Return JSON array of objects: [{ name, calories, protein, carbs, fat, ingredients }]", body.mimeType, body.base64Image);

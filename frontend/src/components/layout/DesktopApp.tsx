@@ -268,10 +268,10 @@ export const DesktopApp: React.FC<DesktopAppProps> = ({
                 return <FuelSection {...fuelProps} defaultTab="plan" initialMedicalParams={medicalActionParams} />;
             case 'nutrition.pantry': 
                 return <FuelSection {...fuelProps} defaultTab="grocery" />; 
-            case 'nutrition.pantry_chef':
-                return <PantryChefView savedMeals={fuelProps.savedMeals} onSaveMeal={fuelProps.onAddMealToLibrary} />;
-            case 'nutrition.dining': 
-                return <MasterChefView savedMeals={fuelProps.savedMeals} onSaveMeal={fuelProps.onAddMealToLibrary} />;
+                case 'nutrition.pantry_chef':
+                    return <PantryChefView savedMeals={fuelProps.savedMeals} onSaveMeal={fuelProps.onAddMealToLibrary} onSelectMeal={fuelProps.onSelectMeal} />;
+                    case 'nutrition.dining': 
+                    return <MasterChefView savedMeals={fuelProps.savedMeals} onSaveMeal={fuelProps.onAddMealToLibrary} onSelectMeal={fuelProps.onSelectMeal} />;
             case 'nutrition.library': 
                 return <FuelSection {...fuelProps} defaultTab="library" />;
             case 'nutrition.videos': 

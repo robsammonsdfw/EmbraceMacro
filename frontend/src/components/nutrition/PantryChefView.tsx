@@ -10,9 +10,12 @@ import { Loader } from '../Loader';
 interface PantryChefViewProps {
     savedMeals: SavedMeal[];
     onSaveMeal: (meal: any) => void;
+    onSelectMeal: (meal: any) => void;
 }
 
-export const PantryChefView: React.FC<PantryChefViewProps> = ({ savedMeals, onSaveMeal }) => {
+export const PantryChefView: React.FC<PantryChefViewProps> = ({ savedMeals, onSaveMeal, onSelectMeal }) => {
+
+export const PantryChefView: React.FC<PantryChefViewProps> = ({ savedMeals, onSaveMeal, onSelectMeal }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [pantryLog, setPantryLog] = useState<PantryLogEntry[]>([]);
     const [generatedRecipes, setGeneratedRecipes] = useState<Recipe[]>([]);
@@ -121,10 +124,7 @@ export const PantryChefView: React.FC<PantryChefViewProps> = ({ savedMeals, onSa
                         <h3 className="text-2xl font-black mb-2">What's in your fridge?</h3>
                         <p className="text-orange-100 font-medium max-w-md">Take a photo of your open fridge or pantry shelf. AI will identify ingredients and suggest 3 unique recipes.</p>
                     </div>
-                    <button 
-                        onClick={handleCameraClick}
-                        className="bg-white text-orange-600 font-black px-8 py-4 rounded-2xl shadow-lg hover:bg-orange-50 active:scale-95 transition-all flex items-center gap-3"
-                    >
+                    <button onClick={() => onSelectMeal(meal)} className="text-xs font-bold text-indigo-600 bg-white border border-indigo-100 px-3 py-1.5 rounded-lg shadow-sm hover:bg-indigo-50 transition-colors">View</button>
                         <CameraIcon className="w-6 h-6" />
                         <span>Snap & Cook</span>
                     </button>
