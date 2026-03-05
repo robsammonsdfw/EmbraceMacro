@@ -144,36 +144,103 @@ export const createMealLogEntry = async (userId, data, imageBase64) => {
     try { return (await client.query(`INSERT INTO meal_log_entries (user_id, meal_data, image_base64) VALUES ($1, $2, $3) RETURNING id`, [userId, data, imageBase64])).rows[0]; } catch(e) { return { id: null }; } finally { client.release(); }
 };
 
+// --- START OF PHASE 4 FIXES ---
+
 export const getPantryLog = async (userId) => {
     const client = await pool.connect();
-    try { return (await client.query(`SELECT id, created_at, (image_base64 IS NOT NULL) as "hasImage" FROM pantry_log_entries WHERE user_id = $1 ORDER BY created_at DESC`, [userId])).rows; } catch(e) { return []; } finally { client.release(); }
+    try { 
+        const query = `
+            SELECT id, created_at, (image_base64 IS NOT NULL) as "hasImage" 
+            FROM pantry_log_entries 
+            WHERE user_id = $1 
+            ORDER BY created_at DESC
+        `;
+        return (await client.query(query, [userId])).rows; 
+    } catch(e) { return []; } finally { client.release(); }
 };
 
 export const savePantryLogEntry = async (userId, imageBase64) => {
     const client = await pool.connect();
-    try { await client.query(`INSERT INTO pantry_log_entries (user_id, image_base64) VALUES ($1, $2)`, [userId, imageBase64]); return { success: true }; } catch(e) { return { success: false }; } finally { client.release(); }
+    try { 
+        await client.query(`INSERT INTO pantry_log_entries (user_id, image_base64) VALUES ($1, $2)`, [userId, imageBase64]); 
+        return { success: true }; 
+    } catch(e) { return { success: false }; } finally { client.release(); }
 };
 
-export const getPantryLogEntryById = async (userId, id) => { return null; };
+export const getPantryLogEntryById = async (userId, id) => {
+    const client = await pool.connect();
+    try {
+        const query = `SELECT id, created_at, image_base64 as "imageBase64" FROM pantry_log_entries WHERE id = $1 AND user_id = $2`;
+        const res = await client.query(query, [id, userId]);
+        return res.rows[0] || null;
+    } catch(e) { 
+        console.error("Error fetching pantry log detail:", e);
+        return null; 
+    } finally { client.release(); }
+};
 
 export const getRestaurantLog = async (userId) => {
     const client = await pool.connect();
-    try { return (await client.query(`SELECT id, created_at, (image_base64 IS NOT NULL) as "hasImage" FROM restaurant_log_entries WHERE user_id = $1 ORDER BY created_at DESC`, [userId])).rows; } catch(e) { return []; } finally { client.release(); }
+    try { 
+        const query = `
+            SELECT id, created_at, (image_base64 IS NOT NULL) as "hasImage" 
+            FROM restaurant_log_entries 
+            WHERE user_id = $1 
+            ORDER BY created_at DESC
+        `;
+        return (await client.query(query, [userId])).rows; 
+    } catch(e) { return []; } finally { client.release(); }
 };
 
 export const saveRestaurantLogEntry = async (userId, imageBase64) => {
     const client = await pool.connect();
-    try { await client.query(`INSERT INTO restaurant_log_entries (user_id, image_base64) VALUES ($1, $2)`, [userId, imageBase64]); return { success: true }; } catch(e) { return { success: false }; } finally { client.release(); }
+    try { 
+        await client.query(`INSERT INTO restaurant_log_entries (user_id, image_base64) VALUES ($1, $2)`, [userId, imageBase64]); 
+        return { success: true }; 
+    } catch(e) { return { success: false }; } finally { client.release(); }
 };
 
-export const getRestaurantLogEntryById = async (userId, id) => { return null; };
+export const getRestaurantLogEntryById = async (userId, id) => {
+    const client = await pool.connect();
+    try {
+        const query = `SELECT id, created_at, image_base64 as "imageBase64" FROM restaurant_log_entries WHERE id = $1 AND user_id = $2`;
+        const res = await client.query(query, [id, userId]);
+        return res.rows[0] || null;
+    } catch(e) { 
+        console.error("Error fetching restaurant log detail:", e);
+        return null; 
+    } finally { client.release(); }
+};
 
 export const getSavedMeals = async (userId) => {
     const client = await pool.connect();
-    try { return (await client.query(`SELECT id, meal_data FROM saved_meals WHERE user_id = $1`, [userId])).rows.map(r => ({ ...processDataForList(r.meal_data), id: r.id })); } catch(e) { return []; } finally { client.release(); }
+    try { 
+        return (await client.query(`SELECT id, meal_data FROM saved_meals WHERE user_id = $1`, [userId]))
+            .rows.map(r => ({ ...processDataForList(r.meal_data), id: r.id })); 
+    } catch(e) { return []; } finally { client.release(); }
 };
 
-export const getSavedMealById = async (userId, id) => { return null; };
+export const getSavedMealById = async (userId, id) => {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`SELECT id, meal_data, image_base64 FROM saved_meals WHERE id = $1 AND user_id = $2`, [id, userId]);
+        if (!res.rows[0]) return null;
+        
+        let imgUrl = null;
+        if (res.rows[0].image_base64) {
+            const rawBase64 = res.rows[0].image_base64.replace(/^(data:image\/\w+;base64,)+/, '');
+            imgUrl = `data:image/jpeg;base64,${rawBase64}`;
+        }
+        
+        const mealData = typeof res.rows[0].meal_data === 'string' ? JSON.parse(res.rows[0].meal_data) : res.rows[0].meal_data;
+        return { ...mealData, imageUrl: imgUrl };
+    } catch(e) { 
+        console.error("Error fetching saved meal detail:", e);
+        return null; 
+    } finally { client.release(); }
+};
+
+// --- END OF PHASE 4 FIXES ---
 
 export const saveMeal = async (userId, meal) => {
     const client = await pool.connect();
@@ -299,7 +366,6 @@ export const clearGroceryListItems = async (userId, listId, type) => {
     const client = await pool.connect();
     try { await client.query(`DELETE FROM grocery_list_items WHERE grocery_list_id = $1`, [listId]); } catch(e) {} finally { client.release(); }
 };
-
 // ==========================================
 // 5. SOCIAL & COACHING
 // ==========================================
