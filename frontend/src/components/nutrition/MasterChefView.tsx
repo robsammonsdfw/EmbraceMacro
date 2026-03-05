@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { CameraIcon, UtensilsIcon, ClockIcon, BookOpenIcon } from '../icons';
 import * as apiService from '../../services/apiService';
@@ -15,8 +14,6 @@ interface MasterChefViewProps {
 }
 
 export const MasterChefView: React.FC<MasterChefViewProps> = ({ savedMeals, onSaveMeal, onSelectMeal }) => {
-
-export const MasterChefView: React.FC<MasterChefViewProps> = ({ savedMeals, onSaveMeal }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [restaurantLog, setRestaurantLog] = useState<any[]>([]);
     const [analysisResult, setAnalysisResult] = useState<NutritionInfo | null>(null);
@@ -150,7 +147,12 @@ export const MasterChefView: React.FC<MasterChefViewProps> = ({ savedMeals, onSa
                                         <p className="font-bold text-slate-800 text-sm">{meal.mealName}</p>
                                         <p className="text-xs text-slate-500">{Math.round(meal.totalCalories)} kcal • Restaurant Style</p>
                                     </div>
-                                    <button onClick={() => onSelectMeal(meal)} className="text-xs font-bold text-indigo-600 bg-white border border-indigo-100 px-3 py-1.5 rounded-lg shadow-sm hover:bg-indigo-50 transition-colors">View</button>
+                                    <button 
+                                        onClick={() => onSelectMeal(meal)} 
+                                        className="text-xs font-bold text-indigo-600 bg-white border border-indigo-100 px-3 py-1.5 rounded-lg shadow-sm hover:bg-indigo-50 transition-colors"
+                                    >
+                                        View
+                                    </button>
                                 </div>
                             ))}
                         </div>

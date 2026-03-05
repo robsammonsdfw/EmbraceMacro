@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { CameraIcon, ChefHatIcon, ClockIcon, BookOpenIcon } from '../icons';
 import * as apiService from '../../services/apiService';
@@ -12,8 +11,6 @@ interface PantryChefViewProps {
     onSaveMeal: (meal: any) => void;
     onSelectMeal: (meal: any) => void;
 }
-
-export const PantryChefView: React.FC<PantryChefViewProps> = ({ savedMeals, onSaveMeal, onSelectMeal }) => {
 
 export const PantryChefView: React.FC<PantryChefViewProps> = ({ savedMeals, onSaveMeal, onSelectMeal }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -124,7 +121,10 @@ export const PantryChefView: React.FC<PantryChefViewProps> = ({ savedMeals, onSa
                         <h3 className="text-2xl font-black mb-2">What's in your fridge?</h3>
                         <p className="text-orange-100 font-medium max-w-md">Take a photo of your open fridge or pantry shelf. AI will identify ingredients and suggest 3 unique recipes.</p>
                     </div>
-                    <button onClick={() => onSelectMeal(meal)} className="text-xs font-bold text-indigo-600 bg-white border border-indigo-100 px-3 py-1.5 rounded-lg shadow-sm hover:bg-indigo-50 transition-colors">View</button>
+                    <button 
+                        onClick={handleCameraClick}
+                        className="bg-white text-orange-600 font-black px-8 py-4 rounded-2xl shadow-lg hover:bg-orange-50 active:scale-95 transition-all flex items-center gap-3"
+                    >
                         <CameraIcon className="w-6 h-6" />
                         <span>Snap & Cook</span>
                     </button>
@@ -163,7 +163,12 @@ export const PantryChefView: React.FC<PantryChefViewProps> = ({ savedMeals, onSa
                                         <p className="font-bold text-slate-800 text-sm">{meal.mealName}</p>
                                         <p className="text-xs text-slate-500">{Math.round(meal.totalCalories)} kcal • {meal.recipe?.ingredients.length || 0} ingredients</p>
                                     </div>
-                                    <button className="text-xs font-bold text-indigo-600 bg-white border border-indigo-100 px-3 py-1.5 rounded-lg shadow-sm">View</button>
+                                    <button 
+                                        onClick={() => onSelectMeal(meal)} 
+                                        className="text-xs font-bold text-indigo-600 bg-white border border-indigo-100 px-3 py-1.5 rounded-lg shadow-sm hover:bg-indigo-50 transition-colors"
+                                    >
+                                        View
+                                    </button>
                                 </div>
                             ))}
                         </div>
