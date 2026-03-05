@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { 
     ActivityIcon, CameraIcon, BrainIcon, 
@@ -6,7 +5,7 @@ import {
     HomeIcon, BookOpenIcon, PillIcon, UploadIcon, HeartIcon,
     GlobeAltIcon, BeakerIcon, ClockIcon, MoonIcon, ShoppingCartIcon,
     ClipboardCheckIcon, UsersIcon, TrophyIcon, BadgeCheckIcon,
-    DumbbellIcon, UserGroupIcon, NewspaperIcon
+    DumbbellIcon, UserGroupIcon, NewspaperIcon, ChefHatIcon
 } from '../icons';
 import type { HealthStats, UserDashboardPrefs, Article } from '../../types';
 
@@ -26,6 +25,8 @@ import { ReadinessView } from '../sections/ReadinessView';
 import { HealthReportsView } from '../sections/HealthReportsView';
 import { PlaceholderPage } from '../PlaceholderPage';
 import { MealPrepVideos } from '../nutrition/MealPrepVideos';
+import { PantryChefView } from '../nutrition/PantryChefView';
+import { MasterChefView } from '../nutrition/MasterChefView';
 import { PulseFeed } from '../content/PulseFeed';
 import { ArticleViewer } from '../content/ArticleViewer';
 
@@ -315,11 +316,22 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                         </>
                     )}
                     {stack === 'nutrition' && (
-                        subView ? (
-                            subView === 'videos' ? <MealPrepVideos /> : <FuelSection {...fuelProps} defaultTab={subView === 'plan' ? 'plan' : undefined} initialMedicalParams={medicalActionParams} />
-                        ) : (
-                            <FuelSection {...fuelProps} />
-                        )
+                        <div className="space-y-4">
+                            {!subView && (
+                                <>
+                                    <CategoryItem label="Meal Planner Hub" icon={<UtensilsIcon className="w-5 h-5 text-emerald-500" />} onClick={() => setSubView('planner')} />
+                                    <CategoryItem label="Pantry Chef (AI)" icon={<ChefHatIcon className="w-5 h-5 text-amber-500" />} onClick={() => setSubView('pantry_chef')} />
+                                    <CategoryItem label="MasterChef Replicator" icon={<CameraIcon className="w-5 h-5 text-indigo-500" />} onClick={() => setSubView('dining')} />
+                                </>
+                            )}
+                            
+                            {subView === 'planner' && <FuelSection {...fuelProps} defaultTab="plan" initialMedicalParams={medicalActionParams} />}
+                            {subView === 'pantry_chef' && <PantryChefView savedMeals={fuelProps.savedMeals} onSaveMeal={fuelProps.onAddMealToLibrary} onSelectMeal={fuelProps.onSelectMeal} />}
+                            {subView === 'dining' && <MasterChefView savedMeals={fuelProps.savedMeals} onSaveMeal={fuelProps.onAddMealToLibrary} onSelectMeal={fuelProps.onSelectMeal} />}
+                            
+                            {/* Preserves the bottom navigation bar "Library" button functionality */}
+                            {subView === 'library' && <FuelSection {...fuelProps} defaultTab="library" />}
+                        </div>
                     )}
                     {stack === 'physical' && (
                         <BodyHub 
@@ -448,14 +460,13 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                             <button onClick={onLogout} className="w-full bg-rose-50 p-6 rounded-3xl border border-rose-100 text-left font-black uppercase text-sm text-rose-600 flex justify-between mt-10">Sign Out <span>⏻</span></button>
                         </div>
                     )}
-{subView === 'sync' && stack === 'account' && (
+                    {subView === 'sync' && stack === 'account' && (
                         <div className="fixed inset-0 z-[60] bg-slate-50 flex flex-col">
                             <div className="p-4 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0 shrink-0">
                                 <button onClick={() => setSubView(null)} className="text-xs font-black uppercase">← Back</button>
                                 <h2 className="font-black uppercase">Sync</h2><div className="w-10"></div>
                             </div>
                             <div className="flex-1 overflow-y-auto">
-                                {/* FIX: Added lastSynced and mapped the correct sync trigger from bodyProps */}
                                 <DeviceSync 
                                     onSyncComplete={(stats) => { bodyProps.onHealthStatsUpdate(stats); setSubView(null); }} 
                                     onVisionSyncTrigger={bodyProps.onSyncHealth || onVisionSync} 
@@ -471,7 +482,6 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                                 <h2 className="font-black uppercase">Widgets</h2><div className="w-10"></div>
                             </div>
                             <div className="flex-1 overflow-y-auto">
-                                {/* FIX: Added modal close on save so the UI updates immediately */}
                                 <WidgetConfig 
                                     currentPrefs={dashboardPrefs} 
                                     onSave={(prefs) => { bodyProps.onUpdatePrefs(prefs); setSubView(null); }} 
@@ -479,35 +489,6 @@ export const MobileApp: React.FC<MobileAppProps> = ({
                             </div>
                         </div>
                     )}
-{subView === 'pharmacy' && stack === 'account' && (
+                    {subView === 'pharmacy' && stack === 'account' && (
                         <div className="fixed inset-0 z-[60] bg-slate-50 flex flex-col">
-                            <div className="p-4 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0 shrink-0">
-                                <button onClick={() => setSubView(null)} className="text-xs font-black uppercase">← Back</button>
-                                <h2 className="font-black uppercase">Pharmacy</h2><div className="w-10"></div>
-                            </div>
-                            <div className="flex-1 overflow-y-auto p-2">
-                                {/* FIX: Isolated the component in a scrolling flex-container to prevent rendering cutoffs */}
-                                <PharmacyOrders />
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
-        );
-    };
-
-    return (
-        <div className="min-h-screen bg-slate-50 flex flex-col font-sans selection:bg-indigo-100">
-            <VitalsStrip stats={healthStats} prefs={dashboardPrefs} onVisionSync={onVisionSync} />
-            <main className="flex-grow overflow-y-auto no-scrollbar">
-                {renderStack()}
-            </main>
-            
-            <div className="fixed bottom-0 left-0 right-0 h-20 bg-white/90 backdrop-blur-xl border-t border-slate-100 z-40 flex items-center justify-around px-6 pb-safe shadow-[0_-4px_24px_rgba(0,0,0,0.04)]">
-                 <button onClick={() => setStack('home')} className={`p-3 rounded-2xl transition-all ${stack === 'home' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:bg-slate-50'}`}><HomeIcon /></button>
-                 <button onClick={onCameraClick} className="w-16 h-16 bg-emerald-500 text-white rounded-[1.8rem] shadow-xl shadow-emerald-200 flex items-center justify-center transform active:scale-90 transition-all border-4 border-white -mt-10"><CameraIcon className="w-8 h-8" /></button>
-                 <button onClick={() => navigateTo('nutrition', 'library')} className={`p-3 rounded-2xl transition-all ${stack === 'nutrition' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:bg-slate-50'}`}><BookOpenIcon /></button>
-            </div>
-        </div>
-    );
-};
+                            <div className="p-4 flex items-center justify-between bg-white border-b border-
