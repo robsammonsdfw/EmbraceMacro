@@ -445,9 +445,72 @@ export const saveDashboardPrefs = async (userId, prefs) => {
 export const getPartnerBlueprint = async (userId) => { return {}; };
 export const savePartnerBlueprint = async (userId, body) => { return { success: true }; };
 export const getMatches = async (userId) => { return []; };
-export const getArticles = async () => { return []; };
-export const publishArticle = async (userId, body) => { return { success: true }; };
-export const completeArticleAction = async (userId, id, action) => { return { success: true }; };
+// ==========================================
+// PHASE 1: CONTENT & PULSE FEED (RESTORED)
+// ==========================================
+export const getArticles = async () => {
+    const client = await pool.connect();
+    try {
+        const query = `
+            SELECT 
+                id, 
+                title, 
+                summary, 
+                content, 
+                image_url, 
+                author_name, 
+                author_avatar, 
+                embedded_actions, 
+                created_at, 
+                is_squad_exclusive, 
+                author_id
+            FROM articles
+            ORDER BY created_at DESC
+        `;
+        const res = await client.query(query);
+        return res.rows;
+    } catch (e) {
+        console.error("Error fetching articles:", e);
+        return [];
+    } finally {
+        client.release();
+    }
+};
+
+export const publishArticle = async (userId, body) => {
+    const client = await pool.connect();
+    try {
+        const query = `
+            INSERT INTO articles 
+            (title, summary, content, image_url, author_name, author_avatar, embedded_actions, author_id) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+            RETURNING *
+        `;
+        const values = [
+            body.title || 'Untitled',
+            body.summary || '',
+            body.content || '',
+            body.image_url || null,
+            body.author_name || null,
+            body.author_avatar || null,
+            body.embedded_actions ? JSON.stringify(body.embedded_actions) : null,
+            userId
+        ];
+        const res = await client.query(query, values);
+        return res.rows[0];
+    } catch (e) {
+        console.error("Error publishing article:", e);
+        return { success: false, error: e.message };
+    } finally {
+        client.release();
+    }
+};
+
+export const completeArticleAction = async (userId, id, action) => {
+    // Note: Since there is no specific tracking table for this in your schema, 
+    // we return a valid success object so the frontend UI can update properly.
+    return { success: true, articleId: id, actionTaken: action };
+};
 export const getMedicalIntake = async (userId) => { return { data: {} }; };
 export const updateMedicalIntake = async (userId, body) => { return { success: true }; };
 export const saveIntakeData = async (userId, body) => { return { success: true }; };
